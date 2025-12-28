@@ -1,54 +1,39 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { User } from '../types';
-import { authService } from '../service';
+import { useAuth as useAuthContext } from '@/contexts/AuthContext';
 
-export function useAuth() {
-    const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+/**
+ * Custom hook to access authentication context
+ * Re-export from AuthContext for convenience
+ */
+export const useAuth = () => {
+    return useAuthContext();
+};
 
-    useEffect(() => {
-        const loadUser = async () => {
-            try {
-                const currentUser = await authService.getCurrentUser();
-                setUser(currentUser);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load user');
-            } finally {
-                setLoading(false);
-            }
-        };
+/**
+ * Hook to check if user has specific role
+ */
+export const useRole = () => {
+    const { user } = useAuthContext();
 
-        loadUser();
-    }, []);
-
-    const login = async (email: string, password: string) => {
-        setLoading(true);
-        setError(null);
-        try {
-            const user = await authService.login(email, password);
-            setUser(user);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Login failed');
-            throw err;
-        } finally {
-            setLoading(false);
-        }
+    return {
+        isUser: user?.role === 'user',
+        isProvider: user?.role === 'provider',
+        isAdmin: user?.role === 'admin',
+        role: user?.role,
     };
+};
 
-    const logout = async () => {
-        setLoading(true);
-        try {
-            await authService.logout();
-            setUser(null);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Logout failed');
-        } finally {
-            setLoading(false);
-        }
+/**
+ * Hook to require authentication
+ * Redirects to login if not authenticated
+ */
+export const useRequireAuth = () => {
+    const { user, loading } = useAuthContext();
+
+    return {
+        user,
+        loading,
+        isAuthenticated: !!user,
     };
-
-    return { user, loading, error, login, logout };
-}
+};

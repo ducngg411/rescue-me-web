@@ -1,50 +1,64 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
+import { LoginForm } from '@/components/auth/LoginForm';
+import Link from 'next/link';
 
 export default function LoginPage() {
     const router = useRouter();
-    const [loading, setLoading] = useState(false);
+    const { user, login, loginWithGoogle, loading } = useAuth();
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        // Add login logic here
-        setLoading(false);
+    // Redirect if already logged in
+    useEffect(() => {
+        if (user && !loading) {
+            if (!user.profileCompleted) {
+                router.push('/complete-profile');
+            } else {
+                router.push('/');
+            }
+        }
+    }, [user, loading, router]);
+
+    const handleLogin = async (email: string, password: string) => {
+        await login(email, password);
+        // Redirect will be handled by the useEffect above
     };
 
+    const handleGoogleLogin = async () => {
+        await loginWithGoogle();
+        // Redirect will be handled by the useEffect above
+    };
+
+    if (loading && !user) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="bg-card p-8 rounded-lg shadow-lg">
-            <h1 className="text-2xl font-bold mb-6 text-center">Login to RescueMe</h1>
-            <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium mb-2">Email</label>
-                    <input
-                        type="email"
-                        className="w-full px-4 py-2 border rounded-md"
-                        required
-                    />
+        <div className="w-full max-w-md mx-auto">
+            <div className="bg-card p-8 rounded-lg shadow-lg">
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-bold mb-2">Welcome Back</h1>
+                    <p className="text-gray-600">Login to your RescueMe account</p>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium mb-2">Password</label>
-                    <input
-                        type="password"
-                        className="w-full px-4 py-2 border rounded-md"
-                        required
-                    />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? 'Logging in...' : 'Login'}
-                </Button>
-            </form>
-            <p className="mt-4 text-center text-sm">
-                Don't have an account?{' '}
-                <a href="/register" className="text-primary hover:underline">
-                    Register
-                </a>
-            </p>
+
+                <LoginForm onSubmit={handleLogin} onGoogleLogin={handleGoogleLogin} />
+
+                <p className="mt-6 text-center text-sm text-gray-600">
+                    Don't have an account?{' '}
+                    <Link href="/register" className="text-primary font-medium hover:underline">
+                        Create one now
+                    </Link>
+                </p>
+            </div>
         </div>
     );
 }

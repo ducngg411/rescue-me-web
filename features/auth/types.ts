@@ -1,9 +1,12 @@
 export interface User {
     uid: string;
-    email: string;
-    displayName: string;
-    role: 'user' | 'provider';
+    email: string | null;
+    displayName: string | null;
+    role: 'user' | 'provider' | 'admin';
     profileCompleted: boolean;
+    photoURL?: string | null;
+    createdAt?: any;
+    updatedAt?: any;
 }
 
 export interface AuthState {
