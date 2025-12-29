@@ -6,7 +6,7 @@ import { useAuth } from '@/features/auth/hooks/useAuth';
 
 interface ProtectedRouteProps {
     children: React.ReactNode;
-    allowedRoles?: ('user' | 'provider' | 'admin')[];
+    allowedRoles?: ('user' | 'provider' | 'admin' | null)[];
 }
 
 /**
