@@ -25,6 +25,10 @@ interface User {
     role: 'user' | 'provider' | 'admin' | null;
     profileCompleted: boolean;
     photoURL?: string | null;
+    phoneNumber?: string | null;
+    vehicleType?: 'CAR' | 'TRUCK' | 'MOTORCYCLE' | null;
+    licensePlate?: string | null;
+    vehicleColor?: string | null;
 }
 
 interface AuthContextType {
@@ -33,12 +37,18 @@ interface AuthContextType {
     loading: boolean;
     error: string | null;
     login: (email: string, password: string) => Promise<void>;
-    register: (email: string, password: string, displayName: string) => Promise<void>;
+    register: (email: string, password: string, displayName: string, phoneNumber?: string) => Promise<void>;
     loginWithGoogle: () => Promise<void>;
     logout: () => Promise<void>;
     resetPassword: (email: string) => Promise<void>;
     updateUserProfile: (displayName: string, photoURL?: string) => Promise<void>;
     updateUserRole: (role: 'user' | 'provider') => Promise<void>;
+    completeUserProfile: (
+        phoneNumber: string,
+        vehicleType?: 'CAR' | 'TRUCK' | 'MOTORCYCLE',
+        licensePlate?: string,
+        vehicleColor?: string
+    ) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -64,6 +74,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     role: userData.role || null,
                     profileCompleted: userData.profileCompleted || false,
                     photoURL: firebaseUser.photoURL || userData.photoURL || null,
+                    phoneNumber: userData.phoneNumber || null,
+                    vehicleType: userData.vehicleType || null,
+                    licensePlate: userData.licensePlate || null,
+                    vehicleColor: userData.vehicleColor || null,
                 };
             } else {
                 // Create a default user document if it doesn't exist
@@ -73,6 +87,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     role: null,
                     profileCompleted: false,
                     photoURL: firebaseUser.photoURL,
+                    phoneNumber: null,
+                    vehicleType: null,
+                    licensePlate: null,
+                    vehicleColor: null,
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp(),
                 };
@@ -86,6 +104,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     role: null,
                     profileCompleted: false,
                     photoURL: firebaseUser.photoURL,
+                    phoneNumber: null,
+                    vehicleType: null,
+                    licensePlate: null,
+                    vehicleColor: null,
                 };
             }
         } catch (err) {
@@ -132,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const register = async (
         email: string,
         password: string,
-        displayName: string
+        displayName: string,
     ) => {
         try {
             setError(null);
@@ -286,6 +308,64 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const completeUserProfile = async (
+        phoneNumber: string,
+        vehicleType?: 'CAR' | 'TRUCK' | 'MOTORCYCLE',
+        licensePlate?: string,
+        vehicleColor?: string
+    ) => {
+        try {
+            setError(null);
+
+            if (!firebaseUser) {
+                throw new Error('No user logged in');
+            }
+
+            if (!user) {
+                throw new Error('User data not found');
+            }
+
+            // Prepare update data
+            const updateData: any = {
+                phoneNumber,
+                profileCompleted: true,
+                updatedAt: serverTimestamp(),
+            };
+
+            // Add vehicle info if provided (for users)
+            if (vehicleType) {
+                updateData.vehicleType = vehicleType;
+            }
+            if (licensePlate) {
+                updateData.licensePlate = licensePlate.toUpperCase();
+            }
+            if (vehicleColor) {
+                updateData.vehicleColor = vehicleColor;
+            }
+
+            // Update Firestore
+            const userDocRef = doc(db, 'users', firebaseUser.uid);
+            await setDoc(userDocRef, updateData, { merge: true });
+
+            // Update local user state
+            setUser({
+                ...user,
+                phoneNumber,
+                vehicleType: vehicleType || user.vehicleType,
+                licensePlate: licensePlate || user.licensePlate,
+                vehicleColor: vehicleColor || user.vehicleColor,
+                profileCompleted: true,
+            });
+
+            console.log('Profile completed successfully');
+        } catch (err: any) {
+            const errorMessage = err.message || 'Failed to complete profile';
+            setError(errorMessage);
+            console.error('Error completing profile:', err);
+            throw new Error(errorMessage);
+        }
+    }
+
     const value: AuthContextType = {
         user,
         firebaseUser,
@@ -298,6 +378,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resetPassword,
         updateUserProfile,
         updateUserRole,
+        completeUserProfile
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

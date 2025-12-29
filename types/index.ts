@@ -1,4 +1,5 @@
 export type UserRole = 'user' | 'provider' | 'admin';
+export type VehicleType = 'CAR' | 'TRUCK' | 'MOTORCYCLE';
 
 export interface User {
     uid: string;
@@ -8,8 +9,19 @@ export interface User {
     phoneNumber: string | null;
     role: UserRole;
     profileCompleted: boolean;
+
+    vehicleType?: VehicleType | null;
+    licensePlate?: string | null;
+    vehicelColor?: string | null;
+
     createdAt: Date;
     updatedAt: Date;
+}
+
+export interface VehicleInfo {
+    vehicleType: VehicleType;
+    licensePlate: string;
+    vehicleColor: string;
 }
 
 export interface Location {
@@ -21,7 +33,6 @@ export interface Location {
 
 export type RequestStatus = 'CREATED' | 'MATCHING' | 'ASSIGNED' | 'ON_THE_WAY' | 'IN_PROGRESS' | 'AWAITING_USER_CONFIRMATION' | 'COMPLETED' | 'CANCELLED';
 export type IncidentType = 'FLAT_TIRE' | 'OUT_OF_FUEL' | 'BATTERY_DEAD' | 'ENGINE_PROBLEM' | 'ACCIDENT' | 'OTHER';
-export type VehicleType = 'CAR' | 'TRUCK' | 'MOTORCYCLE';
 export type QuoteStatus = 'NONE' | 'QUOTED' | 'ACCEPTED' | 'REJECTED';
 export type CancelReason = 'USER_CANCELLED' | 'PROVIDER_CANCELLED' | 'NO_PROVIDER' | 'OTHER';
 

@@ -1,6 +1,25 @@
 export const APP_NAME = 'RescueMe';
 export const APP_DESCRIPTION = 'Emergency assistance when you need it most';
 
+export const VEHICLE_TYPES = {
+    CAR: 'Ô tô',
+    TRUCK: 'Xe tải',
+    MOTORCYCLE: 'Xe máy',
+} as const;
+
+export const VEHICLE_COLORS = [
+    'Trắng',
+    'Đen',
+    'Xám',
+    'Bạc',
+    'Đỏ',
+    'Xanh dương',
+    'Xanh lá',
+    'Vàng',
+    'Nâu',
+    'Cam',
+] as const;
+
 export const SERVICE_TYPES = {
     tow: 'Tow Service',
     mechanic: 'Mechanic',

@@ -5,6 +5,12 @@ export interface User {
     role: 'user' | 'provider' | 'admin' | null;
     profileCompleted: boolean;
     photoURL?: string | null;
+    phoneNumber?: string | null;
+
+    vehicleType?: 'CAR' | 'TRUCK' | 'MOTORCYCLE' | null;
+    licensePlate?: string | null;
+    vehicelColor?: string | null;
+
     createdAt?: any;
     updatedAt?: any;
 }

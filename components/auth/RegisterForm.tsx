@@ -24,20 +24,52 @@ export function RegisterForm({ onSubmit, onGoogleLogin }: RegisterFormProps) {
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<{
+        displayName?: string;
+        email?: string;
+        password?: string;
+        confirmPassword?: string;
+    }>({});
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+        setFieldErrors({});
 
-        // Validate passwords match
-        if (formData.password !== formData.confirmPassword) {
-            setError("Passwords don't match");
-            return;
+        // Validate all fields
+        const errors: {
+            displayName?: string;
+            email?: string;
+            password?: string;
+            confirmPassword?: string;
+        } = {};
+
+        if (!formData.displayName.trim()) {
+            errors.displayName = 'Tên là bắt buộc';
+        } else if (formData.displayName.trim().length < 2) {
+            errors.displayName = 'Tên phải có ít nhất 2 ký tự';
         }
 
-        // Validate password length
-        if (formData.password.length < 6) {
-            setError("Password must be at least 6 characters");
+        if (!formData.email.trim()) {
+            errors.email = 'Email là bắt buộc';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+            errors.email = 'Email không hợp lệ';
+        }
+
+        if (!formData.password) {
+            errors.password = 'Mật khẩu là bắt buộc';
+        } else if (formData.password.length < 6) {
+            errors.password = 'Mật khẩu phải có ít nhất 6 ký tự';
+        }
+
+        if (!formData.confirmPassword) {
+            errors.confirmPassword = 'Vui lòng xác nhận mật khẩu';
+        } else if (formData.password !== formData.confirmPassword) {
+            errors.confirmPassword = 'Mật khẩu không khớp';
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
             return;
         }
 
@@ -78,51 +110,80 @@ export function RegisterForm({ onSubmit, onGoogleLogin }: RegisterFormProps) {
                     <input
                         type="text"
                         value={formData.displayName}
-                        onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                        className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                        onChange={(e) => {
+                            setFormData({ ...formData, displayName: e.target.value });
+                            if (fieldErrors.displayName) {
+                                setFieldErrors({ ...fieldErrors, displayName: undefined });
+                            }
+                        }}
+                        className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${fieldErrors.displayName ? 'border-red-500' : ''
+                            }`}
                         placeholder="John Doe"
-                        required
                         disabled={loading}
-                        minLength={2}
                     />
+                    {fieldErrors.displayName && (
+                        <p className="text-red-500 text-sm mt-1">{fieldErrors.displayName}</p>
+                    )}
                 </div>
                 <div>
                     <label className="block text-sm font-medium mb-2">Email</label>
                     <input
-                        type="email"
+                        type="text"
                         value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                        onChange={(e) => {
+                            setFormData({ ...formData, email: e.target.value });
+                            if (fieldErrors.email) {
+                                setFieldErrors({ ...fieldErrors, email: undefined });
+                            }
+                        }}
+                        className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${fieldErrors.email ? 'border-red-500' : ''
+                            }`}
                         placeholder="your@email.com"
-                        required
                         disabled={loading}
                     />
+                    {fieldErrors.email && (
+                        <p className="text-red-500 text-sm mt-1">{fieldErrors.email}</p>
+                    )}
                 </div>
                 <div>
                     <label className="block text-sm font-medium mb-2">Password</label>
                     <input
                         type="password"
                         value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                        onChange={(e) => {
+                            setFormData({ ...formData, password: e.target.value });
+                            if (fieldErrors.password) {
+                                setFieldErrors({ ...fieldErrors, password: undefined });
+                            }
+                        }}
+                        className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${fieldErrors.password ? 'border-red-500' : ''
+                            }`}
                         placeholder="••••••••"
-                        required
                         disabled={loading}
-                        minLength={6}
                     />
+                    {fieldErrors.password && (
+                        <p className="text-red-500 text-sm mt-1">{fieldErrors.password}</p>
+                    )}
                 </div>
                 <div>
                     <label className="block text-sm font-medium mb-2">Confirm Password</label>
                     <input
                         type="password"
                         value={formData.confirmPassword}
-                        onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                        className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                        onChange={(e) => {
+                            setFormData({ ...formData, confirmPassword: e.target.value });
+                            if (fieldErrors.confirmPassword) {
+                                setFieldErrors({ ...fieldErrors, confirmPassword: undefined });
+                            }
+                        }}
+                        className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${fieldErrors.confirmPassword ? 'border-red-500' : ''
+                            }`}
                         placeholder="••••••••"
-                        required
                         disabled={loading}
-                        minLength={6}
                     />
+                    {fieldErrors.confirmPassword && (
+                        <p className="text-red-500 text-sm mt-1">{fieldErrors.confirmPassword}</p>
+                    )}
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? 'Creating account...' : 'Create Account'}

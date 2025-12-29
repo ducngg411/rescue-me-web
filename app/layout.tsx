@@ -1,10 +1,20 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Poppins, Roboto } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/providers/AppProviders";
 import { Navbar } from "@/components/shared/Navbar";
 
-const inter = Inter({ subsets: ["latin"] });
+const poppins = Poppins({
+    subsets: ["latin"],
+    weight: ["300", "400", "500", "600", "700"],
+    variable: "--font-poppins"
+});
+
+const roboto = Roboto({
+    subsets: ["latin"],
+    weight: ["300", "400", "500", "700"],
+    variable: "--font-roboto"
+});
 
 export const metadata: Metadata = {
     title: "RescueMe - Emergency Assistance Platform",
@@ -18,7 +28,7 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body className={inter.className}>
+            <body className={`${poppins.variable} ${roboto.variable} font-sans`}>
                 <AppProviders>
                     <Navbar />
                     {children}

@@ -14,11 +14,32 @@ export function LoginForm({ onSubmit, onGoogleLogin }: LoginFormProps) {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
         setError(null);
+        setFieldErrors({});
+
+        // Validate fields
+        const errors: { email?: string; password?: string } = {};
+
+        if (!email.trim()) {
+            errors.email = 'Email là bắt buộc';
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            errors.email = 'Email không hợp lệ';
+        }
+
+        if (!password) {
+            errors.password = 'Mật khẩu là bắt buộc';
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
+            return;
+        }
+
+        setLoading(true);
         try {
             await onSubmit(email, password);
         } catch (err: any) {
@@ -55,24 +76,40 @@ export function LoginForm({ onSubmit, onGoogleLogin }: LoginFormProps) {
                     <input
                         type="email"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                        onChange={(e) => {
+                            setEmail(e.target.value);
+                            if (fieldErrors.email) {
+                                setFieldErrors({ ...fieldErrors, email: undefined });
+                            }
+                        }}
+                        className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${fieldErrors.email ? 'border-red-500' : ''
+                            }`}
                         placeholder="your@email.com"
-                        required
                         disabled={loading}
                     />
+                    {fieldErrors.email && (
+                        <p className="text-red-500 text-sm mt-1">{fieldErrors.email}</p>
+                    )}
                 </div>
                 <div>
                     <label className="block text-sm font-medium mb-2">Password</label>
                     <input
                         type="password"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                        onChange={(e) => {
+                            setPassword(e.target.value);
+                            if (fieldErrors.password) {
+                                setFieldErrors({ ...fieldErrors, password: undefined });
+                            }
+                        }}
+                        className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${fieldErrors.password ? 'border-red-500' : ''
+                            }`}
                         placeholder="••••••••"
-                        required
                         disabled={loading}
                     />
+                    {fieldErrors.password && (
+                        <p className="text-red-500 text-sm mt-1">{fieldErrors.password}</p>
+                    )}
                 </div>
 
                 <div className="flex justify-end">
