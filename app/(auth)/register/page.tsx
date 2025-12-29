@@ -13,16 +13,24 @@ export default function RegisterPage() {
     // Redirect if already logged in
     useEffect(() => {
         if (user && !loading) {
-            if (!user.profileCompleted) {
+            console.log('Register page - user:', user);
+            console.log('Register page - role:', user.role);
+            // If no role selected, go to select-role page
+            if (user.role === null) {
+                console.log('Redirecting to /select-role');
+                router.push('/select-role');
+            } else if (!user.profileCompleted) {
+                console.log('Redirecting to /complete-profile');
                 router.push('/complete-profile');
             } else {
+                console.log('Redirecting to /');
                 router.push('/');
             }
         }
     }, [user, loading, router]);
 
     const handleRegister = async (data: RegisterData) => {
-        await register(data.email, data.password, data.displayName, data.role);
+        await register(data.email, data.password, data.displayName);
         // Redirect will be handled by the useEffect above
     };
 

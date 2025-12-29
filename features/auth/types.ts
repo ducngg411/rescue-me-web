@@ -2,7 +2,7 @@ export interface User {
     uid: string;
     email: string | null;
     displayName: string | null;
-    role: 'user' | 'provider' | 'admin';
+    role: 'user' | 'provider' | 'admin' | null;
     profileCompleted: boolean;
     photoURL?: string | null;
     createdAt?: any;

@@ -22,7 +22,7 @@ interface User {
     uid: string;
     email: string | null;
     displayName: string | null;
-    role: 'user' | 'provider' | 'admin';
+    role: 'user' | 'provider' | 'admin' | null;
     profileCompleted: boolean;
     photoURL?: string | null;
 }
@@ -33,11 +33,12 @@ interface AuthContextType {
     loading: boolean;
     error: string | null;
     login: (email: string, password: string) => Promise<void>;
-    register: (email: string, password: string, displayName: string, role: 'user' | 'provider') => Promise<void>;
+    register: (email: string, password: string, displayName: string) => Promise<void>;
     loginWithGoogle: () => Promise<void>;
     logout: () => Promise<void>;
     resetPassword: (email: string) => Promise<void>;
     updateUserProfile: (displayName: string, photoURL?: string) => Promise<void>;
+    updateUserRole: (role: 'user' | 'provider') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     uid: firebaseUser.uid,
                     email: firebaseUser.email,
                     displayName: firebaseUser.displayName || userData.displayName || null,
-                    role: userData.role || 'user',
+                    role: userData.role || null,
                     profileCompleted: userData.profileCompleted || false,
                     photoURL: firebaseUser.photoURL || userData.photoURL || null,
                 };
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const newUserData = {
                     email: firebaseUser.email,
                     displayName: firebaseUser.displayName,
-                    role: 'user' as const,
+                    role: null,
                     profileCompleted: false,
                     photoURL: firebaseUser.photoURL,
                     createdAt: serverTimestamp(),
@@ -82,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     uid: firebaseUser.uid,
                     email: firebaseUser.email,
                     displayName: firebaseUser.displayName,
-                    role: 'user',
+                    role: null,
                     profileCompleted: false,
                     photoURL: firebaseUser.photoURL,
                 };
@@ -131,8 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const register = async (
         email: string,
         password: string,
-        displayName: string,
-        role: 'user' | 'provider'
+        displayName: string
     ) => {
         try {
             setError(null);
@@ -150,13 +150,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await setDoc(userDocRef, {
                 email,
                 displayName,
-                role,
+                role: null,
                 profileCompleted: false,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
 
-            // The onAuthStateChanged listener will handle setting the user
+            // Manually fetch and set user data to trigger redirect immediately
+            const userData = await fetchUserData(firebaseUser);
+            setUser(userData);
+            setFirebaseUser(firebaseUser);
         } catch (err: any) {
             const errorMessage = err.message || 'Failed to register';
             setError(errorMessage);
@@ -250,6 +253,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    // Update user role
+    const updateUserRole = async (role: 'user' | 'provider') => {
+        try {
+            setError(null);
+            if (!firebaseUser) {
+                throw new Error('No user logged in');
+            }
+
+            // Update Firestore document
+            const userDocRef = doc(db, 'users', firebaseUser.uid);
+            await setDoc(
+                userDocRef,
+                {
+                    role,
+                    updatedAt: serverTimestamp(),
+                },
+                { merge: true }
+            );
+
+            // Update local user state
+            if (user) {
+                setUser({
+                    ...user,
+                    role,
+                });
+            }
+        } catch (err: any) {
+            const errorMessage = err.message || 'Failed to update role';
+            setError(errorMessage);
+            throw new Error(errorMessage);
+        }
+    };
+
     const value: AuthContextType = {
         user,
         firebaseUser,
@@ -261,6 +297,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         resetPassword,
         updateUserProfile,
+        updateUserRole,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -13,7 +13,6 @@ export interface RegisterData {
     email: string;
     password: string;
     confirmPassword: string;
-    role: 'user' | 'provider';
 }
 
 export function RegisterForm({ onSubmit, onGoogleLogin }: RegisterFormProps) {
@@ -22,7 +21,6 @@ export function RegisterForm({ onSubmit, onGoogleLogin }: RegisterFormProps) {
         email: '',
         password: '',
         confirmPassword: '',
-        role: 'user',
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -125,19 +123,6 @@ export function RegisterForm({ onSubmit, onGoogleLogin }: RegisterFormProps) {
                         disabled={loading}
                         minLength={6}
                     />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium mb-2">I want to:</label>
-                    <select
-                        value={formData.role}
-                        onChange={(e) => setFormData({ ...formData, role: e.target.value as 'user' | 'provider' })}
-                        className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                        required
-                        disabled={loading}
-                    >
-                        <option value="user">Request rescue services (User)</option>
-                        <option value="provider">Provide rescue services (Provider)</option>
-                    </select>
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? 'Creating account...' : 'Create Account'}

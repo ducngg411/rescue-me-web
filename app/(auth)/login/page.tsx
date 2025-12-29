@@ -13,9 +13,17 @@ export default function LoginPage() {
     // Redirect if already logged in
     useEffect(() => {
         if (user && !loading) {
-            if (!user.profileCompleted) {
+            console.log('Login page - user:', user);
+            console.log('Login page - role:', user.role);
+            // If no role selected, go to select-role page
+            if (user.role === null) {
+                console.log('Redirecting to /select-role');
+                router.push('/select-role');
+            } else if (!user.profileCompleted) {
+                console.log('Redirecting to /complete-profile');
                 router.push('/complete-profile');
             } else {
+                console.log('Redirecting to /');
                 router.push('/');
             }
         }

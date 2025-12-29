@@ -31,7 +31,7 @@ export function Navbar() {
         <nav className="border-b bg-background sticky top-0 z-50 backdrop-blur-sm bg-background/95">
             <div className="container mx-auto px-4 py-4 flex justify-between items-center">
                 <Link href="/" className="text-xl font-bold hover:text-primary transition-colors">
-                    🚑 RescueMe
+                    RescueMe
                 </Link>
 
                 <div className="flex items-center gap-4">
@@ -43,9 +43,11 @@ export function Navbar() {
                                 <span className="text-sm font-medium hidden sm:inline">
                                     {user.displayName || user.email}
                                 </span>
-                                <span className={`text-xs px-2 py-1 rounded-full ${getRoleBadge(user.role)}`}>
-                                    {user.role.toUpperCase()}
-                                </span>
+                                {user.role && (
+                                    <span className={`text-xs px-2 py-1 rounded-full ${getRoleBadge(user.role)}`}>
+                                        {user.role.toUpperCase()}
+                                    </span>
+                                )}
                             </div>
 
                             <div className="flex items-center gap-2">

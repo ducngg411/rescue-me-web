@@ -8,7 +8,7 @@ export default function Home() {
       <section className="container mx-auto px-4 py-20">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-5xl font-bold mb-6">
-            🚑 Welcome to <span className="text-primary">RescueMe</span>
+            Welcome to <span className="text-primary">RescueMe</span>
           </h1>
           <p className="text-xl text-gray-600 mb-8">
             Emergency assistance platform connecting people in need with rescue service providers
