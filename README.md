@@ -36,56 +36,12 @@ rescueme/
 
 ## Features
 
-- 🔐 Firebase Authentication
-- 🗺️ VietMap Integration
-- 👥 User & Provider Roles
-- 📍 Real-time Location Tracking
-- 💳 Payment Integration (SePay)
-- 📱 Responsive Design
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ and npm/yarn
-- Firebase project
-- VietMap API key
-
-### Installation
-
-1. Install dependencies:
-```bash
-npm install
-```
-
-2. Create `.env.local` file:
-```env
-# Firebase Client
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
-NEXT_PUBLIC_FIREBASE_APP_ID=
-
-# Firebase Admin
-FIREBASE_PROJECT_ID=
-FIREBASE_CLIENT_EMAIL=
-FIREBASE_PRIVATE_KEY=
-
-# VietMap
-NEXT_PUBLIC_VIETMAP_API_KEY=
-
-# App
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-3. Run the development server:
-```bash
-npm run dev
-```
-
-4. Open [http://localhost:3000](http://localhost:3000)
+- Firebase Authentication
+- VietMap Integration
+- User & Provider Roles
+- Real-time Location Tracking
+- Payment Integration (SePay)
+- Responsive Design
 
 ## Tech Stack
 
