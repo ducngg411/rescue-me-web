@@ -1,14 +1,79 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enum cho các loại auth provider
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+}
+
+// Enum cho vai trò người dùng
+enum UserRole {
+  USER
+  ADMIN
+  RESCUER
+}
+
+// User Model - Quản lý thông tin người dùng
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatar    String?
+  
+  // Authentication fields
+  authProvider     AuthProvider
+  hashedPassword   String?  // Chỉ có giá trị khi authProvider = EMAIL
+  googleId         String?  @unique // Chỉ có giá trị khi authProvider = GOOGLE
+  
+  // Profile & Onboarding
+  profileCompleted Boolean  @default(false)
+  phone            String?
+  address          String?
+  emergencyContact String?
+  
+  // Role & Permissions
+  role      UserRole @default(USER)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLogin DateTime?
+  
+  // Relations
+  sessions  Session[]
+  
+  @@index([email])
+  @@index([googleId])
+  @@map("users")
+}
+
+// Session Model - Quản lý phiên đăng nhập
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  refreshToken String?  @unique
+  expiresAt    DateTime
+  userAgent    String?
+  ipAddress    String?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
 }
