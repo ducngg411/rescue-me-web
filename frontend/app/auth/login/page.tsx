@@ -35,7 +35,7 @@ export default function LoginPage() {
 
             // Redirect based on profile completion status
             if (response.requiresProfileCompletion) {
-                router.push('/auth/complete-profile');
+                router.push('/onboarding/role');
             } else {
                 router.push('/');
             }
@@ -57,7 +57,7 @@ export default function LoginPage() {
 
             // Redirect based on profile completion status
             if (response.requiresProfileCompletion) {
-                router.push('/auth/complete-profile');
+                router.push('/onboarding/role');
             } else {
                 router.push('/');
             }

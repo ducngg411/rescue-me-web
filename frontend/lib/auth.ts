@@ -54,6 +54,30 @@ export const loginWithGoogle = async (idToken: string): Promise<AuthResponse> =>
 };
 
 // ==================== PROFILE COMPLETION ====================
+export const selectRole = async (role: 'USER' | 'PROVIDER'): Promise<User> => {
+    const response = await api.post('/auth/profile/select-role', { role });
+    return response.data.user;
+};
+
+export interface UpdateUserProfileData {
+    fullName: string;
+    phoneNumber: string;
+    contactEmail?: string;
+    defaultAddress?: {
+        addressText: string;
+        lat: number;
+        lng: number;
+    };
+    vehicleType: 'CAR' | 'MOTORCYCLE';
+    licensePlate: string;
+    vehicleColor: string;
+}
+
+export const updateUserProfile = async (data: UpdateUserProfileData): Promise<User> => {
+    const response = await api.put('/me/profile', data);
+    return response.data;
+};
+
 export const completeProfile = async (data: {
     name: string;
     phone: string;

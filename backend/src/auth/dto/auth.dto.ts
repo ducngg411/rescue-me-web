@@ -1,4 +1,17 @@
-import { IsEmail, IsString, MinLength, Matches } from 'class-validator';
+import { IsEmail, IsString, MinLength, Matches, IsEnum, IsOptional, ValidateNested, IsNumber } from 'class-validator';
+import { UserRole, VehicleType } from '@prisma/client';
+import { Type } from 'class-transformer';
+
+class DefaultAddressDto {
+    @IsString()
+    addressText: string;
+
+    @IsNumber()
+    lat: number;
+
+    @IsNumber()
+    lng: number;
+}
 
 export class RegisterEmailDto {
     @IsEmail({}, { message: 'Email không hợp lệ' })
@@ -32,13 +45,42 @@ export class GoogleAuthDto {
 export class CompleteProfileDto {
     @IsString()
     name: string;
+}
 
-    @IsString()
-    phone: string;
+export class SelectRoleDto {
+    @IsEnum(UserRole, {
+        message: 'Role phải là USER hoặc PROVIDER'
+    })
+    role: UserRole;
+}
 
-    @IsString()
-    address: string;
+export class UpdateUserProfileDto {
+    @IsString({ message: 'Họ tên không được để trống' })
+    fullName: string;
 
-    @IsString()
-    emergencyContact: string;
+    @IsString({ message: 'Số điện thoại không được để trống' })
+    @Matches(/^0[39][0-9]{8}$/, {
+        message: 'Số điện thoại không hợp lệ (phải là số VN: 0[39]xxxxxxxx)'
+    })
+    phoneNumber: string;
+
+    @IsOptional()
+    @IsEmail({}, { message: 'Email liên hệ không hợp lệ' })
+    contactEmail?: string;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => DefaultAddressDto)
+    defaultAddress?: DefaultAddressDto;
+
+    @IsEnum(VehicleType, {
+        message: 'Loại phương tiện phải là CAR hoặc MOTORCYCLE'
+    })
+    vehicleType: VehicleType;
+
+    @IsString({ message: 'Biển số xe không được để trống' })
+    licensePlate: string;
+
+    @IsString({ message: 'Màu xe không được để trống' })
+    vehicleColor: string;
 }

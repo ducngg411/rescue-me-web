@@ -14,6 +14,7 @@ import {
     LoginEmailDto,
     GoogleAuthDto,
     CompleteProfileDto,
+    SelectRoleDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
@@ -42,6 +43,13 @@ export class AuthController {
     }
 
     // ==================== PROFILE ====================
+    @Post('profile/select-role')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async selectRole(@Request() req, @Body() dto: SelectRoleDto) {
+        return this.authService.selectRole(req.user.id, dto);
+    }
+
     @Post('profile/complete')
     @UseGuards(JwtAuthGuard)
     @HttpCode(HttpStatus.OK)

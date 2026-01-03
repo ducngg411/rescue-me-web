@@ -18,9 +18,15 @@ enum AuthProvider {
 
 // Enum cho vai trò người dùng
 enum UserRole {
-  USER
-  ADMIN
-  RESCUER
+  USER      // Người dùng cần cứu hộ
+  PROVIDER  // Nhà cung cấp dịch vụ cứu hộ
+  ADMIN     // Quản trị viên
+}
+
+// Enum cho loại phương tiện
+enum VehicleType {
+  CAR
+  MOTORCYCLE
 }
 
 // User Model - Quản lý thông tin người dùng
@@ -37,9 +43,15 @@ model User {
   
   // Profile & Onboarding
   profileCompleted Boolean  @default(false)
-  phone            String?
-  address          String?
-  emergencyContact String?
+  
+  // User Profile (Role = USER)
+  fullName         String?
+  phoneNumber      String?
+  contactEmail     String?
+  defaultAddress   Json?   // {addressText, lat, lng}
+  vehicleType      VehicleType?
+  licensePlate     String?
+  vehicleColor     String?
   
   // Role & Permissions
   role      UserRole @default(USER)

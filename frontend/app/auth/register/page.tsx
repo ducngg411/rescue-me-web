@@ -68,8 +68,8 @@ export default function RegisterPage() {
             const response = await registerWithEmail(data.email, data.password, data.name);
             setUser(response.user);
 
-            // Always redirect to profile completion for new registrations
-            router.push('/auth/complete-profile');
+            // Always redirect to role selection for new registrations
+            router.push('/onboarding/role');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Đăng ký thất bại');
         } finally {
@@ -88,7 +88,7 @@ export default function RegisterPage() {
 
             // Redirect based on profile completion status
             if (response.requiresProfileCompletion) {
-                router.push('/auth/complete-profile');
+                router.push('/onboarding/role');
             } else {
                 router.push('/');
             }

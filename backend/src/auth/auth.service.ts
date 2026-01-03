@@ -8,7 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
-import { RegisterEmailDto, LoginEmailDto, CompleteProfileDto } from './dto/auth.dto';
+import { RegisterEmailDto, LoginEmailDto, CompleteProfileDto, SelectRoleDto } from './dto/auth.dto';
 import { AuthProvider, User } from '@prisma/client';
 
 @Injectable()
@@ -165,9 +165,6 @@ export class AuthService {
             where: { id: userId },
             data: {
                 name: dto.name,
-                phone: dto.phone,
-                address: dto.address,
-                emergencyContact: dto.emergencyContact,
                 profileCompleted: true,
             },
         });
@@ -224,6 +221,34 @@ export class AuthService {
         });
 
         return { message: 'Đăng xuất thành công' };
+    }
+
+    // ==================== ROLE SELECTION ====================
+    async selectRole(userId: string, dto: SelectRoleDto) {
+        // Kiểm tra user tồn tại
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user) {
+            throw new UnauthorizedException('User không tồn tại');
+        }
+
+        // Không cho phép thay đổi role nếu đã hoàn thành profile
+        if (user.profileCompleted) {
+            throw new BadRequestException('Không thể thay đổi role sau khi hoàn thành profile');
+        }
+
+        // Cập nhật role
+        const updatedUser = await this.prisma.user.update({
+            where: { id: userId },
+            data: { role: dto.role },
+        });
+
+        return {
+            user: this.sanitizeUser(updatedUser),
+            message: 'Cập nhật role thành công',
+        };
     }
 
     // ==================== HELPER METHODS ====================
