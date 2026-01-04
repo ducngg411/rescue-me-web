@@ -89,6 +89,10 @@ model User {
   carPlateNumber          String?         // Biển số ô tô
   motorcyclePlateNumber   String?         // Biển số xe máy
   verificationStatus      VerificationStatus  @default(DRAFT)
+  submittedAt             DateTime?       // Thời gian gửi hồ sơ xác minh
+  rejectedAt              DateTime?       // Thời gian bị từ chối
+  rejectReasonCode        String?         // Mã lý do từ chối
+  rejectReasonDetail      String?         // Chi tiết lý do từ chối
   isActive                Boolean         @default(false)
   
   // Role & Permissions
@@ -139,10 +143,13 @@ enum UploadPurpose {
 
 // Enum cho loại tài liệu xác minh
 enum DocumentType {
-  CITIZEN_ID_FRONT      // CMND/CCCD mặt trước
-  CITIZEN_ID_BACK       // CMND/CCCD mặt sau
-  SELFIE                // Ảnh selfie
-  MOTORBIKE_PHOTO       // Ảnh xe máy
+  CITIZEN_ID_FRONT           // CMND/CCCD mặt trước
+  CITIZEN_ID_BACK            // CMND/CCCD mặt sau
+  SELFIE                     // Ảnh selfie
+  CAR_PHOTO                  // Ảnh xe ô tô
+  MOTORBIKE_PHOTO            // Ảnh xe máy
+  DRIVER_LICENSE             // Giấy phép lái xe
+  BUSINESS_REGISTRATION      // Giấy đăng ký kinh doanh
 }
 
 // Upload Model - Quản lý file uploads

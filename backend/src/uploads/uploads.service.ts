@@ -203,7 +203,10 @@ export class UploadsService {
             [DocumentType.CITIZEN_ID_FRONT]: PrismaDocumentType.CITIZEN_ID_FRONT,
             [DocumentType.CITIZEN_ID_BACK]: PrismaDocumentType.CITIZEN_ID_BACK,
             [DocumentType.SELFIE]: PrismaDocumentType.SELFIE,
+            [DocumentType.CAR_PHOTO]: PrismaDocumentType.CAR_PHOTO,
             [DocumentType.MOTORBIKE_PHOTO]: PrismaDocumentType.MOTORBIKE_PHOTO,
+            [DocumentType.DRIVER_LICENSE]: PrismaDocumentType.DRIVER_LICENSE,
+            [DocumentType.BUSINESS_REGISTRATION]: PrismaDocumentType.BUSINESS_REGISTRATION,
         };
         return mapping[docType];
     }

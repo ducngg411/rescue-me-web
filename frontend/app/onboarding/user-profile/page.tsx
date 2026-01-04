@@ -49,7 +49,7 @@ export default function UserProfilePage() {
         }
 
         if (user && user.role !== 'USER') {
-            router.push('/onboarding/provider-profile');
+            router.push('/provider/onboarding');
             return;
         }
     }, [user, loading, router]);

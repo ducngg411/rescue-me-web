@@ -43,7 +43,7 @@ export default function RoleSelectionPage() {
             if (selectedRole === 'USER') {
                 router.push('/onboarding/user-profile');
             } else {
-                router.push('/onboarding/provider-profile');
+                router.push('/provider/onboarding');
             }
         } catch (err: any) {
             console.error('Role selection error:', err);

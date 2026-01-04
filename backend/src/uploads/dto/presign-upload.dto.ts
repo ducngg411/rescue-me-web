@@ -11,7 +11,10 @@ export enum DocumentType {
     CITIZEN_ID_FRONT = 'citizenIdFront',
     CITIZEN_ID_BACK = 'citizenIdBack',
     SELFIE = 'selfie',
+    CAR_PHOTO = 'carPhoto',
     MOTORBIKE_PHOTO = 'motorbikePhoto',
+    DRIVER_LICENSE = 'driverLicense',
+    BUSINESS_REGISTRATION = 'businessRegistration',
 }
 
 export class PresignUploadDto {

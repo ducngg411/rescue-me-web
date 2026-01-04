@@ -33,10 +33,14 @@ export default function LoginPage() {
             const response = await loginWithEmail(data.email, data.password);
             setUser(response.user);
 
-            // Redirect based on profile completion status
+            // Redirect based on role and profile completion status
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
+            } else if (response.user.role === 'PROVIDER') {
+                // Provider with completed profile goes to dashboard
+                router.push('/provider/dashboard');
             } else {
+                // Regular user goes to home
                 router.push('/');
             }
         } catch (err: any) {
@@ -55,10 +59,14 @@ export default function LoginPage() {
             const response = await loginWithGoogle(credentialResponse.credential);
             setUser(response.user);
 
-            // Redirect based on profile completion status
+            // Redirect based on role and profile completion status
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
+            } else if (response.user.role === 'PROVIDER') {
+                // Provider with completed profile goes to dashboard
+                router.push('/provider/dashboard');
             } else {
+                // Regular user goes to home
                 router.push('/');
             }
         } catch (err: any) {
