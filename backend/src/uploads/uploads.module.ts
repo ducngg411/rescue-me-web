@@ -1,0 +1,13 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { UploadsController } from './uploads.controller';
+import { UploadsService } from './uploads.service';
+import { PrismaModule } from '../prisma/prisma.module';
+
+@Module({
+    imports: [ConfigModule, PrismaModule],
+    controllers: [UploadsController],
+    providers: [UploadsService],
+    exports: [UploadsService],
+})
+export class UploadsModule { }

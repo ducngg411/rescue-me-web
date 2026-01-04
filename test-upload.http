@@ -1,0 +1,47 @@
+### Test Upload System
+
+# 1. Login (thay email/password của bạn)
+POST http://localhost:3001/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+###
+
+# 2. Request Presign URL (thay TOKEN từ response trên)
+POST http://localhost:3001/api/uploads/presign
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "purpose": "request_photo",
+  "fileName": "test-image.jpg",
+  "fileSize": 50000,
+  "contentType": "image/jpeg"
+}
+
+###
+
+# 3. Confirm Upload (thay TOKEN và uploadId)
+POST http://localhost:3001/api/uploads/confirm
+Authorization: Bearer YOUR_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "uploadId": "UPLOAD_ID_FROM_STEP_2"
+}
+
+###
+
+# 4. Get User Uploads
+GET http://localhost:3001/api/uploads
+Authorization: Bearer YOUR_TOKEN_HERE
+
+###
+
+# 5. Get User Uploads by Purpose
+GET http://localhost:3001/api/uploads?purpose=request_photo
+Authorization: Bearer YOUR_TOKEN_HERE

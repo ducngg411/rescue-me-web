@@ -101,6 +101,7 @@ model User {
   
   // Relations
   sessions  Session[]
+  uploads   Upload[]
   
   @@index([email])
   @@index([googleId])
@@ -126,4 +127,54 @@ model Session {
   @@index([userId])
   @@index([token])
   @@map("sessions")
+}
+
+// Enum cho mục đích upload
+enum UploadPurpose {
+  PROVIDER_VERIFICATION  // Xác minh provider
+  REQUEST_PHOTO          // Ảnh yêu cầu cứu hộ
+  REVIEW_PHOTO           // Ảnh đánh giá
+  BEFORE_AFTER           // Ảnh trước/sau
+}
+
+// Enum cho loại tài liệu xác minh
+enum DocumentType {
+  CITIZEN_ID_FRONT      // CMND/CCCD mặt trước
+  CITIZEN_ID_BACK       // CMND/CCCD mặt sau
+  SELFIE                // Ảnh selfie
+  MOTORBIKE_PHOTO       // Ảnh xe máy
+}
+
+// Upload Model - Quản lý file uploads
+model Upload {
+  id          String        @id @default(cuid())
+  userId      String
+  
+  // Upload metadata
+  purpose     UploadPurpose
+  docType     DocumentType? // Chỉ dùng cho PROVIDER_VERIFICATION
+  
+  // File information
+  objectKey   String        @unique // providers/{providerId}/verification/{docType}/{timestamp}_{rand}.jpg
+  fileName    String
+  fileSize    Int           // bytes
+  contentType String        // image/jpeg, image/png, image/webp
+  
+  // URLs
+  publicUrl   String
+  
+  // Status
+  confirmed   Boolean       @default(false)
+  
+  // Timestamps
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([purpose])
+  @@index([objectKey])
+  @@map("uploads")
 }
