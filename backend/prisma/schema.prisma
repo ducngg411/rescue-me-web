@@ -29,6 +29,31 @@ enum VehicleType {
   MOTORCYCLE
 }
 
+// Enum cho loại dịch vụ cứu hộ
+enum ServiceType {
+  TOWING           // Kéo xe
+  BATTERY_JUMP     // Cứu hộ bình điện
+  TIRE_CHANGE      // Thay lốp xe
+  FUEL_DELIVERY    // Tiếp nhiên liệu
+  LOCKOUT          // Mở khóa xe
+  BREAKDOWN_REPAIR // Sửa chữa tại chỗ
+}
+
+// Enum cho loại nhà cung cấp
+enum ProviderType {
+  INDIVIDUAL       // Cá nhân
+  BUSINESS         // Doanh nghiệp
+}
+
+// Enum cho trạng thái xác minh Provider
+enum VerificationStatus {
+  DRAFT            // Bản nháp
+  PENDING          // Chờ xác minh
+  APPROVED         // Đã xác minh
+  REJECTED         // Bị từ chối
+  SUSPENDED        // Bị tạm ngưng
+}
+
 // User Model - Quản lý thông tin người dùng
 model User {
   id        String   @id @default(cuid())
@@ -52,6 +77,19 @@ model User {
   vehicleType      VehicleType?
   licensePlate     String?
   vehicleColor     String?
+  
+  // Provider Profile (Role = PROVIDER)
+  providerType            ProviderType?   // Individual hoặc Business
+  businessName            String?         // Chỉ dành cho Business
+  serviceTypes            ServiceType[]
+  supportedVehicleTypes   VehicleType[]
+  serviceRadiusKm         Int?            // 5-50 km
+  permanentAddress        Json?           // {addressText, lat, lng} - Dành cho Individual
+  businessAddress         Json?           // {addressText, lat, lng} - Dành cho Business
+  carPlateNumber          String?         // Biển số ô tô
+  motorcyclePlateNumber   String?         // Biển số xe máy
+  verificationStatus      VerificationStatus  @default(DRAFT)
+  isActive                Boolean         @default(false)
   
   // Role & Permissions
   role      UserRole @default(USER)

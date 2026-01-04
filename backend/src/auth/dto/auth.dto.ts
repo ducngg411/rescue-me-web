@@ -1,5 +1,5 @@
-import { IsEmail, IsString, MinLength, Matches, IsEnum, IsOptional, ValidateNested, IsNumber } from 'class-validator';
-import { UserRole, VehicleType } from '@prisma/client';
+import { IsEmail, IsString, MinLength, Matches, IsEnum, IsOptional, ValidateNested, IsNumber, IsArray, ArrayMinSize, Min, Max } from 'class-validator';
+import { UserRole, VehicleType, ServiceType, ProviderType } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 class DefaultAddressDto {
@@ -83,4 +83,55 @@ export class UpdateUserProfileDto {
 
     @IsString({ message: 'Màu xe không được để trống' })
     vehicleColor: string;
+}
+
+export class UpdateProviderProfileDto {
+    @IsEnum(ProviderType, { message: 'Loại nhà cung cấp phải là INDIVIDUAL hoặc BUSINESS' })
+    providerType: ProviderType;
+
+    @IsString({ message: 'Họ tên không được để trống' })
+    fullName: string;
+
+    @IsString({ message: 'Số điện thoại không được để trống' })
+    @Matches(/^0[39][0-9]{8}$/, {
+        message: 'Số điện thoại không hợp lệ (phải là số VN: 0[39]xxxxxxxx)'
+    })
+    phoneNumber: string;
+
+    @IsOptional()
+    @IsString({ message: 'Tên doanh nghiệp không được để trống' })
+    businessName?: string;
+
+    @IsArray({ message: 'Loại dịch vụ phải là một mảng' })
+    @ArrayMinSize(1, { message: 'Phải chọn ít nhất một loại dịch vụ' })
+    @IsEnum(ServiceType, { each: true, message: 'Loại dịch vụ không hợp lệ' })
+    serviceTypes: ServiceType[];
+
+    @IsArray({ message: 'Loại phương tiện hỗ trợ phải là một mảng' })
+    @ArrayMinSize(1, { message: 'Phải chọn ít nhất một loại phương tiện' })
+    @IsEnum(VehicleType, { each: true, message: 'Loại phương tiện không hợp lệ' })
+    supportedVehicleTypes: VehicleType[];
+
+    @IsNumber({}, { message: 'Bán kính dịch vụ phải là số' })
+    @Min(5, { message: 'Bán kính dịch vụ tối thiểu 5 km' })
+    @Max(50, { message: 'Bán kính dịch vụ tối đa 50 km' })
+    serviceRadiusKm: number;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => DefaultAddressDto)
+    permanentAddress?: DefaultAddressDto;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => DefaultAddressDto)
+    businessAddress?: DefaultAddressDto;
+
+    @IsOptional()
+    @IsString({ message: 'Biển số ô tô không hợp lệ' })
+    carPlateNumber?: string;
+
+    @IsOptional()
+    @IsString({ message: 'Biển số xe máy không hợp lệ' })
+    motorcyclePlateNumber?: string;
 }

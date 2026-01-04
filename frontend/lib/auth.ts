@@ -121,3 +121,31 @@ export const getStoredToken = (): string | null => {
     }
     return null;
 };
+
+// ==================== PROVIDER PROFILE ====================
+export interface UpdateProviderProfileData {
+    providerType: 'INDIVIDUAL' | 'BUSINESS';
+    fullName: string;
+    phoneNumber: string;
+    businessName?: string;
+    serviceTypes: string[];
+    supportedVehicleTypes: string[];
+    serviceRadiusKm: number;
+    permanentAddress?: {
+        addressText: string;
+        lat: number;
+        lng: number;
+    };
+    businessAddress?: {
+        addressText: string;
+        lat: number;
+        lng: number;
+    };
+    carPlateNumber?: string;
+    motorcyclePlateNumber?: string;
+}
+
+export const updateProviderProfile = async (data: UpdateProviderProfileData): Promise<User> => {
+    const response = await api.put('/me/provider/profile', data);
+    return response.data;
+};
