@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Shield, User, Briefcase, AlertTriangle, CheckCircle, XCircle, Clock, RefreshCw, Power, Edit } from 'lucide-react';
 import api from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useProviderGuard } from '@/lib/guards';
@@ -125,14 +126,15 @@ export default function ProviderDashboard() {
     return (
         <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-4xl mx-auto px-4">
-                <h1 className="text-3xl font-bold mb-8">Provider Dashboard</h1>
+                <h1 className="text-3xl font-semibold text-gray-900 mb-8">Provider Dashboard</h1>
 
                 {/* Verification Status Card */}
-                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-semibold">Trạng thái xác minh</h2>
+                <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+                    <div className="flex items-center gap-2 mb-4 pb-3 border-b-2 border-blue-600">
+                        <Shield className="w-5 h-5 text-blue-600" />
+                        <h2 className="text-lg font-semibold text-gray-900 flex-1">Trạng thái xác minh</h2>
                         <span
-                            className={`px-4 py-2 rounded-full text-sm font-medium ${statusInfo.color === 'green'
+                            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium ${statusInfo.color === 'green'
                                 ? 'bg-green-100 text-green-700'
                                 : statusInfo.color === 'yellow'
                                     ? 'bg-yellow-100 text-yellow-700'
@@ -141,77 +143,90 @@ export default function ProviderDashboard() {
                                         : 'bg-gray-100 text-gray-700'
                                 }`}
                         >
+                            {statusInfo.color === 'green' && <CheckCircle className="w-4 h-4" />}
+                            {statusInfo.color === 'yellow' && <Clock className="w-4 h-4" />}
+                            {statusInfo.color === 'red' && <XCircle className="w-4 h-4" />}
+                            {statusInfo.color === 'gray' && <RefreshCw className="w-4 h-4" />}
                             {statusInfo.label}
                         </span>
                     </div>
 
-                    <p className="text-gray-600 mb-4">{statusInfo.description}</p>
+                    <p className="text-sm text-gray-700 mb-4">{statusInfo.description}</p>
 
                     {/* Show rejection details if REJECTED */}
                     {profile.verificationStatus === 'REJECTED' && profile.rejectReasonCode && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                            <p className="font-medium text-red-800 mb-1">Lý do từ chối:</p>
-                            <p className="text-sm text-red-700">
-                                <strong>Mã:</strong> {profile.rejectReasonCode}
-                            </p>
-                            {profile.rejectReasonDetail && (
-                                <p className="text-sm text-red-700 mt-1">
-                                    <strong>Chi tiết:</strong> {profile.rejectReasonDetail}
-                                </p>
-                            )}
-                            {profile.rejectedAt && (
-                                <p className="text-xs text-red-600 mt-2">
-                                    Từ chối lúc: {new Date(profile.rejectedAt).toLocaleString('vi-VN')}
-                                </p>
-                            )}
+                        <div className="border-l-4 border-red-500 bg-red-50 rounded-r-lg p-4 mb-4">
+                            <div className="flex items-start gap-3">
+                                <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium text-red-900 mb-2">Lý do từ chối</p>
+                                    <p className="text-sm text-red-700">
+                                        <span className="font-medium">Mã:</span> {profile.rejectReasonCode}
+                                    </p>
+                                    {profile.rejectReasonDetail && (
+                                        <p className="text-sm text-red-700 mt-1">
+                                            <span className="font-medium">Chi tiết:</span> {profile.rejectReasonDetail}
+                                        </p>
+                                    )}
+                                    {profile.rejectedAt && (
+                                        <p className="text-xs text-red-600 mt-2">
+                                            Từ chối lúc: {new Date(profile.rejectedAt).toLocaleString('vi-VN')}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     )}
 
                     {profile.submittedAt && (
-                        <p className="text-sm text-gray-500 mb-4">
-                            Gửi hồ sơ: {new Date(profile.submittedAt).toLocaleString('vi-VN')}
+                        <p className="text-sm text-gray-600 mb-4">
+                            <span className="font-medium">Gửi hồ sơ:</span> {new Date(profile.submittedAt).toLocaleString('vi-VN')}
                         </p>
                     )}
 
                     {statusInfo.action && statusInfo.actionLink && (
                         <button
                             onClick={() => router.push(statusInfo.actionLink)}
-                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-white bg-blue-600 border-2 border-blue-600 rounded-lg hover:bg-blue-700 hover:border-blue-700 transition-colors"
                         >
+                            <RefreshCw className="w-4 h-4" />
                             {statusInfo.action}
                         </button>
                     )}
                 </div>
 
                 {/* Profile Info Card */}
-                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-                    <h2 className="text-xl font-semibold mb-4">Thông tin nhà cung cấp</h2>
+                <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+                    <div className="flex items-center gap-2 mb-4 pb-3 border-b-2 border-blue-600">
+                        <User className="w-5 h-5 text-blue-600" />
+                        <h2 className="text-lg font-semibold text-gray-900">Thông tin nhà cung cấp</h2>
+                    </div>
                     <div className="grid md:grid-cols-2 gap-4">
                         <div>
-                            <p className="text-sm text-gray-500">Họ và tên</p>
-                            <p className="font-medium">{profile.fullName || 'Chưa cập nhật'}</p>
+                            <p className="text-sm font-medium text-gray-900">Họ và tên</p>
+                            <p className="text-sm text-gray-700 mt-1">{profile.fullName || 'Chưa cập nhật'}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-500">Email</p>
-                            <p className="font-medium">{profile.email}</p>
+                            <p className="text-sm font-medium text-gray-900">Email</p>
+                            <p className="text-sm text-gray-700 mt-1">{profile.email}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-500">Số điện thoại</p>
-                            <p className="font-medium">{profile.phoneNumber || 'Chưa cập nhật'}</p>
+                            <p className="text-sm font-medium text-gray-900">Số điện thoại</p>
+                            <p className="text-sm text-gray-700 mt-1">{profile.phoneNumber || 'Chưa cập nhật'}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-500">Loại nhà cung cấp</p>
-                            <p className="font-medium">
+                            <p className="text-sm font-medium text-gray-900">Loại nhà cung cấp</p>
+                            <p className="text-sm text-gray-700 mt-1">
                                 {profile.providerType === 'INDIVIDUAL' ? 'Cá nhân' : 'Doanh nghiệp'}
                             </p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-500">Dịch vụ cung cấp</p>
-                            <p className="font-medium">{profile.serviceTypes?.join(', ') || 'Chưa cập nhật'}</p>
+                            <p className="text-sm font-medium text-gray-900">Dịch vụ cung cấp</p>
+                            <p className="text-sm text-gray-700 mt-1">{profile.serviceTypes?.join(', ') || 'Chưa cập nhật'}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-500">Phương tiện hỗ trợ</p>
-                            <p className="font-medium">
+                            <p className="text-sm font-medium text-gray-900">Phương tiện hỗ trợ</p>
+                            <p className="text-sm text-gray-700 mt-1">
                                 {profile.supportedVehicleTypes?.join(', ') || 'Chưa cập nhật'}
                             </p>
                         </div>
@@ -221,19 +236,23 @@ export default function ProviderDashboard() {
                     {profile.verificationStatus === 'REJECTED' && (
                         <button
                             onClick={() => router.push('/provider/onboarding')}
-                            className="mt-4 px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                            className="mt-6 flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
                         >
+                            <Edit className="w-4 h-4" />
                             Chỉnh sửa hồ sơ
                         </button>
                     )}
                 </div>
 
                 {/* Online/Offline Toggle */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-xl font-semibold mb-2">Trạng thái hoạt động</h2>
-                            <p className="text-gray-600">
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Power className="w-5 h-5 text-blue-600" />
+                                <h2 className="text-lg font-semibold text-gray-900">Trạng thái hoạt động</h2>
+                            </div>
+                            <p className="text-sm text-gray-700">
                                 {profile.verificationStatus === 'APPROVED'
                                     ? 'Bật/tắt để nhận yêu cầu cứu hộ'
                                     : 'Bạn cần được xác minh trước khi có thể online'}

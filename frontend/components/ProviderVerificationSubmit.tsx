@@ -193,81 +193,117 @@ export default function ProviderVerificationSubmit() {
     }
 
     return (
-        <div className="max-w-4xl mx-auto p-6">
-            <h1 className="text-3xl font-bold mb-2">Xác minh nhà cung cấp</h1>
-            <p className="text-gray-600 mb-6">
-                Vui lòng tải lên các tài liệu sau để hoàn tất quá trình xác minh
-            </p>
+        <div className="max-w-4xl mx-auto p-6 space-y-6">
+            {/* Header */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Xác minh nhà cung cấp</h1>
+                <p className="text-gray-600">
+                    Vui lòng tải lên các tài liệu sau để hoàn tất quá trình xác minh
+                </p>
+            </div>
 
+            {/* Error Alert */}
             {error && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-red-800 font-medium">{error}</p>
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-sm">
+                    <div className="flex items-start gap-3">
+                        <span className="text-red-500 text-xl">⚠️</span>
+                        <p className="text-red-800 font-medium">{error}</p>
+                    </div>
                 </div>
             )}
 
+            {/* Missing Fields Alert */}
             {validationErrors.missingFields && validationErrors.missingFields.length > 0 && (
-                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <h3 className="font-semibold text-yellow-800 mb-2">Thiếu thông tin hồ sơ:</h3>
-                    <ul className="list-disc list-inside text-yellow-700">
-                        {validationErrors.missingFields.map((field) => (
-                            <li key={field}>{field}</li>
-                        ))}
-                    </ul>
-                    <p className="mt-2 text-sm text-yellow-600">
-                        Vui lòng <a href="/provider/onboarding" className="underline">hoàn thành hồ sơ</a> trước khi gửi xác minh.
-                    </p>
+                <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-lg shadow-sm">
+                    <div className="flex items-start gap-3">
+                        <span className="text-yellow-500 text-xl">⚠️</span>
+                        <div className="flex-1">
+                            <h3 className="font-semibold text-yellow-800 mb-2">Thiếu thông tin hồ sơ:</h3>
+                            <ul className="list-disc list-inside text-yellow-700 space-y-1">
+                                {validationErrors.missingFields.map((field) => (
+                                    <li key={field}>{field}</li>
+                                ))}
+                            </ul>
+                            <p className="mt-3 text-sm text-yellow-600">
+                                Vui lòng{' '}
+                                <a href="/provider/onboarding" className="underline font-medium hover:text-yellow-800">
+                                    hoàn thành hồ sơ
+                                </a>{' '}
+                                trước khi gửi xác minh.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             )}
 
+            {/* Missing Docs Alert */}
             {validationErrors.missingDocs && validationErrors.missingDocs.length > 0 && (
-                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <h3 className="font-semibold text-yellow-800 mb-2">Thiếu tài liệu:</h3>
-                    <ul className="list-disc list-inside text-yellow-700">
-                        {validationErrors.missingDocs.map((doc) => (
-                            <li key={doc}>{doc}</li>
-                        ))}
-                    </ul>
+                <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-lg shadow-sm">
+                    <div className="flex items-start gap-3">
+                        <span className="text-yellow-500 text-xl">📄</span>
+                        <div className="flex-1">
+                            <h3 className="font-semibold text-yellow-800 mb-2">Thiếu tài liệu:</h3>
+                            <ul className="list-disc list-inside text-yellow-700 space-y-1">
+                                {validationErrors.missingDocs.map((doc) => (
+                                    <li key={doc}>{doc}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             )}
 
-            <div className="space-y-6">
+            {/* Documents Grid */}
+            <div className="grid gap-6 md:grid-cols-2">
                 {documents.map((doc) => (
-                    <div key={doc.type} className="border rounded-lg p-6 bg-white shadow-sm">
+                    <div
+                        key={doc.type}
+                        className={`bg-white rounded-lg shadow-sm border-2 p-6 transition-all ${doc.uploaded
+                                ? 'border-green-500 bg-green-50'
+                                : doc.required
+                                    ? 'border-gray-200 hover:border-blue-300'
+                                    : 'border-gray-100'
+                            }`}
+                    >
+                        {/* Document Header */}
                         <div className="flex items-start justify-between mb-4">
-                            <div>
-                                <h3 className="font-semibold text-lg">
-                                    {doc.label}
-                                    {doc.required && <span className="text-red-500 ml-1">*</span>}
+                            <div className="flex-1">
+                                <h3 className="font-semibold text-lg text-gray-900 flex items-center gap-2">
+                                    {doc.uploaded ? '✅' : '📄'} {doc.label}
+                                    {doc.required && !doc.uploaded && <span className="text-red-500">*</span>}
                                 </h3>
-                                <p className="text-sm text-gray-500">{doc.description}</p>
+                                <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
                             </div>
                             {doc.uploaded && (
-                                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
-                                    ✓ Đã tải lên
+                                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium whitespace-nowrap">
+                                    ✓ Hoàn tất
                                 </span>
                             )}
                         </div>
 
+                        {/* Document Upload/Preview */}
                         {!doc.uploaded ? (
-                            <FileUpload
-                                purpose={UploadPurpose.PROVIDER_VERIFICATION}
-                                docType={doc.type}
-                                onSuccess={(result) => {
-                                    if (result.publicUrl) {
-                                        handleUploadSuccess(doc.type, result.publicUrl);
-                                    }
-                                }}
-                                onError={(error) => {
-                                    console.error('Upload error:', error);
-                                    alert(`Upload failed: ${error}`);
-                                }}
-                            />
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg">
+                                <FileUpload
+                                    purpose={UploadPurpose.PROVIDER_VERIFICATION}
+                                    docType={doc.type}
+                                    onSuccess={(result) => {
+                                        if (result.publicUrl) {
+                                            handleUploadSuccess(doc.type, result.publicUrl);
+                                        }
+                                    }}
+                                    onError={(error) => {
+                                        console.error('Upload error:', error);
+                                        alert(`Upload failed: ${error}`);
+                                    }}
+                                />
+                            </div>
                         ) : (
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                                 <img
                                     src={doc.publicUrl}
                                     alt={doc.label}
-                                    className="max-w-sm max-h-64 rounded-lg border object-cover"
+                                    className="w-full h-48 object-cover rounded-lg border-2 border-green-200"
                                 />
                                 <button
                                     onClick={() => {
@@ -279,9 +315,9 @@ export default function ProviderVerificationSubmit() {
                                             )
                                         );
                                     }}
-                                    className="text-sm text-blue-600 hover:underline"
+                                    className="w-full py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg font-medium transition-colors"
                                 >
-                                    Tải lên lại
+                                    🔄 Tải lên lại
                                 </button>
                             </div>
                         )}
@@ -289,13 +325,24 @@ export default function ProviderVerificationSubmit() {
                 ))}
             </div>
 
-            <div className="mt-8 p-6 bg-gray-50 border rounded-lg">
+            {/* Submit Section */}
+            <div className="bg-white rounded-lg shadow-sm border p-6">
                 <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="font-semibold text-lg">
-                            {allRequiredUploaded ? '✅ Sẵn sàng gửi hồ sơ' : '⚠️ Chưa hoàn thành'}
-                        </h3>
-                        <p className="text-sm text-gray-600 mt-1">
+                    <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                            {allRequiredUploaded ? (
+                                <>
+                                    <span className="text-2xl">✅</span>
+                                    <h3 className="text-xl font-bold text-green-700">Sẵn sàng gửi hồ sơ</h3>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="text-2xl">⚠️</span>
+                                    <h3 className="text-xl font-bold text-yellow-700">Chưa hoàn thành</h3>
+                                </>
+                            )}
+                        </div>
+                        <p className="text-sm text-gray-600 ml-11">
                             {allRequiredUploaded
                                 ? 'Bạn đã tải lên đầy đủ tài liệu. Nhấn nút bên dưới để gửi yêu cầu xác minh.'
                                 : 'Vui lòng tải lên đầy đủ các tài liệu bắt buộc để gửi hồ sơ.'}
@@ -304,12 +351,22 @@ export default function ProviderVerificationSubmit() {
                     <button
                         onClick={handleSubmit}
                         disabled={!allRequiredUploaded || submitting}
-                        className={`px-6 py-3 rounded-lg font-medium transition-colors ${allRequiredUploaded && !submitting
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        className={`px-8 py-4 rounded-lg font-semibold text-lg transition-all shadow-md hover:shadow-lg ${allRequiredUploaded && !submitting
+                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             }`}
                     >
-                        {submitting ? 'Đang gửi...' : 'Gửi hồ sơ xác minh'}
+                        {submitting ? (
+                            <span className="flex items-center gap-2">
+                                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                Đang gửi...
+                            </span>
+                        ) : (
+                            'Gửi hồ sơ xác minh →'
+                        )}
                     </button>
                 </div>
             </div>

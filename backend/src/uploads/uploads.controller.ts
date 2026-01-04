@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Req, Get, Query } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Req, Get, Query, Delete, Param } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UploadsService } from './uploads.service';
 import { PresignUploadDto, PresignUploadResponseDto, UploadPurpose } from './dto/presign-upload.dto';
@@ -31,5 +31,13 @@ export class UploadsController {
         @Query('purpose') purpose?: UploadPurpose,
     ) {
         return this.uploadsService.getUserUploads(req.user.id, purpose);
+    }
+
+    @Delete(':uploadId')
+    async deleteUpload(
+        @Req() req,
+        @Param('uploadId') uploadId: string,
+    ) {
+        return this.uploadsService.deleteUpload(req.user.id, uploadId);
     }
 }

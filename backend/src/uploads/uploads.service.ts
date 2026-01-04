@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresignUploadDto, PresignUploadResponseDto, UploadPurpose, DocumentType } from './dto/presign-upload.dto';
@@ -73,6 +73,11 @@ export class UploadsService {
 
             if (!user || user.role !== 'PROVIDER') {
                 throw new ForbiddenException('Only providers can upload verification documents');
+            }
+
+            // Delete existing uploads for this docType to prevent accumulation
+            if (dto.docType) {
+                await this.deleteUploadsByDocType(userId, dto.purpose, dto.docType);
             }
         }
 
@@ -223,5 +228,79 @@ export class UploadsService {
             where,
             orderBy: { createdAt: 'desc' },
         });
+    }
+
+    // Delete upload (soft delete or hard delete with R2 cleanup)
+    async deleteUpload(userId: string, uploadId: string) {
+        // Find upload record
+        const upload = await this.prisma.upload.findUnique({
+            where: { id: uploadId },
+        });
+
+        if (!upload) {
+            throw new NotFoundException('Upload not found');
+        }
+
+        // Verify ownership
+        if (upload.userId !== userId) {
+            throw new ForbiddenException('You can only delete your own uploads');
+        }
+
+        // Delete from R2
+        try {
+            const command = new DeleteObjectCommand({
+                Bucket: this.bucketName,
+                Key: upload.objectKey,
+            });
+            await this.s3Client.send(command);
+        } catch (error) {
+            console.error('Failed to delete from R2:', error);
+            // Continue with database deletion even if R2 deletion fails
+        }
+
+        // Delete from database
+        await this.prisma.upload.delete({
+            where: { id: uploadId },
+        });
+
+        return {
+            success: true,
+            message: 'Upload deleted successfully',
+        };
+    }
+
+    // Delete uploads by docType for a user (used when uploading new file for same docType)
+    async deleteUploadsByDocType(userId: string, purpose: UploadPurpose, docType: DocumentType) {
+        const uploads = await this.prisma.upload.findMany({
+            where: {
+                userId,
+                purpose: this.mapPurposeToEnum(purpose),
+                docType: this.mapDocTypeToEnum(docType),
+            },
+        });
+
+        for (const upload of uploads) {
+            try {
+                // Delete from R2
+                const command = new DeleteObjectCommand({
+                    Bucket: this.bucketName,
+                    Key: upload.objectKey,
+                });
+                await this.s3Client.send(command);
+
+                // Delete from database
+                await this.prisma.upload.delete({
+                    where: { id: upload.id },
+                });
+            } catch (error) {
+                console.error(`Failed to delete upload ${upload.id}:`, error);
+                // Continue with next upload
+            }
+        }
+
+        return {
+            success: true,
+            deletedCount: uploads.length,
+        };
     }
 }

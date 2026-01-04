@@ -196,6 +196,14 @@ export async function getUserUploads(purpose?: UploadPurpose) {
 }
 
 /**
+ * Delete upload by ID
+ */
+export async function deleteUpload(uploadId: string) {
+    const response = await api.delete(`/uploads/${uploadId}`);
+    return response.data;
+}
+
+/**
  * Format file size for display
  */
 export function formatFileSize(bytes: number): string {

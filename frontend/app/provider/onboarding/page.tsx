@@ -129,31 +129,34 @@ export default function ProviderOnboardingPage() {
             <div className="max-w-4xl mx-auto px-4">
                 {/* Progress Steps */}
                 <div className="mb-8">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center">
                         {[1, 2, 3, 4].map((step) => (
-                            <div key={step} className="flex items-center flex-1">
-                                <div
-                                    className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${currentStep >= step
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-gray-300 text-gray-600'
-                                        }`}
-                                >
-                                    {step}
+                            <React.Fragment key={step}>
+                                <div className="flex flex-col items-center">
+                                    <div
+                                        className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${currentStep >= step
+                                                ? 'bg-blue-600 text-white'
+                                                : 'bg-gray-300 text-gray-700'
+                                            }`}
+                                    >
+                                        {step}
+                                    </div>
+                                    <span className={`text-xs mt-2 font-medium whitespace-nowrap ${currentStep >= step ? 'text-blue-600' : 'text-gray-500'
+                                        }`}>
+                                        {step === 1 && 'Thông tin dịch vụ'}
+                                        {step === 2 && 'Tài liệu bắt buộc'}
+                                        {step === 3 && 'Tài liệu tùy chọn'}
+                                        {step === 4 && 'Xem lại & Gửi'}
+                                    </span>
                                 </div>
                                 {step < 4 && (
                                     <div
-                                        className={`flex-1 h-1 mx-2 ${currentStep > step ? 'bg-blue-600' : 'bg-gray-300'
+                                        className={`flex-1 h-1 mx-3 ${currentStep > step ? 'bg-blue-600' : 'bg-gray-300'
                                             }`}
                                     />
                                 )}
-                            </div>
+                            </React.Fragment>
                         ))}
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                        <span className="text-sm text-gray-600">Service Info</span>
-                        <span className="text-sm text-gray-600">Required Docs</span>
-                        <span className="text-sm text-gray-600">Optional Docs</span>
-                        <span className="text-sm text-gray-600">Review & Submit</span>
                     </div>
                 </div>
 

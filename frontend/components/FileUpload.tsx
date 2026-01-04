@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
+import { Upload, X, Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { useUpload, UseUploadOptions } from '@/lib/hooks/useUpload';
 import { validateFile, formatFileSize } from '@/lib/upload';
 
@@ -10,6 +11,7 @@ interface FileUploadProps extends UseUploadOptions {
     disabled?: boolean;
     className?: string;
     children?: React.ReactNode;
+    existingUpload?: { id: string; publicUrl: string } | null;
 }
 
 export default function FileUpload({
@@ -18,6 +20,7 @@ export default function FileUpload({
     disabled = false,
     className = '',
     children,
+    existingUpload = null,
     ...uploadOptions
 }: FileUploadProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -25,6 +28,9 @@ export default function FileUpload({
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
     const { upload, uploading, progress, error, result, reset } = useUpload(uploadOptions);
+
+    // If there's an existing upload and no new upload, show existing
+    const showExisting = existingUpload && !result?.success && !selectedFile;
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -68,25 +74,9 @@ export default function FileUpload({
     return (
         <div className={`space-y-4 ${className}`}>
             {/* Label */}
-            {label && <label className="block text-sm font-medium text-gray-700">{label}</label>}
+            {label && <label className="block text-sm font-semibold text-gray-700">{label}</label>}
 
-            {/* Custom trigger or default button */}
-            {children ? (
-                <div onClick={handleButtonClick} className="cursor-pointer">
-                    {children}
-                </div>
-            ) : (
-                <button
-                    type="button"
-                    onClick={handleButtonClick}
-                    disabled={disabled || uploading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    {uploading ? 'Uploading...' : 'Choose File'}
-                </button>
-            )}
-
-            {/* Hidden file input */}
+            {/* Hidden File Input - Always rendered */}
             <input
                 ref={fileInputRef}
                 type="file"
@@ -96,79 +86,147 @@ export default function FileUpload({
                 className="hidden"
             />
 
+            {/* Existing Upload Display */}
+            {showExisting && (
+                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <p className="text-sm font-semibold text-green-800">Đã tải lên trước đó</p>
+                    </div>
+                    <img
+                        src={existingUpload.publicUrl}
+                        alt="Existing upload"
+                        className="w-full h-48 object-cover rounded-lg border-2 border-green-300"
+                    />
+                    <button
+                        type="button"
+                        onClick={handleButtonClick}
+                        className="w-full py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                        Tải lên file khác
+                    </button>
+                </div>
+            )}
+
+            {/* Upload Area */}
+            {!selectedFile && !result?.success && !showExisting && (
+                <div
+                    onClick={handleButtonClick}
+                    className="relative border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all group"
+                >
+                    <div className="flex flex-col items-center gap-3">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                            <Upload className="w-8 h-8 text-blue-600" />
+                        </div>
+                        <div>
+                            <p className="text-base font-medium text-gray-700 group-hover:text-blue-600">
+                                Nhấn để chọn file
+                            </p>
+                            <p className="text-sm text-gray-500 mt-1">
+                                hoặc kéo thả file vào đây
+                            </p>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                            Hỗ trợ: JPG, PNG, WEBP (tối đa 5MB)
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Preview */}
             {preview && !result?.success && (
-                <div className="space-y-2">
-                    <img src={preview} alt="Preview" className="max-w-xs rounded-lg border" />
-                    <div className="text-sm text-gray-600">
-                        {selectedFile?.name} ({formatFileSize(selectedFile?.size || 0)})
-                    </div>
-                    <div className="flex gap-2">
-                        <button
-                            type="button"
-                            onClick={handleUpload}
-                            disabled={uploading}
-                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                        >
-                            {uploading ? 'Uploading...' : 'Upload'}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleReset}
-                            disabled={uploading}
-                            className="px-4 py-2 bg-gray-400 text-white rounded-md hover:bg-gray-500 disabled:opacity-50"
-                        >
-                            Cancel
-                        </button>
+                <div className="bg-white rounded-lg border-2 border-gray-200 p-4 space-y-4">
+                    <img
+                        src={preview}
+                        alt="Preview"
+                        className="w-full h-64 object-cover rounded-lg border"
+                    />
+                    <div className="flex items-center justify-between">
+                        <div className="text-sm">
+                            <p className="font-medium text-gray-900">{selectedFile?.name}</p>
+                            <p className="text-gray-500">{formatFileSize(selectedFile?.size || 0)}</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={handleReset}
+                                disabled={uploading}
+                                className="px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 font-medium transition-colors flex items-center gap-2"
+                            >
+                                <X className="w-4 h-4" />
+                                Hủy
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleUpload}
+                                disabled={uploading}
+                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium shadow-sm transition-all flex items-center gap-2"
+                            >
+                                {uploading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Đang tải...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload className="w-4 h-4" />
+                                        Tải lên
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* Progress bar */}
             {uploading && (
-                <div className="space-y-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="bg-white rounded-lg border-2 border-blue-200 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">Đang tải lên...</span>
+                        <span className="text-sm font-bold text-blue-600">{Math.round(progress)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                         <div
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
                             style={{ width: `${progress}%` }}
                         />
                     </div>
-                    <div className="text-sm text-gray-600 text-center">{Math.round(progress)}%</div>
                 </div>
             )}
 
             {/* Error */}
             {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                    <p className="text-sm text-red-600">{error}</p>
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+                    <div className="flex items-start gap-2">
+                        <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-red-800 font-medium">{error}</p>
+                    </div>
                 </div>
             )}
 
             {/* Success */}
             {result?.success && (
-                <div className="space-y-2">
-                    <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-                        <p className="text-sm text-green-600">Upload successful!</p>
-                        {result.publicUrl && (
-                            <a
-                                href={result.publicUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-blue-600 hover:underline"
-                            >
-                                View file
-                            </a>
-                        )}
+                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                        <p className="text-sm font-semibold text-green-800">Tải lên thành công!</p>
                     </div>
                     {result.publicUrl && (
-                        <img src={result.publicUrl} alt="Uploaded" className="max-w-xs rounded-lg border" />
+                        <img
+                            src={result.publicUrl}
+                            alt="Uploaded"
+                            className="w-full h-48 object-cover rounded-lg border-2 border-green-300"
+                        />
                     )}
                     <button
                         type="button"
                         onClick={handleReset}
-                        className="px-4 py-2 bg-gray-400 text-white rounded-md hover:bg-gray-500"
+                        className="w-full py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                     >
-                        Upload Another
+                        <RefreshCw className="w-4 h-4" />
+                        Tải lên file khác
                     </button>
                 </div>
             )}
