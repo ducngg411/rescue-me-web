@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { User, Phone, Mail, MapPin, Car, Bike, Palette, Loader2, CheckCircle, Save } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { updateUserProfile, UpdateUserProfileData } from '@/lib/auth';
 import { searchPlaces, getPlaceDetails, PlaceSearchResult } from '@/lib/vietmap';
@@ -207,10 +208,10 @@ export default function UserProfilePage() {
 
     if (loading || !user) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Đang tải...</p>
+                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto" />
+                    <p className="mt-4 text-sm text-gray-600">Đang tải...</p>
                 </div>
             </div>
         );
@@ -221,27 +222,25 @@ export default function UserProfilePage() {
             <div className="max-w-md w-full">
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-full mb-3">
-                        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
+                    <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-50 rounded-full mb-3">
+                        <User className="w-7 h-7 text-blue-600" />
                     </div>
                     <h1 className="text-2xl font-semibold text-gray-900">Hoàn thiện hồ sơ</h1>
-                    <p className="mt-1 text-sm text-gray-500">Cung cấp thông tin phương tiện của bạn</p>
+                    <p className="mt-1 text-sm text-gray-600">Cung cấp thông tin phương tiện của bạn</p>
                 </div>
 
                 {/* Form Card */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
                     {errors.general && (
-                        <div className="mb-4 p-3 bg-red-50 border-l-4 border-red-500 rounded">
-                            <p className="text-sm text-red-700">{errors.general}</p>
+                        <div className="mb-4 border-l-4 border-red-500 bg-red-50 rounded-r-lg p-3">
+                            <p className="text-sm text-red-800">{errors.general}</p>
                         </div>
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {/* Full Name */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                            <label className="block text-sm font-medium text-gray-900 mb-1.5">
                                 Họ và tên <span className="text-red-500">*</span>
                             </label>
                             <input
@@ -256,7 +255,7 @@ export default function UserProfilePage() {
 
                         {/* Phone Number */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                            <label className="block text-sm font-medium text-gray-900 mb-1.5">
                                 Số điện thoại <span className="text-red-500">*</span>
                             </label>
                             <input
@@ -271,7 +270,7 @@ export default function UserProfilePage() {
 
                         {/* Contact Email */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                            <label className="block text-sm font-medium text-gray-900 mb-1.5">
                                 Email liên hệ
                             </label>
                             <input
@@ -286,7 +285,7 @@ export default function UserProfilePage() {
 
                         {/* Default Address with VietMap Autocomplete */}
                         <div className="relative">
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                            <label className="block text-sm font-medium text-gray-900 mb-1.5">
                                 Địa chỉ thường dùng
                             </label>
                             <input
@@ -325,11 +324,8 @@ export default function UserProfilePage() {
                                     className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto"
                                 >
                                     {isSearching ? (
-                                        <div className="px-4 py-3 text-sm text-gray-500 flex items-center">
-                                            <svg className="animate-spin h-4 w-4 mr-2 text-blue-600" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                            </svg>
+                                        <div className="px-4 py-3 text-sm text-gray-600 flex items-center">
+                                            <Loader2 className="w-4 h-4 mr-2 text-blue-600 animate-spin" />
                                             Đang tìm kiếm...
                                         </div>
                                     ) : (
@@ -341,10 +337,7 @@ export default function UserProfilePage() {
                                                 className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
                                             >
                                                 <div className="flex items-start">
-                                                    <svg className="w-4 h-4 mt-0.5 mr-2 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    </svg>
+                                                    <MapPin className="w-4 h-4 mt-0.5 mr-2 text-gray-400 flex-shrink-0" />
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-sm font-medium text-gray-900 truncate">{suggestion.displayName}</p>
                                                         {suggestion.address && suggestion.address !== suggestion.displayName && (
@@ -360,14 +353,17 @@ export default function UserProfilePage() {
 
                             {/* Display selected address with coordinates */}
                             {formData.defaultAddress && (
-                                <p className="mt-1 text-xs text-gray-500">
-                                    📍 {formData.defaultAddress.addressText}
-                                    {formData.defaultAddress.lat && formData.defaultAddress.lng && (
-                                        <span className="ml-2 text-gray-400">
-                                            ({formData.defaultAddress.lat.toFixed(6)}, {formData.defaultAddress.lng.toFixed(6)})
-                                        </span>
-                                    )}
-                                </p>
+                                <div className="mt-2 flex items-start gap-1.5">
+                                    <MapPin className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
+                                    <p className="text-xs text-gray-600">
+                                        {formData.defaultAddress.addressText}
+                                        {formData.defaultAddress.lat && formData.defaultAddress.lng && (
+                                            <span className="ml-2 text-gray-400">
+                                                ({formData.defaultAddress.lat.toFixed(6)}, {formData.defaultAddress.lng.toFixed(6)})
+                                            </span>
+                                        )}
+                                    </p>
+                                </div>
                             )}
                         </div>
 
@@ -380,27 +376,23 @@ export default function UserProfilePage() {
                                 <button
                                     type="button"
                                     onClick={() => setFormData({ ...formData, vehicleType: 'CAR' })}
-                                    className={`p-3 border rounded-md transition-all ${formData.vehicleType === 'CAR'
+                                    className={`p-3 border rounded-lg transition-all ${formData.vehicleType === 'CAR'
                                         ? 'border-blue-600 bg-blue-50 text-blue-700'
                                         : 'border-gray-300 hover:border-gray-400'
                                         }`}
                                 >
-                                    <svg className="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                                    </svg>
+                                    <Car className="w-6 h-6 mx-auto mb-1" />
                                     <p className="text-sm font-medium">Ô tô</p>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setFormData({ ...formData, vehicleType: 'MOTORCYCLE' })}
-                                    className={`p-3 border rounded-md transition-all ${formData.vehicleType === 'MOTORCYCLE'
+                                    className={`p-3 border rounded-lg transition-all ${formData.vehicleType === 'MOTORCYCLE'
                                         ? 'border-blue-600 bg-blue-50 text-blue-700'
                                         : 'border-gray-300 hover:border-gray-400'
                                         }`}
                                 >
-                                    <svg className="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                    </svg>
+                                    <Bike className="w-6 h-6 mx-auto mb-1" />
                                     <p className="text-sm font-medium">Xe máy</p>
                                 </button>
                             </div>
@@ -409,7 +401,7 @@ export default function UserProfilePage() {
                         {/* License Plate & Color */}
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                <label className="block text-sm font-medium text-gray-900 mb-1.5">
                                     Biển số xe <span className="text-red-500">*</span>
                                 </label>
                                 <input
@@ -442,12 +434,15 @@ export default function UserProfilePage() {
                                 />
                                 {errors.licensePlate && <p className="mt-1 text-xs text-red-600">{errors.licensePlate}</p>}
                                 {!errors.licensePlate && formData.licensePlate && isValidVietnamPlate(formData.licensePlate) && (
-                                    <p className="mt-1 text-xs text-green-600">✓ Biển số hợp lệ</p>
+                                    <div className="mt-1 flex items-center gap-1 text-xs text-green-600">
+                                        <CheckCircle className="w-3 h-3" />
+                                        <span>Biển số hợp lệ</span>
+                                    </div>
                                 )}
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                <label className="block text-sm font-medium text-gray-900 mb-1.5">
                                     Màu xe <span className="text-red-500">*</span>
                                 </label>
                                 <select
