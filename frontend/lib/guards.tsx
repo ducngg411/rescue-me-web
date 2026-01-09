@@ -145,6 +145,42 @@ export function useProviderGuard() {
 }
 
 /**
+ * Hook to ensure user is admin
+ * Redirects non-admin users
+ * 
+ * Usage in admin pages:
+ * ```tsx
+ * const { isReady } = useAdminGuard();
+ * ```
+ */
+export function useAdminGuard() {
+    const router = useRouter();
+    const { user, loading } = useAuth();
+
+    useEffect(() => {
+        if (loading) return;
+
+        // Must be authenticated
+        if (!user) {
+            router.push('/auth/login');
+            return;
+        }
+
+        // Must be ADMIN role
+        if (user.role !== 'ADMIN') {
+            router.push('/');
+            return;
+        }
+    }, [user, loading, router]);
+
+    return {
+        user,
+        loading,
+        isReady: !loading && user?.role === 'ADMIN',
+    };
+}
+
+/**
  * Component wrapper for protected routes
  * 
  * Usage:

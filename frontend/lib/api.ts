@@ -35,4 +35,57 @@ api.interceptors.response.use(
     }
 );
 
+// Admin API helpers
+export const adminApi = {
+    // Get all providers with filters
+    getProviders: async (params?: {
+        status?: string;
+        search?: string;
+        page?: number;
+        limit?: number;
+    }) => {
+        const response = await api.get('/admin/providers', { params });
+        return response.data;
+    },
+
+    // Get provider detail
+    getProviderDetail: async (providerId: string) => {
+        const response = await api.get(`/admin/providers/${providerId}`);
+        return response.data;
+    },
+
+    // Approve provider
+    approveProvider: async (providerId: string) => {
+        const response = await api.post(`/admin/providers/${providerId}/approve`);
+        return response.data;
+    },
+
+    // Reject provider
+    rejectProvider: async (providerId: string, data: {
+        rejectReasonCode: string;
+        rejectReasonDetail: string;
+    }) => {
+        const response = await api.post(`/admin/providers/${providerId}/reject`, data);
+        return response.data;
+    },
+
+    // Suspend provider
+    suspendProvider: async (providerId: string, reason?: string) => {
+        const response = await api.post(`/admin/providers/${providerId}/suspend`, { reason });
+        return response.data;
+    },
+
+    // Unsuspend provider
+    unsuspendProvider: async (providerId: string) => {
+        const response = await api.post(`/admin/providers/${providerId}/unsuspend`);
+        return response.data;
+    },
+
+    // Get provider verification history
+    getProviderHistory: async (providerId: string) => {
+        const response = await api.get(`/admin/providers/${providerId}/history`);
+        return response.data;
+    },
+};
+
 export default api;

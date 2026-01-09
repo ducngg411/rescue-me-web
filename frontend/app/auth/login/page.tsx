@@ -36,6 +36,9 @@ export default function LoginPage() {
             // Redirect based on role and profile completion status
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
+            } else if (response.user.role === 'ADMIN') {
+                // Admin goes to admin dashboard
+                router.push('/admin/dashboard');
             } else if (response.user.role === 'PROVIDER') {
                 // Provider with completed profile goes to dashboard
                 router.push('/provider/dashboard');
@@ -62,6 +65,9 @@ export default function LoginPage() {
             // Redirect based on role and profile completion status
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
+            } else if (response.user.role === 'ADMIN') {
+                // Admin goes to admin dashboard
+                router.push('/admin/dashboard');
             } else if (response.user.role === 'PROVIDER') {
                 // Provider with completed profile goes to dashboard
                 router.push('/provider/dashboard');

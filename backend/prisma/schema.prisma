@@ -81,18 +81,31 @@ model User {
   // Provider Profile (Role = PROVIDER)
   providerType            ProviderType?   // Individual hoặc Business
   businessName            String?         // Chỉ dành cho Business
+  serviceName             String?         // Tên dịch vụ hiển thị
   serviceTypes            ServiceType[]
   supportedVehicleTypes   VehicleType[]
   serviceRadiusKm         Int?            // 5-50 km
   permanentAddress        Json?           // {addressText, lat, lng} - Dành cho Individual
   businessAddress         Json?           // {addressText, lat, lng} - Dành cho Business
+  address                 String?         // Địa chỉ văn bản đầy đủ
   carPlateNumber          String?         // Biển số ô tô
   motorcyclePlateNumber   String?         // Biển số xe máy
+  
+  // Pricing & Service
+  pricePerKm              Int?            // Giá mỗi km (VND)
+  baseFee                 Int?            // Phí cơ bản (VND)
+  emergencyAvailable      Boolean         @default(false) // Có phục vụ khẩn cấp
+  isOnline                Boolean         @default(false) // Trạng thái online
+  
+  // Verification
   verificationStatus      VerificationStatus  @default(DRAFT)
   submittedAt             DateTime?       // Thời gian gửi hồ sơ xác minh
+  approvedAt              DateTime?       // Thời gian được duyệt
   rejectedAt              DateTime?       // Thời gian bị từ chối
   rejectReasonCode        String?         // Mã lý do từ chối
   rejectReasonDetail      String?         // Chi tiết lý do từ chối
+  suspendedAt             DateTime?       // Thời gian bị tạm ngưng
+  suspensionReason        String?         // Lý do tạm ngưng
   isActive                Boolean         @default(false)
   
   // Role & Permissions
