@@ -116,7 +116,14 @@ export function useProviderGuard() {
 
         // Must be PROVIDER role
         if (user.role !== 'PROVIDER') {
-            router.push('/');
+            // Redirect to appropriate page based on role
+            if (user.role === 'USER') {
+                router.push('/user');
+            } else if (user.role === 'ADMIN') {
+                router.push('/admin/dashboard');
+            } else {
+                router.push('/');
+            }
             return;
         }
 
@@ -145,6 +152,55 @@ export function useProviderGuard() {
 }
 
 /**
+ * Hook to ensure user is in correct state for user dashboard access
+ * Redirects to login if not authenticated, to onboarding if profile incomplete
+ * 
+ * Usage in user dashboard pages:
+ * ```tsx
+ * const { isReady, user } = useUserGuard();
+ * ```
+ */
+export function useUserGuard() {
+    const router = useRouter();
+    const { user, loading } = useAuth();
+
+    useEffect(() => {
+        if (loading) return;
+
+        // Must be authenticated
+        if (!user) {
+            router.push('/auth/login');
+            return;
+        }
+
+        // Must be USER role
+        if (user.role !== 'USER') {
+            // Redirect to appropriate page based on role
+            if (user.role === 'PROVIDER') {
+                router.push('/provider');
+            } else if (user.role === 'ADMIN') {
+                router.push('/admin/dashboard');
+            } else {
+                router.push('/');
+            }
+            return;
+        }
+
+        // Must have completed profile
+        if (!user.profileCompleted) {
+            router.push('/onboarding/role');
+            return;
+        }
+    }, [user, loading, router]);
+
+    return {
+        user,
+        loading,
+        isReady: !loading && user?.role === 'USER' && user.profileCompleted,
+    };
+}
+
+/**
  * Hook to ensure user is admin
  * Redirects non-admin users
  * 
@@ -168,7 +224,14 @@ export function useAdminGuard() {
 
         // Must be ADMIN role
         if (user.role !== 'ADMIN') {
-            router.push('/');
+            // Redirect to appropriate page based on role
+            if (user.role === 'USER') {
+                router.push('/user');
+            } else if (user.role === 'PROVIDER') {
+                router.push('/provider');
+            } else {
+                router.push('/');
+            }
             return;
         }
     }, [user, loading, router]);

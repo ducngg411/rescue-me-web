@@ -8,6 +8,7 @@ import { UserModule } from './user/user.module';
 import { ProviderModule } from './provider/provider.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { AdminModule } from './admin/admin.module';
+import { RescueRequestModule } from './rescue-request/rescue-request.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { AdminModule } from './admin/admin.module';
     ProviderModule,
     UploadsModule,
     AdminModule,
+    RescueRequestModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -9,8 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@hookform/resolvers": "^3.9.1",
     "@react-oauth/google": "^0.12.1",
+    "@vietmap/vietmap-gl-js": "^7.0.0-pre.1",
     "axios": "^1.7.9",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^0.468.0",

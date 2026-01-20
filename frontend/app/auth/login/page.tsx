@@ -40,11 +40,11 @@ export default function LoginPage() {
                 // Admin goes to admin dashboard
                 router.push('/admin/dashboard');
             } else if (response.user.role === 'PROVIDER') {
-                // Provider with completed profile goes to dashboard
-                router.push('/provider/dashboard');
+                // Provider goes to provider page
+                router.push('/provider');
             } else {
-                // Regular user goes to home
-                router.push('/');
+                // Regular user goes to user page
+                router.push('/user');
             }
         } catch (err: any) {
             setError(err.response?.data?.message || 'Đăng nhập thất bại');
@@ -69,11 +69,11 @@ export default function LoginPage() {
                 // Admin goes to admin dashboard
                 router.push('/admin/dashboard');
             } else if (response.user.role === 'PROVIDER') {
-                // Provider with completed profile goes to dashboard
-                router.push('/provider/dashboard');
+                // Provider goes to provider page
+                router.push('/provider');
             } else {
-                // Regular user goes to home
-                router.push('/');
+                // Regular user goes to user page
+                router.push('/user');
             }
         } catch (err: any) {
             setError(err.response?.data?.message || 'Đăng nhập Google thất bại');

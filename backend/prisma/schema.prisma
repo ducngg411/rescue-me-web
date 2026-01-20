@@ -139,8 +139,8 @@ model User {
   lastLogin DateTime?
 
   // Relations
-  sessions Session[]
-  uploads  Upload[]
+  sessions       Session[]
+  uploads        Upload[]
   rescueRequests RescueRequest[]
 
   @@index([email])
@@ -244,7 +244,7 @@ model RescueRequest {
   updatedAt DateTime @updatedAt
 
   // Relations
-  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   media RequestMedia[]
 
   @@index([userId])

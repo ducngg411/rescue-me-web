@@ -1,0 +1,59 @@
+2️⃣ Ví dụ HTML + JS tối giản (chạy được)
+
+📌 Lưu ý
+
+Thay YOUR_API_KEY bằng API key của bạn
+
+VietMap dùng thứ tự [lng, lat]
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>VietMap - Chấm tròn vị trí</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- VietMap Web GL -->
+  <link
+    href="https://unpkg.com/vietmap-gl-js@latest/vietmap-gl.css"
+    rel="stylesheet"
+  />
+  <script src="https://unpkg.com/vietmap-gl-js@latest/vietmap-gl.js"></script>
+
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { width: 100%; height: 100vh; }
+
+    /* Chấm tròn */
+    .dot {
+      width: 14px;
+      height: 14px;
+      background-color: #ff0000;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script>
+    vietmapgl.accessToken = "YOUR_API_KEY";
+
+    const map = new vietmapgl.Map({
+      container: "map",
+      style: "https://maps.vietmap.vn/api/maps/light/styles.json?apikey=YOUR_API_KEY",
+      center: [105.83782, 21.168874], // [lng, lat]
+      zoom: 16
+    });
+
+    // Tạo chấm tròn
+    const dot = document.createElement("div");
+    dot.className = "dot";
+
+    new vietmapgl.Marker(dot)
+      .setLngLat([105.83782, 21.168874])
+      .addTo(map);
+  </script>
+</body>
+</html>

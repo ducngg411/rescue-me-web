@@ -45,7 +45,7 @@ export default function UserProfilePage() {
         }
 
         if (user && user.profileCompleted) {
-            router.push('/');
+            router.push('/user');
             return;
         }
 
@@ -177,7 +177,7 @@ export default function UserProfilePage() {
 
             await updateUserProfile(submissionData);
             await refreshUser();
-            router.push('/');
+            router.push('/user');
         } catch (err: any) {
             console.error('Profile update error:', err);
 
@@ -434,8 +434,8 @@ export default function UserProfilePage() {
                                         }
                                     }}
                                     className={`w-full px-3 py-2 border rounded-md text-sm font-mono text-gray-900 placeholder:text-gray-400 bg-white uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.licensePlate ? 'border-red-500 bg-red-50' :
-                                            formData.licensePlate && isValidVietnamPlate(formData.licensePlate) ? 'border-green-500 bg-green-50' :
-                                                'border-gray-300'
+                                        formData.licensePlate && isValidVietnamPlate(formData.licensePlate) ? 'border-green-500 bg-green-50' :
+                                            'border-gray-300'
                                         }`}
                                     placeholder="29A-12345"
                                 />

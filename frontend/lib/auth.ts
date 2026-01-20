@@ -9,6 +9,7 @@ export interface User {
     role: string;
     authProvider: string;
     profileCompleted: boolean;
+    verificationStatus?: string;
 }
 
 export interface AuthResponse {
