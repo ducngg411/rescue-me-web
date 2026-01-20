@@ -18,9 +18,9 @@ enum AuthProvider {
 
 // Enum cho vai trò người dùng
 enum UserRole {
-  USER      // Người dùng cần cứu hộ
-  PROVIDER  // Nhà cung cấp dịch vụ cứu hộ
-  ADMIN     // Quản trị viên
+  USER // Người dùng cần cứu hộ
+  PROVIDER // Nhà cung cấp dịch vụ cứu hộ
+  ADMIN // Quản trị viên
 }
 
 // Enum cho loại phương tiện
@@ -31,95 +31,118 @@ enum VehicleType {
 
 // Enum cho loại dịch vụ cứu hộ
 enum ServiceType {
-  TOWING           // Kéo xe
-  BATTERY_JUMP     // Cứu hộ bình điện
-  TIRE_CHANGE      // Thay lốp xe
-  FUEL_DELIVERY    // Tiếp nhiên liệu
-  LOCKOUT          // Mở khóa xe
+  TOWING // Kéo xe
+  BATTERY_JUMP // Cứu hộ bình điện
+  TIRE_CHANGE // Thay lốp xe
+  FUEL_DELIVERY // Tiếp nhiên liệu
+  LOCKOUT // Mở khóa xe
   BREAKDOWN_REPAIR // Sửa chữa tại chỗ
+}
+
+// Enum cho loại sự cố
+enum IncidentType {
+  BREAKDOWN // Hỏng xe
+  ACCIDENT // Tai nạn
+  FLAT_TIRE // Lốp xe hỏng
+  BATTERY_DEAD // Hết bình điện
+  OUT_OF_FUEL // Hết nhiên liệu
+  LOCKED_OUT // Khóa xe
+  OTHER // Khác
+}
+
+// Enum cho trạng thái rescue request
+enum RequestStatus {
+  CREATED // Vừa tạo
+  SEARCHING // Đang tìm provider
+  MATCHED // Đã match với provider
+  ACCEPTED // Provider đã chấp nhận
+  IN_PROGRESS // Đang thực hiện
+  COMPLETED // Hoàn thành
+  CANCELLED // Đã hủy
+  REJECTED // Bị từ chối
 }
 
 // Enum cho loại nhà cung cấp
 enum ProviderType {
-  INDIVIDUAL       // Cá nhân
-  BUSINESS         // Doanh nghiệp
+  INDIVIDUAL // Cá nhân
+  BUSINESS // Doanh nghiệp
 }
 
 // Enum cho trạng thái xác minh Provider
 enum VerificationStatus {
-  DRAFT            // Bản nháp
-  PENDING          // Chờ xác minh
-  APPROVED         // Đã xác minh
-  REJECTED         // Bị từ chối
-  SUSPENDED        // Bị tạm ngưng
+  DRAFT // Bản nháp
+  PENDING // Chờ xác minh
+  APPROVED // Đã xác minh
+  REJECTED // Bị từ chối
+  SUSPENDED // Bị tạm ngưng
 }
 
 // User Model - Quản lý thông tin người dùng
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  avatar    String?
-  
+  id     String  @id @default(cuid())
+  email  String  @unique
+  name   String?
+  avatar String?
+
   // Authentication fields
-  authProvider     AuthProvider
-  hashedPassword   String?  // Chỉ có giá trị khi authProvider = EMAIL
-  googleId         String?  @unique // Chỉ có giá trị khi authProvider = GOOGLE
-  
+  authProvider   AuthProvider
+  hashedPassword String? // Chỉ có giá trị khi authProvider = EMAIL
+  googleId       String?      @unique // Chỉ có giá trị khi authProvider = GOOGLE
+
   // Profile & Onboarding
-  profileCompleted Boolean  @default(false)
-  
+  profileCompleted Boolean @default(false)
+
   // User Profile (Role = USER)
-  fullName         String?
-  phoneNumber      String?
-  contactEmail     String?
-  defaultAddress   Json?   // {addressText, lat, lng}
-  vehicleType      VehicleType?
-  licensePlate     String?
-  vehicleColor     String?
-  
+  fullName       String?
+  phoneNumber    String?
+  contactEmail   String?
+  defaultAddress Json? // {addressText, lat, lng}
+  vehicleType    VehicleType?
+  licensePlate   String?
+  vehicleColor   String?
+
   // Provider Profile (Role = PROVIDER)
-  providerType            ProviderType?   // Individual hoặc Business
-  businessName            String?         // Chỉ dành cho Business
-  serviceName             String?         // Tên dịch vụ hiển thị
-  serviceTypes            ServiceType[]
-  supportedVehicleTypes   VehicleType[]
-  serviceRadiusKm         Int?            // 5-50 km
-  permanentAddress        Json?           // {addressText, lat, lng} - Dành cho Individual
-  businessAddress         Json?           // {addressText, lat, lng} - Dành cho Business
-  address                 String?         // Địa chỉ văn bản đầy đủ
-  carPlateNumber          String?         // Biển số ô tô
-  motorcyclePlateNumber   String?         // Biển số xe máy
-  
+  providerType          ProviderType? // Individual hoặc Business
+  businessName          String? // Chỉ dành cho Business
+  serviceName           String? // Tên dịch vụ hiển thị
+  serviceTypes          ServiceType[]
+  supportedVehicleTypes VehicleType[] // Loại xe KHÁCH HÀNG (xe cần cứu hộ)
+  serviceRadiusKm       Int? // 5-50 km
+  permanentAddress      Json? // {addressText, lat, lng} - Dành cho Individual
+  businessAddress       Json? // {addressText, lat, lng} - Dành cho Business
+  address               String? // Địa chỉ văn bản đầy đủ
+  rescueVehicles        Json? // Array of {type: 'CAR'|'MOTORCYCLE', plateNumber: string, isPrimary: boolean} - Xe của PROVIDER (xe dùng để đi cứu hộ)
+
   // Pricing & Service
-  pricePerKm              Int?            // Giá mỗi km (VND)
-  baseFee                 Int?            // Phí cơ bản (VND)
-  emergencyAvailable      Boolean         @default(false) // Có phục vụ khẩn cấp
-  isOnline                Boolean         @default(false) // Trạng thái online
-  
+  pricePerKm         Int? // Giá mỗi km (VND)
+  baseFee            Int? // Phí cơ bản (VND)
+  emergencyAvailable Boolean @default(false) // Có phục vụ khẩn cấp
+  isOnline           Boolean @default(false) // Trạng thái online
+
   // Verification
-  verificationStatus      VerificationStatus  @default(DRAFT)
-  submittedAt             DateTime?       // Thời gian gửi hồ sơ xác minh
-  approvedAt              DateTime?       // Thời gian được duyệt
-  rejectedAt              DateTime?       // Thời gian bị từ chối
-  rejectReasonCode        String?         // Mã lý do từ chối
-  rejectReasonDetail      String?         // Chi tiết lý do từ chối
-  suspendedAt             DateTime?       // Thời gian bị tạm ngưng
-  suspensionReason        String?         // Lý do tạm ngưng
-  isActive                Boolean         @default(false)
-  
+  verificationStatus VerificationStatus @default(DRAFT)
+  submittedAt        DateTime? // Thời gian gửi hồ sơ xác minh
+  approvedAt         DateTime? // Thời gian được duyệt
+  rejectedAt         DateTime? // Thời gian bị từ chối
+  rejectReasonCode   String? // Mã lý do từ chối
+  rejectReasonDetail String? // Chi tiết lý do từ chối
+  suspendedAt        DateTime? // Thời gian bị tạm ngưng
+  suspensionReason   String? // Lý do tạm ngưng
+  isActive           Boolean            @default(false)
+
   // Role & Permissions
-  role      UserRole @default(USER)
-  
+  role UserRole @default(USER)
+
   // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   lastLogin DateTime?
-  
+
   // Relations
-  sessions  Session[]
-  uploads   Upload[]
-  
+  sessions Session[]
+  uploads  Upload[]
+  rescueRequests RescueRequest[]
+
   @@index([email])
   @@index([googleId])
   @@map("users")
@@ -134,13 +157,13 @@ model Session {
   expiresAt    DateTime
   userAgent    String?
   ipAddress    String?
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@index([userId])
   @@index([token])
   @@map("sessions")
@@ -148,53 +171,106 @@ model Session {
 
 // Enum cho mục đích upload
 enum UploadPurpose {
-  PROVIDER_VERIFICATION  // Xác minh provider
-  REQUEST_PHOTO          // Ảnh yêu cầu cứu hộ
-  REVIEW_PHOTO           // Ảnh đánh giá
-  BEFORE_AFTER           // Ảnh trước/sau
+  PROVIDER_VERIFICATION // Xác minh provider
+  REQUEST_PHOTO // Ảnh yêu cầu cứu hộ
+  REVIEW_PHOTO // Ảnh đánh giá
+  BEFORE_AFTER // Ảnh trước/sau
 }
 
 // Enum cho loại tài liệu xác minh
 enum DocumentType {
-  CITIZEN_ID_FRONT           // CMND/CCCD mặt trước
-  CITIZEN_ID_BACK            // CMND/CCCD mặt sau
-  SELFIE                     // Ảnh selfie
-  CAR_PHOTO                  // Ảnh xe ô tô
-  MOTORBIKE_PHOTO            // Ảnh xe máy
-  DRIVER_LICENSE             // Giấy phép lái xe
-  BUSINESS_REGISTRATION      // Giấy đăng ký kinh doanh
+  CITIZEN_ID_FRONT // CMND/CCCD mặt trước
+  CITIZEN_ID_BACK // CMND/CCCD mặt sau
+  SELFIE // Ảnh selfie
+  CAR_PHOTO // Ảnh xe ô tô
+  MOTORBIKE_PHOTO // Ảnh xe máy
+  DRIVER_LICENSE // Giấy phép lái xe
+  BUSINESS_REGISTRATION // Giấy đăng ký kinh doanh
 }
 
 // Upload Model - Quản lý file uploads
 model Upload {
-  id          String        @id @default(cuid())
-  userId      String
-  
+  id     String @id @default(cuid())
+  userId String
+
   // Upload metadata
-  purpose     UploadPurpose
-  docType     DocumentType? // Chỉ dùng cho PROVIDER_VERIFICATION
-  
+  purpose UploadPurpose
+  docType DocumentType? // Chỉ dùng cho PROVIDER_VERIFICATION
+
   // File information
-  objectKey   String        @unique // providers/{providerId}/verification/{docType}/{timestamp}_{rand}.jpg
+  objectKey   String @unique // providers/{providerId}/verification/{docType}/{timestamp}_{rand}.jpg
   fileName    String
-  fileSize    Int           // bytes
-  contentType String        // image/jpeg, image/png, image/webp
-  
+  fileSize    Int // bytes
+  contentType String // image/jpeg, image/png, image/webp
+
   // URLs
-  publicUrl   String
-  
+  publicUrl String
+
   // Status
-  confirmed   Boolean       @default(false)
-  
+  confirmed Boolean @default(false)
+
   // Timestamps
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@index([userId])
   @@index([purpose])
   @@index([objectKey])
   @@map("uploads")
+}
+
+// RescueRequest Model - Quản lý yêu cầu cứu hộ
+model RescueRequest {
+  id     String @id @default(cuid())
+  userId String
+
+  // Request details
+  incidentType IncidentType
+  vehicleType  VehicleType
+  description  String?
+
+  // Location details
+  pickupLocation  Json // {addressText: string, lat: number, lng: number}
+  dropoffLocation Json? // {addressText: string, lat: number, lng: number} - Optional
+
+  // Status
+  status RequestStatus @default(CREATED)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media RequestMedia[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("rescue_requests")
+}
+
+// RequestMedia Model - Quản lý media của rescue request
+model RequestMedia {
+  id        String @id @default(cuid())
+  requestId String
+
+  // File information
+  objectKey   String @unique
+  fileName    String
+  fileSize    Int
+  contentType String
+  publicUrl   String
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  // Relations
+  request RescueRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@map("request_media")
 }

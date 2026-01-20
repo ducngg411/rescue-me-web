@@ -30,8 +30,11 @@ interface ProviderDetail {
         lat: number;
         lng: number;
     };
-    carPlateNumber?: string;
-    motorcyclePlateNumber?: string;
+    rescueVehicles?: Array<{
+        type: 'CAR' | 'MOTORCYCLE';
+        plateNumber: string;
+        isPrimary: boolean;
+    }>;
     verificationStatus: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
     submittedAt: string | null;
     rejectedAt: string | null;
@@ -352,16 +355,23 @@ export default function ProviderDetailPage({ params }: { params: Promise<{ id: s
                                 </p>
                             </div>
                         </div>
-                        {provider.carPlateNumber && (
-                            <div>
-                                <p className="font-medium text-gray-900">Biển số ô tô</p>
-                                <p className="text-gray-700 mt-1 font-mono">{provider.carPlateNumber}</p>
-                            </div>
-                        )}
-                        {provider.motorcyclePlateNumber && (
-                            <div>
-                                <p className="font-medium text-gray-900">Biển số xe máy</p>
-                                <p className="text-gray-700 mt-1 font-mono">{provider.motorcyclePlateNumber}</p>
+                        {provider.rescueVehicles && provider.rescueVehicles.length > 0 && (
+                            <div className="md:col-span-2">
+                                <p className="font-medium text-gray-900 mb-2">Phương tiện cứu hộ</p>
+                                <div className="space-y-2">
+                                    {provider.rescueVehicles.map((vehicle, index) => (
+                                        <div key={index} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg">
+                                            {vehicle.type === 'CAR' ? <Car className="w-4 h-4 text-gray-600" /> : <Bike className="w-4 h-4 text-gray-600" />}
+                                            <span className="text-sm font-medium text-gray-700">
+                                                {vehicle.type === 'CAR' ? 'Ô tô' : 'Xe máy'}:
+                                            </span>
+                                            <span className="text-sm text-gray-900 font-mono">{vehicle.plateNumber}</span>
+                                            {vehicle.isPrimary && (
+                                                <span className="ml-auto text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Chính</span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                         <div className="md:col-span-2">

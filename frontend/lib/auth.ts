@@ -123,6 +123,12 @@ export const getStoredToken = (): string | null => {
 };
 
 // ==================== PROVIDER PROFILE ====================
+export interface RescueVehicle {
+    type: 'CAR' | 'MOTORCYCLE';
+    plateNumber: string;
+    isPrimary: boolean;
+}
+
 export interface UpdateProviderProfileData {
     providerType: 'INDIVIDUAL' | 'BUSINESS';
     fullName: string;
@@ -141,8 +147,7 @@ export interface UpdateProviderProfileData {
         lat: number;
         lng: number;
     };
-    carPlateNumber?: string;
-    motorcyclePlateNumber?: string;
+    rescueVehicles: RescueVehicle[];
 }
 
 export const updateProviderProfile = async (data: UpdateProviderProfileData): Promise<User> => {

@@ -6,7 +6,7 @@ import { User, Phone, Mail, MapPin, Car, Bike, Palette, Loader2, CheckCircle, Sa
 import { useAuth } from '@/contexts/AuthContext';
 import { updateUserProfile, UpdateUserProfileData } from '@/lib/auth';
 import { searchPlaces, getPlaceDetails, PlaceSearchResult } from '@/lib/vietmap';
-import { normalizeVietnamPlate, isValidVietnamPlate } from '@/lib/validators';
+import { normalizeVietnamPlate, isValidVietnamPlate, formatVietnamPlate } from '@/lib/validators';
 
 const VEHICLE_COLORS = [
     'Trắng', 'Đen', 'Xám', 'Bạc', 'Đỏ', 'Xanh dương', 'Xanh lá', 'Vàng', 'Cam', 'Nâu'
@@ -421,23 +421,33 @@ export default function UserProfilePage() {
                                         }
                                     }}
                                     onBlur={() => {
-                                        // Validate on blur using normalized version (without dashes)
-                                        if (formData.licensePlate && !isValidVietnamPlate(formData.licensePlate)) {
+                                        // Auto-format and validate on blur
+                                        const value = formData.licensePlate;
+                                        if (value && isValidVietnamPlate(value)) {
+                                            const formatted = formatVietnamPlate(value);
+                                            setFormData({ ...formData, licensePlate: formatted });
+                                        } else if (value && !isValidVietnamPlate(value)) {
                                             setErrors(prev => ({
                                                 ...prev,
-                                                licensePlate: 'Biển số xe không hợp lệ (VD: 51A-12345, 51AB-12345)'
+                                                licensePlate: 'Biển số xe không hợp lệ (VD: 29A-12345, 51AB-12345)'
                                             }));
                                         }
                                     }}
-                                    className={`w-full px-3 py-2 border rounded-md text-sm text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.licensePlate ? 'border-red-500' : 'border-gray-300'}`}
-                                    placeholder="51A-12345"
+                                    className={`w-full px-3 py-2 border rounded-md text-sm font-mono text-gray-900 placeholder:text-gray-400 bg-white uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.licensePlate ? 'border-red-500 bg-red-50' :
+                                            formData.licensePlate && isValidVietnamPlate(formData.licensePlate) ? 'border-green-500 bg-green-50' :
+                                                'border-gray-300'
+                                        }`}
+                                    placeholder="29A-12345"
                                 />
                                 {errors.licensePlate && <p className="mt-1 text-xs text-red-600">{errors.licensePlate}</p>}
                                 {!errors.licensePlate && formData.licensePlate && isValidVietnamPlate(formData.licensePlate) && (
                                     <div className="mt-1 flex items-center gap-1 text-xs text-green-600">
                                         <CheckCircle className="w-3 h-3" />
-                                        <span>Biển số hợp lệ</span>
+                                        <span>Biển số hợp lệ (định dạng: 29A-12345)</span>
                                     </div>
+                                )}
+                                {!errors.licensePlate && formData.licensePlate && !isValidVietnamPlate(formData.licensePlate) && (
+                                    <p className="mt-1 text-xs text-gray-500">Nhập đúng định dạng: 29A-12345 hoặc 51AB-12345</p>
                                 )}
                             </div>
 

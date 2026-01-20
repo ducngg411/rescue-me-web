@@ -28,15 +28,16 @@ export class ProviderService {
             }
         }
 
-        // Validation biển số dựa trên supportedVehicleTypes
-        const hasCar = dto.supportedVehicleTypes.includes('CAR');
-        const hasMotorcycle = dto.supportedVehicleTypes.includes('MOTORCYCLE');
-
-        if (hasCar && !dto.carPlateNumber) {
-            throw new ForbiddenException('Biển số ô tô là bắt buộc khi hỗ trợ phương tiện CAR');
+        // Validation rescueVehicles
+        if (!dto.rescueVehicles || dto.rescueVehicles.length === 0) {
+            throw new ForbiddenException('Phải có ít nhất một phương tiện cứu hộ');
         }
-        if (hasMotorcycle && !dto.motorcyclePlateNumber) {
-            throw new ForbiddenException('Biển số xe máy là bắt buộc khi hỗ trợ phương tiện MOTORCYCLE');
+
+        // Validate each rescue vehicle's plate number
+        for (const vehicle of dto.rescueVehicles) {
+            if (!vehicle.plateNumber || !vehicle.plateNumber.trim()) {
+                throw new ForbiddenException(`Biển số xe ${vehicle.type === 'CAR' ? 'ô tô' : 'xe máy'} không được để trống`);
+            }
         }
 
         // Tìm user
@@ -61,8 +62,7 @@ export class ProviderService {
                 serviceRadiusKm: dto.serviceRadiusKm,
                 permanentAddress: dto.providerType === ProviderType.INDIVIDUAL ? dto.permanentAddress as any : null,
                 businessAddress: dto.providerType === ProviderType.BUSINESS ? dto.businessAddress as any : null,
-                carPlateNumber: hasCar ? dto.carPlateNumber : null,
-                motorcyclePlateNumber: hasMotorcycle ? dto.motorcyclePlateNumber : null,
+                rescueVehicles: dto.rescueVehicles as any,
                 verificationStatus: VerificationStatus.DRAFT,
                 isActive: false,
                 profileCompleted: true, // Đánh dấu hoàn thành profile
@@ -126,13 +126,17 @@ export class ProviderService {
             if (!user.businessAddress) missingFields.push('businessAddress');
         }
 
-        // Validate vehicle plate numbers
-        const supportedVehicles = user.supportedVehicleTypes as string[];
-        if (supportedVehicles.includes('CAR') && !user.carPlateNumber) {
-            missingFields.push('carPlateNumber');
-        }
-        if (supportedVehicles.includes('MOTORCYCLE') && !user.motorcyclePlateNumber) {
-            missingFields.push('motorcyclePlateNumber');
+        // Validate rescue vehicles
+        const rescueVehicles = user.rescueVehicles as any[];
+        if (!rescueVehicles || rescueVehicles.length === 0) {
+            missingFields.push('rescueVehicles');
+        } else {
+            // Validate each vehicle has plate number
+            for (const vehicle of rescueVehicles) {
+                if (!vehicle.plateNumber || !vehicle.plateNumber.trim()) {
+                    missingFields.push(`rescueVehicles.${vehicle.type}.plateNumber`);
+                }
+            }
         }
 
         // Validate required documents (Tier 1)
@@ -155,11 +159,11 @@ export class ProviderService {
             DocumentType.SELFIE,
         ];
 
-        // Add vehicle photo based on supported types
-        if (supportedVehicles.includes('CAR')) {
+        // Add vehicle photo based on rescue vehicles (not supportedVehicleTypes)
+        if (rescueVehicles && rescueVehicles.some(v => v.type === 'CAR')) {
             requiredDocs.push(DocumentType.CAR_PHOTO);
         }
-        if (supportedVehicles.includes('MOTORCYCLE')) {
+        if (rescueVehicles && rescueVehicles.some(v => v.type === 'MOTORCYCLE')) {
             requiredDocs.push(DocumentType.MOTORBIKE_PHOTO);
         }
 

@@ -118,16 +118,22 @@ export default function ReviewSubmitStep({ serviceInfo, requiredDocs, optionalDo
                         <span className="font-medium text-gray-900 w-48">Địa chỉ:</span>
                         <span className="text-gray-700">{serviceInfo.providerType === 'INDIVIDUAL' ? serviceInfo.permanentAddress.addressText : serviceInfo.businessAddress.addressText}</span>
                     </div>
-                    {serviceInfo.carPlateNumber && (
+                    {serviceInfo.rescueVehicles && serviceInfo.rescueVehicles.length > 0 && (
                         <div className="flex">
-                            <span className="font-medium text-gray-900 w-48">Biển số ô tô:</span>
-                            <span className="text-gray-700 font-mono">{serviceInfo.carPlateNumber}</span>
-                        </div>
-                    )}
-                    {serviceInfo.motorcyclePlateNumber && (
-                        <div className="flex">
-                            <span className="font-medium text-gray-900 w-48">Biển số xe máy:</span>
-                            <span className="text-gray-700 font-mono">{serviceInfo.motorcyclePlateNumber}</span>
+                            <span className="font-medium text-gray-900 w-48">Phương tiện cứu hộ:</span>
+                            <div className="flex-1">
+                                {serviceInfo.rescueVehicles.map((vehicle: any, index: number) => (
+                                    <div key={index} className="flex items-center gap-2 mb-1">
+                                        <span className="text-gray-700">
+                                            {vehicle.type === 'CAR' ? '🚗 Ô tô' : '🏍️ Xe máy'}:
+                                        </span>
+                                        <span className="text-gray-700 font-mono">{vehicle.plateNumber}</span>
+                                        {vehicle.isPrimary && (
+                                            <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Chính</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>

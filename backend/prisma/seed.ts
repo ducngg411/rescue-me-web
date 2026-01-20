@@ -49,8 +49,10 @@ async function main() {
             pricePerKm: 15000,
             baseFee: 200000,
             emergencyAvailable: true,
-            carPlateNumber: '59A-12345',
-            motorcyclePlateNumber: '51G-67890',
+            rescueVehicles: [
+                { type: 'CAR', plateNumber: '59A-12345', isPrimary: true },
+                { type: 'MOTORCYCLE', plateNumber: '51G-67890', isPrimary: false }
+            ],
             verificationStatus: 'PENDING',
             submittedAt: new Date(),
             profileCompleted: true,
@@ -105,7 +107,9 @@ async function main() {
             pricePerKm: 20000,
             baseFee: 250000,
             emergencyAvailable: true,
-            carPlateNumber: '59B-11111',
+            rescueVehicles: [
+                { type: 'CAR', plateNumber: '59B-11111', isPrimary: true }
+            ],
             verificationStatus: 'REJECTED',
             rejectReasonCode: 'INVALID_LICENSE',
             rejectReasonDetail: 'Giấy phép kinh doanh không hợp lệ',

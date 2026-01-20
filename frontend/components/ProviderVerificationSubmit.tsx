@@ -86,8 +86,9 @@ export default function ProviderVerificationSubmit() {
                 },
             ];
 
-            // Add vehicle photos based on supported types
-            if (profile.supportedVehicleTypes?.includes('CAR')) {
+            // Add vehicle photos based on rescue vehicles (not supportedVehicleTypes)
+            const rescueVehicles = profile.rescueVehicles || [];
+            if (rescueVehicles.some((v: any) => v.type === 'CAR')) {
                 requiredDocs.push({
                     type: DocumentType.CAR_PHOTO,
                     label: 'Ảnh xe ô tô cứu hộ',
@@ -97,7 +98,7 @@ export default function ProviderVerificationSubmit() {
                 });
             }
 
-            if (profile.supportedVehicleTypes?.includes('MOTORCYCLE')) {
+            if (rescueVehicles.some((v: any) => v.type === 'MOTORCYCLE')) {
                 requiredDocs.push({
                     type: DocumentType.MOTORBIKE_PHOTO,
                     label: 'Ảnh xe máy cứu hộ',
@@ -259,10 +260,10 @@ export default function ProviderVerificationSubmit() {
                     <div
                         key={doc.type}
                         className={`bg-white rounded-lg shadow-sm border-2 p-6 transition-all ${doc.uploaded
-                                ? 'border-green-500 bg-green-50'
-                                : doc.required
-                                    ? 'border-gray-200 hover:border-blue-300'
-                                    : 'border-gray-100'
+                            ? 'border-green-500 bg-green-50'
+                            : doc.required
+                                ? 'border-gray-200 hover:border-blue-300'
+                                : 'border-gray-100'
                             }`}
                     >
                         {/* Document Header */}
@@ -352,8 +353,8 @@ export default function ProviderVerificationSubmit() {
                         onClick={handleSubmit}
                         disabled={!allRequiredUploaded || submitting}
                         className={`px-8 py-4 rounded-lg font-semibold text-lg transition-all shadow-md hover:shadow-lg ${allRequiredUploaded && !submitting
-                                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             }`}
                     >
                         {submitting ? (

@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, Matches, IsEnum, IsOptional, ValidateNested, IsNumber, IsArray, ArrayMinSize, Min, Max } from 'class-validator';
+import { IsEmail, IsString, MinLength, Matches, IsEnum, IsOptional, ValidateNested, IsNumber, IsArray, ArrayMinSize, Min, Max, IsBoolean } from 'class-validator';
 import { UserRole, VehicleType, ServiceType, ProviderType } from '@prisma/client';
 import { Type } from 'class-transformer';
 
@@ -11,6 +11,17 @@ class DefaultAddressDto {
 
     @IsNumber()
     lng: number;
+}
+
+class RescueVehicleDto {
+    @IsEnum(VehicleType, { message: 'Loại phương tiện phải là CAR hoặc MOTORCYCLE' })
+    type: VehicleType;
+
+    @IsString({ message: 'Biển số xe không được để trống' })
+    plateNumber: string;
+
+    @IsBoolean()
+    isPrimary: boolean;
 }
 
 export class RegisterEmailDto {
@@ -127,11 +138,9 @@ export class UpdateProviderProfileDto {
     @Type(() => DefaultAddressDto)
     businessAddress?: DefaultAddressDto;
 
-    @IsOptional()
-    @IsString({ message: 'Biển số ô tô không hợp lệ' })
-    carPlateNumber?: string;
-
-    @IsOptional()
-    @IsString({ message: 'Biển số xe máy không hợp lệ' })
-    motorcyclePlateNumber?: string;
+    @IsArray({ message: 'Phương tiện cứu hộ phải là một mảng' })
+    @ArrayMinSize(1, { message: 'Phải có ít nhất một phương tiện cứu hộ' })
+    @ValidateNested({ each: true })
+    @Type(() => RescueVehicleDto)
+    rescueVehicles: RescueVehicleDto[];
 }

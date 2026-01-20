@@ -18,8 +18,11 @@ interface Provider {
     verificationStatus: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
     submittedAt: string | null;
     isActive: boolean;
-    carPlateNumber?: string;
-    motorcyclePlateNumber?: string;
+    rescueVehicles?: Array<{
+        type: 'CAR' | 'MOTORCYCLE';
+        plateNumber: string;
+        isPrimary: boolean;
+    }>;
 }
 
 const STATUS_CONFIG = {
@@ -101,8 +104,7 @@ export default function AdminDashboard() {
             provider.phoneNumber?.includes(searchLower) ||
             provider.email?.toLowerCase().includes(searchLower) ||
             provider.businessName?.toLowerCase().includes(searchLower) ||
-            provider.carPlateNumber?.toLowerCase().includes(searchLower) ||
-            provider.motorcyclePlateNumber?.toLowerCase().includes(searchLower)
+            (provider.rescueVehicles?.some(v => v.plateNumber.toLowerCase().includes(searchLower)) ?? false)
         );
     });
 
@@ -227,19 +229,19 @@ export default function AdminDashboard() {
                                                         {provider.providerType === 'INDIVIDUAL' ? 'Cá nhân' : 'Doanh nghiệp'}
                                                     </span>
                                                 </div>
-                                                {provider.carPlateNumber && (
-                                                    <div className="flex items-center gap-2">
-                                                        <Car className="w-4 h-4 text-gray-400" />
-                                                        <span className="text-gray-700 font-mono">{provider.carPlateNumber}</span>
-                                                    </div>
-                                                )}
-                                                {provider.motorcyclePlateNumber && (
-                                                    <div className="flex items-center gap-2">
-                                                        <Bike className="w-4 h-4 text-gray-400" />
-                                                        <span className="text-gray-700 font-mono">{provider.motorcyclePlateNumber}</span>
-                                                    </div>
-                                                )}
                                             </div>
+
+                                            {/* Rescue Vehicles */}
+                                            {provider.rescueVehicles && provider.rescueVehicles.length > 0 && (
+                                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                                    {provider.rescueVehicles.map((vehicle, index) => (
+                                                        <span key={index} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-700 text-xs rounded">
+                                                            {vehicle.type === 'CAR' ? <Car className="w-3 h-3" /> : <Bike className="w-3 h-3" />}
+                                                            <span className="font-mono">{vehicle.plateNumber}</span>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
 
                                             {/* Services & Vehicles */}
                                             <div className="mt-3 flex flex-wrap gap-2">

@@ -29,8 +29,6 @@ export class AdminService {
                 { phoneNumber: { contains: filters.search } },
                 { email: { contains: filters.search, mode: 'insensitive' } },
                 { businessName: { contains: filters.search, mode: 'insensitive' } },
-                { carPlateNumber: { contains: filters.search, mode: 'insensitive' } },
-                { motorcyclePlateNumber: { contains: filters.search, mode: 'insensitive' } },
             ];
         }
 
@@ -51,8 +49,7 @@ export class AdminService {
                 verificationStatus: true,
                 submittedAt: true,
                 isActive: true,
-                carPlateNumber: true,
-                motorcyclePlateNumber: true,
+                rescueVehicles: true,
             },
             orderBy: [
                 { submittedAt: 'desc' },

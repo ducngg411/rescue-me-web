@@ -24,8 +24,8 @@ export default function RequiredDocsStep({ initialData, serviceInfo, onComplete,
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
 
-    const needsCarPhoto = serviceInfo?.supportedVehicleTypes?.includes('CAR') || false;
-    const needsMotorbikePhoto = serviceInfo?.supportedVehicleTypes?.includes('MOTORCYCLE') || false;
+    const needsCarPhoto = serviceInfo?.rescueVehicles?.some((v: any) => v.type === 'CAR') || false;
+    const needsMotorbikePhoto = serviceInfo?.rescueVehicles?.some((v: any) => v.type === 'MOTORCYCLE') || false;
 
     // Always load existing uploads from server on mount (server is source of truth)
     useEffect(() => {
@@ -180,8 +180,17 @@ export default function RequiredDocsStep({ initialData, serviceInfo, onComplete,
                                 Ảnh ô tô cứu hộ <span className="text-red-500">*</span>
                             </label>
                             <p className="text-sm text-gray-500 mb-2">
-                                Chụp ảnh xe với biển số rõ ràng - Biển số đã đăng ký: <span className="font-mono font-semibold text-gray-700">{serviceInfo?.carPlateNumber || 'Chưa có'}</span>
+                                Chụp ảnh xe với biển số rõ ràng - Các biển số đã đăng ký:
                             </p>
+                            <ul className="text-sm text-gray-700 mb-2 ml-4 list-disc">
+                                {serviceInfo?.rescueVehicles
+                                    ?.filter((v: any) => v.type === 'CAR')
+                                    .map((v: any, idx: number) => (
+                                        <li key={idx} className="font-mono font-semibold">
+                                            {v.plateNumber} {v.isPrimary && <span className="text-blue-600">(Chính)</span>}
+                                        </li>
+                                    ))}
+                            </ul>
                             <FileUpload
                                 purpose={UploadPurpose.PROVIDER_VERIFICATION}
                                 docType={DocumentType.CAR_PHOTO}
@@ -199,8 +208,17 @@ export default function RequiredDocsStep({ initialData, serviceInfo, onComplete,
                                 Ảnh xe máy cứu hộ <span className="text-red-500">*</span>
                             </label>
                             <p className="text-sm text-gray-500 mb-2">
-                                Chụp ảnh xe với biển số rõ ràng - Biển số đã đăng ký: <span className="font-mono font-semibold text-gray-700">{serviceInfo?.motorcyclePlateNumber || 'Chưa có'}</span>
+                                Chụp ảnh xe với biển số rõ ràng - Các biển số đã đăng ký:
                             </p>
+                            <ul className="text-sm text-gray-700 mb-2 ml-4 list-disc">
+                                {serviceInfo?.rescueVehicles
+                                    ?.filter((v: any) => v.type === 'MOTORCYCLE')
+                                    .map((v: any, idx: number) => (
+                                        <li key={idx} className="font-mono font-semibold">
+                                            {v.plateNumber} {v.isPrimary && <span className="text-blue-600">(Chính)</span>}
+                                        </li>
+                                    ))}
+                            </ul>
                             <FileUpload
                                 purpose={UploadPurpose.PROVIDER_VERIFICATION}
                                 docType={DocumentType.MOTORBIKE_PHOTO}

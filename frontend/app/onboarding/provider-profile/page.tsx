@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { updateProviderProfile, UpdateProviderProfileData } from '@/lib/auth';
+import { updateProviderProfile, UpdateProviderProfileData, RescueVehicle } from '@/lib/auth';
 import { searchPlaces, getPlaceDetails, PlaceSearchResult } from '@/lib/vietmap';
-import { normalizeVietnamPlate, isValidVietnamPlate } from '@/lib/validators';
+import { normalizeVietnamPlate, isValidVietnamPlate, formatVietnamPlate } from '@/lib/validators';
 
 const SERVICE_TYPES = [
     { value: 'TOWING', label: 'Kéo xe' },
@@ -59,8 +59,7 @@ export default function ProviderProfilePage() {
             lat: 0,
             lng: 0,
         },
-        carPlateNumber: '',
-        motorcyclePlateNumber: '',
+        rescueVehicles: [{ type: 'CAR' as 'CAR' | 'MOTORCYCLE', plateNumber: '', isPrimary: true }] as RescueVehicle[],
     });
 
     useEffect(() => {
@@ -187,23 +186,17 @@ export default function ProviderProfilePage() {
         if (formData.serviceTypes.length === 0) newErrors.serviceTypes = 'Phải chọn ít nhất một loại dịch vụ';
         if (formData.supportedVehicleTypes.length === 0) newErrors.supportedVehicleTypes = 'Phải chọn ít nhất một loại phương tiện';
 
-        const hasCar = formData.supportedVehicleTypes.includes('CAR');
-        const hasMotorcycle = formData.supportedVehicleTypes.includes('MOTORCYCLE');
-
-        if (hasCar) {
-            if (!formData.carPlateNumber.trim()) {
-                newErrors.carPlateNumber = 'Biển số ô tô không được để trống';
-            } else if (!isValidVietnamPlate(formData.carPlateNumber)) {
-                newErrors.carPlateNumber = 'Biển số ô tô không hợp lệ';
-            }
-        }
-
-        if (hasMotorcycle) {
-            if (!formData.motorcyclePlateNumber.trim()) {
-                newErrors.motorcyclePlateNumber = 'Biển số xe máy không được để trống';
-            } else if (!isValidVietnamPlate(formData.motorcyclePlateNumber)) {
-                newErrors.motorcyclePlateNumber = 'Biển số xe máy không hợp lệ';
-            }
+        // Validate rescue vehicles
+        if (formData.rescueVehicles.length === 0) {
+            newErrors.rescueVehicles = 'Phải có ít nhất một phương tiện cứu hộ';
+        } else {
+            formData.rescueVehicles.forEach((vehicle, index) => {
+                if (!vehicle.plateNumber.trim()) {
+                    newErrors[`rescueVehicle_${index}_plateNumber`] = 'Biển số xe không được để trống';
+                } else if (!isValidVietnamPlate(vehicle.plateNumber)) {
+                    newErrors[`rescueVehicle_${index}_plateNumber`] = 'Biển số xe không hợp lệ';
+                }
+            });
         }
 
         setErrors(newErrors);
@@ -218,6 +211,12 @@ export default function ProviderProfilePage() {
         setErrors({});
 
         try {
+            // Normalize rescue vehicle plate numbers
+            const normalizedVehicles = formData.rescueVehicles.map(vehicle => ({
+                ...vehicle,
+                plateNumber: normalizeVietnamPlate(vehicle.plateNumber)
+            }));
+
             const submissionData: UpdateProviderProfileData = {
                 providerType: formData.providerType,
                 fullName: formData.fullName,
@@ -225,6 +224,7 @@ export default function ProviderProfilePage() {
                 serviceTypes: formData.serviceTypes,
                 supportedVehicleTypes: formData.supportedVehicleTypes,
                 serviceRadiusKm: formData.serviceRadiusKm,
+                rescueVehicles: normalizedVehicles,
             };
 
             if (formData.providerType === 'BUSINESS') {
@@ -232,13 +232,6 @@ export default function ProviderProfilePage() {
                 submissionData.businessAddress = formData.businessAddress;
             } else {
                 submissionData.permanentAddress = formData.permanentAddress;
-            }
-
-            if (formData.supportedVehicleTypes.includes('CAR')) {
-                submissionData.carPlateNumber = normalizeVietnamPlate(formData.carPlateNumber);
-            }
-            if (formData.supportedVehicleTypes.includes('MOTORCYCLE')) {
-                submissionData.motorcyclePlateNumber = normalizeVietnamPlate(formData.motorcyclePlateNumber);
             }
 
             await updateProviderProfile(submissionData);
@@ -378,8 +371,9 @@ export default function ProviderProfilePage() {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Phương tiện hỗ trợ <span className="text-red-500">*</span>
+                                Bạn nhận cứu hộ cho loại phương tiện nào? <span className="text-red-500">*</span>
                             </label>
+                            <p className="text-xs text-gray-500 mb-2">Chọn loại xe mà khách hàng cần cứu hộ (có thể chọn nhiều)</p>
                             <div className="grid grid-cols-2 gap-3">
                                 {VEHICLE_TYPES.map(vehicle => (
                                     <button
@@ -398,71 +392,118 @@ export default function ProviderProfilePage() {
                             {errors.supportedVehicleTypes && <p className="mt-1 text-xs text-red-600">{errors.supportedVehicleTypes}</p>}
                         </div>
 
-                        {formData.supportedVehicleTypes.includes('CAR') && (
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                    Biển số ô tô <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.carPlateNumber}
-                                    onChange={(e) => {
-                                        const value = e.target.value.toUpperCase();
-                                        setFormData({ ...formData, carPlateNumber: value });
-                                        if (errors.carPlateNumber) {
-                                            setErrors(prev => {
-                                                const { carPlateNumber, ...rest } = prev;
-                                                return rest;
-                                            });
-                                        }
-                                    }}
-                                    onBlur={() => {
-                                        if (formData.carPlateNumber && !isValidVietnamPlate(formData.carPlateNumber)) {
-                                            setErrors(prev => ({ ...prev, carPlateNumber: 'Biển số ô tô không hợp lệ' }));
-                                        }
-                                    }}
-                                    className={`w-full px-3 py-2 border rounded-md text-sm text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.carPlateNumber ? 'border-red-500' : 'border-gray-300'}`}
-                                    placeholder="51A-12345"
-                                />
-                                {errors.carPlateNumber && <p className="mt-1 text-xs text-red-600">{errors.carPlateNumber}</p>}
-                                {!errors.carPlateNumber && formData.carPlateNumber && isValidVietnamPlate(formData.carPlateNumber) && (
-                                    <p className="mt-1 text-xs text-green-600">✓ Biển số hợp lệ</p>
-                                )}
-                            </div>
-                        )}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Bạn sử dụng phương tiện nào để đi cứu hộ? <span className="text-red-500">*</span>
+                            </label>
+                            <p className="text-xs text-gray-500 mb-3">Thông tin phương tiện của bạn (có thể thêm nhiều xe)</p>
 
-                        {formData.supportedVehicleTypes.includes('MOTORCYCLE') && (
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                    Biển số xe máy <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.motorcyclePlateNumber}
-                                    onChange={(e) => {
-                                        const value = e.target.value.toUpperCase();
-                                        setFormData({ ...formData, motorcyclePlateNumber: value });
-                                        if (errors.motorcyclePlateNumber) {
-                                            setErrors(prev => {
-                                                const { motorcyclePlateNumber, ...rest } = prev;
-                                                return rest;
-                                            });
-                                        }
+                            <div className="space-y-3">
+                                {formData.rescueVehicles.map((vehicle, index) => (
+                                    <div key={index} className="flex gap-2 items-start p-3 border border-gray-200 rounded-md bg-gray-50">
+                                        <div className="flex-1 space-y-2">
+                                            <select
+                                                value={vehicle.type}
+                                                onChange={(e) => {
+                                                    const newVehicles = [...formData.rescueVehicles];
+                                                    newVehicles[index].type = e.target.value as 'CAR' | 'MOTORCYCLE';
+                                                    setFormData({ ...formData, rescueVehicles: newVehicles });
+                                                }}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="CAR">Ô tô</option>
+                                                <option value="MOTORCYCLE">Xe máy</option>
+                                            </select>
+
+                                            <input
+                                                type="text"
+                                                value={vehicle.plateNumber}
+                                                onChange={(e) => {
+                                                    const value = e.target.value.toUpperCase();
+                                                    const newVehicles = [...formData.rescueVehicles];
+                                                    newVehicles[index].plateNumber = value;
+                                                    setFormData({ ...formData, rescueVehicles: newVehicles });
+
+                                                    // Clear error on change
+                                                    const errorKey = `rescueVehicle_${index}_plateNumber`;
+                                                    if (errors[errorKey]) {
+                                                        const { [errorKey]: _, ...rest } = errors;
+                                                        setErrors(rest);
+                                                    }
+                                                }}
+                                                onBlur={() => {
+                                                    // Auto-format on blur if valid
+                                                    const value = vehicle.plateNumber;
+                                                    if (value && isValidVietnamPlate(value)) {
+                                                        const formatted = formatVietnamPlate(value);
+                                                        const newVehicles = [...formData.rescueVehicles];
+                                                        newVehicles[index].plateNumber = formatted;
+                                                        setFormData({ ...formData, rescueVehicles: newVehicles });
+                                                    } else if (value && !isValidVietnamPlate(value)) {
+                                                        setErrors(prev => ({
+                                                            ...prev,
+                                                            [`rescueVehicle_${index}_plateNumber`]: 'Biển số xe không hợp lệ (VD: 29A-12345, 51AB-12345)'
+                                                        }));
+                                                    }
+                                                }}
+                                                className={`w-full px-3 py-2 border rounded-md text-sm font-mono text-gray-900 placeholder:text-gray-400 bg-white uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors[`rescueVehicle_${index}_plateNumber`] ? 'border-red-500 bg-red-50' :
+                                                        vehicle.plateNumber && isValidVietnamPlate(vehicle.plateNumber) ? 'border-green-500 bg-green-50' :
+                                                            'border-gray-300'
+                                                    }`}
+                                                placeholder="VD: 29A-12345"
+                                            />
+
+                                            {errors[`rescueVehicle_${index}_plateNumber`] && (
+                                                <p className="text-xs text-red-600">{errors[`rescueVehicle_${index}_plateNumber`]}</p>
+                                            )}
+                                            {!errors[`rescueVehicle_${index}_plateNumber`] && vehicle.plateNumber && isValidVietnamPlate(vehicle.plateNumber) && (
+                                                <p className="text-xs text-green-600">✓ Biển số hợp lệ (định dạng: 29A-12345)</p>
+                                            )}
+                                            {!errors[`rescueVehicle_${index}_plateNumber`] && vehicle.plateNumber && !isValidVietnamPlate(vehicle.plateNumber) && (
+                                                <p className="text-xs text-gray-500">Nhập đúng định dạng: 29A-12345 hoặc 51AB-12345</p>
+                                            )}
+                                        </div>
+
+                                        {formData.rescueVehicles.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const newVehicles = formData.rescueVehicles.filter((_, i) => i !== index);
+                                                    // Set first vehicle as primary if we removed the primary one
+                                                    if (vehicle.isPrimary && newVehicles.length > 0) {
+                                                        newVehicles[0].isPrimary = true;
+                                                    }
+                                                    setFormData({ ...formData, rescueVehicles: newVehicles });
+                                                }}
+                                                className="mt-2 p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                                title="Xóa phương tiện"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setFormData({
+                                            ...formData,
+                                            rescueVehicles: [
+                                                ...formData.rescueVehicles,
+                                                { type: 'CAR', plateNumber: '', isPrimary: false }
+                                            ]
+                                        });
                                     }}
-                                    onBlur={() => {
-                                        if (formData.motorcyclePlateNumber && !isValidVietnamPlate(formData.motorcyclePlateNumber)) {
-                                            setErrors(prev => ({ ...prev, motorcyclePlateNumber: 'Biển số xe máy không hợp lệ' }));
-                                        }
-                                    }}
-                                    className={`w-full px-3 py-2 border rounded-md text-sm text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.motorcyclePlateNumber ? 'border-red-500' : 'border-gray-300'}`}
-                                    placeholder="51A-12345"
-                                />
-                                {errors.motorcyclePlateNumber && <p className="mt-1 text-xs text-red-600">{errors.motorcyclePlateNumber}</p>}
-                                {!errors.motorcyclePlateNumber && formData.motorcyclePlateNumber && isValidVietnamPlate(formData.motorcyclePlateNumber) && (
-                                    <p className="mt-1 text-xs text-green-600">✓ Biển số hợp lệ</p>
-                                )}
+                                    className="w-full py-2 px-3 border-2 border-dashed border-gray-300 rounded-md text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                                >
+                                    + Thêm phương tiện
+                                </button>
                             </div>
-                        )}
+                            {errors.rescueVehicles && <p className="mt-1 text-xs text-red-600">{errors.rescueVehicles}</p>}
+                        </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1.5">

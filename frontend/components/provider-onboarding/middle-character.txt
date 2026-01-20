@@ -1,0 +1,25 @@
+MIDDLE CHARACTER (CHỮ SAU MÃ 2 SỐ) - VIỆT NAM
+
+A) BIỂN TRẮNG (cá nhân / doanh nghiệp)
+- Dạng: XX[A-Z]-NNN.NN  (vd: 29A-123.45, 61C-888.88)
+- Chữ cái A–Z (thực tế dùng nhiều: A, B, C, D, E, F, G, H, K, L, M, N, P, S, T, U, V, X, Y, Z...)
+- Ý nghĩa: chia SERIES / đợt cấp trong cùng địa phương.
+  -> KHÔNG có quy ước toàn quốc kiểu "A là ô tô, B là xe máy".
+
+B) BIỂN VÀNG (xe kinh doanh vận tải)
+- Dạng ký tự giống biển trắng (XX[A-Z]-...), điểm khác là NỀN VÀNG.
+- Chữ cái vẫn là series.
+
+C) BIỂN XANH (cơ quan nhà nước)
+- Dạng ký tự giống biển trắng (XX[A-Z]-...), điểm khác là NỀN XANH.
+- Chữ cái vẫn là series.
+
+D) NGOẠI GIAO / NƯỚC NGOÀI / TỔ CHỨC QUỐC TẾ
+- Thường gặp (mang “middle token” đặc biệt):
+  NG = Ngoại giao
+  NN = Nước ngoài
+  QT = Tổ chức quốc tế
+- Dạng hay thấy: 80-NG-xxx.xx / 80-NN-xxx.xx / 80-QT-xxx.xx
+
+E) MÃ 80 (xe cơ quan Trung ương)
+- 80 không phải tỉnh/thành; vẫn có thể đi với chữ cái series (A/B/...) tùy đăng ký.
