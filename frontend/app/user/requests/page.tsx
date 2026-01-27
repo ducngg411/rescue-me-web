@@ -27,24 +27,30 @@ interface RescueRequest {
 
 const STATUS_LABELS: Record<string, string> = {
     CREATED: 'Đã tạo',
+    MATCHING: 'Đang tìm provider',
     SEARCHING: 'Đang tìm kiếm',
     MATCHED: 'Đã ghép đôi',
+    ASSIGNED: 'Đã có provider',
     ACCEPTED: 'Đã chấp nhận',
     IN_PROGRESS: 'Đang thực hiện',
     COMPLETED: 'Hoàn thành',
     CANCELLED: 'Đã hủy',
     REJECTED: 'Bị từ chối',
+    EXPIRED: 'Hết hạn',
 };
 
 const STATUS_COLORS: Record<string, string> = {
     CREATED: 'bg-blue-100 text-blue-800',
+    MATCHING: 'bg-yellow-100 text-yellow-800 animate-pulse',
     SEARCHING: 'bg-yellow-100 text-yellow-800',
     MATCHED: 'bg-purple-100 text-purple-800',
+    ASSIGNED: 'bg-green-100 text-green-800',
     ACCEPTED: 'bg-green-100 text-green-800',
     IN_PROGRESS: 'bg-indigo-100 text-indigo-800',
     COMPLETED: 'bg-gray-100 text-gray-800',
     CANCELLED: 'bg-red-100 text-red-800',
     REJECTED: 'bg-red-100 text-red-800',
+    EXPIRED: 'bg-orange-100 text-orange-800',
 };
 
 const INCIDENT_LABELS: Record<string, string> = {

@@ -53,13 +53,16 @@ enum IncidentType {
 // Enum cho trạng thái rescue request
 enum RequestStatus {
   CREATED // Vừa tạo
-  SEARCHING // Đang tìm provider
-  MATCHED // Đã match với provider
+  MATCHING // Đang tìm kiếm provider (U2)
+  SEARCHING // Đang tìm provider (legacy - deprecated)
+  MATCHED // Đã match với provider (legacy)
+  ASSIGNED // Provider đã nhận (U2)
   ACCEPTED // Provider đã chấp nhận
   IN_PROGRESS // Đang thực hiện
   COMPLETED // Hoàn thành
   CANCELLED // Đã hủy
   REJECTED // Bị từ chối
+  EXPIRED // Hết hạn, không có provider nhận (U2)
 }
 
 // Enum cho loại nhà cung cấp
@@ -139,9 +142,10 @@ model User {
   lastLogin DateTime?
 
   // Relations
-  sessions       Session[]
-  uploads        Upload[]
-  rescueRequests RescueRequest[]
+  sessions         Session[]
+  uploads          Upload[]
+  rescueRequests   RescueRequest[] @relation("UserRequests")
+  assignedRequests RescueRequest[] @relation("AssignedRequests")
 
   @@index([email])
   @@index([googleId])
@@ -257,17 +261,29 @@ model RescueRequest {
   // Status
   status RequestStatus @default(CREATED)
 
+  // Provider assignment
+  assignedProviderId String?
+  assignedProvider   User?   @relation("AssignedRequests", fields: [assignedProviderId], references: [id])
+
+  // Matching tracking
+  matchingStartedAt DateTime? // When status changed to MATCHING
+  assignedAt        DateTime? // When provider accepted
+  expiresAt         DateTime? // MATCHING expiration time
+  matchAttempts     Int       @default(1) // Number of matching attempts
+  searchPhase       Int       @default(1) // Search phase: 1 = normal radius, 2 = expanded radius
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User           @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
   media RequestMedia[]
 
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([assignedProviderId])
   @@map("rescue_requests")
 }
 
