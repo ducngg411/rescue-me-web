@@ -39,8 +39,22 @@ export default function UserDashboard() {
     // Get current location on mount
     useEffect(() => {
         if ('geolocation' in navigator) {
+            console.log('🔍 [UserDashboard] Requesting current position...');
+            console.log('🔍 [UserDashboard] Options:', {
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 0
+            });
+
             navigator.geolocation.getCurrentPosition(
                 (position) => {
+                    console.log('✅ [UserDashboard] Position received:', {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        accuracy: position.coords.accuracy,
+                        timestamp: new Date(position.timestamp).toLocaleString('vi-VN')
+                    });
+
                     setCurrentLocation({
                         lat: position.coords.latitude,
                         lng: position.coords.longitude,
@@ -49,17 +63,17 @@ export default function UserDashboard() {
                     setLocationError(null);
                 },
                 (error) => {
-                    console.error('Error getting location:', {
+                    console.error('❌ [UserDashboard] Error:', {
                         code: error.code,
                         message: error.message,
-                        PERMISSION_DENIED: error.PERMISSION_DENIED,
-                        POSITION_UNAVAILABLE: error.POSITION_UNAVAILABLE,
-                        TIMEOUT: error.TIMEOUT
+                        PERMISSION_DENIED: error.code === 1,
+                        POSITION_UNAVAILABLE: error.code === 2,
+                        TIMEOUT: error.code === 3
                     });
-                    
+
                     // Use default location when user denies permission
                     setCurrentLocation(DEFAULT_LOCATION);
-                    
+
                     let errorMessage = 'Không thể lấy vị trí hiện tại. Sử dụng vị trí mặc định.';
                     switch (error.code) {
                         case 1: // PERMISSION_DENIED
@@ -72,14 +86,14 @@ export default function UserDashboard() {
                             errorMessage = 'Hết thời gian chờ lấy vị trí. Sử dụng vị trí mặc định.';
                             break;
                     }
-                    
+
                     setLocationError(errorMessage);
                     setIsLoadingLocation(false);
                 },
                 {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0,
+                    enableHighAccuracy: true,  // Sử dụng GPS chính xác nhất
+                    timeout: 15000,            // Tăng timeout lên 15 giây
+                    maximumAge: 0,             // KHÔNG dùng cache, luôn lấy vị trí mới
                 }
             );
         } else {

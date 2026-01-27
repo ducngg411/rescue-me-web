@@ -89,3 +89,29 @@ export async function getPlaceDetails(refId: string): Promise<PlaceDetails | nul
         return null;
     }
 }
+
+/**
+ * Reverse geocode - convert coordinates to address using v4 API
+ * display_type=1: New merged format (2 levels: ward, city) - more concise
+ */
+export async function reverseGeocode(lat: number, lng: number): Promise<string> {
+    try {
+        const url = `https://maps.vietmap.vn/api/reverse/v4?apikey=${VIETMAP_API_KEY}&lat=${lat}&lng=${lng}&display_type=1`;
+        const response = await fetch(url);
+
+        if (response.ok) {
+            const data = await response.json();
+            // v4 returns array of results
+            if (data && Array.isArray(data) && data.length > 0) {
+                const result = data[0];
+                // Use display for full address, fallback to address or name
+                return result.display || result.address || result.name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            }
+            return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        }
+        return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    } catch (error) {
+        console.error('Error reverse geocoding:', error);
+        return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+}

@@ -69,8 +69,17 @@ export default function LocationPicker({
 
     const handleGetCurrentLocation = () => {
         if ('geolocation' in navigator) {
+            console.log('🔍 [LocationPicker] Requesting current position...');
+
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
+                    console.log('✅ [LocationPicker] Position received:', {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        accuracy: position.coords.accuracy,
+                        timestamp: new Date(position.timestamp).toLocaleString('vi-VN')
+                    });
+
                     const { latitude, longitude } = position.coords;
 
                     // Use reverse geocoding or just use coordinates
@@ -82,11 +91,24 @@ export default function LocationPicker({
 
                     setSelectedPlace(locationData);
                     onChange(locationData);
-                    setQuery(locationData.addressText);
+                    // KHÔNG set query để tránh trigger search
+                    setQuery('');
+                    setShowResults(false);
                 },
                 (error) => {
-                    console.error('Error getting location:', error);
+                    console.error('❌ [LocationPicker] Error:', {
+                        code: error.code,
+                        message: error.message,
+                        PERMISSION_DENIED: error.code === 1,
+                        POSITION_UNAVAILABLE: error.code === 2,
+                        TIMEOUT: error.code === 3
+                    });
                     alert('Không thể lấy vị trí hiện tại. Vui lòng cho phép truy cập vị trí.');
+                },
+                {
+                    enableHighAccuracy: true,  // Sử dụng GPS chính xác nhất
+                    timeout: 15000,            // Timeout sau 15 giây
+                    maximumAge: 0,             // KHÔNG dùng cache, luôn lấy vị trí mới
                 }
             );
         } else {
@@ -109,7 +131,7 @@ export default function LocationPicker({
                         onChange={(e) => setQuery(e.target.value)}
                         onFocus={() => setShowResults(true)}
                         placeholder={placeholder}
-                        className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
                     />
                     <MagnifyingGlassIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                 </div>
@@ -118,7 +140,7 @@ export default function LocationPicker({
                 <button
                     type="button"
                     onClick={handleGetCurrentLocation}
-                    className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                    className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
                 >
                     <MapPinIcon className="h-5 w-5" />
                     Sử dụng vị trí hiện tại
