@@ -326,29 +326,34 @@ export class UploadsService {
 
     /**
      * Track a Cloudinary upload in database
-     * Max 2 videos per user - auto delete oldest if exceeds
+     * Cleanup orphaned videos older than 1 hour that are still unconfirmed
      */
     async trackCloudinaryUpload(
         userId: string,
         dto: TrackCloudinaryUploadDto,
     ): Promise<TrackCloudinaryUploadResponseDto> {
-        // Check existing video uploads for this user
-        const existingVideos = await this.prisma.upload.findMany({
+        // Clean up orphaned videos (unconfirmed and older than 1 hour)
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const orphanedVideos = await this.prisma.upload.findMany({
             where: {
                 userId,
                 purpose: 'REQUEST_VIDEO',
-                confirmed: false, // Only unconfirmed videos
-            },
-            orderBy: {
-                createdAt: 'asc', // Oldest first
+                confirmed: false,
+                createdAt: {
+                    lt: oneHourAgo, // Older than 1 hour
+                },
             },
         });
 
-        // If user has 2 or more videos, delete the oldest ones
-        if (existingVideos.length >= 2) {
-            const videosToDelete = existingVideos.slice(0, existingVideos.length - 1); // Keep only the most recent one
-            for (const video of videosToDelete) {
+        console.log(`🧹 [Cloudinary] Found ${orphanedVideos.length} orphaned videos to cleanup`);
+
+        // Delete orphaned videos
+        for (const video of orphanedVideos) {
+            try {
                 await this.deleteCloudinaryUpload(userId, video.id);
+                console.log(`🗑️ [Cloudinary] Deleted orphaned video: ${video.id}`);
+            } catch (error) {
+                console.error(`❌ [Cloudinary] Failed to delete orphaned video ${video.id}:`, error);
             }
         }
 

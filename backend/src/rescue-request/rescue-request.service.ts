@@ -120,6 +120,20 @@ export class RescueRequestService {
             },
         });
 
+        // Mark video uploads as confirmed (attached to request)
+        if (dto.videoUploadIds && dto.videoUploadIds.length > 0) {
+            await this.prisma.upload.updateMany({
+                where: {
+                    id: { in: dto.videoUploadIds },
+                    userId,
+                },
+                data: {
+                    confirmed: true,
+                },
+            });
+            console.log(`✅ [RescueRequest] Confirmed ${dto.videoUploadIds.length} video uploads`);
+        }
+
         console.log('✅ [RescueRequest] Created request:', rescueRequest.id);
         console.log('📊 [RescueRequest] Media created:', rescueRequest.media.length);
 

@@ -57,17 +57,21 @@ export function useUpload(options: UseUploadOptions): UseUploadReturn {
             }
         },
         [options]
-        setProgress(0);
-    setError(null);
-    setResult(null);
-}, []);
+    );
 
-return {
-    upload,
-    uploading,
-    progress,
-    error,
-    result,
-    reset,
-};
+    const reset = useCallback(() => {
+        setUploading(false);
+        setProgress(0);
+        setError(null);
+        setResult(null);
+    }, []);
+
+    return {
+        upload,
+        uploading,
+        progress,
+        error,
+        result,
+        reset,
+    };
 }
