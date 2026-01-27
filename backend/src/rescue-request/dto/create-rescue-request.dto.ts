@@ -63,8 +63,22 @@ export class CreateRescueRequestDto {
   @IsOptional()
   description?: string;
 
+  @IsString()
+  @IsNotEmpty()
+  contactPhone: string;
+
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
-  mediaObjectKeys?: string[]; // Array of object keys from pre-uploaded media
+  mediaObjectKeys?: string[]; // Array of object keys from pre-uploaded media (images)
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  videoUrls?: string[]; // Array of Cloudinary video URLs (deprecated, use videoUploadIds)
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  videoUploadIds?: string[]; // Array of Upload IDs for Cloudinary videos
 }

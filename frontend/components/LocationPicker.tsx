@@ -30,11 +30,18 @@ export default function LocationPicker({
     const [isSearching, setIsSearching] = useState(false);
     const [showResults, setShowResults] = useState(false);
     const [selectedPlace, setSelectedPlace] = useState<LocationData | null>(value);
+    const [isSelecting, setIsSelecting] = useState(false); // Flag để ngăn search khi đang chọn
 
     // Debounce search
     useEffect(() => {
+        // Không search nếu đang trong quá trình chọn địa chỉ
+        if (isSelecting) {
+            return;
+        }
+
         if (!query.trim()) {
             setSearchResults([]);
+            setShowResults(false);
             return;
         }
 
@@ -47,9 +54,11 @@ export default function LocationPicker({
         }, 500);
 
         return () => clearTimeout(timer);
-    }, [query]);
+    }, [query, isSelecting]);
 
     const handleSelectPlace = async (result: PlaceSearchResult) => {
+        setIsSelecting(true); // Bắt đầu quá trình chọn
+
         if (result.refId) {
             // Fetch full details including coordinates
             const details = await getPlaceDetails(result.refId);
@@ -61,10 +70,13 @@ export default function LocationPicker({
                 };
                 setSelectedPlace(locationData);
                 onChange(locationData);
-                setQuery(locationData.addressText);
+                setQuery(''); // Xóa query để không trigger search
                 setShowResults(false);
+                setSearchResults([]);
             }
         }
+
+        setIsSelecting(false); // Kết thúc quá trình chọn
     };
 
     const handleGetCurrentLocation = () => {
@@ -128,8 +140,18 @@ export default function LocationPicker({
                     <input
                         type="text"
                         value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        onFocus={() => setShowResults(true)}
+                        onChange={(e) => {
+                            setQuery(e.target.value);
+                            // Khi user gõ lại, xóa địa điểm đã chọn
+                            if (selectedPlace && e.target.value.trim()) {
+                                setSelectedPlace(null);
+                            }
+                        }}
+                        onFocus={() => {
+                            if (query.trim() && searchResults.length > 0) {
+                                setShowResults(true);
+                            }
+                        }}
                         placeholder={placeholder}
                         className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
                     />

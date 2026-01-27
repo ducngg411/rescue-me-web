@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUserGuard } from '@/lib/guards';
 import LocationPicker from '@/components/LocationPicker';
-import FileUpload from '@/components/FileUpload';
+import ImageUpload from '@/components/ImageUpload';
+import VideoUpload from '@/components/VideoUpload';
 import { UploadPurpose } from '@/lib/upload';
 import api from '@/lib/api';
 import { reverseGeocode } from '@/lib/vietmap';
@@ -63,14 +64,19 @@ export default function CreateRescueRequestPage() {
         incidentLocation: null as LocationData | null,
         contactPhone: '',
         description: '',
-        mediaObjectKeys: [] as string[],
+        images: [] as Array<{ objectKey: string; publicUrl: string }>, // Changed structure
+        videoUrls: [] as string[],
+        videoUploadIds: [] as string[], // Track upload IDs
     });
 
     // Fetch user profile and setup vehicles
     useEffect(() => {
         const fetchProfile = async () => {
             try {
+                console.log('🔍 Fetching user profile...');
+                console.log('🔑 Token:', localStorage.getItem('accessToken')?.substring(0, 20) + '...');
                 const response = await api.get('/me/profile');
+                console.log('✅ Profile fetched:', response.data);
                 const profile = response.data;
                 setUserProfile(profile);
 
@@ -208,15 +214,23 @@ export default function CreateRescueRequestPage() {
                 incidentType: formData.incidentType,
                 vehicleType: selectedVehicle.type,
                 pickupLocation: formData.incidentLocation,
+                contactPhone: formData.contactPhone,
                 description: formData.description,
-                mediaObjectKeys: formData.mediaObjectKeys,
+                mediaObjectKeys: formData.images.map(img => img.objectKey), // Extract objectKeys
+                videoUploadIds: formData.videoUploadIds, // New: send upload IDs instead of URLs
+                videoUrls: formData.videoUrls, // Keep for backward compatibility
             };
 
+            console.log('📤 [CreateRequest] Submitting payload:', payload);
+            console.log('📸 [CreateRequest] Image count:', formData.images.length);
+            console.log('🎥 [CreateRequest] Video upload IDs:', formData.videoUploadIds.length);
+
             const response = await api.post('/rescue-requests', payload);
+            console.log('✅ [CreateRequest] Response:', response.data);
             alert('Tạo yêu cầu cứu hộ thành công!');
             router.push(`/user/requests/${response.data.id}`);
         } catch (error: any) {
-            console.error('Error creating rescue request:', error);
+            console.error('❌ [CreateRequest] Error:', error);
             const errorMessage = error.response?.data?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
             alert(`Lỗi: ${errorMessage}`);
         } finally {
@@ -224,19 +238,19 @@ export default function CreateRescueRequestPage() {
         }
     };
 
-    const handleFileUploadSuccess = (result: any) => {
-        if (result.objectKey) {
-            setFormData(prev => ({
-                ...prev,
-                mediaObjectKeys: [...prev.mediaObjectKeys, result.objectKey],
-            }));
-        }
-    };
-
-    const removeMedia = (objectKey: string) => {
+    const handleImageUploadSuccess = (objectKey: string, publicUrl: string) => {
+        console.log('📸 [ImageUpload] Success:', { objectKey, publicUrl });
         setFormData(prev => ({
             ...prev,
-            mediaObjectKeys: prev.mediaObjectKeys.filter(key => key !== objectKey),
+            images: [...prev.images, { objectKey, publicUrl }],
+        }));
+    };
+
+    const handleImageRemove = (objectKey: string) => {
+        console.log('🗑️ [ImageUpload] Removing:', objectKey);
+        setFormData(prev => ({
+            ...prev,
+            images: prev.images.filter(img => img.objectKey !== objectKey),
         }));
     };
 
@@ -537,40 +551,56 @@ export default function CreateRescueRequestPage() {
                                 <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
-                                Hình ảnh
+                                Hình ảnh hiện trường
                             </h2>
                         </div>
+                        <ImageUpload
+                            purpose={UploadPurpose.REQUEST_PHOTO}
+                            maxImages={5}
+                            uploadedImages={formData.images}
+                            onSuccess={handleImageUploadSuccess}
+                            onRemove={handleImageRemove}
+                            label=""
+                        />
+                    </div>
 
-                        {formData.mediaObjectKeys.length < 5 && (
-                            <FileUpload
-                                purpose={UploadPurpose.REQUEST_PHOTO}
-                                onSuccess={handleFileUploadSuccess}
-                                label="Chọn ảnh (tối đa 5 ảnh)"
-                            />
-                        )}
-
-                        {formData.mediaObjectKeys.length > 0 && (
-                            <div className="mt-4 grid grid-cols-3 gap-3">
-                                {formData.mediaObjectKeys.map((key, index) => (
-                                    <div key={index} className="relative group">
-                                        <img
-                                            src={`${process.env.NEXT_PUBLIC_S3_PUBLIC_URL}/${key}`}
-                                            alt={`Photo ${index + 1}`}
-                                            className="w-full h-24 object-cover rounded-lg border border-gray-200"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => removeMedia(key)}
-                                            className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                                        >
-                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                    {/* Video Upload */}
+                    <div className="bg-white p-6 rounded-lg border border-gray-200">
+                        <div className="border-b-2 border-blue-600 pb-2 mb-4">
+                            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                                <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                Video (Tùy chọn)
+                            </h2>
+                        </div>
+                        <VideoUpload
+                            label="Upload video tình trạng xe"
+                            maxVideos={2}
+                            cloudinaryCloudName={process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ''}
+                            cloudinaryUploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || ''}
+                            uploadedVideos={formData.videoUrls.map((url, idx) => ({
+                                url,
+                                uploadId: formData.videoUploadIds[idx]
+                            }))}
+                            onSuccess={(videoUrl, uploadId) => {
+                                setFormData(prev => ({
+                                    ...prev,
+                                    videoUrls: [...prev.videoUrls, videoUrl],
+                                    videoUploadIds: [...prev.videoUploadIds, uploadId]
+                                }));
+                            }}
+                            onRemove={(videoUrl, uploadId) => {
+                                setFormData(prev => {
+                                    const urlIndex = prev.videoUrls.indexOf(videoUrl);
+                                    return {
+                                        ...prev,
+                                        videoUrls: prev.videoUrls.filter((_, i) => i !== urlIndex),
+                                        videoUploadIds: prev.videoUploadIds.filter((_, i) => i !== urlIndex)
+                                    };
+                                });
+                            }}
+                        />
                     </div>
 
                     {/* Submit Button */}

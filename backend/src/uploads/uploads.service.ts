@@ -5,7 +5,9 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresignUploadDto, PresignUploadResponseDto, UploadPurpose, DocumentType } from './dto/presign-upload.dto';
 import { ConfirmUploadResponseDto } from './dto/confirm-upload.dto';
+import { TrackCloudinaryUploadDto, TrackCloudinaryUploadResponseDto } from './dto/cloudinary-upload.dto';
 import { UploadPurpose as PrismaUploadPurpose, DocumentType as PrismaDocumentType } from '@prisma/client';
+import { v2 as cloudinary } from 'cloudinary';
 
 @Injectable()
 export class UploadsService {
@@ -39,6 +41,22 @@ export class UploadsService {
 
         this.bucketName = bucketName;
         this.publicDomain = publicDomain;
+
+        // Initialize Cloudinary
+        const cloudinaryCloudName = this.configService.get<string>('CLOUDINARY_CLOUD_NAME');
+        const cloudinaryApiKey = this.configService.get<string>('CLOUDINARY_API_KEY');
+        const cloudinaryApiSecret = this.configService.get<string>('CLOUDINARY_API_SECRET');
+
+        if (cloudinaryCloudName && cloudinaryApiKey && cloudinaryApiSecret) {
+            cloudinary.config({
+                cloud_name: cloudinaryCloudName,
+                api_key: cloudinaryApiKey,
+                api_secret: cloudinaryApiSecret,
+            });
+            console.log('✅ Cloudinary configured:', cloudinaryCloudName);
+        } else {
+            console.warn('⚠️  Cloudinary not configured - video upload features will not work');
+        }
     }
 
     async presignUpload(
@@ -301,6 +319,163 @@ export class UploadsService {
         return {
             success: true,
             deletedCount: uploads.length,
+        };
+    }
+
+    // ==================== CLOUDINARY METHODS ====================
+
+    /**
+     * Track a Cloudinary upload in database
+     * Max 2 videos per user - auto delete oldest if exceeds
+     */
+    async trackCloudinaryUpload(
+        userId: string,
+        dto: TrackCloudinaryUploadDto,
+    ): Promise<TrackCloudinaryUploadResponseDto> {
+        // Check existing video uploads for this user
+        const existingVideos = await this.prisma.upload.findMany({
+            where: {
+                userId,
+                purpose: 'REQUEST_VIDEO',
+                confirmed: false, // Only unconfirmed videos
+            },
+            orderBy: {
+                createdAt: 'asc', // Oldest first
+            },
+        });
+
+        // If user has 2 or more videos, delete the oldest ones
+        if (existingVideos.length >= 2) {
+            const videosToDelete = existingVideos.slice(0, existingVideos.length - 1); // Keep only the most recent one
+            for (const video of videosToDelete) {
+                await this.deleteCloudinaryUpload(userId, video.id);
+            }
+        }
+
+        // Create new upload record
+        const upload = await this.prisma.upload.create({
+            data: {
+                userId,
+                purpose: 'REQUEST_VIDEO',
+                storageType: 'CLOUDINARY',
+                objectKey: dto.cloudinaryPublicId, // Use public_id as objectKey
+                fileName: dto.fileName,
+                fileSize: dto.fileSize,
+                contentType: dto.contentType,
+                publicUrl: dto.publicUrl,
+                cloudinaryPublicId: dto.cloudinaryPublicId,
+                cloudinaryResourceType: dto.resourceType || 'video',
+                confirmed: false,
+            },
+        });
+
+        return {
+            uploadId: upload.id,
+            publicUrl: upload.publicUrl,
+        };
+    }
+
+    /**
+     * Delete a Cloudinary video from both Cloudinary and database
+     */
+    async deleteCloudinaryUpload(userId: string, uploadId: string) {
+        try {
+            console.log(`[deleteCloudinaryUpload] Starting deletion for uploadId: ${uploadId}, userId: ${userId}`);
+
+            // Find upload
+            const upload = await this.prisma.upload.findUnique({
+                where: { id: uploadId },
+            });
+
+            if (!upload) {
+                console.log(`[deleteCloudinaryUpload] Upload not found: ${uploadId}`);
+                throw new NotFoundException('Upload not found');
+            }
+
+            console.log(`[deleteCloudinaryUpload] Upload found:`, {
+                id: upload.id,
+                storageType: upload.storageType,
+                cloudinaryPublicId: upload.cloudinaryPublicId,
+                userId: upload.userId
+            });
+
+            // Verify ownership
+            if (upload.userId !== userId) {
+                console.log(`[deleteCloudinaryUpload] Ownership mismatch - upload.userId: ${upload.userId}, requestUserId: ${userId}`);
+                throw new ForbiddenException('You can only delete your own uploads');
+            }
+
+            // Only delete from Cloudinary if it's a Cloudinary upload
+            if (upload.storageType === 'CLOUDINARY' && upload.cloudinaryPublicId) {
+                try {
+                    console.log(`[deleteCloudinaryUpload] Deleting from Cloudinary:`, {
+                        publicId: upload.cloudinaryPublicId,
+                        resourceType: upload.cloudinaryResourceType || 'video'
+                    });
+
+                    const result = await cloudinary.uploader.destroy(
+                        upload.cloudinaryPublicId,
+                        { resource_type: upload.cloudinaryResourceType || 'video' }
+                    );
+
+                    console.log(`[deleteCloudinaryUpload] Cloudinary deletion result:`, result);
+                } catch (error) {
+                    console.error('[deleteCloudinaryUpload] Failed to delete from Cloudinary:', error);
+                    // Continue to delete from database anyway
+                }
+            }
+
+            // Delete from database
+            console.log(`[deleteCloudinaryUpload] Deleting from database: ${uploadId}`);
+            await this.prisma.upload.delete({
+                where: { id: uploadId },
+            });
+
+            console.log(`[deleteCloudinaryUpload] Successfully deleted upload: ${uploadId}`);
+
+            return {
+                success: true,
+                message: 'Video deleted successfully',
+            };
+        } catch (error) {
+            console.error('[deleteCloudinaryUpload] Error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Confirm Cloudinary uploads (called when creating rescue request)
+     * Delete any unconfirmed videos
+     */
+    async confirmCloudinaryUploads(userId: string, uploadIds: string[]) {
+        // Mark specified uploads as confirmed
+        await this.prisma.upload.updateMany({
+            where: {
+                id: { in: uploadIds },
+                userId,
+            },
+            data: {
+                confirmed: true,
+            },
+        });
+
+        // Delete all unconfirmed Cloudinary videos for this user
+        const unconfirmedVideos = await this.prisma.upload.findMany({
+            where: {
+                userId,
+                purpose: 'REQUEST_VIDEO',
+                confirmed: false,
+            },
+        });
+
+        for (const video of unconfirmedVideos) {
+            await this.deleteCloudinaryUpload(userId, video.id);
+        }
+
+        return {
+            success: true,
+            confirmedCount: uploadIds.length,
+            deletedCount: unconfirmedVideos.length,
         };
     }
 }

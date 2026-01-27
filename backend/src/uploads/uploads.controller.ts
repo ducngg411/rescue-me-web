@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UploadsService } from './uploads.service';
 import { PresignUploadDto, PresignUploadResponseDto, UploadPurpose } from './dto/presign-upload.dto';
 import { ConfirmUploadDto, ConfirmUploadResponseDto } from './dto/confirm-upload.dto';
+import { TrackCloudinaryUploadDto, TrackCloudinaryUploadResponseDto } from './dto/cloudinary-upload.dto';
 
 @Controller('uploads')
 @UseGuards(JwtAuthGuard)
@@ -23,6 +24,23 @@ export class UploadsController {
         @Body() dto: ConfirmUploadDto,
     ): Promise<ConfirmUploadResponseDto> {
         return this.uploadsService.confirmUpload(req.user.id, dto.uploadId);
+    }
+
+    // Cloudinary endpoints
+    @Post('cloudinary/track')
+    async trackCloudinaryUpload(
+        @Req() req,
+        @Body() dto: TrackCloudinaryUploadDto,
+    ): Promise<TrackCloudinaryUploadResponseDto> {
+        return this.uploadsService.trackCloudinaryUpload(req.user.id, dto);
+    }
+
+    @Delete('cloudinary/:uploadId')
+    async deleteCloudinaryUpload(
+        @Req() req,
+        @Param('uploadId') uploadId: string,
+    ) {
+        return this.uploadsService.deleteCloudinaryUpload(req.user.id, uploadId);
     }
 
     @Get()

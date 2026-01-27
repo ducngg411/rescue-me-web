@@ -175,6 +175,7 @@ enum UploadPurpose {
   REQUEST_PHOTO // Ảnh yêu cầu cứu hộ
   REVIEW_PHOTO // Ảnh đánh giá
   BEFORE_AFTER // Ảnh trước/sau
+  REQUEST_VIDEO // Video yêu cầu cứu hộ (Cloudinary)
 }
 
 // Enum cho loại tài liệu xác minh
@@ -188,23 +189,34 @@ enum DocumentType {
   BUSINESS_REGISTRATION // Giấy đăng ký kinh doanh
 }
 
+// Enum cho loại storage
+enum StorageType {
+  R2 // Cloudflare R2
+  CLOUDINARY // Cloudinary
+}
+
 // Upload Model - Quản lý file uploads
 model Upload {
   id     String @id @default(cuid())
   userId String
 
   // Upload metadata
-  purpose UploadPurpose
-  docType DocumentType? // Chỉ dùng cho PROVIDER_VERIFICATION
+  purpose     UploadPurpose
+  docType     DocumentType? // Chỉ dùng cho PROVIDER_VERIFICATION
+  storageType StorageType   @default(R2)
 
   // File information
-  objectKey   String @unique // providers/{providerId}/verification/{docType}/{timestamp}_{rand}.jpg
+  objectKey   String @unique // providers/{providerId}/verification/{docType}/{timestamp}_{rand}.jpg OR cloudinary public_id
   fileName    String
   fileSize    Int // bytes
-  contentType String // image/jpeg, image/png, image/webp
+  contentType String // image/jpeg, image/png, image/webp, video/mp4
 
   // URLs
   publicUrl String
+
+  // Cloudinary specific (for videos)
+  cloudinaryPublicId     String? // Public ID trong Cloudinary để xóa
+  cloudinaryResourceType String? // image, video, raw
 
   // Status
   confirmed Boolean @default(false)
@@ -236,6 +248,12 @@ model RescueRequest {
   pickupLocation  Json // {addressText: string, lat: number, lng: number}
   dropoffLocation Json? // {addressText: string, lat: number, lng: number} - Optional
 
+  // Contact info
+  contactPhone String @default("")
+
+  // Media
+  videoUrls String[] @default([]) // Cloudinary video URLs
+
   // Status
   status RequestStatus @default(CREATED)
 
@@ -258,12 +276,18 @@ model RequestMedia {
   id        String @id @default(cuid())
   requestId String
 
-  // File information
-  objectKey   String @unique
+  // Media type
+  mediaType String @default("IMAGE") // IMAGE or VIDEO
+
+  // File information (for R2 images)
+  objectKey   String? @unique // Null for Cloudinary videos
   fileName    String
   fileSize    Int
   contentType String
   publicUrl   String
+
+  // Cloudinary specific (for videos)
+  cloudinaryPublicId String? // For video deletion
 
   // Timestamps
   createdAt DateTime @default(now())

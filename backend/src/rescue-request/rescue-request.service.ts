@@ -7,6 +7,12 @@ export class RescueRequestService {
     constructor(private prisma: PrismaService) { }
 
     async createRescueRequest(userId: string, dto: CreateRescueRequestDto) {
+        console.log('📝 [RescueRequest] Creating request for user:', userId);
+        console.log('📝 [RescueRequest] DTO:', JSON.stringify(dto, null, 2));
+        console.log('📸 [RescueRequest] Media objectKeys:', dto.mediaObjectKeys);
+        console.log('🎥 [RescueRequest] Video URLs:', dto.videoUrls);
+        console.log('🎥 [RescueRequest] Video UploadIds:', dto.videoUploadIds);
+
         // Validate user exists
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
@@ -16,6 +22,72 @@ export class RescueRequestService {
             throw new NotFoundException('User not found');
         }
 
+        // Prepare media items
+        const mediaItems: Array<{
+            mediaType: string;
+            objectKey: string | null;
+            fileName: string;
+            fileSize: number;
+            contentType: string;
+            publicUrl: string;
+            cloudinaryPublicId: string | null;
+        }> = [];
+
+        // Add images from mediaObjectKeys
+        if (dto.mediaObjectKeys && dto.mediaObjectKeys.length > 0) {
+            for (const objectKey of dto.mediaObjectKeys) {
+                const fileName = objectKey.split('/').pop() || 'unknown';
+                mediaItems.push({
+                    mediaType: 'IMAGE',
+                    objectKey,
+                    fileName,
+                    fileSize: 0,
+                    contentType: 'image/jpeg',
+                    publicUrl: `${process.env.R2_PUBLIC_DOMAIN}/${objectKey}`,
+                    cloudinaryPublicId: null,
+                });
+            }
+        }
+
+        // Add videos from videoUploadIds (preferred) or videoUrls (legacy)
+        if (dto.videoUploadIds && dto.videoUploadIds.length > 0) {
+            // Fetch video upload details
+            const videoUploads = await this.prisma.upload.findMany({
+                where: {
+                    id: { in: dto.videoUploadIds },
+                    userId,
+                    purpose: 'REQUEST_VIDEO',
+                },
+            });
+
+            for (const upload of videoUploads) {
+                mediaItems.push({
+                    mediaType: 'VIDEO',
+                    objectKey: null, // Cloudinary videos don't use R2
+                    fileName: upload.fileName,
+                    fileSize: upload.fileSize,
+                    contentType: upload.contentType,
+                    publicUrl: upload.publicUrl,
+                    cloudinaryPublicId: upload.cloudinaryPublicId,
+                });
+            }
+        } else if (dto.videoUrls && dto.videoUrls.length > 0) {
+            // Legacy: support old videoUrls format
+            for (const videoUrl of dto.videoUrls) {
+                mediaItems.push({
+                    mediaType: 'VIDEO',
+                    objectKey: null,
+                    fileName: 'video.mp4',
+                    fileSize: 0,
+                    contentType: 'video/mp4',
+                    publicUrl: videoUrl,
+                    cloudinaryPublicId: null,
+                });
+            }
+        }
+
+        console.log(`📊 [RescueRequest] Total media items:`, mediaItems.length);
+
         // Create rescue request
         const rescueRequest = await this.prisma.rescueRequest.create({
             data: {
@@ -23,23 +95,15 @@ export class RescueRequestService {
                 incidentType: dto.incidentType,
                 vehicleType: dto.vehicleType,
                 description: dto.description,
+                contactPhone: dto.contactPhone,
                 pickupLocation: dto.pickupLocation as any,
                 dropoffLocation: dto.dropoffLocation as any,
+                videoUrls: dto.videoUrls || [], // Keep for backward compatibility
                 status: 'CREATED',
-                // Create associated media if provided
-                media: dto.mediaObjectKeys
+                // Create associated media
+                media: mediaItems.length > 0
                     ? {
-                        create: dto.mediaObjectKeys.map((objectKey) => {
-                            // Extract file info from object key
-                            const fileName = objectKey.split('/').pop() || 'unknown';
-                            return {
-                                objectKey,
-                                fileName,
-                                fileSize: 0, // Will be updated later if needed
-                                contentType: 'image/jpeg', // Default, should be passed from frontend
-                                publicUrl: `${process.env.S3_PUBLIC_URL}/${objectKey}`,
-                            };
-                        }),
+                        create: mediaItems,
                     }
                     : undefined,
             },
@@ -55,6 +119,9 @@ export class RescueRequestService {
                 },
             },
         });
+
+        console.log('✅ [RescueRequest] Created request:', rescueRequest.id);
+        console.log('📊 [RescueRequest] Media created:', rescueRequest.media.length);
 
         return rescueRequest;
     }
