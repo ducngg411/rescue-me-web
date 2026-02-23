@@ -39,13 +39,13 @@ export default function MatchingStatus({ timeRemaining, searchPhase = 1, onCance
             {/* Status Badge */}
             <div className="flex justify-center mb-6">
                 <div className={`inline-flex items-center gap-2 px-4 py-2 border-2 rounded-full animate-pulse ${colorTheme === 'gray' ? 'bg-gray-50 border-gray-200' :
-                        colorTheme === 'orange' ? 'bg-orange-50 border-orange-200' : 'bg-blue-50 border-blue-200'
+                    colorTheme === 'orange' ? 'bg-orange-50 border-orange-200' : 'bg-blue-50 border-blue-200'
                     }`}>
                     <div className={`h-3 w-3 rounded-full animate-ping ${colorTheme === 'gray' ? 'bg-gray-500' :
-                            colorTheme === 'orange' ? 'bg-orange-500' : 'bg-blue-500'
+                        colorTheme === 'orange' ? 'bg-orange-500' : 'bg-blue-500'
                         }`}></div>
                     <span className={`font-medium ${colorTheme === 'gray' ? 'text-gray-700' :
-                            colorTheme === 'orange' ? 'text-orange-700' : 'text-blue-700'
+                        colorTheme === 'orange' ? 'text-orange-700' : 'text-blue-700'
                         }`}>{statusText}</span>
                 </div>
             </div>
@@ -66,7 +66,7 @@ export default function MatchingStatus({ timeRemaining, searchPhase = 1, onCance
                 <div className="relative">
                     <div className="h-16 w-16">
                         <svg className={`animate-spin h-16 w-16 ${colorTheme === 'gray' ? 'text-gray-400' :
-                                colorTheme === 'orange' ? 'text-orange-500' : 'text-blue-500'
+                            colorTheme === 'orange' ? 'text-orange-500' : 'text-blue-500'
                             }`} fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -77,20 +77,20 @@ export default function MatchingStatus({ timeRemaining, searchPhase = 1, onCance
 
             {/* Status Message */}
             <div className={`rounded-lg p-4 mb-6 ${colorTheme === 'gray' ? 'bg-gray-50' :
-                    colorTheme === 'orange' ? 'bg-orange-50' : 'bg-blue-50'
+                colorTheme === 'orange' ? 'bg-orange-50' : 'bg-blue-50'
                 }`}>
                 <div className="flex items-start gap-3">
                     <svg className={`h-5 w-5 mt-0.5 flex-shrink-0 ${colorTheme === 'gray' ? 'text-gray-500' :
-                            colorTheme === 'orange' ? 'text-orange-500' : 'text-blue-500'
+                        colorTheme === 'orange' ? 'text-orange-500' : 'text-blue-500'
                         }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <div>
                         <p className={`text-sm font-medium ${colorTheme === 'gray' ? 'text-gray-900' :
-                                colorTheme === 'orange' ? 'text-orange-900' : 'text-blue-900'
+                            colorTheme === 'orange' ? 'text-orange-900' : 'text-blue-900'
                             }`}>{messageTitle}</p>
                         <p className={`text-sm mt-1 ${colorTheme === 'gray' ? 'text-gray-700' :
-                                colorTheme === 'orange' ? 'text-orange-700' : 'text-blue-700'
+                            colorTheme === 'orange' ? 'text-orange-700' : 'text-blue-700'
                             }`}>
                             {messageSubtitle}
                         </p>
@@ -104,8 +104,8 @@ export default function MatchingStatus({ timeRemaining, searchPhase = 1, onCance
                     onClick={onCancel}
                     disabled={isTransitioning}
                     className={`px-6 py-3 border-2 font-medium rounded-lg transition-colors ${isTransitioning
-                            ? 'border-gray-300 text-gray-400 cursor-not-allowed'
-                            : 'border-red-500 text-red-600 hover:bg-red-50'
+                        ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                        : 'border-red-500 text-red-600 hover:bg-red-50'
                         }`}
                 >
                     Huỷ yêu cầu

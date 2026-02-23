@@ -10,6 +10,7 @@ export interface User {
     authProvider: string;
     profileCompleted: boolean;
     verificationStatus?: string;
+    isOnline?: boolean; // Provider only
 }
 
 export interface AuthResponse {

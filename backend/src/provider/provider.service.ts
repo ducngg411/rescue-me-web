@@ -206,4 +206,394 @@ export class ProviderService {
             submittedAt: updatedUser.submittedAt ?? undefined,
         };
     }
+
+    // Provider Active Mode Methods
+    async updateOnlineStatus(userId: string, isOnline: boolean) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        if (user.role !== UserRole.PROVIDER) {
+            throw new ForbiddenException('Only providers can update online status');
+        }
+
+        // Chỉ cho phép online nếu đã verified
+        if (isOnline && user.verificationStatus !== VerificationStatus.APPROVED) {
+            throw new ForbiddenException('Provider must be verified (APPROVED) to go online');
+        }
+
+        const updatedUser = await this.prisma.user.update({
+            where: { id: userId },
+            data: { isOnline },
+        });
+
+        return {
+            success: true,
+            isOnline: updatedUser.isOnline,
+            message: isOnline ? 'Bạn đang online, sẵn sàng nhận requests' : 'Bạn đã offline',
+        };
+    }
+
+    async getPendingRequests(userId: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                role: true,
+                isOnline: true,
+                verificationStatus: true,
+                permanentAddress: true,
+                businessAddress: true,
+                serviceRadiusKm: true,
+                supportedVehicleTypes: true,
+                serviceTypes: true,
+                pricePerKm: true,
+                baseFee: true,
+            },
+        });
+
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        if (user.role !== UserRole.PROVIDER) {
+            throw new ForbiddenException('Only providers can view pending requests');
+        }
+
+        if (!user.isOnline) {
+            return []; // Provider offline, không trả request
+        }
+
+        if (user.verificationStatus !== VerificationStatus.APPROVED) {
+            return []; // Chưa verified, không trả request
+        }
+
+        // Get provider location
+        const providerLocation = (user.permanentAddress || user.businessAddress) as any;
+        if (!providerLocation || !providerLocation.lat || !providerLocation.lng) {
+            console.warn(`[Provider ${userId}] No location set, cannot match requests`);
+            return [];
+        }
+
+        const providerLat = providerLocation.lat;
+        const providerLng = providerLocation.lng;
+        const radiusKm = user.serviceRadiusKm || 15;
+
+        // Find MATCHING requests in radius
+        const allMatchingRequests = await this.prisma.rescueRequest.findMany({
+            where: {
+                status: 'MATCHING',
+                assignedProviderId: null,
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        phoneNumber: true,
+                        fullName: true,
+                    },
+                },
+                media: {
+                    select: {
+                        mediaType: true,
+                        publicUrl: true,
+                    },
+                },
+            },
+            orderBy: {
+                createdAt: 'asc',
+            },
+        });
+
+        // Filter by distance using Haversine formula
+        const matchedRequests: any[] = [];
+        for (const request of allMatchingRequests) {
+            const pickupLocation = request.pickupLocation as any;
+            if (!pickupLocation || !pickupLocation.lat || !pickupLocation.lng) {
+                continue;
+            }
+
+            const distance = this.calculateDistance(
+                providerLat,
+                providerLng,
+                pickupLocation.lat,
+                pickupLocation.lng,
+            );
+
+            if (distance <= radiusKm) {
+                const now = new Date();
+                const timeRemaining = request.expiresAt
+                    ? Math.max(0, Math.floor((request.expiresAt.getTime() - now.getTime()) / 1000))
+                    : 0;
+
+                const estimatedEarnings = this.calculateEstimatedEarnings(
+                    distance,
+                    user.baseFee || 50000,
+                    user.pricePerKm || 10000,
+                );
+
+                matchedRequests.push({
+                    id: request.id,
+                    user: {
+                        name: request.user.fullName || request.user.name,
+                        phone: request.user.phoneNumber,
+                    },
+                    incidentType: request.incidentType,
+                    vehicleType: request.vehicleType,
+                    description: request.description,
+                    contactPhone: request.contactPhone,
+                    pickupLocation: {
+                        lat: pickupLocation.lat,
+                        lng: pickupLocation.lng,
+                        address: pickupLocation.addressText || pickupLocation.address,
+                    },
+                    dropoffLocation: request.dropoffLocation,
+                    media: request.media.map(m => ({
+                        type: m.mediaType,
+                        url: m.publicUrl,
+                    })),
+                    distance: Math.round(distance * 10) / 10, // Round to 1 decimal
+                    estimatedEarnings,
+                    searchPhase: request.searchPhase,
+                    expiresAt: request.expiresAt,
+                    timeRemaining,
+                    createdAt: request.createdAt,
+                });
+            }
+        }
+
+        return matchedRequests;
+    }
+
+    // Haversine formula to calculate distance between two coordinates
+    private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+        const R = 6371; // Radius of Earth in km
+        const dLat = this.deg2rad(lat2 - lat1);
+        const dLng = this.deg2rad(lng2 - lng1);
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(this.deg2rad(lat1)) *
+            Math.cos(this.deg2rad(lat2)) *
+            Math.sin(dLng / 2) *
+            Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    private deg2rad(deg: number): number {
+        return deg * (Math.PI / 180);
+    }
+
+    private calculateEstimatedEarnings(distanceKm: number, baseFee: number, pricePerKm: number): number {
+        return baseFee + Math.ceil(distanceKm) * pricePerKm;
+    }
+
+    async acceptRequest(providerId: string, requestId: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: providerId },
+        });
+
+        if (!user) {
+            throw new NotFoundException('Provider not found');
+        }
+
+        if (user.role !== UserRole.PROVIDER) {
+            throw new ForbiddenException('Only providers can accept requests');
+        }
+
+        if (!user.isOnline) {
+            throw new ForbiddenException('Provider must be online to accept requests');
+        }
+
+        if (user.verificationStatus !== VerificationStatus.APPROVED) {
+            throw new ForbiddenException('Provider must be verified to accept requests');
+        }
+
+        const request = await this.prisma.rescueRequest.findUnique({
+            where: { id: requestId },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        fullName: true,
+                        phoneNumber: true,
+                    },
+                },
+                media: true,
+            },
+        });
+
+        if (!request) {
+            throw new NotFoundException('Request not found');
+        }
+
+        if (request.status !== 'MATCHING') {
+            throw new BadRequestException('Request is not in MATCHING state');
+        }
+
+        if (request.assignedProviderId) {
+            throw new BadRequestException('Request already assigned to another provider');
+        }
+
+        // Update request: MATCHING → ASSIGNED
+        const updatedRequest = await this.prisma.rescueRequest.update({
+            where: { id: requestId },
+            data: {
+                status: 'ASSIGNED',
+                assignedProviderId: providerId,
+                assignedAt: new Date(),
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        fullName: true,
+                        phoneNumber: true,
+                    },
+                },
+                assignedProvider: {
+                    select: {
+                        id: true,
+                        name: true,
+                        fullName: true,
+                        serviceName: true,
+                        phoneNumber: true,
+                        pricePerKm: true,
+                        baseFee: true,
+                    },
+                },
+                media: true,
+            },
+        });
+
+        console.log(`✅ [Provider ${providerId}] Accepted request ${requestId}`);
+
+        return {
+            success: true,
+            message: 'Request accepted successfully',
+            request: updatedRequest,
+        };
+    }
+
+    async declineRequest(providerId: string, requestId: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: providerId },
+        });
+
+        if (!user) {
+            throw new NotFoundException('Provider not found');
+        }
+
+        if (user.role !== UserRole.PROVIDER) {
+            throw new ForbiddenException('Only providers can decline requests');
+        }
+
+        const request = await this.prisma.rescueRequest.findUnique({
+            where: { id: requestId },
+        });
+
+        if (!request) {
+            throw new NotFoundException('Request not found');
+        }
+
+        console.log(`❌ [Provider ${providerId}] Declined request ${requestId}`);
+
+        // Just log decline, request remains MATCHING for other providers
+        return {
+            success: true,
+            message: 'Request declined',
+        };
+    }
+
+    async updateSettings(userId: string, settings: {
+        serviceRadiusKm?: number;
+        phoneNumber?: string;
+        emergencyAvailable?: boolean;
+    }) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        if (user.role !== UserRole.PROVIDER) {
+            throw new ForbiddenException('Only providers can update settings');
+        }
+
+        // Validate serviceRadiusKm range (5-50 km)
+        if (settings.serviceRadiusKm !== undefined) {
+            if (settings.serviceRadiusKm < 5 || settings.serviceRadiusKm > 50) {
+                throw new BadRequestException('Service radius must be between 5 and 50 km');
+            }
+        }
+
+        const updatedUser = await this.prisma.user.update({
+            where: { id: userId },
+            data: {
+                serviceRadiusKm: settings.serviceRadiusKm,
+                phoneNumber: settings.phoneNumber,
+                emergencyAvailable: settings.emergencyAvailable,
+            },
+        });
+
+        return {
+            success: true,
+            message: 'Settings updated successfully',
+            data: {
+                serviceRadiusKm: updatedUser.serviceRadiusKm,
+                phoneNumber: updatedUser.phoneNumber,
+                emergencyAvailable: updatedUser.emergencyAvailable,
+            },
+        };
+    }
+
+    async getSettings(userId: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                role: true,
+                serviceName: true,
+                serviceRadiusKm: true,
+                pricePerKm: true,
+                baseFee: true,
+                emergencyAvailable: true,
+                phoneNumber: true,
+                contactEmail: true,
+                email: true,
+                name: true,
+                avatar: true,
+                providerType: true,
+                businessName: true,
+                serviceTypes: true,
+                supportedVehicleTypes: true,
+                address: true,
+                permanentAddress: true,
+                businessAddress: true,
+                rescueVehicles: true,
+            },
+        });
+
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        if (user.role !== UserRole.PROVIDER) {
+            throw new ForbiddenException('Only providers can access settings');
+        }
+
+        return {
+            success: true,
+            data: user,
+        };
+    }
 }

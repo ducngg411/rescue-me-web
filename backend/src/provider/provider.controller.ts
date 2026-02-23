@@ -1,4 +1,4 @@
-import { Controller, Put, Get, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Put, Get, Post, Patch, Param, Body, UseGuards, Request } from '@nestjs/common';
 import { ProviderService } from './provider.service';
 import { UpdateProviderProfileDto } from '../auth/dto/auth.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -22,5 +22,41 @@ export class ProviderController {
     @Post('submit-verification')
     async submitVerification(@Request() req): Promise<SubmitVerificationResponseDto> {
         return this.providerService.submitVerification(req.user.id);
+    }
+
+    // Provider Active Mode APIs
+    @Patch('status')
+    async updateOnlineStatus(@Request() req, @Body() body: { isOnline: boolean }) {
+        return this.providerService.updateOnlineStatus(req.user.id, body.isOnline);
+    }
+
+    @Get('pending-requests')
+    async getPendingRequests(@Request() req) {
+        return this.providerService.getPendingRequests(req.user.id);
+    }
+
+    @Post('requests/:id/accept')
+    async acceptRequest(@Request() req, @Param('id') requestId: string) {
+        return this.providerService.acceptRequest(req.user.id, requestId);
+    }
+
+    @Post('requests/:id/decline')
+    async declineRequest(@Request() req, @Param('id') requestId: string) {
+        return this.providerService.declineRequest(req.user.id, requestId);
+    }
+
+    // Provider Settings API
+    @Patch('settings')
+    async updateSettings(@Request() req, @Body() body: {
+        serviceRadiusKm?: number;
+        phoneNumber?: string;
+        emergencyAvailable?: boolean;
+    }) {
+        return this.providerService.updateSettings(req.user.id, body);
+    }
+
+    @Get('settings')
+    async getSettings(@Request() req) {
+        return this.providerService.getSettings(req.user.id);
     }
 }
