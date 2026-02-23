@@ -30,6 +30,11 @@ export class ProviderController {
         return this.providerService.updateOnlineStatus(req.user.id, body.isOnline);
     }
 
+    @Patch('location')
+    async updateCurrentLocation(@Request() req, @Body() body: { lat: number; lng: number }) {
+        return this.providerService.updateCurrentLocation(req.user.id, body.lat, body.lng);
+    }
+
     @Get('pending-requests')
     async getPendingRequests(@Request() req) {
         return this.providerService.getPendingRequests(req.user.id);

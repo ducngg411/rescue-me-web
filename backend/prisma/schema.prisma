@@ -119,8 +119,10 @@ model User {
   // Pricing & Service
   pricePerKm         Int? // Giá mỗi km (VND)
   baseFee            Int? // Phí cơ bản (VND)
-  emergencyAvailable Boolean @default(false) // Có phục vụ khẩn cấp
-  isOnline           Boolean @default(false) // Trạng thái online
+  emergencyAvailable Boolean   @default(false) // Có phục vụ khẩn cấp
+  isOnline           Boolean   @default(false) // Trạng thái online
+  currentLocation    Json? // {lat, lng, timestamp} - Vị trí hiện tại (GPS) khi Provider online
+  lastLocationUpdate DateTime? // Thời gian cập nhật vị trí gần nhất
 
   // Verification
   verificationStatus VerificationStatus @default(DRAFT)

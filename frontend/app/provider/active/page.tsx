@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProviderStatus } from '@/lib/hooks/useProviderStatus';
 import { usePendingRequests } from '@/lib/hooks/usePendingRequests';
+import { useProviderLocation } from '@/lib/hooks/useProviderLocation';
 import OnlineToggle from '@/components/provider/OnlineToggle';
 import WaitingState from '@/components/provider/WaitingState';
 import IncomingRequestModal from '@/components/provider/IncomingRequestModal';
@@ -17,6 +18,12 @@ export default function ProviderActivePage() {
     const { requests, acceptRequest, declineRequest } = usePendingRequests({
         enabled: isOnline,
         pollInterval: 5000,
+    });
+
+    // Track GPS location when online
+    const { location } = useProviderLocation({
+        enabled: isOnline,
+        updateInterval: 30000, // Update every 30 seconds
     });
 
     const [selectedRequest, setSelectedRequest] = useState<any>(null);
@@ -165,8 +172,8 @@ export default function ProviderActivePage() {
                         <button
                             onClick={() => setActiveTab('active')}
                             className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'active'
-                                    ? 'border-blue-600 text-blue-600'
-                                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-600 hover:text-gray-900'
                                 }`}
                         >
                             Hoạt động
@@ -174,8 +181,8 @@ export default function ProviderActivePage() {
                         <button
                             onClick={() => setActiveTab('settings')}
                             className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'settings'
-                                    ? 'border-blue-600 text-blue-600'
-                                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-600 hover:text-gray-900'
                                 }`}
                         >
                             Cài đặt
@@ -217,7 +224,44 @@ export default function ProviderActivePage() {
                             </div>
                         </div>
                     ) : (
-                        <WaitingState />
+                        <>
+                            {/* GPS Location Warning */}
+                            {location.error && (
+                                <div className="max-w-6xl mx-auto px-6 pt-6">
+                                    <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+                                        <div className="flex items-start gap-3">
+                                            <span className="text-2xl">⚠️</span>
+                                            <div className="flex-1">
+                                                <h4 className="font-semibold text-red-900 mb-1">
+                                                    Không thể truy cập vị trí GPS
+                                                </h4>
+                                                <p className="text-sm text-red-700 mb-2">{location.error}</p>
+                                                <p className="text-xs text-red-600">
+                                                    Bạn sẽ không nhận được yêu cầu nếu không bật GPS.
+                                                    Vui lòng cho phép truy cập vị trí trong cài đặt trình duyệt.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* GPS Location Success */}
+                            {location.isTracking && location.lat && location.lng && (
+                                <div className="max-w-6xl mx-auto px-6 pt-6">
+                                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span className="text-green-600">📍</span>
+                                            <span className="text-green-700">
+                                                GPS đang hoạt động - Vị trí: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <WaitingState />
+                        </>
                     )}
                 </>
             ) : (

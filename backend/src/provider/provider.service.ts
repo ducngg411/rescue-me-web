@@ -226,15 +226,60 @@ export class ProviderService {
             throw new ForbiddenException('Provider must be verified (APPROVED) to go online');
         }
 
+        // Clear currentLocation when going offline
+        const updateData: any = { isOnline };
+        if (!isOnline) {
+            updateData.currentLocation = null;
+            updateData.lastLocationUpdate = null;
+        }
+
         const updatedUser = await this.prisma.user.update({
             where: { id: userId },
-            data: { isOnline },
+            data: updateData,
         });
 
         return {
             success: true,
             isOnline: updatedUser.isOnline,
             message: isOnline ? 'Bạn đang online, sẵn sàng nhận requests' : 'Bạn đã offline',
+        };
+    }
+
+    async updateCurrentLocation(userId: string, lat: number, lng: number) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        if (user.role !== UserRole.PROVIDER) {
+            throw new ForbiddenException('Only providers can update location');
+        }
+
+        if (!user.isOnline) {
+            throw new ForbiddenException('Provider must be online to update location');
+        }
+
+        const now = new Date();
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: {
+                currentLocation: {
+                    lat,
+                    lng,
+                    timestamp: now.toISOString(),
+                } as any,
+                lastLocationUpdate: now,
+            },
+        });
+
+        console.log(`📍 [Provider ${userId}] Location updated: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+
+        return {
+            success: true,
+            message: 'Location updated',
         };
     }
 
@@ -246,13 +291,15 @@ export class ProviderService {
                 role: true,
                 isOnline: true,
                 verificationStatus: true,
+                currentLocation: true,
+                lastLocationUpdate: true,
                 permanentAddress: true,
                 businessAddress: true,
                 serviceRadiusKm: true,
                 supportedVehicleTypes: true,
                 serviceTypes: true,
-                pricePerKm: true,
                 baseFee: true,
+                pricePerKm: true,
             },
         });
 
@@ -272,10 +319,16 @@ export class ProviderService {
             return []; // Chưa verified, không trả request
         }
 
-        // Get provider location
-        const providerLocation = (user.permanentAddress || user.businessAddress) as any;
+        // Get provider current location (GPS) - fallback to default address
+        let providerLocation = user.currentLocation as any;
+
+        // If no current location, try default addresses (for backward compatibility)
         if (!providerLocation || !providerLocation.lat || !providerLocation.lng) {
-            console.warn(`[Provider ${userId}] No location set, cannot match requests`);
+            providerLocation = (user.permanentAddress || user.businessAddress) as any;
+        }
+
+        if (!providerLocation || !providerLocation.lat || !providerLocation.lng) {
+            console.warn(`[Provider ${userId}] No location set (neither current nor default), cannot match requests`);
             return [];
         }
 

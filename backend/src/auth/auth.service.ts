@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 import { RegisterEmailDto, LoginEmailDto, CompleteProfileDto, SelectRoleDto } from './dto/auth.dto';
 import { AuthProvider, User } from '@prisma/client';
