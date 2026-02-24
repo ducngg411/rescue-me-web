@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
+import toast from 'react-hot-toast';
 
 interface RescueRequest {
     id: string;
@@ -33,6 +34,12 @@ interface RescueRequest {
         mediaType: string;
         publicUrl: string;
     }>;
+    // Quote window info
+    quoteWindowOpen?: boolean;
+    quoteWindowTimeRemaining?: number;
+    quoteWindowExpiresAt?: string | null;
+    quoteCount?: number;
+    maxQuotes?: number;
 }
 
 const incidentTypeLabels: Record<string, string> = {
@@ -64,6 +71,9 @@ export default function ProviderRequestDetailPage() {
     const [hasPendingQuote, setHasPendingQuote] = useState(false);
     const [hasRejectedQuote, setHasRejectedQuote] = useState(false);
 
+    // Quote window timer
+    const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
     // Quote form state
     const [price, setPrice] = useState<string>('');
     const [estimatedArrivalMinutes, setEstimatedArrivalMinutes] = useState<string>('');
@@ -79,6 +89,32 @@ export default function ProviderRequestDetailPage() {
             fetchRequestDetail();
         }
     }, [user, requestId]);
+
+    // Timer countdown effect
+    useEffect(() => {
+        if (request?.quoteWindowTimeRemaining && request?.quoteWindowOpen) {
+            // Initialize timer only if not already set
+            if (timeLeft === null) {
+                setTimeLeft(request.quoteWindowTimeRemaining);
+            }
+        }
+
+        if (timeLeft === null || timeLeft <= 0) {
+            return;
+        }
+
+        const interval = setInterval(() => {
+            setTimeLeft((prev) => {
+                if (prev === null || prev <= 1) {
+                    clearInterval(interval);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [request?.quoteWindowTimeRemaining, request?.quoteWindowOpen, timeLeft]);
 
     // Keyboard navigation for image viewer
     useEffect(() => {
@@ -133,7 +169,28 @@ export default function ProviderRequestDetailPage() {
             setError(null);
         } catch (err: any) {
             console.error('Error fetching request:', err);
-            setError(err.response?.data?.message || 'Không thể tải thông tin request');
+
+            const errorMessage = err.response?.data?.message || '';
+
+            // Handle quote window closed errors
+            if (errorMessage.includes('QUOTE_WINDOW_CLOSED')) {
+                toast.error('⏰ Yêu cầu này đã hết hạn nhận báo giá!\n\nCửa sổ nhận báo giá đã đóng. Vui lòng tìm yêu cầu khác.', {
+                    duration: 5000,
+                });
+                // Redirect back after a short delay
+                setTimeout(() => {
+                    router.push('/provider/active');
+                }, 2000);
+            } else if (errorMessage.includes('SLOTS_FULL')) {
+                toast.error('📋 Đã đủ số lượng báo giá!\n\nYêu cầu này đã nhận đủ 3 báo giá.', {
+                    duration: 4000,
+                });
+                setTimeout(() => {
+                    router.push('/provider/active');
+                }, 2000);
+            } else {
+                setError(errorMessage || 'Không thể tải thông tin request');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -147,12 +204,12 @@ export default function ProviderRequestDetailPage() {
         const etaNum = parseInt(estimatedArrivalMinutes);
 
         if (!priceNum || priceNum < 10000) {
-            alert('Giá báo giá phải từ 10,000 VNĐ trở lên');
+            toast.error('Giá báo giá phải từ 10,000 VNĐ trở lên');
             return;
         }
 
         if (!etaNum || etaNum < 1 || etaNum > 300) {
-            alert('Thời gian đến phải từ 1-300 phút');
+            toast.error('Thời gian đến phải từ 1-300 phút');
             return;
         }
 
@@ -165,17 +222,49 @@ export default function ProviderRequestDetailPage() {
                 message: message || undefined,
             });
 
-            alert('Đã gửi báo giá thành công! Chờ khách hàng phản hồi.');
+            toast.success('Đã gửi báo giá thành công! Chờ khách hàng phản hồi.');
             router.push('/provider/active');
         } catch (err: any) {
             console.error('Error submitting quote:', err);
-            alert(err.response?.data?.message || 'Không thể gửi báo giá');
+
+            const errorMessage = err.response?.data?.message || '';
+
+            // Handle specific error cases
+            if (errorMessage.includes('QUOTE_WINDOW_CLOSED')) {
+                toast.error('⏰ Hết thời gian nhận báo giá!\n\nYêu cầu này đã đóng cửa sổ nhận báo giá (hết 90 giây hoặc đã đủ số lượng).\n\nVui lòng tìm yêu cầu khác!', {
+                    duration: 6000,
+                });
+            } else if (errorMessage.includes('SLOTS_FULL')) {
+                toast.error('📋 Đã đủ số lượng báo giá!\n\nYêu cầu này đã nhận đủ 3 báo giá rồi.\n\nVui lòng tìm yêu cầu khác!', {
+                    duration: 5000,
+                });
+            } else if (errorMessage.includes('already sent a quote')) {
+                toast.error('✋ Bạn đã gửi báo giá cho yêu cầu này rồi!');
+            } else if (errorMessage.includes('not available for quotes')) {
+                toast.error('❌ Yêu cầu này không còn nhận báo giá nữa.');
+            } else {
+                toast.error(errorMessage || 'Không thể gửi báo giá. Vui lòng thử lại!');
+            }
+
+            // Refresh to get updated status
+            fetchRequestDetail();
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    const handleCancel = () => {
+    const handleCancel = async () => {
+        // If provider hasn't sent a quote yet, decline to prevent spam
+        if (request && request.status === 'MATCHING' && !hasPendingQuote) {
+            try {
+                await api.post(`/rescue-requests/${requestId}/decline`);
+                console.log(`🚫 Declined request ${requestId} on cancel`);
+            } catch (err) {
+                console.error('Error declining request:', err);
+                // Continue anyway
+            }
+        }
+
         router.push('/provider/active');
     };
 
@@ -260,6 +349,29 @@ export default function ProviderRequestDetailPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Quote Window Timer */}
+            {request.status === 'MATCHING' && !hasPendingQuote && timeLeft !== null && timeLeft > 0 && (
+                <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 px-4 shadow-md">
+                    <div className="max-w-4xl mx-auto flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="text-2xl">⏰</div>
+                            <div>
+                                <div className="text-sm font-medium">Thời gian còn lại để gửi báo giá</div>
+                                <div className="text-xs opacity-90">Vui lòng gửi báo giá trước khi hết thời gian</div>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-3xl font-bold font-mono">
+                                {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+                            </div>
+                            <div className="text-xs opacity-90">
+                                {timeLeft < 60 ? '⚠️ Còn ít thời gian!' : `${request.quoteCount || 0}/${request.maxQuotes || 3} báo giá`}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
                 {/* Request Info Card */}

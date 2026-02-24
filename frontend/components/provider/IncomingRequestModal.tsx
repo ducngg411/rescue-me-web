@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PendingRequest } from '@/lib/hooks/usePendingRequests';
 
 interface IncomingRequestModalProps {
@@ -31,10 +31,17 @@ export default function IncomingRequestModal({
     onDecline,
     isProcessing,
 }: IncomingRequestModalProps) {
-    const [timeLeft, setTimeLeft] = useState(request.timeRemaining);
+    // Use quote window time if available, fallback to search phase time
+    const initialTime = request.quoteWindowTimeRemaining ?? request.timeRemaining;
+    const isInitialMount = useRef(true);
+    const [timeLeft, setTimeLeft] = useState(initialTime);
 
     useEffect(() => {
-        setTimeLeft(request.timeRemaining);
+        // Only set initial time on first mount, don't reset when request prop updates
+        if (isInitialMount.current) {
+            setTimeLeft(initialTime);
+            isInitialMount.current = false;
+        }
 
         const interval = setInterval(() => {
             setTimeLeft((prev) => {
@@ -48,14 +55,20 @@ export default function IncomingRequestModal({
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [request.timeRemaining, onDecline]);
+    }, [onDecline]); // Removed initialTime from dependencies
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
-    const progressPercent = (timeLeft / request.timeRemaining) * 100;
+    const progressPercent = (timeLeft / initialTime) * 100;
 
     // Use real ETA from backend (VietMap API) or fallback to distance-based calculation
     const estimatedMinutes = request.eta || Math.ceil((request.distance / 40) * 60);
+
+    // Check quote window status
+    const quoteWindowOpen = request.quoteWindowOpen ?? true;
+    const quoteWindowTime = request.quoteWindowTimeRemaining ?? 0;
+    const quoteWindowCritical = quoteWindowTime > 0 && quoteWindowTime <= 10; // Less than 10 seconds left
+    const quoteWindowClosed = !quoteWindowOpen || quoteWindowTime === 0;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -163,7 +176,12 @@ export default function IncomingRequestModal({
                             <div className="text-2xl font-bold text-gray-900">
                                 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
                             </div>
-                            <div className="text-xs text-gray-600">Thời gian phản hồi</div>
+                            <div className="text-xs text-gray-600">
+                                {request.quoteWindowTimeRemaining
+                                    ? 'Thời gian còn lại để gửi báo giá'
+                                    : 'Thời gian phản hồi'
+                                }
+                            </div>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                             <div
@@ -172,6 +190,30 @@ export default function IncomingRequestModal({
                             />
                         </div>
                     </div>
+
+                    {/* Quote Window Status Warning */}
+                    {quoteWindowClosed && (
+                        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3">
+                            <div className="flex items-center gap-2 text-sm text-red-700">
+                                <span className="text-lg">⏰</span>
+                                <div>
+                                    <div className="font-semibold">Đã hết hạn nhận báo giá!</div>
+                                    <div className="text-xs text-red-600">Yêu cầu này đã đóng cửa sổ nhận báo giá.</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {!quoteWindowClosed && quoteWindowCritical && (
+                        <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-3">
+                            <div className="flex items-center gap-2 text-sm text-orange-700">
+                                <span className="text-lg">⚠️</span>
+                                <div>
+                                    <div className="font-semibold">Sắp hết hạn! Còn {quoteWindowTime}s</div>
+                                    <div className="text-xs text-orange-600">Cửa sổ nhận báo giá sắp đóng.</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Action Buttons */}
                     <div className="grid grid-cols-2 gap-3 pt-2">
@@ -184,10 +226,14 @@ export default function IncomingRequestModal({
                         </button>
                         <button
                             onClick={onViewDetails}
-                            disabled={isProcessing}
-                            className="px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={isProcessing || quoteWindowClosed}
+                            className={`px-4 py-3 font-semibold rounded-lg transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${quoteWindowClosed
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800'
+                                }`}
+                            title={quoteWindowClosed ? 'Cửa sổ nhận báo giá đã đóng' : ''}
                         >
-                            Xem chi tiết & Gửi báo giá
+                            {quoteWindowClosed ? 'Đã hết hạn' : 'Xem chi tiết & Gửi báo giá'}
                         </button>
                     </div>
                 </div>

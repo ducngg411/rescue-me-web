@@ -10,6 +10,7 @@ import OnlineToggle from '@/components/provider/OnlineToggle';
 import WaitingState from '@/components/provider/WaitingState';
 import IncomingRequestModal from '@/components/provider/IncomingRequestModal';
 import ProviderSettings from '@/components/provider/ProviderSettings';
+import api from '@/lib/api';
 
 export default function ProviderActivePage() {
     const router = useRouter();
@@ -141,8 +142,19 @@ export default function ProviderActivePage() {
         setSelectedRequest(null);
     };
 
-    const handleSkip = () => {
-        // Just dismiss the modal without declining - provider can see it again later
+    const handleSkip = async () => {
+        if (!selectedRequest) return;
+
+        try {
+            // Call decline API to prevent seeing this request again
+            await api.post(`/rescue-requests/${selectedRequest.id}/decline`);
+            console.log(`🚫 Declined request ${selectedRequest.id}`);
+        } catch (err) {
+            console.error('Error declining request:', err);
+            // Continue anyway to dismiss modal
+        }
+
+        // Dismiss the modal
         setSelectedRequest(null);
     };
 

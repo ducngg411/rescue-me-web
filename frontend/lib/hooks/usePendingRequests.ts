@@ -28,6 +28,12 @@ export interface PendingRequest {
     searchPhase: number;
     expiresAt: string | null;
     timeRemaining: number;
+    // Quote window info
+    quoteWindowOpen?: boolean;
+    quoteWindowTimeRemaining?: number;
+    quoteWindowExpiresAt?: string | null;
+    quoteCount?: number;
+    maxQuotes?: number;
     createdAt: string;
 }
 

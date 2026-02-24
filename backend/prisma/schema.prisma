@@ -297,6 +297,9 @@ model RescueRequest {
   viewingProviders String[]  @default([]) // Array of provider IDs currently viewing this request
   viewingUpdatedAt DateTime? // Last time viewingProviders was updated
 
+  // Provider decline tracking
+  declinedProviders String[] @default([]) // Array of provider IDs who declined this request (to prevent spam)
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

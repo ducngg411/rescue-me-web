@@ -80,6 +80,15 @@ export class RescueRequestController {
         return this.rescueRequestService.checkAndExpireRequests();
     }
 
+    /**
+     * Provider decline request - không muốn nhận request này nữa
+     * POST /rescue-requests/:id/decline
+     */
+    @Post(':id/decline')
+    async declineRequest(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.declineRequest(requestId, req.user.id);
+    }
+
     // ==================== QUOTE ENDPOINTS ====================
 
     /**

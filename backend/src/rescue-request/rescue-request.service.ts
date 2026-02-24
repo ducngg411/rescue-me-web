@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRescueRequestDto } from './dto/create-rescue-request.dto';
@@ -123,8 +123,8 @@ export class RescueRequestService {
         const phase1Timeout = 60; // Phase 1: 60 seconds normal radius search
         const phaseExpiresAt = new Date(now.getTime() + phase1Timeout * 1000);
 
-        // Quote Window: 90 seconds from creation (providers can submit quotes during this time)
-        const quoteWindowDuration = 90; // 90 seconds default
+        // Quote Window: 5 minutes from creation (providers can submit quotes during this time)
+        const quoteWindowDuration = 300; // 5 minutes (300 seconds)
         const quoteWindowExpiresAt = new Date(now.getTime() + quoteWindowDuration * 1000);
 
         // Create rescue request with MATCHING status
@@ -279,13 +279,36 @@ export class RescueRequestService {
         }
 
         // Provider can only view:
-        // 1. MATCHING requests (to send quotes)
+        // 1. MATCHING requests (to send quotes) - only if quote window is still open
         // 2. Requests assigned to them
         if (request.status !== 'MATCHING' && request.assignedProviderId !== providerId) {
-            throw new Error('You do not have permission to view this request');
+            throw new ForbiddenException('You do not have permission to view this request');
         }
 
-        // Track that this provider is viewing the request (only for MATCHING status)
+        // If MATCHING status, check if quote window is still open
+        if (request.status === 'MATCHING' && request.assignedProviderId !== providerId) {
+            const now = new Date();
+
+            // Check if quote window is closed
+            if (request.quoteWindowClosedAt) {
+                console.log(`❌ [Provider View] Quote window closed at ${request.quoteWindowClosedAt.toISOString()}`);
+                throw new BadRequestException('QUOTE_WINDOW_CLOSED: Yêu cầu này đã đóng cửa sổ nhận báo giá');
+            }
+
+            // Check if quote window has expired
+            if (request.quoteWindowExpiresAt && now > request.quoteWindowExpiresAt) {
+                console.log(`❌ [Provider View] Quote window expired at ${request.quoteWindowExpiresAt.toISOString()}`);
+                throw new BadRequestException('QUOTE_WINDOW_CLOSED: Cửa sổ nhận báo giá đã hết hạn');
+            }
+
+            // Check if slots are already full
+            if (request.quoteCount >= request.maxQuotes) {
+                console.log(`❌ [Provider View] Slots full: ${request.quoteCount}/${request.maxQuotes}`);
+                throw new BadRequestException('SLOTS_FULL: Đã đủ số lượng báo giá');
+            }
+        }
+
+        // Track that this provider is viewing the request (only for MATCHING status with open window)
         if (request.status === 'MATCHING') {
             const currentViewingProviders = request.viewingProviders || [];
 
@@ -303,7 +326,29 @@ export class RescueRequestService {
             }
         }
 
-        return request;
+        // Calculate quote window status for response
+        const now = new Date();
+        let quoteWindowOpen = false;
+        let quoteWindowTimeRemaining = 0;
+
+        if (request.status === 'MATCHING' && !request.quoteWindowClosedAt && request.quoteWindowExpiresAt) {
+            if (now < request.quoteWindowExpiresAt) {
+                quoteWindowOpen = true;
+                quoteWindowTimeRemaining = Math.max(0, Math.floor((request.quoteWindowExpiresAt.getTime() - now.getTime()) / 1000));
+            }
+        }
+
+        // Check if slots are full
+        if (request.quoteCount >= request.maxQuotes) {
+            quoteWindowOpen = false;
+        }
+
+        // Return request with quote window info
+        return {
+            ...request,
+            quoteWindowOpen,
+            quoteWindowTimeRemaining,
+        };
     }
 
     async cancelRescueRequest(requestId: string, userId: string) {
@@ -324,6 +369,39 @@ export class RescueRequestService {
                 media: true,
             },
         });
+    }
+
+    async declineRequest(requestId: string, providerId: string) {
+        // Validate request exists and is in MATCHING status
+        const request = await this.prisma.rescueRequest.findUnique({
+            where: { id: requestId },
+        });
+
+        if (!request) {
+            throw new NotFoundException('Rescue request not found');
+        }
+
+        if (request.status !== 'MATCHING') {
+            // Already assigned or cancelled - no need to decline
+            return { success: true, message: 'Request no longer available' };
+        }
+
+        // Add provider to declined list to prevent spam
+        const currentDeclinedProviders = request.declinedProviders || [];
+
+        if (!currentDeclinedProviders.includes(providerId)) {
+            await this.prisma.rescueRequest.update({
+                where: { id: requestId },
+                data: {
+                    declinedProviders: {
+                        push: providerId,
+                    },
+                },
+            });
+            console.log(`🚫 [RescueRequest] Provider ${providerId} declined request ${requestId}`);
+        }
+
+        return { success: true, message: 'Request declined successfully' };
     }
 
     async retryRescueRequest(requestId: string, userId: string) {
@@ -591,23 +669,37 @@ export class RescueRequestService {
         }
 
         if (rescueRequest.status !== 'MATCHING') {
-            throw new Error('Request is not available for quotes');
+            throw new BadRequestException('Request is not available for quotes');
         }
 
         // Check if quote window is still open
         const now = new Date();
+
+        // Check 1: Window was explicitly closed
         if (rescueRequest.quoteWindowClosedAt) {
-            throw new Error('QUOTE_WINDOW_CLOSED');
+            console.log(`❌ [Quote] Window closed at ${rescueRequest.quoteWindowClosedAt.toISOString()}`);
+            throw new BadRequestException('QUOTE_WINDOW_CLOSED');
         }
 
-        if (rescueRequest.quoteWindowExpiresAt && now > rescueRequest.quoteWindowExpiresAt) {
-            throw new Error('QUOTE_WINDOW_CLOSED');
+        // Check 2: Window expiration time has passed
+        if (!rescueRequest.quoteWindowExpiresAt) {
+            // Old request without quote window configured - reject to be safe
+            console.log(`❌ [Quote] Request has no quote window configured (old request)`);
+            throw new BadRequestException('QUOTE_WINDOW_CLOSED');
         }
 
-        // Check if slots are full
+        if (now > rescueRequest.quoteWindowExpiresAt) {
+            console.log(`❌ [Quote] Window expired at ${rescueRequest.quoteWindowExpiresAt.toISOString()}, now is ${now.toISOString()}`);
+            throw new BadRequestException('QUOTE_WINDOW_CLOSED');
+        }
+
+        // Check 3: Slots are full
         if (rescueRequest.quoteCount >= rescueRequest.maxQuotes) {
-            throw new Error('SLOTS_FULL');
+            console.log(`❌ [Quote] Slots full: ${rescueRequest.quoteCount}/${rescueRequest.maxQuotes}`);
+            throw new BadRequestException('SLOTS_FULL');
         }
+
+        console.log(`✅ [Quote] Window check passed. Expires at: ${rescueRequest.quoteWindowExpiresAt.toISOString()}, now: ${now.toISOString()}, remaining: ${Math.floor((rescueRequest.quoteWindowExpiresAt.getTime() - now.getTime()) / 1000)}s`);
 
         // Validate provider
         const provider = await this.prisma.user.findUnique({
@@ -615,7 +707,7 @@ export class RescueRequestService {
         });
 
         if (!provider || provider.role !== 'PROVIDER') {
-            throw new Error('Invalid provider');
+            throw new ForbiddenException('Invalid provider');
         }
 
         // Check if provider already sent a quote for this request
@@ -628,7 +720,7 @@ export class RescueRequestService {
         });
 
         if (existingQuote) {
-            throw new Error('You already sent a quote for this request');
+            throw new BadRequestException('You already sent a quote for this request');
         }
 
         // Individual Quote TTL: 2 minutes from now (quotes sent early expire sooner)

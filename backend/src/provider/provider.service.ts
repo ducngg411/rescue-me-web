@@ -342,11 +342,17 @@ export class ProviderService {
         const providerLng = providerLocation.lng;
         const radiusKm = user.serviceRadiusKm || 15;
 
-        // Find MATCHING requests in radius
+        // Find MATCHING requests in radius (exclude declined)
         const allMatchingRequests = await this.prisma.rescueRequest.findMany({
             where: {
                 status: 'MATCHING',
                 assignedProviderId: null,
+                // Exclude requests this provider declined
+                NOT: {
+                    declinedProviders: {
+                        has: userId,
+                    },
+                },
             },
             include: {
                 user: {
@@ -419,6 +425,21 @@ export class ProviderService {
                     ? Math.max(0, Math.floor((request.expiresAt.getTime() - now.getTime()) / 1000))
                     : 0;
 
+                // Calculate quote window status
+                let quoteWindowOpen = false;
+                let quoteWindowTimeRemaining = 0;
+                if (!request.quoteWindowClosedAt && request.quoteWindowExpiresAt) {
+                    if (now < request.quoteWindowExpiresAt) {
+                        quoteWindowOpen = true;
+                        quoteWindowTimeRemaining = Math.max(0, Math.floor((request.quoteWindowExpiresAt.getTime() - now.getTime()) / 1000));
+                    }
+                }
+
+                // Check if slots are full
+                if (request.quoteCount >= request.maxQuotes) {
+                    quoteWindowOpen = false;
+                }
+
                 const estimatedEarnings = this.calculateEstimatedEarnings(
                     routeInfo.distance,
                     user.baseFee || 50000,
@@ -452,6 +473,12 @@ export class ProviderService {
                     searchPhase: request.searchPhase,
                     expiresAt: request.expiresAt,
                     timeRemaining,
+                    // Quote window info
+                    quoteWindowOpen,
+                    quoteWindowTimeRemaining,
+                    quoteWindowExpiresAt: request.quoteWindowExpiresAt,
+                    quoteCount: request.quoteCount,
+                    maxQuotes: request.maxQuotes,
                     createdAt: request.createdAt,
                 });
             } else if (!routeInfo.success) {
