@@ -9,6 +9,8 @@ export interface RequestStatus {
     expiresAt: string | null;
     matchAttempts: number;
     searchPhase?: number; // U2: 1 = normal radius, 2 = expanded radius
+    matchedDistance?: number; // Distance in km (from VietMap API)
+    matchedEta?: number; // ETA in minutes (from VietMap API)
     assignedProvider?: {
         id: string;
         name: string | null;

@@ -43,10 +43,11 @@ export default function ProviderActivePage() {
             setSelectedRequest(requests[0]);
 
             // Play notification sound
-            const audio = new Audio('/notification.mp3');
-            audio.play().catch(() => {
-                // Ignore if user hasn't interacted with page yet
-            });
+            // TODO: Add notification.mp3 to public folder
+            // const audio = new Audio('/notification.mp3');
+            // audio.play().catch(() => {
+            //     // Ignore if user hasn't interacted with page yet
+            // });
         }
     }, [requests, selectedRequest]);
 

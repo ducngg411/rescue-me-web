@@ -13,6 +13,8 @@ interface Provider {
 
 interface AssignedProviderProps {
     provider: Provider;
+    distance?: number; // Distance in km
+    eta?: number; // ETA in minutes
 }
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
@@ -24,9 +26,15 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
     BREAKDOWN_REPAIR: 'Sửa chữa tại chỗ',
 };
 
-export default function AssignedProvider({ provider }: AssignedProviderProps) {
+export default function AssignedProvider({ provider, distance, eta }: AssignedProviderProps) {
     const displayName = provider.serviceName || provider.name || 'Provider';
     const serviceLabels = provider.serviceTypes.map(type => SERVICE_TYPE_LABELS[type] || type).join(', ');
+
+    // Use real data or fallback to placeholder
+    const displayDistance = distance
+        ? (distance < 1 ? `${(distance * 1000).toFixed(0)} m` : `${distance.toFixed(2)} km`)
+        : '~5 km';
+    const displayEta = eta ? `${eta} phút` : '15 phút';
 
     const handleCall = () => {
         if (provider.phoneNumber) {
@@ -102,7 +110,8 @@ export default function AssignedProvider({ provider }: AssignedProviderProps) {
                             </svg>
                             <span className="text-xs text-gray-600">Khoảng cách</span>
                         </div>
-                        <p className="text-lg font-semibold text-gray-900">~5 km</p>
+                        <p className="text-lg font-semibold text-gray-900">{displayDistance}</p>
+                        {distance && <p className="text-xs text-gray-500 mt-0.5">(VietMap)</p>}
                     </div>
                     <div className="bg-white rounded-lg p-3">
                         <div className="flex items-center gap-2 mb-1">
@@ -111,7 +120,8 @@ export default function AssignedProvider({ provider }: AssignedProviderProps) {
                             </svg>
                             <span className="text-xs text-gray-600">Dự kiến tới</span>
                         </div>
-                        <p className="text-lg font-semibold text-gray-900">15 phút</p>
+                        <p className="text-lg font-semibold text-gray-900">{displayEta}</p>
+                        {eta && <p className="text-xs text-gray-500 mt-0.5">(ETA thực)</p>}
                     </div>
                 </div>
 

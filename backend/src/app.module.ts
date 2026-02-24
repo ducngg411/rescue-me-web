@@ -9,6 +9,7 @@ import { ProviderModule } from './provider/provider.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { AdminModule } from './admin/admin.module';
 import { RescueRequestModule } from './rescue-request/rescue-request.module';
+import { VietMapModule } from './vietmap/vietmap.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { RescueRequestModule } from './rescue-request/rescue-request.module';
       isGlobal: true,
     }),
     PrismaModule,
+    VietMapModule,
     AuthModule,
     UserModule,
     ProviderModule,

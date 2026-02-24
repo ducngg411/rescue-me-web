@@ -1,12 +1,18 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { VietMapService } from '../vietmap/vietmap.service';
 import { UpdateProviderProfileDto } from '../auth/dto/auth.dto';
 import { UserRole, VerificationStatus, ProviderType, DocumentType } from '@prisma/client';
 import { SubmitVerificationResponseDto } from './dto/submit-verification.dto';
 
 @Injectable()
 export class ProviderService {
-    constructor(private prisma: PrismaService) { }
+    private readonly logger = new Logger(ProviderService.name);
+
+    constructor(
+        private prisma: PrismaService,
+        private vietMapService: VietMapService,
+    ) { }
 
     async updateProfile(userId: string, dto: UpdateProviderProfileDto, userRole: UserRole) {
         // Kiểm tra role phải là PROVIDER
@@ -363,29 +369,58 @@ export class ProviderService {
             },
         });
 
-        // Filter by distance using Haversine formula
-        const matchedRequests: any[] = [];
+        // Step 1: Pre-filter by Haversine distance (fast, cheap) to reduce VietMap API calls
+        const candidateRequests: any[] = [];
         for (const request of allMatchingRequests) {
             const pickupLocation = request.pickupLocation as any;
             if (!pickupLocation || !pickupLocation.lat || !pickupLocation.lng) {
                 continue;
             }
 
-            const distance = this.calculateDistance(
+            // Use Haversine for initial filtering (straight-line distance)
+            const straightLineDistance = this.vietMapService.calculateHaversineDistance(
                 providerLat,
                 providerLng,
                 pickupLocation.lat,
                 pickupLocation.lng,
             );
 
-            if (distance <= radiusKm) {
+            // Pre-filter: only consider if straight-line distance <= radiusKm * 1.5
+            // (actual road distance is usually 1.2-1.8x straight-line)
+            if (straightLineDistance <= radiusKm * 1.5) {
+                candidateRequests.push(request);
+            }
+        }
+
+        console.log(`📊 [Provider ${userId}] Found ${candidateRequests.length}/${allMatchingRequests.length} candidates within ${radiusKm * 1.5}km straight-line`);
+
+        if (candidateRequests.length === 0) {
+            return [];
+        }
+
+        // Step 2: Calculate REAL routes using VietMap API (with ETA!)
+        const matchedRequests: any[] = [];
+        for (const request of candidateRequests) {
+            const pickupLocation = request.pickupLocation as any;
+
+            // Call VietMap Route API to get REAL distance and ETA
+            const routeInfo = await this.vietMapService.calculateRoute(
+                providerLat,
+                providerLng,
+                pickupLocation.lat,
+                pickupLocation.lng,
+                'car', // Default to car, could be dynamic based on provider vehicle
+            );
+
+            // Check if route is successful and within service radius
+            if (routeInfo.success && routeInfo.distance <= radiusKm) {
                 const now = new Date();
                 const timeRemaining = request.expiresAt
                     ? Math.max(0, Math.floor((request.expiresAt.getTime() - now.getTime()) / 1000))
                     : 0;
 
                 const estimatedEarnings = this.calculateEstimatedEarnings(
-                    distance,
+                    routeInfo.distance,
                     user.baseFee || 50000,
                     user.pricePerKm || 10000,
                 );
@@ -410,36 +445,30 @@ export class ProviderService {
                         type: m.mediaType,
                         url: m.publicUrl,
                     })),
-                    distance: Math.round(distance * 10) / 10, // Round to 1 decimal
+                    distance: routeInfo.distance, // Real road distance (km)
+                    eta: routeInfo.duration, // ETA in minutes ⭐ KEY METRIC
+                    etaSeconds: routeInfo.durationSeconds, // ETA in seconds for countdown
                     estimatedEarnings,
                     searchPhase: request.searchPhase,
                     expiresAt: request.expiresAt,
                     timeRemaining,
                     createdAt: request.createdAt,
                 });
+            } else if (!routeInfo.success) {
+                console.warn(`⚠️ VietMap route failed for request ${request.id}: ${routeInfo.error}`);
+                // Could fallback to Haversine here if needed
             }
         }
 
+        // Step 3: Sort by ETA (MOST IMPORTANT) - providers closest in TIME, not distance
+        matchedRequests.sort((a, b) => a.eta - b.eta);
+
+        console.log(`✅ [Provider ${userId}] Matched ${matchedRequests.length} requests with real ETA`);
+        if (matchedRequests.length > 0) {
+            console.log(`   → Best match: ${matchedRequests[0].distance}km, ETA: ${matchedRequests[0].eta} minutes`);
+        }
+
         return matchedRequests;
-    }
-
-    // Haversine formula to calculate distance between two coordinates
-    private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-        const R = 6371; // Radius of Earth in km
-        const dLat = this.deg2rad(lat2 - lat1);
-        const dLng = this.deg2rad(lng2 - lng1);
-        const a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(this.deg2rad(lat1)) *
-            Math.cos(this.deg2rad(lat2)) *
-            Math.sin(dLng / 2) *
-            Math.sin(dLng / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }
-
-    private deg2rad(deg: number): number {
-        return deg * (Math.PI / 180);
     }
 
     private calculateEstimatedEarnings(distanceKm: number, baseFee: number, pricePerKm: number): number {
@@ -494,6 +523,65 @@ export class ProviderService {
             throw new BadRequestException('Request already assigned to another provider');
         }
 
+        // Calculate distance and ETA using VietMap API
+        let matchedDistance: number | undefined;
+        let matchedEta: number | undefined;
+
+        try {
+            // Get provider location (currentLocation or default address)
+            let providerLat: number | undefined;
+            let providerLng: number | undefined;
+
+            if (user.currentLocation) {
+                const location = user.currentLocation as any;
+                providerLat = location.lat;
+                providerLng = location.lng;
+            } else if (user.permanentAddress) {
+                const address = user.permanentAddress as any;
+                providerLat = address?.lat;
+                providerLng = address?.lng;
+            } else if (user.businessAddress) {
+                const address = user.businessAddress as any;
+                providerLat = address?.lat;
+                providerLng = address?.lng;
+            }
+
+            // Get customer pickup location
+            const pickupLocation = request.pickupLocation as any;
+            const customerLat = pickupLocation.lat;
+            const customerLng = pickupLocation.lng;
+
+            if (providerLat && providerLng && customerLat && customerLng) {
+                const routeInfo = await this.vietMapService.calculateRoute(
+                    providerLat,
+                    providerLng,
+                    customerLat,
+                    customerLng,
+                    'car',
+                );
+
+                if (routeInfo.success) {
+                    matchedDistance = routeInfo.distance;
+                    matchedEta = routeInfo.duration;
+                    this.logger.log(
+                        `📍 [Provider ${providerId}] Matched with distance: ${matchedDistance}km, ETA: ${matchedEta} minutes`,
+                    );
+                } else {
+                    this.logger.warn(
+                        `⚠️ VietMap route failed: ${routeInfo.error}`,
+                    );
+                }
+            } else {
+                this.logger.warn(
+                    `⚠️ Cannot calculate route: Provider location (${providerLat}, ${providerLng}), Customer location (${customerLat}, ${customerLng})`,
+                );
+            }
+        } catch (err) {
+            this.logger.error(`Error calculating route: ${err.message}`);
+        }
+
+        this.logger.log(`💾 Saving matched data: distance=${matchedDistance}, eta=${matchedEta}`);
+
         // Update request: MATCHING → ASSIGNED
         const updatedRequest = await this.prisma.rescueRequest.update({
             where: { id: requestId },
@@ -501,6 +589,8 @@ export class ProviderService {
                 status: 'ASSIGNED',
                 assignedProviderId: providerId,
                 assignedAt: new Date(),
+                matchedDistance,
+                matchedEta,
             },
             include: {
                 user: {

@@ -273,6 +273,8 @@ model RescueRequest {
   expiresAt         DateTime? // MATCHING expiration time
   matchAttempts     Int       @default(1) // Number of matching attempts
   searchPhase       Int       @default(1) // Search phase: 1 = normal radius, 2 = expanded radius
+  matchedDistance   Float? // Distance in km from provider to customer (from VietMap API)
+  matchedEta        Int? // ETA in minutes when provider accepted (from VietMap API)
 
   // Timestamps
   createdAt DateTime @default(now())

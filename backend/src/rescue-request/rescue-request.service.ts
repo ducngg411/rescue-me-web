@@ -287,16 +287,27 @@ export class RescueRequestService {
     async getRequestStatus(requestId: string, userId: string) {
         const request = await this.getRescueRequestById(requestId, userId);
 
-        return {
+        const statusResponse = {
             id: request.id,
             status: request.status,
             matchingStartedAt: request.matchingStartedAt,
             assignedAt: request.assignedAt,
             expiresAt: request.expiresAt,
             matchAttempts: request.matchAttempts,
-            searchPhase: request.searchPhase, // U2: Include search phase for 2-phase matching
+            searchPhase: request.searchPhase,
+            matchedDistance: request.matchedDistance,
+            matchedEta: request.matchedEta,
             assignedProvider: request.assignedProvider,
         };
+
+        console.log(`📊 [Request ${requestId}] Status response:`, {
+            status: statusResponse.status,
+            matchedDistance: statusResponse.matchedDistance,
+            matchedEta: statusResponse.matchedEta,
+            hasProvider: !!statusResponse.assignedProvider,
+        });
+
+        return statusResponse;
     }
 
     async checkAndExpireRequests() {

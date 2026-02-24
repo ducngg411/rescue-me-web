@@ -22,6 +22,8 @@ export interface PendingRequest {
         url: string;
     }>;
     distance: number;
+    eta?: number; // Estimated time of arrival in minutes
+    etaSeconds?: number; // ETA in seconds for countdown
     estimatedEarnings: number;
     searchPhase: number;
     expiresAt: string | null;

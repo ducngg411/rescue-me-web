@@ -44,6 +44,16 @@ export default function RequestTrackingPage() {
         enabled: isReady,
     });
 
+    // Debug: Log status data
+    if (status) {
+        console.log('📊 [User Request Page] Status:', {
+            status: status.status,
+            matchedDistance: status.matchedDistance,
+            matchedEta: status.matchedEta,
+            hasProvider: !!status.assignedProvider,
+        });
+    }
+
     const handleCancel = async () => {
         const confirmed = window.confirm('Bạn có chắc muốn huỷ yêu cầu này?');
         if (!confirmed) return;
@@ -137,7 +147,11 @@ export default function RequestTrackingPage() {
                 )}
 
                 {status.status === 'ASSIGNED' && status.assignedProvider && (
-                    <AssignedProvider provider={status.assignedProvider} />
+                    <AssignedProvider
+                        provider={status.assignedProvider}
+                        distance={status.matchedDistance}
+                        eta={status.matchedEta}
+                    />
                 )}
 
                 {status.status === 'EXPIRED' && (

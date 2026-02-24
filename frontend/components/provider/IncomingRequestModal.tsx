@@ -54,8 +54,8 @@ export default function IncomingRequestModal({
     const seconds = timeLeft % 60;
     const progressPercent = (timeLeft / request.timeRemaining) * 100;
 
-    // Calculate estimated time based on distance (assume 40km/h average speed in city)
-    const estimatedMinutes = Math.ceil((request.distance / 40) * 60);
+    // Use real ETA from backend (VietMap API) or fallback to distance-based calculation
+    const estimatedMinutes = request.eta || Math.ceil((request.distance / 40) * 60);
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -125,11 +125,16 @@ export default function IncomingRequestModal({
                     {/* Distance & Earnings */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-blue-50 rounded-lg p-3">
-                            <div className="text-xs text-gray-600 mb-1">Khoảng cách</div>
-                            <div className="text-lg font-bold text-blue-600">
-                                {request.distance} km
+                            <div className="text-xs text-gray-600 mb-1">Thời gian đến</div>
+                            <div className="text-2xl font-bold text-blue-600">
+                                ~{estimatedMinutes} phút
                             </div>
-                            <div className="text-xs text-gray-500">~{estimatedMinutes} phút</div>
+                            <div className="text-xs text-gray-500 mt-1">
+                                {request.distance < 1
+                                    ? `${(request.distance * 1000).toFixed(0)} m`
+                                    : `${request.distance.toFixed(2)} km`
+                                } {request.eta ? '(VietMap)' : '(ước tính)'}
+                            </div>
                         </div>
                         <div className="bg-green-50 rounded-lg p-3">
                             <div className="text-xs text-gray-600 mb-1">Dự kiến thu nhập</div>
