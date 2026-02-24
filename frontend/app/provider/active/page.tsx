@@ -15,7 +15,7 @@ export default function ProviderActivePage() {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
     const { isOnline, isLoading: statusLoading, toggleOnlineStatus, setIsOnline } = useProviderStatus();
-    const { requests, acceptRequest, declineRequest } = usePendingRequests({
+    const { requests } = usePendingRequests({
         enabled: isOnline,
         pollInterval: 5000,
     });
@@ -133,28 +133,16 @@ export default function ProviderActivePage() {
         }
     };
 
-    const handleAccept = async () => {
+    const handleViewDetails = () => {
         if (!selectedRequest) return;
 
-        setIsProcessing(true);
-        const result = await acceptRequest(selectedRequest.id);
-        setIsProcessing(false);
-
-        if (result.success) {
-            setSelectedRequest(null);
-            alert('Đã nhận yêu cầu thành công!');
-            router.push(`/provider/requests/${selectedRequest.id}`);
-        } else {
-            alert(`Lỗi: ${result.message}`);
-        }
+        // Navigate to detail page where provider can view full details and send quote
+        router.push(`/provider/requests/${selectedRequest.id}`);
+        setSelectedRequest(null);
     };
 
-    const handleDecline = async () => {
-        if (!selectedRequest) return;
-
-        setIsProcessing(true);
-        await declineRequest(selectedRequest.id);
-        setIsProcessing(false);
+    const handleSkip = () => {
+        // Just dismiss the modal without declining - provider can see it again later
         setSelectedRequest(null);
     };
 
@@ -273,8 +261,8 @@ export default function ProviderActivePage() {
             {selectedRequest && activeTab === 'active' && (
                 <IncomingRequestModal
                     request={selectedRequest}
-                    onAccept={handleAccept}
-                    onDecline={handleDecline}
+                    onViewDetails={handleViewDetails}
+                    onDecline={handleSkip}
                     isProcessing={isProcessing}
                 />
             )}

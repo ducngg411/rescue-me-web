@@ -92,6 +92,18 @@ export function usePendingRequests({
         };
     }, [enabled, startPolling, stopPolling]);
 
+    /**
+     * @deprecated This function calls a deprecated endpoint that bypasses the quote system.
+     * 
+     * Instead of accepting requests directly, providers should:
+     * 1. Navigate to the request detail page
+     * 2. View full request details
+     * 3. Submit a quote with their price
+     * 4. Wait for user to accept the quote
+     * 
+     * The correct flow is: Provider views → Sends quote → User accepts → ASSIGNED
+     * Not: Provider accepts → ASSIGNED (this bypasses price negotiation)
+     */
     const acceptRequest = async (requestId: string) => {
         try {
             const response = await api.post(`/me/provider/requests/${requestId}/accept`);
@@ -112,6 +124,13 @@ export function usePendingRequests({
         }
     };
 
+    /**
+     * @deprecated This function is no longer needed.
+     * 
+     * The modal now shows "Bỏ qua" (Skip) instead of "Từ chối" (Decline).
+     * Providers can simply close the modal without making an API call.
+     * The request remains visible to other providers.
+     */
     const declineRequest = async (requestId: string) => {
         try {
             await api.post(`/me/provider/requests/${requestId}/decline`);

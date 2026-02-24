@@ -65,6 +65,15 @@ enum RequestStatus {
   EXPIRED // Hết hạn, không có provider nhận (U2)
 }
 
+// Enum cho trạng thái báo giá
+enum QuoteStatus {
+  PENDING // Đang chờ user phản hồi
+  ACCEPTED // User đã chấp nhận
+  REJECTED // User đã từ chối
+  CANCELLED // Provider đã hủy báo giá
+  EXPIRED // Hết hạn (nếu user không phản hồi)
+}
+
 // Enum cho loại nhà cung cấp
 enum ProviderType {
   INDIVIDUAL // Cá nhân
@@ -148,6 +157,7 @@ model User {
   uploads          Upload[]
   rescueRequests   RescueRequest[] @relation("UserRequests")
   assignedRequests RescueRequest[] @relation("AssignedRequests")
+  quotes           Quote[]         @relation("ProviderQuotes")
 
   @@index([email])
   @@index([googleId])
@@ -270,19 +280,31 @@ model RescueRequest {
   // Matching tracking
   matchingStartedAt DateTime? // When status changed to MATCHING
   assignedAt        DateTime? // When provider accepted
-  expiresAt         DateTime? // MATCHING expiration time
+  expiresAt         DateTime? // MATCHING expiration time (used for search phase transitions)
   matchAttempts     Int       @default(1) // Number of matching attempts
   searchPhase       Int       @default(1) // Search phase: 1 = normal radius, 2 = expanded radius
   matchedDistance   Float? // Distance in km from provider to customer (from VietMap API)
   matchedEta        Int? // ETA in minutes when provider accepted (from VietMap API)
+
+  // Quote tracking (Two-Timer System)
+  quoteCount           Int       @default(0) // Current number of valid PENDING quotes
+  maxQuotes            Int       @default(3) // Maximum quotes allowed (default 3)
+  quoteWindowDuration  Int       @default(90) // Quote window duration in seconds (default 90s)
+  quoteWindowExpiresAt DateTime? // When quote window closes (providers can't submit after this)
+  quoteWindowClosedAt  DateTime? // When quote window was actually closed (either by time or maxQuotes)
+
+  // Provider viewing tracking
+  viewingProviders String[]  @default([]) // Array of provider IDs currently viewing this request
+  viewingUpdatedAt DateTime? // Last time viewingProviders was updated
 
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  user  User           @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
-  media RequestMedia[]
+  user   User           @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
+  media  RequestMedia[]
+  quotes Quote[]
 
   @@index([userId])
   @@index([status])
@@ -317,4 +339,44 @@ model RequestMedia {
 
   @@index([requestId])
   @@map("request_media")
+}
+
+// Quote Model - Quản lý báo giá từ provider
+model Quote {
+  id              String @id @default(cuid())
+  rescueRequestId String
+  providerId      String
+
+  // Quote details
+  price                   Int // Giá báo giá (VND)
+  estimatedArrivalMinutes Int // Thời gian dự kiến đến (phút)
+  message                 String? // Lời nhắn từ provider
+
+  // Status
+  status QuoteStatus @default(PENDING)
+
+  // User response
+  rejectionReason String? // Lý do từ chối (nếu user reject)
+  userRespondedAt DateTime? // Thời điểm user phản hồi
+
+  // Provider location at time of quote
+  providerLocation Json? // {lat, lng} - Vị trí provider khi gửi báo giá
+
+  // Timestamps
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  expiresAt DateTime? // Individual quote TTL: expires 2 minutes from creation (quotes sent early expire sooner)
+
+  // Relations
+  rescueRequest RescueRequest @relation(fields: [rescueRequestId], references: [id], onDelete: Cascade)
+  provider      User          @relation("ProviderQuotes", fields: [providerId], references: [id])
+
+  @@unique([rescueRequestId, providerId]) // Prevent duplicate quotes from same provider
+  @@index([rescueRequestId])
+  @@index([providerId])
+  @@index([status])
+  @@index([rescueRequestId, status]) // Optimized for counting quotes by status
+  @@index([status, expiresAt]) // Optimized for expiration queries
+  @@index([createdAt])
+  @@map("quotes")
 }

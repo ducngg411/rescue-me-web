@@ -11,6 +11,14 @@ export interface RequestStatus {
     searchPhase?: number; // U2: 1 = normal radius, 2 = expanded radius
     matchedDistance?: number; // Distance in km (from VietMap API)
     matchedEta?: number; // ETA in minutes (from VietMap API)
+    viewingProvidersCount?: number; // Number of providers currently viewing this request
+    // Quote window info
+    quoteCount?: number; // Current number of valid quotes
+    maxQuotes?: number; // Maximum quotes allowed
+    quoteWindowOpen?: boolean; // Is quote window still open?
+    quoteWindowTimeRemaining?: number; // Seconds remaining in quote window
+    quoteWindowExpiresAt?: string | null; // When quote window expires
+    quoteWindowClosedAt?: string | null; // When quote window was closed
     assignedProvider?: {
         id: string;
         name: string | null;
@@ -72,17 +80,23 @@ export function useRequestTracking({
             setStatus(newStatus);
             setError(null);
 
-            // Calculate time remaining for MATCHING status
-            if (newStatus.status === 'MATCHING' && newStatus.expiresAt) {
-                const expiresAt = new Date(newStatus.expiresAt);
-                const now = new Date();
-                const remaining = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 1000));
-                setTimeRemaining(remaining);
+            // For MATCHING status, use quote window time remaining
+            if (newStatus.status === 'MATCHING') {
+                if (newStatus.quoteWindowTimeRemaining !== undefined) {
+                    // Use quote window timer from backend
+                    setTimeRemaining(newStatus.quoteWindowTimeRemaining);
+                } else {
+                    // Fallback to phase expiration (for backward compatibility)
+                    const expiresAt = new Date(newStatus.expiresAt);
+                    const now = new Date();
+                    const remaining = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 1000));
+                    setTimeRemaining(remaining);
 
-                // INSTANT TRANSITION: When countdown hits 0, force backend to check immediately
-                if (remaining === 0 && newStatus.status === 'MATCHING') {
-                    console.log('⏰ [useRequestTracking] Countdown reached 00:00, forcing transition...');
-                    triggerExpireCheck();
+                    // INSTANT TRANSITION: When countdown hits 0, force backend to check immediately
+                    if (remaining === 0) {
+                        console.log('⏰ [useRequestTracking] Countdown reached 00:00, forcing transition...');
+                        triggerExpireCheck();
+                    }
                 }
             } else {
                 setTimeRemaining(0);

@@ -52,11 +52,11 @@ export default function AssignedProvider({ provider, distance, eta }: AssignedPr
         <div className="bg-white rounded-lg shadow-sm p-6">
             {/* Status Badge */}
             <div className="flex justify-center mb-6">
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 border-2 border-green-200 rounded-full">
-                    <svg className="h-5 w-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 border-2 border-blue-200 rounded-full">
+                    <svg className="h-5 w-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    <span className="text-green-700 font-medium">Đã có provider nhận</span>
+                    <span className="text-blue-700 font-medium">Đã có provider - Đang chuẩn bị</span>
                 </div>
             </div>
 
@@ -149,15 +149,15 @@ export default function AssignedProvider({ provider, distance, eta }: AssignedPr
             </div>
 
             {/* Status Message */}
-            <div className="mt-6 bg-green-50 rounded-lg p-4">
+            <div className="mt-6 bg-blue-50 rounded-lg p-4">
                 <div className="flex items-start gap-3">
-                    <svg className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <div>
-                        <p className="text-sm font-medium text-green-900">Provider đang trên đường</p>
-                        <p className="text-sm text-green-700 mt-1">
-                            Provider sẽ tới vị trí gặp nạn của bạn. Vui lòng giữ liên lạc.
+                        <p className="text-sm font-medium text-blue-900">Provider đang xem xét chi tiết</p>
+                        <p className="text-sm text-blue-700 mt-1">
+                            Provider đã nhận yêu cầu và đang chuẩn bị. Provider sẽ liên hệ với bạn để xác nhận chi tiết và thời gian đến. Vui lòng bật điện thoại.
                         </p>
                     </div>
                 </div>

@@ -475,6 +475,19 @@ export class ProviderService {
         return baseFee + Math.ceil(distanceKm) * pricePerKm;
     }
 
+    /**
+     * @deprecated This method bypasses the quote system by directly assigning providers.
+     * 
+     * INCORRECT FLOW (this method):
+     * Provider clicks Accept → MATCHING → ASSIGNED → Shows "Đã được chọn"
+     * 
+     * CORRECT FLOW (use Quote system instead):
+     * Provider views details → Submits quote → User accepts quote → MATCHING → ASSIGNED
+     * 
+     * See: rescue-request.service.ts createQuote() and respondQuote() for correct implementation.
+     * 
+     * This endpoint is commented out in provider.controller.ts and should not be called.
+     */
     async acceptRequest(providerId: string, requestId: string) {
         const user = await this.prisma.user.findUnique({
             where: { id: providerId },
@@ -625,6 +638,15 @@ export class ProviderService {
         };
     }
 
+    /**
+     * @deprecated This method is no longer needed.
+     * 
+     * The modal now shows "Bỏ qua" (Skip) instead of "Từ chối" (Decline).
+     * Providers can simply close the modal without making an API call.
+     * The request remains in MATCHING state for other providers to see.
+     * 
+     * This endpoint is commented out in provider.controller.ts and should not be called.
+     */
     async declineRequest(providerId: string, requestId: string) {
         const user = await this.prisma.user.findUnique({
             where: { id: providerId },

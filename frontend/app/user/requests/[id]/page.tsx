@@ -142,6 +142,10 @@ export default function RequestTrackingPage() {
                     <MatchingStatus
                         timeRemaining={timeRemaining}
                         searchPhase={status.searchPhase}
+                        viewingProvidersCount={status.viewingProvidersCount}
+                        quoteCount={status.quoteCount}
+                        maxQuotes={status.maxQuotes}
+                        quoteWindowOpen={status.quoteWindowOpen}
                         onCancel={handleCancel}
                     />
                 )}

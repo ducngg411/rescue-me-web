@@ -2,6 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRescueRequestDto } from './dto/create-rescue-request.dto';
+import { CreateQuoteDto } from './dto/create-quote.dto';
+import { QuoteStatus } from './dto/quote-response.dto';
 
 @Injectable()
 export class RescueRequestService {
@@ -13,6 +15,24 @@ export class RescueRequestService {
         const result = await this.checkAndExpireRequests();
         if (result.totalProcessed > 0) {
             console.log(`⏰ [Cron] Processed ${result.totalProcessed} requests (Phase 1→2: ${result.phase1ToPhase2}, Phase 2→EXPIRED: ${result.phase2ToExpired})`);
+        }
+    }
+
+    // Auto-expire PENDING quotes every minute
+    @Cron(CronExpression.EVERY_MINUTE)
+    async autoExpireQuotes() {
+        const result = await this.checkAndExpireQuotes();
+        if (result.expired > 0) {
+            console.log(`⏰ [Cron] Expired ${result.expired} pending quotes`);
+        }
+    }
+
+    // Auto-close quote windows (Case 2: Window expires) every 10 seconds
+    @Cron(CronExpression.EVERY_10_SECONDS)
+    async autoCloseQuoteWindows() {
+        const result = await this.checkAndCloseQuoteWindows();
+        if (result.closed > 0) {
+            console.log(`⏰ [Cron] Closed ${result.closed} quote windows (time expired)`);
         }
     }
 
@@ -98,10 +118,14 @@ export class RescueRequestService {
 
         console.log(`📊 [RescueRequest] Total media items:`, mediaItems.length);
 
-        // U2: Auto-transition to MATCHING state - Phase 1 (60s)
+        // U2: Auto-transition to MATCHING state - Phase 1 (60s for search phase)
         const now = new Date();
-        const phase1Timeout = 60; // Phase 1: 60 seconds normal radius
-        const expiresAt = new Date(now.getTime() + phase1Timeout * 1000);
+        const phase1Timeout = 60; // Phase 1: 60 seconds normal radius search
+        const phaseExpiresAt = new Date(now.getTime() + phase1Timeout * 1000);
+
+        // Quote Window: 90 seconds from creation (providers can submit quotes during this time)
+        const quoteWindowDuration = 90; // 90 seconds default
+        const quoteWindowExpiresAt = new Date(now.getTime() + quoteWindowDuration * 1000);
 
         // Create rescue request with MATCHING status
         const rescueRequest = await this.prisma.rescueRequest.create({
@@ -116,9 +140,14 @@ export class RescueRequestService {
                 videoUrls: dto.videoUrls || [], // Keep for backward compatibility
                 status: 'MATCHING', // U2: Start in MATCHING state
                 matchingStartedAt: now,
-                expiresAt: expiresAt,
+                expiresAt: phaseExpiresAt, // Search phase expiration (for phase 1 -> phase 2 transition)
                 matchAttempts: 1,
                 searchPhase: 1, // Phase 1: normal radius search
+                // Quote window settings
+                quoteWindowDuration,
+                quoteWindowExpiresAt,
+                maxQuotes: 3, // Default max 3 quotes
+                quoteCount: 0,
                 // Create associated media
                 media: mediaItems.length > 0
                     ? {
@@ -154,8 +183,9 @@ export class RescueRequestService {
         }
 
         console.log('✅ [RescueRequest] Created request:', rescueRequest.id);
-        console.log('📊 [RescueRequest] Media created:', rescueRequest.media.length);
-        console.log('🔍 [RescueRequest] Phase 1: MATCHING (normal radius), expires at:', expiresAt.toISOString());
+        console.log('📊 [RescueRequest] Media created:', mediaItems.length);
+        console.log('🔍 [RescueRequest] Phase 1: MATCHING (normal radius), phase expires at:', phaseExpiresAt.toISOString());
+        console.log('📋 [RescueRequest] Quote window expires at:', quoteWindowExpiresAt.toISOString());
 
         // TODO: Broadcast to providers in normal radius (P2 - Provider side)
         // this.broadcastToProviders(rescueRequest, { radiusKm: 10 });
@@ -209,6 +239,68 @@ export class RescueRequestService {
 
         if (!request) {
             throw new NotFoundException('Rescue request not found');
+        }
+
+        return request;
+    }
+
+    /**
+     * Provider xem chi tiết request để gửi báo giá
+     * Provider can view MATCHING requests or requests assigned to them
+     */
+    async getRequestForProvider(requestId: string, providerId: string) {
+        // Validate provider
+        const provider = await this.prisma.user.findUnique({
+            where: { id: providerId },
+        });
+
+        if (!provider || provider.role !== 'PROVIDER') {
+            throw new Error('Only providers can access this endpoint');
+        }
+
+        // Get request
+        const request = await this.prisma.rescueRequest.findUnique({
+            where: { id: requestId },
+            include: {
+                media: true,
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        phoneNumber: true,
+                        fullName: true,
+                    },
+                },
+            },
+        });
+
+        if (!request) {
+            throw new NotFoundException('Rescue request not found');
+        }
+
+        // Provider can only view:
+        // 1. MATCHING requests (to send quotes)
+        // 2. Requests assigned to them
+        if (request.status !== 'MATCHING' && request.assignedProviderId !== providerId) {
+            throw new Error('You do not have permission to view this request');
+        }
+
+        // Track that this provider is viewing the request (only for MATCHING status)
+        if (request.status === 'MATCHING') {
+            const currentViewingProviders = request.viewingProviders || [];
+
+            if (!currentViewingProviders.includes(providerId)) {
+                await this.prisma.rescueRequest.update({
+                    where: { id: requestId },
+                    data: {
+                        viewingProviders: {
+                            push: providerId,
+                        },
+                        viewingUpdatedAt: new Date(),
+                    },
+                });
+                console.log(`👀 [RescueRequest] Provider ${providerId} is now viewing request ${requestId}`);
+            }
         }
 
         return request;
@@ -287,6 +379,57 @@ export class RescueRequestService {
     async getRequestStatus(requestId: string, userId: string) {
         const request = await this.getRescueRequestById(requestId, userId);
 
+        // Clean up stale viewing providers (older than 5 minutes)
+        let viewingProvidersCount = 0;
+        if (request.status === 'MATCHING' && request.viewingProviders && request.viewingProviders.length > 0) {
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+            if (request.viewingUpdatedAt && request.viewingUpdatedAt < fiveMinutesAgo) {
+                // Clear stale viewing providers
+                await this.prisma.rescueRequest.update({
+                    where: { id: requestId },
+                    data: {
+                        viewingProviders: [],
+                        viewingUpdatedAt: null,
+                    },
+                });
+                viewingProvidersCount = 0;
+            } else {
+                viewingProvidersCount = request.viewingProviders.length;
+            }
+        }
+
+        // Count actual quotes from database (for backward compatibility with old requests)
+        const actualQuoteCount = await this.prisma.quote.count({
+            where: {
+                rescueRequestId: requestId,
+                status: 'PENDING',
+            },
+        });
+
+        // Use the actual count from database (more reliable than cached field)
+        const quoteCount = actualQuoteCount;
+
+        // Calculate quote window status
+        const now = new Date();
+        let quoteWindowOpen = false;
+        let quoteWindowTimeRemaining = 0;
+
+        if (request.status === 'MATCHING' && !request.quoteWindowClosedAt) {
+            if (request.quoteWindowExpiresAt) {
+                // Has quote window configured
+                if (now < request.quoteWindowExpiresAt) {
+                    quoteWindowOpen = true;
+                    quoteWindowTimeRemaining = Math.max(0, Math.floor((request.quoteWindowExpiresAt.getTime() - now.getTime()) / 1000));
+                }
+            } else {
+                // Old request without quote window - use phase expiration as fallback
+                if (request.expiresAt && now < request.expiresAt) {
+                    quoteWindowOpen = true;
+                    quoteWindowTimeRemaining = Math.max(0, Math.floor((request.expiresAt.getTime() - now.getTime()) / 1000));
+                }
+            }
+        }
+
         const statusResponse = {
             id: request.id,
             status: request.status,
@@ -298,6 +441,14 @@ export class RescueRequestService {
             matchedDistance: request.matchedDistance,
             matchedEta: request.matchedEta,
             assignedProvider: request.assignedProvider,
+            viewingProvidersCount,
+            // Quote window info
+            quoteCount,
+            maxQuotes: request.maxQuotes || 3, // Default to 3 if undefined
+            quoteWindowOpen,
+            quoteWindowTimeRemaining,
+            quoteWindowExpiresAt: request.quoteWindowExpiresAt,
+            quoteWindowClosedAt: request.quoteWindowClosedAt,
         };
 
         console.log(`📊 [Request ${requestId}] Status response:`, {
@@ -305,7 +456,17 @@ export class RescueRequestService {
             matchedDistance: statusResponse.matchedDistance,
             matchedEta: statusResponse.matchedEta,
             hasProvider: !!statusResponse.assignedProvider,
+            viewingProvidersCount,
+            quoteWindow: {
+                open: quoteWindowOpen,
+                timeRemaining: quoteWindowTimeRemaining,
+                count: `${quoteCount}/${request.maxQuotes || 3}`,
+                actualCountFromDB: actualQuoteCount,
+                cachedCount: request.quoteCount,
+            },
         });
+
+        console.log(`🔍 [DEBUG] Full status response:`, JSON.stringify(statusResponse, null, 2));
 
         return statusResponse;
     }
@@ -368,6 +529,381 @@ export class RescueRequestService {
             phase1ToPhase2: phase1ToPhase2Count,
             phase2ToExpired: phase2ToExpiredCount,
             totalProcessed: expiredRequests.length,
+        };
+    }
+
+    /**
+     * Check and close quote windows that have expired (Case 2)
+     */
+    async checkAndCloseQuoteWindows() {
+        const now = new Date();
+
+        // Find MATCHING requests with expired quote windows that haven't been closed yet
+        const expiredWindows = await this.prisma.rescueRequest.findMany({
+            where: {
+                status: 'MATCHING',
+                quoteWindowExpiresAt: {
+                    lte: now,
+                },
+                quoteWindowClosedAt: null, // Not yet closed
+            },
+        });
+
+        let closedCount = 0;
+
+        for (const request of expiredWindows) {
+            await this.prisma.rescueRequest.update({
+                where: { id: request.id },
+                data: {
+                    quoteWindowClosedAt: now,
+                },
+            });
+
+            console.log(`🔒 [Quote Window] Closed for request ${request.id} - time expired (received ${request.quoteCount}/${request.maxQuotes} quotes)`);
+            closedCount++;
+        }
+
+        return {
+            closed: closedCount,
+        };
+    }
+
+    // ==================== QUOTE METHODS ====================
+
+    /**
+     * P2: Provider gửi báo giá cho rescue request
+     */
+    async createQuote(
+        rescueRequestId: string,
+        providerId: string,
+        dto: CreateQuoteDto,
+    ) {
+        console.log('💰 [Quote] Creating quote for request:', rescueRequestId);
+
+        // Validate rescue request exists and is in MATCHING state
+        const rescueRequest = await this.prisma.rescueRequest.findUnique({
+            where: { id: rescueRequestId },
+            include: { user: true },
+        });
+
+        if (!rescueRequest) {
+            throw new NotFoundException('Rescue request not found');
+        }
+
+        if (rescueRequest.status !== 'MATCHING') {
+            throw new Error('Request is not available for quotes');
+        }
+
+        // Check if quote window is still open
+        const now = new Date();
+        if (rescueRequest.quoteWindowClosedAt) {
+            throw new Error('QUOTE_WINDOW_CLOSED');
+        }
+
+        if (rescueRequest.quoteWindowExpiresAt && now > rescueRequest.quoteWindowExpiresAt) {
+            throw new Error('QUOTE_WINDOW_CLOSED');
+        }
+
+        // Check if slots are full
+        if (rescueRequest.quoteCount >= rescueRequest.maxQuotes) {
+            throw new Error('SLOTS_FULL');
+        }
+
+        // Validate provider
+        const provider = await this.prisma.user.findUnique({
+            where: { id: providerId },
+        });
+
+        if (!provider || provider.role !== 'PROVIDER') {
+            throw new Error('Invalid provider');
+        }
+
+        // Check if provider already sent a quote for this request
+        const existingQuote = await this.prisma.quote.findFirst({
+            where: {
+                rescueRequestId,
+                providerId,
+                status: 'PENDING',
+            },
+        });
+
+        if (existingQuote) {
+            throw new Error('You already sent a quote for this request');
+        }
+
+        // Individual Quote TTL: 2 minutes from now (quotes sent early expire sooner)
+        const quoteTTL = 2 * 60 * 1000; // 2 minutes
+        const quoteExpiresAt = new Date(now.getTime() + quoteTTL);
+
+        // Create quote and increment quote count in a transaction
+        const result = await this.prisma.$transaction(async (tx) => {
+            // Create the quote
+            const quote = await tx.quote.create({
+                data: {
+                    rescueRequestId,
+                    providerId,
+                    price: dto.price,
+                    estimatedArrivalMinutes: dto.estimatedArrivalMinutes,
+                    message: dto.message,
+                    providerLocation: dto.providerLocation ? (dto.providerLocation as any) : undefined,
+                    status: 'PENDING',
+                    expiresAt: quoteExpiresAt,
+                },
+                include: {
+                    provider: {
+                        select: {
+                            id: true,
+                            name: true,
+                            avatar: true,
+                            serviceName: true,
+                            phoneNumber: true,
+                        },
+                    },
+                },
+            });
+
+            // Increment quote count
+            const newQuoteCount = rescueRequest.quoteCount + 1;
+            const updateData: any = {
+                quoteCount: newQuoteCount,
+            };
+
+            // If this reaches maxQuotes, close the quote window immediately (Case 1)
+            if (newQuoteCount >= rescueRequest.maxQuotes) {
+                updateData.quoteWindowClosedAt = now;
+                console.log(`🔒 [Quote] Quote window closed for request ${rescueRequestId} - maxQuotes (${rescueRequest.maxQuotes}) reached`);
+            }
+
+            await tx.rescueRequest.update({
+                where: { id: rescueRequestId },
+                data: updateData,
+            });
+
+            return quote;
+        });
+
+        console.log(`✅ [Quote] Quote created: ${result.id}, expires at ${quoteExpiresAt.toISOString()}, count: ${rescueRequest.quoteCount + 1}/${rescueRequest.maxQuotes}`);
+        return result;
+    }
+
+    /**
+     * U3: User xem danh sách báo giá cho rescue request
+     */
+    async getQuotesByRequest(rescueRequestId: string, userId: string) {
+        // Validate user owns the rescue request
+        const rescueRequest = await this.prisma.rescueRequest.findUnique({
+            where: { id: rescueRequestId },
+        });
+
+        if (!rescueRequest) {
+            throw new NotFoundException('Rescue request not found');
+        }
+
+        if (rescueRequest.userId !== userId) {
+            throw new Error('Unauthorized');
+        }
+
+        // Get all quotes for this request
+        const quotes = await this.prisma.quote.findMany({
+            where: { rescueRequestId },
+            include: {
+                provider: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                        serviceName: true,
+                        phoneNumber: true,
+                    },
+                },
+            },
+            orderBy: { createdAt: 'asc' },
+        });
+
+        return quotes;
+    }
+
+    /**
+     * U3: User accept/reject báo giá
+     */
+    async respondQuote(
+        rescueRequestId: string,
+        quoteId: string,
+        userId: string,
+        action: 'ACCEPT' | 'REJECT',
+        rejectionReason?: string,
+    ) {
+        console.log(`💬 [Quote] User ${action} quote:`, quoteId);
+
+        // Validate rescue request
+        const rescueRequest = await this.prisma.rescueRequest.findUnique({
+            where: { id: rescueRequestId },
+        });
+
+        if (!rescueRequest) {
+            throw new NotFoundException('Rescue request not found');
+        }
+
+        if (rescueRequest.userId !== userId) {
+            throw new Error('Unauthorized');
+        }
+
+        if (rescueRequest.status !== 'MATCHING') {
+            throw new Error('Request is not available for quote response');
+        }
+
+        // Validate quote
+        const quote = await this.prisma.quote.findUnique({
+            where: { id: quoteId },
+            include: { provider: true },
+        });
+
+        if (!quote) {
+            throw new NotFoundException('Quote not found');
+        }
+
+        if (quote.rescueRequestId !== rescueRequestId) {
+            throw new Error('Quote does not belong to this request');
+        }
+
+        if (quote.status !== 'PENDING') {
+            throw new Error('Quote is not available for response');
+        }
+
+        const now = new Date();
+
+        if (action === 'ACCEPT') {
+            // Accept quote: Update quote status and assign provider to request
+            await this.prisma.$transaction(async (tx) => {
+                // Update quote status to ACCEPTED
+                await tx.quote.update({
+                    where: { id: quoteId },
+                    data: {
+                        status: 'ACCEPTED',
+                        userRespondedAt: now,
+                    },
+                });
+
+                // Update rescue request: MATCHING → ASSIGNED
+                await tx.rescueRequest.update({
+                    where: { id: rescueRequestId },
+                    data: {
+                        status: 'ASSIGNED',
+                        assignedProviderId: quote.providerId,
+                        assignedAt: now,
+                        // Calculate distance/ETA from provider location
+                        matchedDistance: null, // TODO: Calculate from providerLocation
+                        matchedEta: quote.estimatedArrivalMinutes,
+                    },
+                });
+
+                // Cancel other pending quotes for this request
+                await tx.quote.updateMany({
+                    where: {
+                        rescueRequestId,
+                        id: { not: quoteId },
+                        status: 'PENDING',
+                    },
+                    data: {
+                        status: 'CANCELLED',
+                    },
+                });
+            });
+
+            console.log('✅ [Quote] Quote accepted, request ASSIGNED to provider');
+        } else {
+            // Reject quote
+            await this.prisma.quote.update({
+                where: { id: quoteId },
+                data: {
+                    status: 'REJECTED',
+                    rejectionReason,
+                    userRespondedAt: now,
+                },
+            });
+
+            console.log('❌ [Quote] Quote rejected');
+        }
+
+        // Return updated quote
+        const updatedQuote = await this.prisma.quote.findUnique({
+            where: { id: quoteId },
+            include: {
+                provider: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                        serviceName: true,
+                        phoneNumber: true,
+                    },
+                },
+            },
+        });
+
+        return updatedQuote;
+    }
+
+    /**
+     * Provider xem danh sách quotes đã gửi
+     */
+    async getProviderQuotes(providerId: string) {
+        const quotes = await this.prisma.quote.findMany({
+            where: { providerId },
+            include: {
+                rescueRequest: {
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                name: true,
+                                phoneNumber: true,
+                            },
+                        },
+                        media: true,
+                    },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        return quotes;
+    }
+
+    /**
+     * Auto-expire PENDING quotes that exceeded expiresAt
+     */
+    async checkAndExpireQuotes() {
+        const now = new Date();
+
+        // Find PENDING quotes that have expired
+        const expiredQuotes = await this.prisma.quote.findMany({
+            where: {
+                status: 'PENDING',
+                expiresAt: {
+                    lte: now,
+                },
+            },
+        });
+
+        let expiredCount = 0;
+
+        for (const quote of expiredQuotes) {
+            await this.prisma.quote.update({
+                where: { id: quote.id },
+                data: {
+                    status: 'EXPIRED',
+                },
+            });
+            expiredCount++;
+        }
+
+        if (expiredCount > 0) {
+            console.log(`📊 [Quote] Expired ${expiredCount} pending quotes`);
+        }
+
+        return {
+            expired: expiredCount,
         };
     }
 }

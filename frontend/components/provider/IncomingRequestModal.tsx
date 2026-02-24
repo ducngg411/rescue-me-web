@@ -5,7 +5,7 @@ import { PendingRequest } from '@/lib/hooks/usePendingRequests';
 
 interface IncomingRequestModalProps {
     request: PendingRequest;
-    onAccept: () => void;
+    onViewDetails: () => void; // Changed from onAccept
     onDecline: () => void;
     isProcessing: boolean;
 }
@@ -27,7 +27,7 @@ const VEHICLE_TYPE_LABELS: Record<string, string> = {
 
 export default function IncomingRequestModal({
     request,
-    onAccept,
+    onViewDetails, // Changed from onAccept
     onDecline,
     isProcessing,
 }: IncomingRequestModalProps) {
@@ -61,107 +61,98 @@ export default function IncomingRequestModal({
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
                 {/* Header */}
-                <div className="bg-red-500 text-white px-6 py-4 rounded-t-lg">
-                    <div className="flex items-center gap-2">
-                        <span className="text-2xl">🚨</span>
-                        <h2 className="text-xl font-bold">YÊU CẦU CỨU HỘ MỚI</h2>
-                    </div>
+                <div className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-4 rounded-t-lg">
+                    <h2 className="text-xl font-bold">YÊU CẦU CỨU HỘ MỚI</h2>
+                    <p className="text-sm text-red-100 mt-1">Vui lòng phản hồi nhanh để nhận yêu cầu</p>
                 </div>
 
                 {/* Content */}
                 <div className="p-6 space-y-4">
                     {/* Customer Info */}
-                    <div className="border-b pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-lg">👤</span>
-                            <span className="font-semibold text-gray-900">{request.user.name || 'Khách hàng'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-700">
-                            <span>📞</span>
-                            <a href={`tel:${request.user.phone}`} className="text-blue-600 hover:underline">
-                                {request.user.phone}
-                            </a>
-                        </div>
+                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="text-xs text-gray-500 mb-2">THÔNG TIN KHÁCH HÀNG</div>
+                        <div className="font-semibold text-gray-900 mb-2">{request.user.name || 'Khách hàng'}</div>
+                        <a href={`tel:${request.user.phone}`} className="text-blue-600 hover:underline text-sm font-medium">
+                            {request.user.phone}
+                        </a>
                     </div>
 
                     {/* Location */}
-                    <div>
-                        <div className="flex items-start gap-2 mb-2">
-                            <span className="text-lg mt-0.5">📍</span>
-                            <div className="flex-1">
-                                <div className="font-medium text-gray-900 mb-1">Vị trí gặp nạn:</div>
-                                <div className="text-sm text-gray-700">{request.pickupLocation.address}</div>
-                            </div>
-                        </div>
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <div className="text-xs text-blue-600 font-semibold mb-2">VỊ TRÍ GẶP NẠN</div>
+                        <div className="text-sm text-gray-800">{request.pickupLocation.address}</div>
                     </div>
 
                     {/* Incident Details */}
-                    <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                        <div className="flex items-center gap-2">
-                            <span>🚗</span>
-                            <span className="text-sm">
-                                <span className="font-medium">Loại xe:</span>{' '}
-                                {VEHICLE_TYPE_LABELS[request.vehicleType] || request.vehicleType}
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span>🔧</span>
-                            <span className="text-sm">
-                                <span className="font-medium">Sự cố:</span>{' '}
-                                {INCIDENT_TYPE_LABELS[request.incidentType] || request.incidentType}
-                            </span>
+                    <div className="bg-white rounded-lg p-4 border border-gray-200 space-y-3">
+                        <div className="text-xs text-gray-500 mb-2">CHI TIẾT SỰ CỐ</div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <div className="text-xs text-gray-500">Loại xe</div>
+                                <div className="text-sm font-medium text-gray-900">
+                                    {VEHICLE_TYPE_LABELS[request.vehicleType] || request.vehicleType}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-gray-500">Sự cố</div>
+                                <div className="text-sm font-medium text-gray-900">
+                                    {INCIDENT_TYPE_LABELS[request.incidentType] || request.incidentType}
+                                </div>
+                            </div>
                         </div>
                         {request.description && (
-                            <div className="flex items-start gap-2">
-                                <span>📝</span>
-                                <div className="text-sm flex-1">
-                                    <span className="font-medium">Mô tả:</span>{' '}
-                                    <span className="text-gray-700">"{request.description}"</span>
-                                </div>
+                            <div className="pt-2 border-t border-gray-100">
+                                <div className="text-xs text-gray-500 mb-1">Mô tả chi tiết</div>
+                                <div className="text-sm text-gray-700 italic">"{request.description}"</div>
                             </div>
                         )}
                     </div>
 
                     {/* Distance & Earnings */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-blue-50 rounded-lg p-3">
-                            <div className="text-xs text-gray-600 mb-1">Thời gian đến</div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+                            <div className="text-xs text-blue-700 font-medium mb-1">THỜI GIAN ĐẾN</div>
                             <div className="text-2xl font-bold text-blue-600">
-                                ~{estimatedMinutes} phút
+                                ~{estimatedMinutes}'
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-gray-600 mt-1">
                                 {request.distance < 1
                                     ? `${(request.distance * 1000).toFixed(0)} m`
                                     : `${request.distance.toFixed(2)} km`
-                                } {request.eta ? '(VietMap)' : '(ước tính)'}
+                                }
                             </div>
                         </div>
-                        <div className="bg-green-50 rounded-lg p-3">
-                            <div className="text-xs text-gray-600 mb-1">Dự kiến thu nhập</div>
-                            <div className="text-lg font-bold text-green-600">
-                                {request.estimatedEarnings.toLocaleString()} ₫
+                        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
+                            <div className="text-xs text-green-700 font-medium mb-1">DỰ KIẾN THU NHẬP</div>
+                            <div className="text-xl font-bold text-green-600">
+                                {request.estimatedEarnings.toLocaleString()}₫
                             </div>
                         </div>
                     </div>
 
                     {/* Media Preview */}
                     {request.media && request.media.length > 0 && (
-                        <div>
-                            <div className="text-sm font-medium text-gray-700 mb-2">
-                                Hình ảnh/Video: ({request.media.length})
+                        <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                            <div className="text-xs text-purple-700 font-medium mb-2">
+                                HÌNH ẢNH/VIDEO ({request.media.length})
                             </div>
                             <div className="flex gap-2 overflow-x-auto">
-                                {request.media.slice(0, 3).map((media, idx) => (
-                                    <div key={idx} className="flex-shrink-0 w-20 h-20 bg-gray-200 rounded-lg overflow-hidden">
+                                {request.media.slice(0, 4).map((media, idx) => (
+                                    <div key={idx} className="flex-shrink-0 w-16 h-16 bg-white rounded border border-purple-200 overflow-hidden">
                                         {media.type === 'IMAGE' ? (
                                             <img src={media.url} alt="" className="w-full h-full object-cover" />
                                         ) : (
-                                            <div className="w-full h-full flex items-center justify-center bg-gray-300">
-                                                <span className="text-2xl">🎬</span>
+                                            <div className="w-full h-full flex items-center justify-center bg-gray-100 text-xs text-gray-500">
+                                                VIDEO
                                             </div>
                                         )}
                                     </div>
                                 ))}
+                                {request.media.length > 4 && (
+                                    <div className="flex-shrink-0 w-16 h-16 bg-purple-100 rounded border border-purple-200 flex items-center justify-center">
+                                        <span className="text-xs font-medium text-purple-600">+{request.media.length - 4}</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -187,16 +178,16 @@ export default function IncomingRequestModal({
                         <button
                             onClick={onDecline}
                             disabled={isProcessing}
-                            className="px-4 py-3 border-2 border-red-500 text-red-600 font-medium rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            ❌ Từ chối
+                            Bỏ qua
                         </button>
                         <button
-                            onClick={onAccept}
+                            onClick={onViewDetails}
                             disabled={isProcessing}
-                            className="px-4 py-3 bg-green-500 text-white font-medium rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            ✅ Nhận ngay
+                            Xem chi tiết & Gửi báo giá
                         </button>
                     </div>
                 </div>

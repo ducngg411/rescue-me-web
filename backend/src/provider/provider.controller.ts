@@ -40,15 +40,24 @@ export class ProviderController {
         return this.providerService.getPendingRequests(req.user.id);
     }
 
+    // DEPRECATED: Direct accept bypasses the quote system
+    // Providers should navigate to request details and submit a quote instead
+    // The quote system ensures proper price negotiation: Provider sends quote → User accepts → ASSIGNED
+    /*
     @Post('requests/:id/accept')
     async acceptRequest(@Request() req, @Param('id') requestId: string) {
         return this.providerService.acceptRequest(req.user.id, requestId);
     }
+    */
 
+    // DEPRECATED: Decline is no longer needed since providers can simply skip viewing requests
+    // The modal now shows "Skip" instead of "Decline" - no API call needed
+    /*
     @Post('requests/:id/decline')
     async declineRequest(@Request() req, @Param('id') requestId: string) {
         return this.providerService.declineRequest(req.user.id, requestId);
     }
+    */
 
     // Provider Settings API
     @Patch('settings')
