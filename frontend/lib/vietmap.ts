@@ -1,4 +1,4 @@
-const VIETMAP_API_KEY = '70791b5e522854f73ccb831a7f015bde93dfc4b58bd2d444';
+const VIETMAP_API_KEY = process.env.NEXT_PUBLIC_VIETMAP_API_KEY || '';
 const AUTOCOMPLETE_URL = 'https://maps.vietmap.vn/api/autocomplete/v3';
 const PLACE_URL = 'https://maps.vietmap.vn/api/place/v3';
 

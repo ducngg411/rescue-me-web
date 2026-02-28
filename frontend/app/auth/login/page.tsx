@@ -6,7 +6,6 @@ import { useForm } from 'react-hook-form';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { loginWithEmail, loginWithGoogle } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
-import AuthIllustration from '@/components/AuthIllustration';
 
 interface LoginFormData {
     email: string;
@@ -79,9 +78,13 @@ export default function LoginPage() {
             <div className="min-h-screen flex" style={{ fontFamily: 'Poppins, sans-serif' }}>
 
                 {/* ── Left: Rescue illustration ── */}
-                <div className="hidden lg:flex flex-1 relative overflow-hidden">
+                <div className="hidden lg:flex flex-1 relative overflow-hidden bg-gray-50">
                     <div className="absolute inset-0">
-                        <AuthIllustration />
+                        <img
+                            src="/illustration_background_car.svg"
+                            alt="Rescue Me Background"
+                            className="w-full h-full object-cover"
+                        />
                     </div>
                 </div>
 

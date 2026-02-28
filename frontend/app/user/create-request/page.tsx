@@ -492,7 +492,7 @@ export default function CreateRescueRequestPage() {
                             </h2>
                         </div>
                         <LocationPicker
-                            label=""
+                            label="Vị trí gặp nạn"
                             value={formData.incidentLocation}
                             onChange={(location) => setFormData({ ...formData, incidentLocation: location })}
                             placeholder="Nhập địa điểm gặp nạn..."

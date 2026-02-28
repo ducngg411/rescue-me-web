@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-const VIETMAP_API_KEY = '70791b5e522854f73ccb831a7f015bde93dfc4b58bd2d444';
-
 // Global flag to track if VietMap script is loaded
 let isVietMapScriptLoaded = false;
 let vietmapLoadPromise: Promise<void> | null = null;
