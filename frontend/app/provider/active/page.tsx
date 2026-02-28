@@ -11,6 +11,7 @@ import WaitingState from '@/components/provider/WaitingState';
 import IncomingRequestModal from '@/components/provider/IncomingRequestModal';
 import ProviderSettings from '@/components/provider/ProviderSettings';
 import api from '@/lib/api';
+import toast from 'react-hot-toast';
 
 export default function ProviderActivePage() {
     const router = useRouter();
@@ -29,7 +30,61 @@ export default function ProviderActivePage() {
 
     const [selectedRequest, setSelectedRequest] = useState<any>(null);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [activeTab, setActiveTab] = useState<'active' | 'settings'>('active');
+    const [activeTab, setActiveTab] = useState<'active' | 'history' | 'settings'>('active');
+    // Track declined request IDs locally to prevent spam
+    const [declinedRequestIds, setDeclinedRequestIds] = useState<Set<string>>(new Set());
+    // Track request history for resume functionality
+    const [requestHistory, setRequestHistory] = useState<any[]>([]);
+
+    // Filter out declined requests
+    const filteredRequests = requests.filter(req => !declinedRequestIds.has(req.id));
+
+    // Load request history from localStorage on mount and when switching to history tab
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('provider_request_history');
+            if (saved) {
+                const history = JSON.parse(saved);
+                // Only keep requests from last 24 hours
+                const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+                const filtered = history.filter((item: any) => item.timestamp > cutoff);
+                setRequestHistory(filtered);
+                console.log('📚 [History] Loaded', filtered.length, 'items from localStorage');
+            }
+        } catch (err) {
+            console.error('Error loading request history:', err);
+        }
+    }, [activeTab]); // Reload whenever activeTab changes
+
+    // Save request history to localStorage
+    const saveToHistory = (request: any) => {
+        try {
+            const historyItem = {
+                id: request.id,
+                timestamp: Date.now(),
+                incidentType: request.incidentType,
+                vehicleType: request.vehicleType,
+                pickupLocation: request.pickupLocation,
+                distance: request.distance,
+                estimatedEarnings: request.estimatedEarnings,
+            };
+
+            const newHistory = [historyItem, ...requestHistory.filter(item => item.id !== request.id)];
+            const limited = newHistory.slice(0, 10); // Keep only last 10 requests
+
+            setRequestHistory(limited);
+            localStorage.setItem('provider_request_history', JSON.stringify(limited));
+        } catch (err) {
+            console.error('Error saving request history:', err);
+        }
+    };
+
+    // Remove from history
+    const removeFromHistory = (requestId: string) => {
+        const newHistory = requestHistory.filter(item => item.id !== requestId);
+        setRequestHistory(newHistory);
+        localStorage.setItem('provider_request_history', JSON.stringify(newHistory));
+    };
 
     // Initialize online status from user profile
     useEffect(() => {
@@ -40,8 +95,8 @@ export default function ProviderActivePage() {
 
     // Auto-show modal when new request arrives
     useEffect(() => {
-        if (requests.length > 0 && !selectedRequest) {
-            setSelectedRequest(requests[0]);
+        if (filteredRequests.length > 0 && !selectedRequest) {
+            setSelectedRequest(filteredRequests[0]);
 
             // Play notification sound
             // TODO: Add notification.mp3 to public folder
@@ -50,7 +105,7 @@ export default function ProviderActivePage() {
             //     // Ignore if user hasn't interacted with page yet
             // });
         }
-    }, [requests, selectedRequest]);
+    }, [filteredRequests, selectedRequest]);
 
     // Guard: Check authentication
     if (authLoading) {
@@ -127,35 +182,48 @@ export default function ProviderActivePage() {
     const handleToggle = async (newStatus: boolean) => {
         const result = await toggleOnlineStatus(newStatus);
         if (result.success) {
-            // Show toast notification
-            alert(result.message);
+            toast.success(result.message);
         } else {
-            alert(`Lỗi: ${result.message}`);
+            toast.error(`Lỗi: ${result.message}`);
         }
     };
 
     const handleViewDetails = () => {
         if (!selectedRequest) return;
 
+        const requestId = selectedRequest.id;
+
+        // Save to history for resume functionality
+        saveToHistory(selectedRequest);
+
+        // Add to declined list to prevent modal from showing again when user comes back
+        // (Detail page will call decline API if user backs without sending quote)
+        setDeclinedRequestIds(prev => new Set(prev).add(requestId));
+
         // Navigate to detail page where provider can view full details and send quote
-        router.push(`/provider/requests/${selectedRequest.id}`);
+        router.push(`/provider/requests/${requestId}`);
         setSelectedRequest(null);
     };
 
     const handleSkip = async () => {
         if (!selectedRequest) return;
 
+        const requestId = selectedRequest.id;
+
+        // Optimistically add to declined list to prevent modal from showing again
+        setDeclinedRequestIds(prev => new Set(prev).add(requestId));
+
+        // Dismiss the modal immediately
+        setSelectedRequest(null);
+
         try {
-            // Call decline API to prevent seeing this request again
-            await api.post(`/rescue-requests/${selectedRequest.id}/decline`);
-            console.log(`🚫 Declined request ${selectedRequest.id}`);
+            // Call decline API in background
+            await api.post(`/rescue-requests/${requestId}/decline`);
+            console.log(`🚫 Declined request ${requestId}`);
         } catch (err) {
             console.error('Error declining request:', err);
-            // Continue anyway to dismiss modal
+            // Keep in declined list anyway to prevent spam
         }
-
-        // Dismiss the modal
-        setSelectedRequest(null);
     };
 
     return (
@@ -178,6 +246,20 @@ export default function ProviderActivePage() {
                                 }`}
                         >
                             Hoạt động
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('history')}
+                            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'history'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-600 hover:text-gray-900'
+                                }`}
+                        >
+                            Lịch sử
+                            {requestHistory.length > 0 && (
+                                <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-600 text-xs rounded-full">
+                                    {requestHistory.length}
+                                </span>
+                            )}
                         </button>
                         <button
                             onClick={() => setActiveTab('settings')}
@@ -265,6 +347,106 @@ export default function ProviderActivePage() {
                         </>
                     )}
                 </>
+            ) : activeTab === 'history' ? (
+                <div className="max-w-6xl mx-auto px-6 py-8">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Lịch sử yêu cầu</h2>
+
+                    {requestHistory.length === 0 ? (
+                        <div className="bg-white border rounded-lg p-8 text-center">
+                            <div className="text-5xl mb-4">📋</div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                                Chưa có lịch sử
+                            </h3>
+                            <p className="text-gray-600">
+                                Các yêu cầu bạn đã xem sẽ xuất hiện ở đây
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {requestHistory.map((item) => {
+                                const incidentTypeLabels: Record<string, string> = {
+                                    BREAKDOWN: 'Hỏng xe',
+                                    ACCIDENT: 'Tai nạn',
+                                    FLAT_TIRE: 'Lốp xe hỏng',
+                                    BATTERY_DEAD: 'Hết bình điện',
+                                    OUT_OF_FUEL: 'Hết nhiên liệu',
+                                    LOCKED_OUT: 'Khóa xe',
+                                    OTHER: 'Khác',
+                                };
+                                const vehicleTypeLabels: Record<string, string> = {
+                                    CAR: 'Ô tô',
+                                    MOTORCYCLE: 'Xe máy',
+                                };
+
+                                const timeAgo = Math.floor((Date.now() - item.timestamp) / 60000); // minutes
+                                const timeStr = timeAgo < 60
+                                    ? `${timeAgo} phút trước`
+                                    : `${Math.floor(timeAgo / 60)} giờ trước`;
+
+                                return (
+                                    <div key={item.id} className="bg-white border rounded-lg p-6 hover:shadow-md transition-shadow">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    <span className="text-2xl">🚗</span>
+                                                    <div>
+                                                        <h3 className="font-semibold text-gray-900">
+                                                            {incidentTypeLabels[item.incidentType] || item.incidentType}
+                                                        </h3>
+                                                        <p className="text-sm text-gray-600">
+                                                            {vehicleTypeLabels[item.vehicleType] || item.vehicleType} • {timeStr}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-3 gap-3 mb-4">
+                                                    <div className="bg-blue-50 rounded-lg p-3">
+                                                        <div className="text-xs text-blue-600 mb-1">Khoảng cách</div>
+                                                        <div className="font-semibold text-blue-900">
+                                                            {item.distance < 1
+                                                                ? `${(item.distance * 1000).toFixed(0)} m`
+                                                                : `${item.distance.toFixed(2)} km`
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-green-50 rounded-lg p-3">
+                                                        <div className="text-xs text-green-600 mb-1">Dự kiến thu nhập</div>
+                                                        <div className="font-semibold text-green-900">
+                                                            {item.estimatedEarnings.toLocaleString()}₫
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-gray-50 rounded-lg p-3">
+                                                        <div className="text-xs text-gray-600 mb-1">Vị trí</div>
+                                                        <div className="font-semibold text-gray-900 text-xs truncate">
+                                                            {item.pickupLocation.address}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col gap-2">
+                                                <button
+                                                    onClick={() => {
+                                                        router.push(`/provider/requests/${item.id}`);
+                                                    }}
+                                                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                                                >
+                                                    Tiếp tục
+                                                </button>
+                                                <button
+                                                    onClick={() => removeFromHistory(item.id)}
+                                                    className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                                                >
+                                                    Xóa
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
             ) : (
                 <ProviderSettings />
             )}

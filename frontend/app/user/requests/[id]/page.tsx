@@ -7,6 +7,7 @@ import { useRequestTracking } from '@/lib/hooks/useRequestTracking';
 import MatchingStatus from '@/components/MatchingStatus';
 import AssignedProvider from '@/components/AssignedProvider';
 import ExpiredRetry from '@/components/ExpiredRetry';
+import toast from 'react-hot-toast';
 
 const STATUS_LABELS: Record<string, string> = {
     CREATED: 'Đã tạo',
@@ -60,7 +61,7 @@ export default function RequestTrackingPage() {
 
         const success = await cancelRequest();
         if (success) {
-            alert('Đã huỷ yêu cầu thành công');
+            toast.success('Đã huỷ yêu cầu thành công');
             router.push('/user/requests');
         }
     };
@@ -69,10 +70,10 @@ export default function RequestTrackingPage() {
         setIsRetrying(true);
         try {
             const newRequest = await retryRequest();
-            alert('Đã tạo yêu cầu mới!');
+            toast.success('Đã tạo yêu cầu mới!');
             router.push(`/user/requests/${newRequest.id}`);
         } catch (err) {
-            alert('Không thể thử lại. Vui lòng thử lại sau.');
+            toast.error('Không thể thử lại. Vui lòng thử lại sau.');
         } finally {
             setIsRetrying(false);
         }

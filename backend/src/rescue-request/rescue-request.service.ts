@@ -123,8 +123,8 @@ export class RescueRequestService {
         const phase1Timeout = 60; // Phase 1: 60 seconds normal radius search
         const phaseExpiresAt = new Date(now.getTime() + phase1Timeout * 1000);
 
-        // Quote Window: 5 minutes from creation (providers can submit quotes during this time)
-        const quoteWindowDuration = 300; // 5 minutes (300 seconds)
+        // Quote Window: 3 minutes from creation (providers can submit quotes during this time)
+        const quoteWindowDuration = 180; // 3 minutes (180 seconds)
         const quoteWindowExpiresAt = new Date(now.getTime() + quoteWindowDuration * 1000);
 
         // Create rescue request with MATCHING status

@@ -9,6 +9,7 @@ import VideoUpload from '@/components/VideoUpload';
 import { UploadPurpose } from '@/lib/upload';
 import api from '@/lib/api';
 import { reverseGeocode } from '@/lib/vietmap';
+import toast from 'react-hot-toast';
 
 interface LocationData {
     addressText: string;
@@ -110,7 +111,7 @@ export default function CreateRescueRequestPage() {
     // Function to fetch current location
     const fetchLocation = async () => {
         if (!('geolocation' in navigator)) {
-            alert('Trình duyệt không hỗ trợ định vị');
+            toast.error('Trình duyệt không hỗ trợ định vị');
             return;
         }
 
@@ -165,7 +166,7 @@ export default function CreateRescueRequestPage() {
                     TIMEOUT: error.code === 3
                 });
                 setIsLoadingLocation(false);
-                alert(`Không thể lấy vị trí: ${error.message}`);
+                toast.error(`Không thể lấy vị trí: ${error.message}`);
             },
             {
                 enableHighAccuracy: true, // Sử dụng GPS chính xác nhất
@@ -182,7 +183,7 @@ export default function CreateRescueRequestPage() {
 
     const handleAddVehicle = () => {
         if (!newVehicle.licensePlate.trim()) {
-            alert('Vui lòng nhập biển số xe');
+            toast.error('Vui lòng nhập biển số xe');
             return;
         }
 
@@ -202,7 +203,7 @@ export default function CreateRescueRequestPage() {
         e.preventDefault();
 
         if (!formData.incidentType || vehicles.length === 0 || !formData.incidentLocation || !formData.contactPhone) {
-            alert('Vui lòng điền đầy đủ thông tin bắt buộc');
+            toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
             return;
         }
 
@@ -227,12 +228,12 @@ export default function CreateRescueRequestPage() {
 
             const response = await api.post('/rescue-requests', payload);
             console.log('✅ [CreateRequest] Response:', response.data);
-            alert('Tạo yêu cầu cứu hộ thành công!');
+            toast.success('Tạo yêu cầu cứu hộ thành công!');
             router.push(`/user/requests/${response.data.id}`);
         } catch (error: any) {
             console.error('❌ [CreateRequest] Error:', error);
             const errorMessage = error.response?.data?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.';
-            alert(`Lỗi: ${errorMessage}`);
+            toast.error(`Lỗi: ${errorMessage}`);
         } finally {
             setIsLoading(false);
         }

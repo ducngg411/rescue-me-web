@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { registerWithEmail, loginWithGoogle } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import AuthIllustration from '@/components/AuthIllustration';
 
 interface RegisterFormData {
     email: string;
@@ -16,17 +17,11 @@ interface RegisterFormData {
 
 const getPasswordStrength = (password: string): 'weak' | 'medium' | 'strong' => {
     if (password.length < 8) return 'weak';
-
     const hasUpperCase = /[A-Z]/.test(password);
     const hasNumber = /\d/.test(password);
     const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-
-    if (hasUpperCase && hasNumber && hasSpecialChar && password.length >= 12) {
-        return 'strong';
-    } else if (hasUpperCase && hasNumber) {
-        return 'medium';
-    }
-
+    if (hasUpperCase && hasNumber && hasSpecialChar && password.length >= 12) return 'strong';
+    if (hasUpperCase && hasNumber) return 'medium';
     return 'weak';
 };
 
@@ -43,44 +38,27 @@ export default function RegisterPage() {
     const {
         register,
         handleSubmit,
-        watch,
         getValues,
         formState: { errors },
     } = useForm<RegisterFormData>();
 
-    const password = watch('password', '');
-    const confirmPassword = watch('confirmPassword', '');
-
-    // Update password strength whenever passwordValue changes
-    useEffect(() => {
-        if (passwordValue) {
-            setPasswordStrength(getPasswordStrength(passwordValue));
-        }
-    }, [passwordValue]);
-
-    // Update password strength on change
     const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const pwd = e.target.value;
         setPasswordValue(pwd);
+        setPasswordStrength(getPasswordStrength(pwd));
     };
 
-    // ==================== EMAIL REGISTRATION ====================
     const onSubmitEmail = async (data: RegisterFormData) => {
         setLoading(true);
         setError('');
-
-        // Validate password strength
         if (passwordStrength === 'weak') {
             setError('Mật khẩu không đủ mạnh. Vui lòng chọn mật khẩu mạnh hơn.');
             setLoading(false);
             return;
         }
-
         try {
             const response = await registerWithEmail(data.email, data.password, data.name);
             setUser(response.user);
-
-            // Always redirect to role selection for new registrations
             router.push('/onboarding/role');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Đăng ký thất bại');
@@ -89,16 +67,12 @@ export default function RegisterPage() {
         }
     };
 
-    // ==================== GOOGLE REGISTRATION ====================
     const handleGoogleSuccess = async (credentialResponse: any) => {
         setLoading(true);
         setError('');
-
         try {
             const response = await loginWithGoogle(credentialResponse.credential);
             setUser(response.user);
-
-            // Redirect based on profile completion status
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
             } else {
@@ -115,225 +89,234 @@ export default function RegisterPage() {
         setError('Đăng nhập Google bị hủy');
     };
 
-    const strengthColors = {
-        weak: 'bg-red-500',
-        medium: 'bg-yellow-500',
-        strong: 'bg-green-500',
+    const strengthConfig = {
+        weak: { color: '#ef4444', label: 'Yếu', width: '33%' },
+        medium: { color: '#f59e0b', label: 'Trung bình', width: '66%' },
+        strong: { color: '#10b981', label: 'Mạnh', width: '100%' },
     };
 
-    const strengthTexts = {
-        weak: 'Yếu',
-        medium: 'Trung bình',
-        strong: 'Mạnh',
-    };
+    const inputBase = "w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all";
+    const borderNormal = '1.5px solid #e5e7eb';
+    const borderFocus = '1.5px solid #f97316';
+    const borderError = '1.5px solid #dc2626';
 
     return (
         <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''}>
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-                <div className="max-w-md w-full space-y-8">
-                    <div>
-                        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                            Đăng ký tài khoản
-                        </h2>
-                        <p className="mt-2 text-center text-sm text-gray-600">
-                            Hoặc{' '}
-                            <a href="/auth/login" className="font-medium text-blue-600 hover:text-blue-500">
-                                đăng nhập nếu đã có tài khoản
+            <div className="min-h-screen flex" style={{ fontFamily: 'Poppins, sans-serif' }}>
+
+                {/* ── Left: Rescue illustration ── */}
+                <div className="hidden lg:flex flex-1 relative overflow-hidden">
+                    <div className="absolute inset-0">
+                        <AuthIllustration />
+                    </div>
+                </div>
+
+                {/* ── Right: Register card ── */}
+                <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-10">
+                    <div className="w-full max-w-sm">
+
+                        {/* Mobile logo */}
+                        <div className="flex items-center gap-2 mb-6 lg:hidden">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#f97316' }}>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" />
+                                </svg>
+                            </div>
+                            <span className="font-bold text-lg" style={{ color: '#1e1b4b' }}>Rescue Me</span>
+                        </div>
+
+                        {/* Heading */}
+                        <h1 className="text-2xl font-bold mb-1" style={{ color: '#1a1a2e' }}>
+                            Tạo tài khoản mới.
+                        </h1>
+                        <p className="text-sm mb-5" style={{ color: '#6b7280' }}>
+                            Đã có tài khoản?{' '}
+                            <a
+                                href="/auth/login"
+                                className="font-medium transition-colors"
+                                style={{ color: '#f97316' }}
+                                onMouseEnter={e => (e.currentTarget.style.color = '#ea6c0a')}
+                                onMouseLeave={e => (e.currentTarget.style.color = '#f97316')}
+                            >
+                                Đăng nhập
                             </a>
                         </p>
-                    </div>
 
-                    {/* Google Registration */}
-                    <div className="flex justify-center">
-                        <GoogleLogin
-                            onSuccess={handleGoogleSuccess}
-                            onError={handleGoogleError}
-                            text="signup_with"
-                            locale="vi"
-                        />
-                    </div>
+                        {/* Error */}
+                        {error && (
+                            <div className="mb-4 rounded-lg px-4 py-3 text-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                                {error}
+                            </div>
+                        )}
 
-                    {/* Divider */}
-                    <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-gray-300"></div>
-                        </div>
-                        <div className="relative flex justify-center text-sm">
-                            <span className="px-2 bg-gray-50 text-gray-500">Hoặc đăng ký bằng email</span>
-                        </div>
-                    </div>
-
-                    {/* Error Message */}
-                    {error && (
-                        <div className="rounded-md bg-red-50 p-4">
-                            <p className="text-sm text-red-800">{error}</p>
-                        </div>
-                    )}
-
-                    {/* Email Registration Form */}
-                    <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmitEmail)}>
-                        <div className="space-y-4">
+                        {/* Form */}
+                        <form onSubmit={handleSubmit(onSubmitEmail)} className="space-y-3.5">
+                            {/* Name */}
                             <div>
-                                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                                    Họ và tên
-                                </label>
+                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Họ và tên</label>
                                 <input
                                     id="name"
                                     type="text"
-                                    {...register('name', {
-                                        required: 'Họ và tên không được để trống',
-                                    })}
-                                    className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                     placeholder="Nguyễn Văn A"
+                                    {...register('name', { required: 'Họ và tên không được để trống' })}
+                                    className={inputBase}
+                                    style={{ border: errors.name ? borderError : borderNormal, color: '#1a1a2e' }}
+                                    onFocus={e => { if (!errors.name) e.target.style.border = borderFocus; }}
+                                    onBlur={e => { if (!errors.name) e.target.style.border = borderNormal; }}
                                 />
-                                {errors.name && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
-                                )}
+                                {errors.name && <p className="mt-1 text-xs" style={{ color: '#dc2626' }}>{errors.name.message}</p>}
                             </div>
 
+                            {/* Email */}
                             <div>
-                                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                                    Email
-                                </label>
+                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Email</label>
                                 <input
                                     id="email"
                                     type="email"
                                     autoComplete="email"
+                                    placeholder="email@example.com"
                                     {...register('email', {
                                         required: 'Email không được để trống',
-                                        pattern: {
-                                            value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                                            message: 'Email không hợp lệ',
-                                        },
+                                        pattern: { value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, message: 'Email không hợp lệ' },
                                     })}
-                                    className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                    placeholder="email@example.com"
+                                    className={inputBase}
+                                    style={{ border: errors.email ? borderError : borderNormal, color: '#1a1a2e' }}
+                                    onFocus={e => { if (!errors.email) e.target.style.border = borderFocus; }}
+                                    onBlur={e => { if (!errors.email) e.target.style.border = borderNormal; }}
                                 />
-                                {errors.email && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-                                )}
+                                {errors.email && <p className="mt-1 text-xs" style={{ color: '#dc2626' }}>{errors.email.message}</p>}
                             </div>
 
+                            {/* Password */}
                             <div>
-                                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                                    Mật khẩu
-                                </label>
-                                <div className="relative mt-1">
+                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Mật khẩu</label>
+                                <div className="relative">
                                     <input
                                         id="password"
                                         type={showPassword ? 'text' : 'password'}
+                                        placeholder="••••••••"
                                         {...register('password', {
                                             required: 'Mật khẩu không được để trống',
-                                            minLength: {
-                                                value: 8,
-                                                message: 'Mật khẩu phải có ít nhất 8 ký tự',
-                                            },
-                                            pattern: {
-                                                value: /^(?=.*[A-Z])(?=.*\d)/,
-                                                message: 'Mật khẩu phải có ít nhất 1 chữ hoa và 1 số',
-                                            },
+                                            minLength: { value: 8, message: 'Mật khẩu phải có ít nhất 8 ký tự' },
+                                            pattern: { value: /^(?=.*[A-Z])(?=.*\d)/, message: 'Mật khẩu phải có ít nhất 1 chữ hoa và 1 số' },
                                             onChange: handlePasswordChange,
                                         })}
-                                        className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                        placeholder="••••••••"
+                                        className={`${inputBase} pr-10`}
+                                        style={{ border: errors.password ? borderError : borderNormal, color: '#1a1a2e' }}
+                                        onFocus={e => { if (!errors.password) e.target.style.border = borderFocus; }}
+                                        onBlur={e => { if (!errors.password) e.target.style.border = borderNormal; }}
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-                                    >
+                                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 flex items-center" style={{ color: '#9ca3af' }}>
                                         {showPassword ? (
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
                                             </svg>
                                         ) : (
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                             </svg>
                                         )}
                                     </button>
                                 </div>
-                                {errors.password && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
-                                )}
-
-                                {/* Password Strength Indicator */}
+                                {errors.password && <p className="mt-1 text-xs" style={{ color: '#dc2626' }}>{errors.password.message}</p>}
                                 {passwordValue && (
-                                    <div className="mt-2">
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex-1 bg-gray-200 rounded-full h-2">
-                                                <div
-                                                    className={`h-2 rounded-full transition-all ${strengthColors[passwordStrength]}`}
-                                                    style={{
-                                                        width:
-                                                            passwordStrength === 'weak'
-                                                                ? '33%'
-                                                                : passwordStrength === 'medium'
-                                                                    ? '66%'
-                                                                    : '100%',
-                                                    }}
-                                                />
-                                            </div>
-                                            <span className="text-sm text-gray-600">
-                                                {strengthTexts[passwordStrength]}
-                                            </span>
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <div className="flex-1 rounded-full h-1.5 overflow-hidden" style={{ background: '#e5e7eb' }}>
+                                            <div
+                                                className="h-full rounded-full transition-all duration-300"
+                                                style={{ width: strengthConfig[passwordStrength].width, background: strengthConfig[passwordStrength].color }}
+                                            />
                                         </div>
+                                        <span className="text-xs font-medium" style={{ color: strengthConfig[passwordStrength].color }}>
+                                            {strengthConfig[passwordStrength].label}
+                                        </span>
                                     </div>
                                 )}
                             </div>
 
+                            {/* Confirm password */}
                             <div>
-                                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                                    Xác nhận mật khẩu
-                                </label>
-                                <div className="relative mt-1">
+                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Xác nhận mật khẩu</label>
+                                <div className="relative">
                                     <input
                                         id="confirmPassword"
                                         type={showConfirmPassword ? 'text' : 'password'}
+                                        placeholder="••••••••"
                                         {...register('confirmPassword', {
                                             required: 'Vui lòng xác nhận mật khẩu',
-                                            validate: (value) => {
-                                                const currentPassword = getValues('password');
-                                                return value === currentPassword || 'Mật khẩu không khớp';
-                                            },
+                                            validate: value => value === getValues('password') || 'Mật khẩu không khớp',
                                         })}
-                                        className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                        placeholder="••••••••"
+                                        className={`${inputBase} pr-10`}
+                                        style={{ border: errors.confirmPassword ? borderError : borderNormal, color: '#1a1a2e' }}
+                                        onFocus={e => { if (!errors.confirmPassword) e.target.style.border = borderFocus; }}
+                                        onBlur={e => { if (!errors.confirmPassword) e.target.style.border = borderNormal; }}
                                     />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-                                    >
+                                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute inset-y-0 right-3 flex items-center" style={{ color: '#9ca3af' }}>
                                         {showConfirmPassword ? (
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
                                             </svg>
                                         ) : (
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                             </svg>
                                         )}
                                     </button>
                                 </div>
-                                {errors.confirmPassword && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
-                                )}
+                                {errors.confirmPassword && <p className="mt-1 text-xs" style={{ color: '#dc2626' }}>{errors.confirmPassword.message}</p>}
                             </div>
-                        </div>
 
-                        <div>
+                            {/* Submit */}
                             <button
                                 type="submit"
                                 disabled={loading || passwordStrength === 'weak'}
-                                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full py-2.5 rounded-lg font-semibold text-sm text-white transition-all mt-1"
+                                style={{
+                                    background: loading || passwordStrength === 'weak' ? '#fdba74' : '#f97316',
+                                    cursor: loading || passwordStrength === 'weak' ? 'not-allowed' : 'pointer',
+                                }}
+                                onMouseEnter={e => {
+                                    if (!loading && passwordStrength !== 'weak')
+                                        (e.currentTarget as HTMLButtonElement).style.background = '#ea6c0a';
+                                }}
+                                onMouseLeave={e => {
+                                    if (!loading && passwordStrength !== 'weak')
+                                        (e.currentTarget as HTMLButtonElement).style.background = '#f97316';
+                                }}
                             >
-                                {loading ? 'Đang đăng ký...' : 'Đăng ký'}
+                                {loading ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                        </svg>
+                                        Đang đăng ký...
+                                    </span>
+                                ) : 'Đăng ký'}
                             </button>
+                        </form>
+
+                        {/* OR divider */}
+                        <div className="flex items-center gap-3 my-4">
+                            <div className="flex-1 h-px" style={{ background: '#e5e7eb' }} />
+                            <span className="text-xs font-medium" style={{ color: '#9ca3af' }}>HOẶC</span>
+                            <div className="flex-1 h-px" style={{ background: '#e5e7eb' }} />
                         </div>
-                    </form>
+
+                        {/* Google */}
+                        <div className="flex justify-center">
+                            <GoogleLogin
+                                onSuccess={handleGoogleSuccess}
+                                onError={handleGoogleError}
+                                text="signup_with"
+                                locale="vi"
+                                width="360"
+                                shape="rectangular"
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
         </GoogleOAuthProvider>

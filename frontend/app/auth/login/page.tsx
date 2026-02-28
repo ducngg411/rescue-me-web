@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { loginWithEmail, loginWithGoogle } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import AuthIllustration from '@/components/AuthIllustration';
 
 interface LoginFormData {
     email: string;
@@ -17,6 +18,7 @@ export default function LoginPage() {
     const { setUser } = useAuth();
     const [error, setError] = useState<string>('');
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
     const {
         register,
@@ -24,26 +26,19 @@ export default function LoginPage() {
         formState: { errors },
     } = useForm<LoginFormData>();
 
-    // ==================== EMAIL LOGIN ====================
     const onSubmitEmail = async (data: LoginFormData) => {
         setLoading(true);
         setError('');
-
         try {
             const response = await loginWithEmail(data.email, data.password);
             setUser(response.user);
-
-            // Redirect based on role and profile completion status
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
             } else if (response.user.role === 'ADMIN') {
-                // Admin goes to admin dashboard
                 router.push('/admin/dashboard');
             } else if (response.user.role === 'PROVIDER') {
-                // Provider goes to provider page
                 router.push('/provider');
             } else {
-                // Regular user goes to user page
                 router.push('/user');
             }
         } catch (err: any) {
@@ -53,26 +48,19 @@ export default function LoginPage() {
         }
     };
 
-    // ==================== GOOGLE LOGIN ====================
     const handleGoogleSuccess = async (credentialResponse: any) => {
         setLoading(true);
         setError('');
-
         try {
             const response = await loginWithGoogle(credentialResponse.credential);
             setUser(response.user);
-
-            // Redirect based on role and profile completion status
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
             } else if (response.user.role === 'ADMIN') {
-                // Admin goes to admin dashboard
                 router.push('/admin/dashboard');
             } else if (response.user.role === 'PROVIDER') {
-                // Provider goes to provider page
                 router.push('/provider');
             } else {
-                // Regular user goes to user page
                 router.push('/user');
             }
         } catch (err: any) {
@@ -88,58 +76,68 @@ export default function LoginPage() {
 
     return (
         <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''}>
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-                <div className="max-w-md w-full space-y-8">
-                    <div>
-                        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                            Đăng nhập vào Rescue Me
-                        </h2>
-                        <p className="mt-2 text-center text-sm text-gray-600">
-                            Hoặc{' '}
-                            <a href="/auth/register" className="font-medium text-blue-600 hover:text-blue-500">
-                                đăng ký tài khoản mới
+            <div className="min-h-screen flex" style={{ fontFamily: 'Poppins, sans-serif' }}>
+
+                {/* ── Left: Rescue illustration ── */}
+                <div className="hidden lg:flex flex-1 relative overflow-hidden">
+                    <div className="absolute inset-0">
+                        <AuthIllustration />
+                    </div>
+                </div>
+
+                {/* ── Right: Auth card ── */}
+                <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-12">
+                    <div className="w-full max-w-sm">
+
+                        {/* Mobile logo */}
+                        <div className="flex items-center gap-2 mb-8 lg:hidden">
+                            <div
+                                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                style={{ background: '#f97316' }}
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" />
+                                </svg>
+                            </div>
+                            <span className="font-bold text-lg" style={{ color: '#1e1b4b' }}>Rescue Me</span>
+                        </div>
+
+                        {/* Heading */}
+                        <h1 className="text-2xl font-bold mb-1" style={{ color: '#1a1a2e' }}>
+                            Đăng nhập vào Rescue Me.
+                        </h1>
+                        <p className="text-sm mb-6" style={{ color: '#6b7280' }}>
+                            Chưa có tài khoản?{' '}
+                            <a
+                                href="/auth/register"
+                                className="font-medium transition-colors"
+                                style={{ color: '#f97316' }}
+                                onMouseEnter={e => (e.currentTarget.style.color = '#ea6c0a')}
+                                onMouseLeave={e => (e.currentTarget.style.color = '#f97316')}
+                            >
+                                Tạo tài khoản
                             </a>
                         </p>
-                    </div>
 
-                    {/* Google Login */}
-                    <div className="flex justify-center">
-                        <GoogleLogin
-                            onSuccess={handleGoogleSuccess}
-                            onError={handleGoogleError}
-                            text="continue_with"
-                            locale="vi"
-                        />
-                    </div>
+                        {/* Error message */}
+                        {error && (
+                            <div className="mb-4 rounded-lg px-4 py-3 text-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                                {error}
+                            </div>
+                        )}
 
-                    {/* Divider */}
-                    <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-gray-300"></div>
-                        </div>
-                        <div className="relative flex justify-center text-sm">
-                            <span className="px-2 bg-gray-50 text-gray-500">Hoặc tiếp tục với email</span>
-                        </div>
-                    </div>
-
-                    {/* Error Message */}
-                    {error && (
-                        <div className="rounded-md bg-red-50 p-4">
-                            <p className="text-sm text-red-800">{error}</p>
-                        </div>
-                    )}
-
-                    {/* Email Login Form */}
-                    <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmitEmail)}>
-                        <div className="rounded-md shadow-sm -space-y-px">
+                        {/* Form */}
+                        <form onSubmit={handleSubmit(onSubmitEmail)} className="space-y-4">
+                            {/* Email */}
                             <div>
-                                <label htmlFor="email" className="sr-only">
+                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>
                                     Email
                                 </label>
                                 <input
                                     id="email"
                                     type="email"
                                     autoComplete="email"
+                                    placeholder="Địa chỉ email"
                                     {...register('email', {
                                         required: 'Email không được để trống',
                                         pattern: {
@@ -147,43 +145,118 @@ export default function LoginPage() {
                                             message: 'Email không hợp lệ',
                                         },
                                     })}
-                                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                    placeholder="Email"
+                                    className="w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all"
+                                    style={{
+                                        border: errors.email ? '1.5px solid #dc2626' : '1.5px solid #e5e7eb',
+                                        color: '#1a1a2e',
+                                    }}
+                                    onFocus={e => { if (!errors.email) e.target.style.border = '1.5px solid #f97316'; }}
+                                    onBlur={e => { if (!errors.email) e.target.style.border = '1.5px solid #e5e7eb'; }}
                                 />
                                 {errors.email && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                                    <p className="mt-1 text-xs" style={{ color: '#dc2626' }}>{errors.email.message}</p>
                                 )}
                             </div>
-                            <div>
-                                <label htmlFor="password" className="sr-only">
-                                    Mật khẩu
-                                </label>
-                                <input
-                                    id="password"
-                                    type="password"
-                                    autoComplete="current-password"
-                                    {...register('password', {
-                                        required: 'Mật khẩu không được để trống',
-                                    })}
-                                    className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                                    placeholder="Mật khẩu"
-                                />
-                                {errors.password && (
-                                    <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
-                                )}
-                            </div>
-                        </div>
 
-                        <div>
+                            {/* Password */}
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="block text-sm font-medium" style={{ color: '#374151' }}>
+                                        Mật khẩu
+                                    </label>
+                                    <a
+                                        href="#"
+                                        className="text-xs transition-colors"
+                                        style={{ color: '#f97316' }}
+                                        onMouseEnter={e => (e.currentTarget.style.color = '#ea6c0a')}
+                                        onMouseLeave={e => (e.currentTarget.style.color = '#f97316')}
+                                    >
+                                        Quên mật khẩu?
+                                    </a>
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        id="password"
+                                        type={showPassword ? 'text' : 'password'}
+                                        autoComplete="current-password"
+                                        placeholder="Mật khẩu"
+                                        {...register('password', {
+                                            required: 'Mật khẩu không được để trống',
+                                        })}
+                                        className="w-full px-4 py-2.5 pr-10 rounded-lg text-sm outline-none transition-all"
+                                        style={{
+                                            border: errors.password ? '1.5px solid #dc2626' : '1.5px solid #e5e7eb',
+                                            color: '#1a1a2e',
+                                        }}
+                                        onFocus={e => { if (!errors.password) e.target.style.border = '1.5px solid #f97316'; }}
+                                        onBlur={e => { if (!errors.password) e.target.style.border = '1.5px solid #e5e7eb'; }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute inset-y-0 right-3 flex items-center"
+                                        style={{ color: '#9ca3af' }}
+                                    >
+                                        {showPassword ? (
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                                            </svg>
+                                        ) : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                        )}
+                                    </button>
+                                </div>
+                                {errors.password && (
+                                    <p className="mt-1 text-xs" style={{ color: '#dc2626' }}>{errors.password.message}</p>
+                                )}
+                            </div>
+
+                            {/* Submit button */}
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full py-2.5 rounded-lg font-semibold text-sm text-white transition-all mt-2"
+                                style={{
+                                    background: loading ? '#fdba74' : '#f97316',
+                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                }}
+                                onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#ea6c0a'; }}
+                                onMouseLeave={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#f97316'; }}
                             >
-                                {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+                                {loading ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                        </svg>
+                                        Đang đăng nhập...
+                                    </span>
+                                ) : 'Đăng nhập'}
                             </button>
+                        </form>
+
+                        {/* OR divider */}
+                        <div className="flex items-center gap-3 my-5">
+                            <div className="flex-1 h-px" style={{ background: '#e5e7eb' }} />
+                            <span className="text-xs font-medium" style={{ color: '#9ca3af' }}>HOẶC</span>
+                            <div className="flex-1 h-px" style={{ background: '#e5e7eb' }} />
                         </div>
-                    </form>
+
+                        {/* Google login */}
+                        <div className="flex justify-center">
+                            <GoogleLogin
+                                onSuccess={handleGoogleSuccess}
+                                onError={handleGoogleError}
+                                text="signin_with"
+                                locale="vi"
+                                width="360"
+                                shape="rectangular"
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
         </GoogleOAuthProvider>
