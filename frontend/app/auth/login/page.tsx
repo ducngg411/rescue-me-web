@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { loginWithEmail, loginWithGoogle } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 interface LoginFormData {
     email: string;
@@ -15,7 +16,6 @@ interface LoginFormData {
 export default function LoginPage() {
     const router = useRouter();
     const { setUser } = useAuth();
-    const [error, setError] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
@@ -27,10 +27,13 @@ export default function LoginPage() {
 
     const onSubmitEmail = async (data: LoginFormData) => {
         setLoading(true);
-        setError('');
+        
         try {
             const response = await loginWithEmail(data.email, data.password);
             setUser(response.user);
+
+            toast.success('Đăng nhập thành công!');
+
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
             } else if (response.user.role === 'ADMIN') {
@@ -41,7 +44,7 @@ export default function LoginPage() {
                 router.push('/user');
             }
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Đăng nhập thất bại');
+            toast.error(err.response?.data?.message || 'Đăng nhập thất bại');
         } finally {
             setLoading(false);
         }
@@ -49,10 +52,10 @@ export default function LoginPage() {
 
     const handleGoogleSuccess = async (credentialResponse: any) => {
         setLoading(true);
-        setError('');
         try {
             const response = await loginWithGoogle(credentialResponse.credential);
             setUser(response.user);
+            toast.success('Đăng nhập thành công');
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
             } else if (response.user.role === 'ADMIN') {
@@ -63,14 +66,14 @@ export default function LoginPage() {
                 router.push('/user');
             }
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Đăng nhập Google thất bại');
+            toast.error(err.response?.data?.message || 'Đăng nhập Google thất bại');
         } finally {
             setLoading(false);
         }
     };
 
     const handleGoogleError = () => {
-        setError('Đăng nhập Google bị hủy');
+        toast.error('Đăng nhập Google bị hủy');
     };
 
     return (
@@ -122,15 +125,8 @@ export default function LoginPage() {
                             </a>
                         </p>
 
-                        {/* Error message */}
-                        {error && (
-                            <div className="mb-4 rounded-lg px-4 py-3 text-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
-                                {error}
-                            </div>
-                        )}
-
                         {/* Form */}
-                        <form onSubmit={handleSubmit(onSubmitEmail)} className="space-y-4">
+                        <form onSubmit={handleSubmit(onSubmitEmail)} className="space-y-4" noValidate>
                             {/* Email */}
                             <div>
                                 <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>

@@ -1,5 +1,7 @@
 'use client';
 
+const VIETMAP_API_KEY = process.env.NEXT_PUBLIC_VIETMAP_API_KEY;
+
 import { useEffect, useRef, useState } from 'react';
 
 // Global flag to track if VietMap script is loaded

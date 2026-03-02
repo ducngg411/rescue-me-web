@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { registerWithEmail, loginWithGoogle } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 interface RegisterFormData {
     email: string;
@@ -27,7 +28,6 @@ const getPasswordStrength = (password: string): 'weak' | 'medium' | 'strong' => 
 export default function RegisterPage() {
     const router = useRouter();
     const { setUser } = useAuth();
-    const [error, setError] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [passwordStrength, setPasswordStrength] = useState<'weak' | 'medium' | 'strong'>('weak');
     const [passwordValue, setPasswordValue] = useState('');
@@ -49,18 +49,18 @@ export default function RegisterPage() {
 
     const onSubmitEmail = async (data: RegisterFormData) => {
         setLoading(true);
-        setError('');
         if (passwordStrength === 'weak') {
-            setError('Mật khẩu không đủ mạnh. Vui lòng chọn mật khẩu mạnh hơn.');
+            toast.error('Mật khẩu không đủ mạnh. Vui lòng chọn mật khẩu mạnh hơn.');
             setLoading(false);
             return;
         }
         try {
             const response = await registerWithEmail(data.email, data.password, data.name);
             setUser(response.user);
+            toast.success('Đăng ký thành công');
             router.push('/onboarding/role');
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Đăng ký thất bại');
+            toast.error(err.response?.data?.message || 'Đăng ký thất bại');
         } finally {
             setLoading(false);
         }
@@ -68,24 +68,24 @@ export default function RegisterPage() {
 
     const handleGoogleSuccess = async (credentialResponse: any) => {
         setLoading(true);
-        setError('');
         try {
             const response = await loginWithGoogle(credentialResponse.credential);
             setUser(response.user);
+            toast.success('Đăng nhập Google thành công');
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
             } else {
                 router.push('/');
             }
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Đăng nhập Google thất bại');
+            toast.error(err.response?.data?.message || 'Đăng nhập Google thất bại');
         } finally {
             setLoading(false);
         }
     };
 
     const handleGoogleError = () => {
-        setError('Đăng nhập Google bị hủy');
+        toast.error('Đăng nhập Google bị hủy');
     };
 
     const strengthConfig = {
@@ -144,13 +144,6 @@ export default function RegisterPage() {
                                 Đăng nhập
                             </a>
                         </p>
-
-                        {/* Error */}
-                        {error && (
-                            <div className="mb-4 rounded-lg px-4 py-3 text-sm" style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
-                                {error}
-                            </div>
-                        )}
 
                         {/* Form */}
                         <form onSubmit={handleSubmit(onSubmitEmail)} className="space-y-3.5">

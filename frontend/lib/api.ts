@@ -26,10 +26,17 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            // Clear tokens và redirect to login
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-            window.location.href = '/auth/login';
+            // Chỉ redirect nếu KHÔNG phải đang ở trang auth
+            const isAuthPage = typeof window !== 'undefined' && 
+                (window.location.pathname.startsWith('/auth/') || 
+                 window.location.pathname === '/auth');
+            
+            if (!isAuthPage) {
+                // Clear tokens và redirect to login
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refreshToken');
+                window.location.href = '/auth/login';
+            }
         }
         return Promise.reject(error);
     }
