@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUserGuard } from '@/lib/guards';
 import { useRequestTracking } from '@/lib/hooks/useRequestTracking';
 import MatchingStatus from '@/components/MatchingStatus';
 import AssignedProvider from '@/components/AssignedProvider';
 import ExpiredRetry from '@/components/ExpiredRetry';
+import QuoteSelectionPanel from '@/components/QuoteSelectionPanel';
 import toast from 'react-hot-toast';
 
 const C = {
@@ -60,11 +61,29 @@ export default function RequestTrackingPage() {
     const requestId = params.id as string;
     const { isReady } = useUserGuard();
     const [isRetrying, setIsRetrying] = useState(false);
+    const [showQuoteSelection, setShowQuoteSelection] = useState(false);
 
-    const { status, isLoading, error, timeRemaining, cancelRequest, retryRequest } = useRequestTracking({
+    const { status, isLoading, error, timeRemaining, quoteWindowJustClosed, cancelRequest, retryRequest } = useRequestTracking({
         requestId,
         enabled: isReady,
     });
+
+    // Auto-switch to quote selection when countdown ends with quotes available
+    useEffect(() => {
+        if (quoteWindowJustClosed && (status?.quoteCount ?? 0) > 0) {
+            setShowQuoteSelection(true);
+        }
+    }, [quoteWindowJustClosed, status?.quoteCount]);
+
+    // Handle page reload: if window already closed + quotes already present, show selection immediately
+    useEffect(() => {
+        if (!showQuoteSelection && status &&
+            (status.status === 'MATCHING' || status.status === 'SEARCHING') &&
+            status.quoteWindowOpen === false &&
+            (status.quoteCount ?? 0) > 0) {
+            setShowQuoteSelection(true);
+        }
+    }, [status?.quoteWindowOpen, status?.quoteCount, status?.status]);
 
     const handleCancel = async () => {
         const confirmed = window.confirm('Bạn có chắc muốn huỷ yêu cầu này?');
@@ -182,8 +201,8 @@ export default function RequestTrackingPage() {
             {/* ── Main Content ── */}
             <div className="px-4 py-4 pb-8 max-w-2xl mx-auto space-y-4">
 
-                {/* MATCHING state */}
-                {(status.status === 'MATCHING' || status.status === 'SEARCHING') && (
+                {/* MATCHING state — quote window still open OR no quotes yet */}
+                {(status.status === 'MATCHING' || status.status === 'SEARCHING') && !showQuoteSelection && (
                     <MatchingStatus
                         timeRemaining={timeRemaining}
                         searchPhase={status.searchPhase}
@@ -192,6 +211,19 @@ export default function RequestTrackingPage() {
                         maxQuotes={status.maxQuotes}
                         quoteWindowOpen={status.quoteWindowOpen}
                         onCancel={handleCancel}
+                        onViewQuotes={() => setShowQuoteSelection(true)}
+                    />
+                )}
+
+                {/* MATCHING state — window closed + has quotes → show quote selection */}
+                {(status.status === 'MATCHING' || status.status === 'SEARCHING') && showQuoteSelection && (
+                    <QuoteSelectionPanel
+                        requestId={requestId}
+                        quoteCount={status.quoteCount ?? 0}
+                        onQuoteAccepted={() => {
+                            setShowQuoteSelection(false);
+                            // Polling in useRequestTracking will catch ASSIGNED status
+                        }}
                     />
                 )}
 

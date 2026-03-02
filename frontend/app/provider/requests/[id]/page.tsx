@@ -5,6 +5,12 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
+import dynamic from 'next/dynamic';
+
+const ProviderNavigationView = dynamic(
+    () => import('@/components/ProviderNavigationView'),
+    { ssr: false, loading: () => <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" /></div> }
+);
 
 interface RescueRequest {
     id: string;
@@ -414,6 +420,23 @@ export default function ProviderRequestDetailPage() {
         );
     }
 
+    // Navigation view: early full-screen return when provider is assigned
+    const isAssignedToMe = request && (
+        (request.status === 'ASSIGNED' && request.assignedProviderId === user?.id) ||
+        quoteAccepted
+    );
+
+    if (isAssignedToMe) {
+        return (
+            <ProviderNavigationView
+                pickupLocation={request!.pickupLocation}
+                user={{ name: request!.user?.name, phoneNumber: request!.contactPhone }}
+                eta={myQuoteDetails?.estimatedArrivalMinutes ?? null}
+                requestId={requestId}
+            />
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
@@ -717,80 +740,6 @@ export default function ProviderRequestDetailPage() {
                                 </button>
                             </div>
                         </form>
-                    </div>
-                )}
-
-                {/* Provider has been assigned - show success message */}
-                {request.status === 'ASSIGNED' && request.assignedProviderId === user?.id && (
-                    <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6">
-                        <div className="flex items-start gap-4">
-                            <div className="flex-shrink-0">
-                                <svg className="h-12 w-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <div className="flex-1">
-                                <h3 className="text-lg font-bold text-green-900 mb-2">
-                                    🎉 Bạn đã được khách hàng chọn!
-                                </h3>
-                                <p className="text-green-800 mb-1 font-medium">
-                                    Báo giá của bạn đã được khách hàng chấp nhận.
-                                </p>
-                                <p className="text-green-700 mb-4 text-sm">
-                                    Trạng thái: <span className="font-semibold">ASSIGNED</span> - Yêu cầu đã được gán cho bạn
-                                </p>
-                                <div className="bg-white rounded-lg p-4 space-y-3 border border-green-100">
-                                    <p className="font-semibold text-gray-900">📝 Các bước tiếp theo:</p>
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                                            1
-                                        </div>
-                                        <div>
-                                            <p className="font-medium text-gray-900">Liên hệ với khách hàng</p>
-                                            <p className="text-sm text-gray-600">
-                                                Gọi điện <a href={`tel:${request.contactPhone}`} className="text-blue-600 font-semibold">{request.contactPhone}</a> để xác nhận chi tiết
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                                            2
-                                        </div>
-                                        <div>
-                                            <p className="font-medium text-gray-900">Chuẩn bị và xuất phát</p>
-                                            <p className="text-sm text-gray-600">
-                                                Kiểm tra thiết bị, phương tiện và di chuyển đến địa điểm
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                                            3
-                                        </div>
-                                        <div>
-                                            <p className="font-medium text-gray-900">Cập nhật trạng thái</p>
-                                            <p className="text-sm text-gray-600">
-                                                Giữ liên lạc với khách hàng trong suốt quá trình
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="mt-4 flex gap-3">
-                                    <a
-                                        href={`tel:${request.contactPhone}`}
-                                        className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-center"
-                                    >
-                                        📞 Gọi khách hàng
-                                    </a>
-                                    <a
-                                        href={`sms:${request.contactPhone}`}
-                                        className="px-4 py-3 bg-white border-2 border-green-600 text-green-600 rounded-lg hover:bg-green-50 font-medium"
-                                    >
-                                        💬 Nhắn tin
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 )}
 

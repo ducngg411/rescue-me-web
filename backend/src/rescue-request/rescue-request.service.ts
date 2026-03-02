@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRescueRequestDto } from './dto/create-rescue-request.dto';
@@ -511,6 +511,9 @@ export class RescueRequestService {
         const statusResponse = {
             id: request.id,
             status: request.status,
+            createdAt: request.createdAt,
+            incidentType: request.incidentType,
+            pickupLocation: request.pickupLocation,
             matchingStartedAt: request.matchingStartedAt,
             assignedAt: request.assignedAt,
             expiresAt: request.expiresAt,
@@ -586,16 +589,30 @@ export class RescueRequestService {
                 // TODO: Broadcast to providers with expanded radius (P2 - Provider side)
                 // this.broadcastToProviders(request, { radiusKm: 20 });
             } else if (request.searchPhase === 2) {
-                // Phase 2 → EXPIRED: No providers found in expanded search
-                await this.prisma.rescueRequest.update({
-                    where: { id: request.id },
-                    data: {
-                        status: 'EXPIRED',
+                // Phase 2 → EXPIRED only if there are NO pending quotes waiting for user selection
+                // If there are quotes, the request stays MATCHING and user will be prompted to choose
+                const pendingQuoteCount = await this.prisma.quote.count({
+                    where: {
+                        rescueRequestId: request.id,
+                        status: 'PENDING',
                     },
                 });
 
-                console.log(`⏰ [RescueRequest] ${request.id} → EXPIRED (no providers found after Phase 2)`);
-                phase2ToExpiredCount++;
+                if (pendingQuoteCount > 0) {
+                    // Has quotes waiting → do NOT expire, let user select
+                    console.log(`⏸️ [RescueRequest] ${request.id} has ${pendingQuoteCount} pending quote(s) — skipping EXPIRED, waiting for user to select`);
+                } else {
+                    // No quotes → expire as normal
+                    await this.prisma.rescueRequest.update({
+                        where: { id: request.id },
+                        data: {
+                            status: 'EXPIRED',
+                        },
+                    });
+
+                    console.log(`⏰ [RescueRequest] ${request.id} → EXPIRED (no providers found after Phase 2)`);
+                    phase2ToExpiredCount++;
+                }
             }
         }
 
@@ -781,8 +798,8 @@ export class RescueRequestService {
     /**
      * U3: User xem danh sách báo giá cho rescue request
      */
-    async getQuotesByRequest(rescueRequestId: string, userId: string) {
-        // Validate user owns the rescue request
+    async getQuotesByRequest(rescueRequestId: string, callerId: string) {
+        // Validate request exists
         const rescueRequest = await this.prisma.rescueRequest.findUnique({
             where: { id: rescueRequestId },
         });
@@ -791,8 +808,16 @@ export class RescueRequestService {
             throw new NotFoundException('Rescue request not found');
         }
 
-        if (rescueRequest.userId !== userId) {
-            throw new Error('Unauthorized');
+        // Allow access if:
+        // 1. Caller is the request owner (user), OR
+        // 2. Caller is a provider who has submitted a quote for this request
+        const isOwner = rescueRequest.userId === callerId;
+        const isProvider = await this.prisma.quote.findFirst({
+            where: { rescueRequestId, providerId: callerId },
+        });
+
+        if (!isOwner && !isProvider) {
+            throw new ForbiddenException('Access denied');
         }
 
         // Get all quotes for this request
@@ -837,11 +862,11 @@ export class RescueRequestService {
         }
 
         if (rescueRequest.userId !== userId) {
-            throw new Error('Unauthorized');
+            throw new ForbiddenException('You can only respond to quotes for your own request');
         }
 
         if (rescueRequest.status !== 'MATCHING') {
-            throw new Error('Request is not available for quote response');
+            throw new BadRequestException('Request is not available for quote response');
         }
 
         // Validate quote

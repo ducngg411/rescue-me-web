@@ -18,6 +18,7 @@ interface MatchingStatusProps {
     maxQuotes?: number;
     quoteWindowOpen?: boolean;
     onCancel: () => void;
+    onViewQuotes?: () => void;
 }
 
 export default function MatchingStatus({
@@ -28,6 +29,7 @@ export default function MatchingStatus({
     maxQuotes = 3,
     quoteWindowOpen = true,
     onCancel,
+    onViewQuotes,
 }: MatchingStatusProps) {
     const minutes = Math.floor(timeRemaining / 60);
     const seconds = timeRemaining % 60;
@@ -167,10 +169,11 @@ export default function MatchingStatus({
             <div className="flex gap-3">
                 {windowClosed && quoteCount > 0 && (
                     <button
-                        className="flex-1 py-3 rounded-xl text-sm font-bold text-white"
-                        style={{ background: '#7c3aed' }}
+                        onClick={onViewQuotes}
+                        className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98]"
+                        style={{ background: '#7c3aed', boxShadow: '0 4px 12px rgba(124,58,237,0.4)' }}
                     >
-                        Xem báo giá ({quoteCount})
+                        Chọn báo giá ({quoteCount}) →
                     </button>
                 )}
                 <button

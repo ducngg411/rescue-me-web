@@ -32,6 +32,12 @@ export default function LocationPicker({
     const [selectedPlace, setSelectedPlace] = useState<LocationData | null>(value);
     const [isSelecting, setIsSelecting] = useState(false); // Flag để ngăn search khi đang chọn
 
+    // Sync selectedPlace when value prop changes from parent
+    useEffect(() => {
+        setSelectedPlace(value);
+        if (value) setQuery('');
+    }, [value]);
+
     // Debounce search
     useEffect(() => {
         // Không search nếu đang trong quá trình chọn địa chỉ
@@ -157,15 +163,7 @@ export default function LocationPicker({
                     <MagnifyingGlassIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                 </div>
 
-                {/* Current Location Button */}
-                <button
-                    type="button"
-                    onClick={handleGetCurrentLocation}
-                    className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                >
-                    <MapPinIcon className="h-5 w-5" />
-                    Sử dụng vị trí hiện tại
-                </button>
+
 
                 {/* Search Results Dropdown */}
                 {showResults && searchResults.length > 0 && (

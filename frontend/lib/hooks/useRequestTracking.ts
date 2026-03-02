@@ -4,21 +4,23 @@ import api from '@/lib/api';
 export interface RequestStatus {
     id: string;
     status: string;
+    createdAt: string;
+    incidentType?: string;
+    pickupLocation?: { addressText: string; lat: number; lng: number } | null;
     matchingStartedAt: string | null;
     assignedAt: string | null;
     expiresAt: string | null;
     matchAttempts: number;
-    searchPhase?: number; // U2: 1 = normal radius, 2 = expanded radius
-    matchedDistance?: number; // Distance in km (from VietMap API)
-    matchedEta?: number; // ETA in minutes (from VietMap API)
-    viewingProvidersCount?: number; // Number of providers currently viewing this request
-    // Quote window info
-    quoteCount?: number; // Current number of valid quotes
-    maxQuotes?: number; // Maximum quotes allowed
-    quoteWindowOpen?: boolean; // Is quote window still open?
-    quoteWindowTimeRemaining?: number; // Seconds remaining in quote window
-    quoteWindowExpiresAt?: string | null; // When quote window expires
-    quoteWindowClosedAt?: string | null; // When quote window was closed
+    searchPhase?: number;
+    matchedDistance?: number;
+    matchedEta?: number;
+    viewingProvidersCount?: number;
+    quoteCount?: number;
+    maxQuotes?: number;
+    quoteWindowOpen?: boolean;
+    quoteWindowTimeRemaining?: number;
+    quoteWindowExpiresAt?: string | null;
+    quoteWindowClosedAt?: string | null;
     assignedProvider?: {
         id: string;
         name: string | null;
@@ -46,9 +48,12 @@ export function useRequestTracking({
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [timeRemaining, setTimeRemaining] = useState<number>(0);
+    const [quoteWindowJustClosed, setQuoteWindowJustClosed] = useState(false);
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const expireCheckInProgress = useRef<boolean>(false);
+    // Track latest status in a ref so countdown interval can read it without stale closure
+    const statusRef = useRef<RequestStatus | null>(null);
 
     // Force backend to check and transition phases immediately
     const triggerExpireCheck = useCallback(async () => {
@@ -78,13 +83,26 @@ export function useRequestTracking({
             const response = await api.get(`/rescue-requests/${requestId}/status`);
             const newStatus = response.data;
             setStatus(newStatus);
+            statusRef.current = newStatus; // keep ref in sync
             setError(null);
 
             // For MATCHING status, use quote window time remaining
             if (newStatus.status === 'MATCHING') {
                 if (newStatus.quoteWindowTimeRemaining !== undefined) {
-                    // Use quote window timer from backend
-                    setTimeRemaining(newStatus.quoteWindowTimeRemaining);
+                    const remaining = newStatus.quoteWindowTimeRemaining;
+                    setTimeRemaining(remaining);
+
+                    // Quote window just closed (server says 0) — check if we have quotes
+                    if (remaining <= 0) {
+                        if ((newStatus.quoteCount ?? 0) > 0) {
+                            // We have quotes → signal UI to show quote selection
+                            setQuoteWindowJustClosed(true);
+                            // Do NOT expire — let user choose a quote
+                        } else {
+                            // No quotes → trigger expire to show ExpiredRetry
+                            triggerExpireCheck();
+                        }
+                    }
                 } else {
                     // Fallback to phase expiration (for backward compatibility)
                     const expiresAt = new Date(newStatus.expiresAt);
@@ -144,10 +162,20 @@ export function useRequestTracking({
             setTimeRemaining(prev => {
                 const newValue = Math.max(0, prev - 1);
 
-                // When countdown hits 0, force immediate phase transition
+                // When countdown hits 0, check if we have quotes before triggering expire
                 if (newValue === 0 && prev > 0) {
-                    console.log('⏰ [Countdown] Reached 00:00, triggering immediate transition');
-                    triggerExpireCheck();
+                    const currentStatus = statusRef.current;
+                    const quoteCount = currentStatus?.quoteCount ?? 0;
+
+                    if (quoteCount > 0) {
+                        // Has quotes → auto-show quote selection, skip expire
+                        console.log(`💰 [Countdown] Reached 00:00 with ${quoteCount} quotes — switching to quote selection`);
+                        setQuoteWindowJustClosed(true);
+                    } else {
+                        // No quotes → trigger expire as before
+                        console.log('⏰ [Countdown] Reached 00:00, no quotes — triggering expire');
+                        triggerExpireCheck();
+                    }
                 }
 
                 return newValue;
@@ -193,6 +221,7 @@ export function useRequestTracking({
         isLoading,
         error,
         timeRemaining,
+        quoteWindowJustClosed,
         refresh: fetchStatus,
         cancelRequest,
         retryRequest,

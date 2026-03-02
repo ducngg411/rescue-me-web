@@ -185,7 +185,6 @@ export default function CreateRescueRequestPage() {
                 const location = { addressText: address, lat: latitude, lng: longitude };
                 setCurrentLocation(location);
                 setLocationTimestamp(new Date());
-                setFormData(prev => ({ ...prev, incidentLocation: location }));
                 setIsLoadingLocation(false);
             },
             (error) => {
@@ -282,34 +281,6 @@ export default function CreateRescueRequestPage() {
                 <div>
                     <h1 className="font-bold text-base leading-tight" style={{ color: C.navy }}>Tạo yêu cầu cứu hộ</h1>
                     <p className="text-xs" style={{ color: C.gray }}>Điền thông tin để gọi cứu hộ ngay</p>
-                </div>
-
-                {/* Location badge */}
-                <div className="ml-auto flex-shrink-0">
-                    {isLoadingLocation ? (
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs" style={{ background: C.orangeLight, color: C.orange }}>
-                            <div className="animate-spin rounded-full h-3 w-3 border-b border-current"></div>
-                            <span>Định vị...</span>
-                        </div>
-                    ) : currentLocation ? (
-                        <button
-                            onClick={fetchLocation}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-opacity hover:opacity-70"
-                            style={{ background: C.orangeLight, color: C.orange }}
-                        >
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill={C.orange}><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" /></svg>
-                            <span className="max-w-[120px] truncate">{currentLocation.addressText.split(',')[0]}</span>
-                        </button>
-                    ) : (
-                        <button
-                            onClick={fetchLocation}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                            style={{ background: C.bg, color: C.gray, border: `1px solid ${C.border}` }}
-                        >
-                            <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
-                            Lấy vị trí
-                        </button>
-                    )}
                 </div>
             </header>
 
@@ -471,23 +442,63 @@ export default function CreateRescueRequestPage() {
                             icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
                         />
                         <LocationPicker
-                            label=""
+                            label="Chọn vị trí hiện tại của bạn"
                             value={formData.incidentLocation}
                             onChange={(location) => setFormData({ ...formData, incidentLocation: location })}
                             placeholder="Tìm kiếm địa điểm gặp nạn..."
                             required
                         />
-                        {currentLocation && (
-                            <button
-                                type="button"
-                                onClick={() => setFormData(prev => ({ ...prev, incidentLocation: currentLocation }))}
-                                className="mt-2 flex items-center gap-1.5 text-xs font-medium transition-opacity hover:opacity-70"
-                                style={{ color: C.orange }}
-                            >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill={C.orange}><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" /></svg>
-                                Dùng vị trí hiện tại
-                            </button>
-                        )}
+                        {/* Current Location Card */}
+                        <div className="mt-3 rounded-xl overflow-hidden" style={{ border: `1.5px solid ${isLoadingLocation ? C.border : currentLocation ? C.orange + '40' : C.border}`, background: currentLocation ? C.orangeLight : C.bg }}>
+                            {isLoadingLocation ? (
+                                <div className="flex items-center gap-3 px-4 py-3">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-2 flex-shrink-0" style={{ borderColor: C.orange, borderTopColor: 'transparent' }}></div>
+                                    <span className="text-sm" style={{ color: C.gray }}>Đang lấy vị trí của bạn...</span>
+                                </div>
+                            ) : currentLocation ? (
+                                <div className="px-4 py-3">
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: C.orange }}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" /></svg>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-semibold mb-0.5" style={{ color: C.orange }}>Vị trí hiện tại của bạn</p>
+                                            <p className="text-sm leading-snug" style={{ color: C.navy }}>{currentLocation.addressText}</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={fetchLocation}
+                                            title="Làm mới vị trí"
+                                            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-opacity hover:opacity-70"
+                                            style={{ background: C.orange + '20', color: C.orange }}
+                                        >
+                                            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData(prev => ({ ...prev, incidentLocation: currentLocation }))}
+                                        className="mt-2.5 w-full py-2 rounded-lg text-sm font-semibold transition-all active:scale-[0.98]"
+                                        style={{ background: C.orange, color: 'white' }}
+                                    >
+                                        Dùng vị trí này
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={fetchLocation}
+                                    className="w-full flex items-center gap-3 px-4 py-3 transition-opacity hover:opacity-70"
+                                >
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: C.border }}>
+                                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                    </div>
+                                    <span className="text-sm" style={{ color: C.gray }}>Nhấn để lấy vị trí hiện tại</span>
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* ── 4. Contact Phone ── */}

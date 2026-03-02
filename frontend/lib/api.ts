@@ -26,16 +26,26 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            // Chỉ redirect nếu KHÔNG phải đang ở trang auth
-            const isAuthPage = typeof window !== 'undefined' && 
-                (window.location.pathname.startsWith('/auth/') || 
-                 window.location.pathname === '/auth');
-            
-            if (!isAuthPage) {
-                // Clear tokens và redirect to login
-                localStorage.removeItem('accessToken');
-                localStorage.removeItem('refreshToken');
-                window.location.href = '/auth/login';
+            // Only force-logout when the token itself is missing/invalid/expired.
+            // Authorization errors (user lacks permission) should NOT log the user out.
+            const message: string = error.response?.data?.message || '';
+            const isTokenError = !message || // No message = no token at all
+                message.toLowerCase().includes('token') ||
+                message.toLowerCase().includes('invalid') ||
+                message.toLowerCase().includes('expired') ||
+                message.toLowerCase().includes('jwt') ||
+                message === 'Unauthorized'; // raw JWT guard rejection
+
+            if (isTokenError) {
+                const isAuthPage = typeof window !== 'undefined' &&
+                    (window.location.pathname.startsWith('/auth/') ||
+                        window.location.pathname === '/auth');
+
+                if (!isAuthPage) {
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                    window.location.href = '/auth/login';
+                }
             }
         }
         return Promise.reject(error);
