@@ -151,8 +151,8 @@ export function useRequestTracking({
         pollIntervalRef.current = setInterval(async () => {
             const newStatus = await fetchStatus();
 
-            // Stop polling if status is no longer MATCHING
-            if (newStatus && !['MATCHING', 'CREATED'].includes(newStatus.status)) {
+            // Stop polling only for terminal states (not during active ride)
+            if (newStatus && !['MATCHING', 'CREATED', 'ASSIGNED', 'IN_PROGRESS'].includes(newStatus.status)) {
                 stopPolling();
             }
         }, pollInterval);

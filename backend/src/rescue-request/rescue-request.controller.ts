@@ -89,6 +89,11 @@ export class RescueRequestController {
         return this.rescueRequestService.declineRequest(requestId, req.user.id);
     }
 
+    @Patch(':id/start-navigation')
+    async startNavigation(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.startNavigation(requestId, req.user.id);
+    }
+
     // ==================== QUOTE ENDPOINTS ====================
 
     /**

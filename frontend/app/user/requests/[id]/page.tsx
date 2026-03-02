@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUserGuard } from '@/lib/guards';
 import { useRequestTracking } from '@/lib/hooks/useRequestTracking';
@@ -8,10 +8,12 @@ import MatchingStatus from '@/components/MatchingStatus';
 import AssignedProvider from '@/components/AssignedProvider';
 import ExpiredRetry from '@/components/ExpiredRetry';
 import QuoteSelectionPanel from '@/components/QuoteSelectionPanel';
+import api from '@/lib/api';
 import toast from 'react-hot-toast';
 
 const C = {
     orange: '#f97316',
+    orangeDark: '#ea6c0a',
     orangeLight: '#fff7ed',
     navy: '#1a1a2e',
     gray: '#6b7280',
@@ -26,7 +28,7 @@ const STATUS_LABELS: Record<string, string> = {
     MATCHED: 'Đã ghép đôi',
     ASSIGNED: 'Đã có provider',
     ACCEPTED: 'Đã chấp nhận',
-    IN_PROGRESS: 'Đang thực hiện',
+    IN_PROGRESS: 'Đang di chuyển',
     COMPLETED: 'Hoàn thành',
     CANCELLED: 'Đã hủy',
     REJECTED: 'Bị từ chối',
@@ -55,6 +57,101 @@ const INCIDENT_LABELS: Record<string, string> = {
     OTHER: 'Khác',
 };
 
+interface Quote {
+    id: string;
+    price: number;
+    estimatedArrivalMinutes: number;
+    message?: string;
+    status: string;
+    provider: {
+        id: string;
+        name: string | null;
+        serviceName: string | null;
+        phoneNumber: string | null;
+    };
+}
+
+// ── Live Quote Card (compact, shown during countdown) ──────────────────────
+function LiveQuoteCard({
+    quote,
+    onAccept,
+    isAccepting,
+    isAnyAccepting,
+}: {
+    quote: Quote;
+    onAccept: (id: string) => void;
+    isAccepting: boolean;
+    isAnyAccepting: boolean;
+}) {
+    const providerName = quote.provider.serviceName || quote.provider.name || 'Provider';
+    const initials = providerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+
+    return (
+        <div
+            className="bg-white rounded-2xl p-4 transition-all"
+            style={{
+                boxShadow: isAccepting ? `0 0 0 2px ${C.orange}` : '0 1px 8px rgba(0,0,0,0.06)',
+                opacity: isAnyAccepting && !isAccepting ? 0.55 : 1,
+            }}
+        >
+            <div className="flex items-center gap-3">
+                {/* Avatar */}
+                <div
+                    className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
+                >
+                    {initials}
+                </div>
+
+                {/* Name + price */}
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold truncate" style={{ color: C.navy }}>{providerName}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-sm font-bold" style={{ color: C.orange }}>
+                            {quote.price.toLocaleString('vi-VN')}₫
+                        </span>
+                        <span className="text-[11px]" style={{ color: C.gray }}>·</span>
+                        <span className="text-[11px]" style={{ color: C.gray }}>
+                            ~{quote.estimatedArrivalMinutes} phút
+                        </span>
+                    </div>
+                </div>
+
+                {/* Accept button */}
+                <button
+                    onClick={() => onAccept(quote.id)}
+                    disabled={isAnyAccepting}
+                    className="flex-shrink-0 px-3 py-2 rounded-xl text-xs font-bold text-white transition-all active:scale-[0.97]"
+                    style={{
+                        background: isAccepting
+                            ? C.gray
+                            : `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
+                        boxShadow: isAccepting ? 'none' : `0 2px 8px ${C.orange}40`,
+                        cursor: isAnyAccepting ? 'not-allowed' : 'pointer',
+                        minWidth: '72px',
+                    }}
+                >
+                    {isAccepting ? (
+                        <span className="flex items-center gap-1">
+                            <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                            </svg>
+                        </span>
+                    ) : 'Chọn ngay'}
+                </button>
+            </div>
+
+            {/* Message snippet */}
+            {quote.message && (
+                <p className="text-[11px] italic mt-2 pl-14 truncate" style={{ color: C.gray }}>
+                    "{quote.message}"
+                </p>
+            )}
+        </div>
+    );
+}
+
 export default function RequestTrackingPage() {
     const router = useRouter();
     const params = useParams();
@@ -63,19 +160,49 @@ export default function RequestTrackingPage() {
     const [isRetrying, setIsRetrying] = useState(false);
     const [showQuoteSelection, setShowQuoteSelection] = useState(false);
 
+    // Live quotes state (during countdown)
+    const [liveQuotes, setLiveQuotes] = useState<Quote[]>([]);
+    const [acceptingId, setAcceptingId] = useState<string | null>(null);
+
     const { status, isLoading, error, timeRemaining, quoteWindowJustClosed, cancelRequest, retryRequest } = useRequestTracking({
         requestId,
         enabled: isReady,
     });
 
-    // Auto-switch to quote selection when countdown ends with quotes available
+    // ── Fetch live quotes when quoteCount > 0 ────────────────────────────────
+    const fetchLiveQuotes = useCallback(async () => {
+        if (!requestId) return;
+        try {
+            const res = await api.get(`/rescue-requests/${requestId}/quotes`);
+            const pending = res.data.filter((q: Quote) => q.status === 'PENDING');
+            setLiveQuotes(pending);
+        } catch (err) {
+            // Silently fail — not critical
+        }
+    }, [requestId]);
+
+    // Poll live quotes every 4s when in MATCHING + window open + has quotes
+    useEffect(() => {
+        const isMatching = status?.status === 'MATCHING' || status?.status === 'SEARCHING';
+        const windowOpen = status?.quoteWindowOpen !== false; // true or undefined = open
+        const hasQuotes = (status?.quoteCount ?? 0) > 0;
+
+        if (!isMatching || !hasQuotes || showQuoteSelection) return;
+
+        fetchLiveQuotes(); // immediate fetch
+
+        const interval = setInterval(fetchLiveQuotes, 4000);
+        return () => clearInterval(interval);
+    }, [status?.quoteCount, status?.status, status?.quoteWindowOpen, showQuoteSelection, fetchLiveQuotes]);
+
+    // ── Auto-switch to full quote selection when countdown ends ───────────────
     useEffect(() => {
         if (quoteWindowJustClosed && (status?.quoteCount ?? 0) > 0) {
             setShowQuoteSelection(true);
         }
     }, [quoteWindowJustClosed, status?.quoteCount]);
 
-    // Handle page reload: if window already closed + quotes already present, show selection immediately
+    // Handle page reload: if window already closed + quotes present
     useEffect(() => {
         if (!showQuoteSelection && status &&
             (status.status === 'MATCHING' || status.status === 'SEARCHING') &&
@@ -84,6 +211,23 @@ export default function RequestTrackingPage() {
             setShowQuoteSelection(true);
         }
     }, [status?.quoteWindowOpen, status?.quoteCount, status?.status]);
+
+    // ── Accept quote during countdown ────────────────────────────────────────
+    const handleAcceptLiveQuote = async (quoteId: string) => {
+        if (acceptingId) return;
+        setAcceptingId(quoteId);
+        try {
+            await api.patch(`/rescue-requests/${requestId}/quotes/${quoteId}/respond`, {
+                action: 'ACCEPT',
+            });
+            toast.success('✅ Đã chọn báo giá! Provider đang chuẩn bị đến.');
+            // Tracking hook will poll and catch ASSIGNED status automatically
+        } catch (err: any) {
+            const msg = err.response?.data?.message || 'Không thể chọn báo giá. Vui lòng thử lại.';
+            toast.error(msg);
+            setAcceptingId(null);
+        }
+    };
 
     const handleCancel = async () => {
         const confirmed = window.confirm('Bạn có chắc muốn huỷ yêu cầu này?');
@@ -139,6 +283,8 @@ export default function RequestTrackingPage() {
     if (!status) return null;
 
     const statusStyle = STATUS_COLORS[status.status] || { bg: C.bg, text: C.gray, dot: C.gray };
+    const isMatchingWithWindowOpen = (status.status === 'MATCHING' || status.status === 'SEARCHING') && !showQuoteSelection;
+    const showLiveQuotes = isMatchingWithWindowOpen && liveQuotes.length > 0 && !acceptingId;
 
     return (
         <div className="min-h-screen" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
@@ -201,8 +347,8 @@ export default function RequestTrackingPage() {
             {/* ── Main Content ── */}
             <div className="px-4 py-4 pb-8 max-w-2xl mx-auto space-y-4">
 
-                {/* MATCHING state — quote window still open OR no quotes yet */}
-                {(status.status === 'MATCHING' || status.status === 'SEARCHING') && !showQuoteSelection && (
+                {/* MATCHING state — countdown + optional live quotes below */}
+                {isMatchingWithWindowOpen && (
                     <MatchingStatus
                         timeRemaining={timeRemaining}
                         searchPhase={status.searchPhase}
@@ -215,24 +361,52 @@ export default function RequestTrackingPage() {
                     />
                 )}
 
-                {/* MATCHING state — window closed + has quotes → show quote selection */}
+                {/* ── Live Quote Cards (during countdown) ── */}
+                {isMatchingWithWindowOpen && liveQuotes.length > 0 && (
+                    <div className="space-y-3">
+                        {/* Section header */}
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#22c55e' }} />
+                            <p className="text-xs font-semibold" style={{ color: C.navy }}>
+                                Báo giá mới nhận — Chọn ngay hoặc đợi thêm
+                            </p>
+                        </div>
+
+                        {liveQuotes.map(quote => (
+                            <LiveQuoteCard
+                                key={quote.id}
+                                quote={quote}
+                                onAccept={handleAcceptLiveQuote}
+                                isAccepting={acceptingId === quote.id}
+                                isAnyAccepting={!!acceptingId}
+                            />
+                        ))}
+
+                        {/* Hint */}
+                        <p className="text-center text-[11px]" style={{ color: C.gray }}>
+                            Đếm ngược vẫn chạy để chờ báo giá từ providers khác
+                        </p>
+                    </div>
+                )}
+
+                {/* MATCHING state — window closed + has quotes → full selection panel */}
                 {(status.status === 'MATCHING' || status.status === 'SEARCHING') && showQuoteSelection && (
                     <QuoteSelectionPanel
                         requestId={requestId}
                         quoteCount={status.quoteCount ?? 0}
                         onQuoteAccepted={() => {
                             setShowQuoteSelection(false);
-                            // Polling in useRequestTracking will catch ASSIGNED status
                         }}
                     />
                 )}
 
                 {/* ASSIGNED state */}
-                {status.status === 'ASSIGNED' && status.assignedProvider && (
+                {(status.status === 'ASSIGNED' || status.status === 'IN_PROGRESS') && status.assignedProvider && (
                     <AssignedProvider
                         provider={status.assignedProvider}
                         distance={status.matchedDistance}
                         eta={status.matchedEta}
+                        requestStatus={status.status}
                     />
                 )}
 
@@ -248,59 +422,22 @@ export default function RequestTrackingPage() {
                 {/* CANCELLED state */}
                 {status.status === 'CANCELLED' && (
                     <div className="bg-white rounded-2xl p-6 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#fef2f2' }}>
-                            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#ef4444" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        <div className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#fef2f2' }}>
+                            <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#ef4444" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
                         </div>
-                        <h3 className="text-base font-bold mb-1" style={{ color: C.navy }}>Đã huỷ yêu cầu</h3>
-                        <p className="text-sm mb-5" style={{ color: C.gray }}>Yêu cầu của bạn đã được huỷ thành công</p>
-                        <div className="flex gap-3">
-                            <button onClick={() => router.push('/user/requests')} className="flex-1 py-2.5 rounded-xl text-sm font-medium" style={{ background: C.bg, color: C.gray, border: `1px solid ${C.border}` }}>
-                                Danh sách
-                            </button>
-                            <button onClick={() => router.push('/user/create-request')} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.orange }}>
-                                Tạo lại
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* COMPLETED state */}
-                {status.status === 'COMPLETED' && (
-                    <div className="bg-white rounded-2xl p-6 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#f0fdf4' }}>
-                            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                        </div>
-                        <h3 className="text-base font-bold mb-1" style={{ color: C.navy }}>Hoàn thành!</h3>
-                        <p className="text-sm mb-5" style={{ color: C.gray }}>Yêu cầu cứu hộ đã hoàn thành</p>
-                        {status.assignedProvider && <AssignedProvider provider={status.assignedProvider} />}
-                        <button onClick={() => router.push('/user')} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white mt-4" style={{ background: C.orange }}>
+                        <h3 className="text-sm font-bold mb-1" style={{ color: C.navy }}>Yêu cầu đã bị huỷ</h3>
+                        <p className="text-xs mb-5" style={{ color: C.gray }}>Yêu cầu cứu hộ của bạn đã được huỷ thành công.</p>
+                        <button
+                            onClick={() => router.push('/user')}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white"
+                            style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
+                        >
                             Về trang chủ
                         </button>
                     </div>
                 )}
-
-                {/* IN_PROGRESS / ACCEPTED state */}
-                {['IN_PROGRESS', 'ACCEPTED'].includes(status.status) && (
-                    <div className="space-y-4">
-                        <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                            <div className="flex items-center gap-2 mb-3">
-                                <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#3b82f6' }}></div>
-                                <span className="text-sm font-semibold" style={{ color: C.navy }}>
-                                    {STATUS_LABELS[status.status]}
-                                </span>
-                            </div>
-                            <p className="text-sm" style={{ color: C.gray }}>Provider đang trên đường tới hoặc đang xử lý yêu cầu của bạn.</p>
-                        </div>
-                        {status.assignedProvider && (
-                            <AssignedProvider
-                                provider={status.assignedProvider}
-                                distance={status.matchedDistance}
-                                eta={status.matchedEta}
-                            />
-                        )}
-                    </div>
-                )}
-
             </div>
         </div>
     );

@@ -35,6 +35,8 @@ interface RescueRequest {
         id: string;
         name: string;
         phoneNumber: string;
+        licensePlate?: string | null;
+        vehicleColor?: string | null;
     };
     media: Array<{
         mediaType: string;
@@ -78,6 +80,9 @@ export default function ProviderRequestDetailPage() {
     const [hasRejectedQuote, setHasRejectedQuote] = useState(false);
     const [myQuoteDetails, setMyQuoteDetails] = useState<any>(null);
     const [quoteAccepted, setQuoteAccepted] = useState(false);
+    const [showNavigationMap, setShowNavigationMap] = useState(false);
+    const [isStartingNav, setIsStartingNav] = useState(false);
+    const [selectedConfirmImage, setSelectedConfirmImage] = useState<string | null>(null);
 
     // Quote window timer
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -420,13 +425,13 @@ export default function ProviderRequestDetailPage() {
         );
     }
 
-    // Navigation view: early full-screen return when provider is assigned
+    // Confirmation + Navigation flow: show details first, map after "Bắt đầu di chuyển"
     const isAssignedToMe = request && (
         (request.status === 'ASSIGNED' && request.assignedProviderId === user?.id) ||
         quoteAccepted
     );
 
-    if (isAssignedToMe) {
+    if (isAssignedToMe && showNavigationMap) {
         return (
             <ProviderNavigationView
                 pickupLocation={request!.pickupLocation}
@@ -434,6 +439,315 @@ export default function ProviderRequestDetailPage() {
                 eta={myQuoteDetails?.estimatedArrivalMinutes ?? null}
                 requestId={requestId}
             />
+        );
+    }
+
+    if (isAssignedToMe && !showNavigationMap) {
+        const req = request!;
+        const C = {
+            orange: '#f97316', orangeDark: '#ea6c0a', orangeLight: '#fff7ed',
+            navy: '#1a1a2e', gray: '#6b7280', border: '#f1f5f9', bg: '#f8fafc',
+        };
+        return (
+            <div className="min-h-screen" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+                {/* Header */}
+                <div className="sticky top-0 z-10 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ borderColor: C.border }}>
+                    <div className="flex-1">
+                        <p className="text-xs font-semibold" style={{ color: C.gray }}>Báo giá được chấp nhận</p>
+                        <h1 className="text-sm font-bold" style={{ color: C.navy }}>Yêu cầu cứu hộ #{req.id.slice(0, 8).toUpperCase()}</h1>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: '#f0fdf4', color: '#16a34a' }}>
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        Được chọn
+                    </div>
+                </div>
+
+                <div className="px-4 py-5 max-w-lg mx-auto space-y-4">
+
+                    {/* Celebration card */}
+                    <div className="bg-white rounded-2xl p-5 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+                        <div className="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center text-3xl" style={{ background: '#f0fdf4' }}>
+                            🎉
+                        </div>
+                        <h2 className="text-base font-bold mb-1" style={{ color: C.navy }}>Bạn được chọn!</h2>
+                        <p className="text-sm" style={{ color: C.gray }}>Khách hàng đã chấp nhận báo giá của bạn. Hãy xem thông tin bên dưới và chuẩn bị xuất phát.</p>
+                    </div>
+
+                    {/* Customer info */}
+                    <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+                        <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>THÔNG TIN KHÁCH HÀNG</p>
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}>
+                                {(req.user?.name || 'K').charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold" style={{ color: C.navy }}>{req.user?.name || 'Khách hàng'}</p>
+                                <p className="text-xs" style={{ color: C.gray }}>{req.contactPhone}</p>
+                            </div>
+                            <a
+                                href={`tel:${req.contactPhone}`}
+                                className="ml-auto w-9 h-9 rounded-xl flex items-center justify-center"
+                                style={{ background: '#f0fdf4' }}
+                            >
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+
+                    {/* Rescue details */}
+                    <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+                        <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>THÔNG TIN CỨU HỘ</p>
+                        <div className="space-y-3">
+                            <div className="flex gap-3">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight }}>
+                                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-medium" style={{ color: C.gray }}>Loại sự cố</p>
+                                    <p className="text-sm font-semibold" style={{ color: C.navy }}>{incidentTypeLabels[req.incidentType] || req.incidentType}</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-3">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight }}>
+                                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 1M13 16H7m6 0l2 1m0-1h1a2 2 0 002-2V9a1 1 0 00-.293-.707L20 7H13v9z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-medium" style={{ color: C.gray }}>Loại xe</p>
+                                    <p className="text-sm font-semibold" style={{ color: C.navy }}>{vehicleTypeLabels[req.vehicleType] || req.vehicleType}</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-3">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight }}>
+                                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] font-medium" style={{ color: C.gray }}>Vị trí đón</p>
+                                    <p className="text-sm font-semibold" style={{ color: C.navy }}>{req.pickupLocation.addressText}</p>
+                                </div>
+                            </div>
+                            {req.description && (
+                                <div className="flex gap-3">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight }}>
+                                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-medium" style={{ color: C.gray }}>Mô tả</p>
+                                        <p className="text-sm" style={{ color: C.navy }}>{req.description}</p>
+                                    </div>
+                                </div>
+                            )}
+                            {req.user?.licensePlate && (
+                                <div className="flex gap-3">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight }}>
+                                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
+                                            <rect x="2" y="7" width="20" height="10" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 11h.01M18 11h.01M9 11h6" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-medium" style={{ color: C.gray }}>Biển số xe</p>
+                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{req.user.licensePlate}</p>
+                                    </div>
+                                </div>
+                            )}
+                            {req.user?.vehicleColor && (
+                                <div className="flex gap-3">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight }}>
+                                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-medium" style={{ color: C.gray }}>Màu xe</p>
+                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{req.user.vehicleColor}</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Media / Photos & Videos */}
+                    {req.media && req.media.length > 0 && (
+                        <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+                            <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>MEDIA TỪ KHÁCH ({req.media.length})</p>
+                            <div className="grid grid-cols-3 gap-2">
+                                {req.media.map((item, idx) => {
+                                    if (item.mediaType === 'IMAGE') {
+                                        const imageOnlyIndex = req.media
+                                            .filter(m => m.mediaType === 'IMAGE')
+                                            .findIndex(m => m.publicUrl === item.publicUrl);
+                                        return (
+                                            <button
+                                                key={idx}
+                                                onClick={() => setSelectedImageIndex(imageOnlyIndex)}
+                                                className="aspect-square rounded-xl overflow-hidden relative"
+                                                style={{ background: C.bg }}
+                                            >
+                                                <img
+                                                    src={item.publicUrl}
+                                                    alt={`Ảnh ${idx + 1}`}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                {/* Overlay hint */}
+                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity" style={{ background: 'rgba(0,0,0,0.3)' }}>
+                                                    <svg width="20" height="20" fill="white" viewBox="0 0 24 24">
+                                                        <path d="M15 3l2.3 2.3-2.89 2.87 1.42 1.42L18.7 6.7 21 9V3h-6zM3 9l2.3-2.3 2.87 2.89 1.42-1.42L6.7 5.3 9 3H3v6zM9 21l-2.3-2.3 2.89-2.87-1.42-1.42L5.3 17.3 3 15v6h6zm12-6l-2.3 2.3-2.87-2.89-1.42 1.42 2.89 2.87L15 21h6v-6z" />
+                                                    </svg>
+                                                </div>
+                                            </button>
+                                        );
+                                    } else {
+                                        return (
+                                            <div key={idx} className="aspect-square rounded-xl overflow-hidden" style={{ background: '#000' }}>
+                                                <video
+                                                    src={item.publicUrl}
+                                                    controls
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </div>
+                                        );
+                                    }
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* My quote summary */}
+                    {myQuoteDetails && (
+                        <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+                            <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>BÁO GIÁ CỦA BẠN</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="rounded-xl p-3" style={{ background: C.bg }}>
+                                    <p className="text-[10px]" style={{ color: C.gray }}>Giá</p>
+                                    <p className="text-base font-bold" style={{ color: C.navy }}>{Number(myQuoteDetails.price).toLocaleString('vi-VN')}₫</p>
+                                </div>
+                                <div className="rounded-xl p-3" style={{ background: C.bg }}>
+                                    <p className="text-[10px]" style={{ color: C.gray }}>Thời gian đến</p>
+                                    <p className="text-base font-bold" style={{ color: C.navy }}>{myQuoteDetails.estimatedArrivalMinutes} phút</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CTA */}
+                    <div className="pb-4">
+                        <button
+                            onClick={async () => {
+                                setIsStartingNav(true);
+                                try {
+                                    await api.patch(`/rescue-requests/${requestId}/start-navigation`);
+                                } catch (err: any) {
+                                    // Ignore if already IN_PROGRESS
+                                    console.warn('start-navigation:', err?.response?.data?.message);
+                                } finally {
+                                    setIsStartingNav(false);
+                                }
+                                setShowNavigationMap(true);
+                            }}
+                            disabled={isStartingNav}
+                            className="w-full py-4 rounded-2xl text-base font-bold text-white flex items-center justify-center gap-3 active:scale-[0.98] transition-transform"
+                            style={{
+                                background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`,
+                                boxShadow: `0 6px 20px ${C.orange}50`,
+                                opacity: isStartingNav ? 0.7 : 1,
+                            }}
+                        >
+                            {isStartingNav ? (
+                                <>
+                                    <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                                        <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
+                                    </svg>
+                                    Đang xác nhận...
+                                </>
+                            ) : (
+                                <>
+                                    <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                    </svg>
+                                    Bắt đầu di chuyển
+                                </>
+                            )}
+                        </button>
+                        <p className="text-center text-xs mt-2" style={{ color: C.gray }}>
+                            Bản đồ điều hướng sẽ mở sau khi bạn bấm
+                        </p>
+                    </div>
+
+                </div>
+
+                {/* Image Viewer Modal (for isAssignedToMe view) */}
+                {selectedImageIndex !== null && imageUrls.length > 0 && (
+                    <div
+                        className="fixed inset-0 bg-black bg-opacity-95 z-50 flex items-center justify-center p-4"
+                        onClick={() => setSelectedImageIndex(null)}
+                    >
+                        <div className="relative max-w-6xl max-h-[90vh] w-full h-full flex items-center justify-center">
+                            {/* Close Button */}
+                            <button
+                                onClick={() => setSelectedImageIndex(null)}
+                                className="absolute top-4 right-4 rounded-full p-2.5 transition-all z-10 flex items-center justify-center"
+                                style={{ background: 'rgba(0,0,0,0.6)', border: '1.5px solid rgba(255,255,255,0.3)' }}
+                                title="Đóng"
+                            >
+                                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+
+                            {/* Previous Button */}
+                            {selectedImageIndex > 0 && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex - 1); }}
+                                    className="absolute left-4 rounded-full p-2.5 transition-all flex items-center justify-center"
+                                    style={{ background: 'rgba(0,0,0,0.5)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+                                >
+                                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                </button>
+                            )}
+
+                            {/* Image */}
+                            <div className="relative max-w-full max-h-full" onClick={(e) => e.stopPropagation()}>
+                                <img
+                                    src={imageUrls[selectedImageIndex]}
+                                    alt={`Image ${selectedImageIndex + 1}`}
+                                    className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                                />
+                                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-60 text-white px-4 py-2 rounded-full text-sm">
+                                    {selectedImageIndex + 1} / {imageUrls.length}
+                                </div>
+                            </div>
+
+                            {/* Next Button */}
+                            {selectedImageIndex < imageUrls.length - 1 && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex + 1); }}
+                                    className="absolute right-4 rounded-full p-2.5 transition-all flex items-center justify-center"
+                                    style={{ background: 'rgba(0,0,0,0.5)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+                                >
+                                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
         );
     }
 
@@ -532,6 +846,20 @@ export default function ProviderRequestDetailPage() {
                             <div>
                                 <div className="text-sm text-gray-500">Mô tả</div>
                                 <div className="text-gray-700">{request.description}</div>
+                            </div>
+                        )}
+
+                        {request.user?.licensePlate && (
+                            <div>
+                                <div className="text-sm text-gray-500">Biển số xe</div>
+                                <div className="font-medium">{request.user.licensePlate}</div>
+                            </div>
+                        )}
+
+                        {request.user?.vehicleColor && (
+                            <div>
+                                <div className="text-sm text-gray-500">Màu xe</div>
+                                <div className="font-medium">{request.user.vehicleColor}</div>
                             </div>
                         )}
 
@@ -789,10 +1117,12 @@ export default function ProviderRequestDetailPage() {
                         {/* Close Button */}
                         <button
                             onClick={() => setSelectedImageIndex(null)}
-                            className="absolute top-4 right-4 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-full p-3 transition-all z-10"
+                            className="absolute top-4 right-4 rounded-full p-2.5 transition-all z-10 flex items-center justify-center"
+                            style={{ background: 'rgba(0,0,0,0.6)', border: '1.5px solid rgba(255,255,255,0.3)' }}
+                            title="Đóng"
                         >
-                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
 
@@ -803,10 +1133,11 @@ export default function ProviderRequestDetailPage() {
                                     e.stopPropagation();
                                     setSelectedImageIndex(selectedImageIndex - 1);
                                 }}
-                                className="absolute left-4 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-full p-3 transition-all"
+                                className="absolute left-4 rounded-full p-2.5 transition-all flex items-center justify-center"
+                                style={{ background: 'rgba(0,0,0,0.5)', border: '1.5px solid rgba(255,255,255,0.25)' }}
                             >
-                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                                 </svg>
                             </button>
                         )}
@@ -834,10 +1165,11 @@ export default function ProviderRequestDetailPage() {
                                     e.stopPropagation();
                                     setSelectedImageIndex(selectedImageIndex + 1);
                                 }}
-                                className="absolute right-4 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-full p-3 transition-all"
+                                className="absolute right-4 rounded-full p-2.5 transition-all flex items-center justify-center"
+                                style={{ background: 'rgba(0,0,0,0.5)', border: '1.5px solid rgba(255,255,255,0.25)' }}
                             >
-                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                                 </svg>
                             </button>
                         )}

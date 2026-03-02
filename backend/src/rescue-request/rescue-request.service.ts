@@ -269,6 +269,8 @@ export class RescueRequestService {
                         name: true,
                         phoneNumber: true,
                         fullName: true,
+                        licensePlate: true,
+                        vehicleColor: true,
                     },
                 },
             },
@@ -959,6 +961,20 @@ export class RescueRequestService {
         });
 
         return updatedQuote;
+    }
+
+    /**
+     * Provider bắt đầu di chuyển: ASSIGNED → IN_PROGRESS
+     */
+    async startNavigation(requestId: string, providerId: string) {
+        const request = await this.prisma.rescueRequest.findUnique({ where: { id: requestId } });
+        if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.assignedProviderId !== providerId) throw new ForbiddenException('Not assigned to this request');
+        if (request.status === 'IN_PROGRESS') return { success: true, status: 'IN_PROGRESS' };
+        if (request.status !== 'ASSIGNED') throw new BadRequestException(`Cannot start from status: ${request.status}`);
+        await this.prisma.rescueRequest.update({ where: { id: requestId }, data: { status: 'IN_PROGRESS' } });
+        console.log(`🚗 [RescueRequest] Provider ${providerId} started navigation → IN_PROGRESS`);
+        return { success: true, status: 'IN_PROGRESS' };
     }
 
     /**

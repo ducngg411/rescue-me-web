@@ -2,6 +2,7 @@
 
 const C = {
     orange: '#f97316',
+    orangeDark: '#ea6c0a',
     orangeLight: '#fff7ed',
     navy: '#1a1a2e',
     gray: '#6b7280',
@@ -24,6 +25,8 @@ interface AssignedProviderProps {
     provider: Provider;
     distance?: number;
     eta?: number;
+    /** 'ASSIGNED' = chuẩn bị, 'IN_PROGRESS' = đang di chuyển */
+    requestStatus?: string;
 }
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
@@ -35,7 +38,7 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
     BREAKDOWN_REPAIR: 'Sửa tại chỗ',
 };
 
-export default function AssignedProvider({ provider, distance, eta }: AssignedProviderProps) {
+export default function AssignedProvider({ provider, distance, eta, requestStatus }: AssignedProviderProps) {
     const displayName = provider.serviceName || provider.name || 'Provider';
     const initials = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
     const serviceLabels = provider.serviceTypes.map(t => SERVICE_TYPE_LABELS[t] || t).join(', ');
@@ -52,10 +55,17 @@ export default function AssignedProvider({ provider, distance, eta }: AssignedPr
         <div className="space-y-3">
             {/* Status badge */}
             <div className="flex justify-center">
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold" style={{ background: '#f0fdf4', color: '#16a34a' }}>
-                    <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#22c55e' }} />
-                    Đã có provider — Đang chuẩn bị
-                </div>
+                {requestStatus === 'IN_PROGRESS' ? (
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold" style={{ background: '#eff6ff', color: '#2563eb' }}>
+                        <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#3b82f6' }} />
+                        Đang di chuyển đến bạn
+                    </div>
+                ) : (
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold" style={{ background: '#f0fdf4', color: '#16a34a' }}>
+                        <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#22c55e' }} />
+                        Đã có provider — Đang chuẩn bị
+                    </div>
+                )}
             </div>
 
             {/* Provider card */}
@@ -141,13 +151,22 @@ export default function AssignedProvider({ provider, distance, eta }: AssignedPr
             </div>
 
             {/* Info note */}
-            <div className="rounded-xl p-3.5 flex items-start gap-3" style={{ background: C.orangeLight }}>
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2} className="flex-shrink-0 mt-0.5">
+            <div className="rounded-xl p-3.5 flex items-start gap-3" style={{ background: requestStatus === 'IN_PROGRESS' ? '#eff6ff' : C.orangeLight }}>
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke={requestStatus === 'IN_PROGRESS' ? '#2563eb' : C.orange} strokeWidth={2} className="flex-shrink-0 mt-0.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div>
-                    <p className="text-sm font-semibold" style={{ color: C.navy }}>Provider đang trên đường tới</p>
-                    <p className="text-xs mt-0.5" style={{ color: C.gray }}>Vui lòng để điện thoại bật và chờ cuộc gọi xác nhận.</p>
+                    {requestStatus === 'IN_PROGRESS' ? (
+                        <>
+                            <p className="text-sm font-semibold" style={{ color: '#1d4ed8' }}>Provider đang trên đường đến bạn</p>
+                            <p className="text-xs mt-0.5" style={{ color: '#3b82f6' }}>Vui lòng ở lại vị trí và chờ provider đến.</p>
+                        </>
+                    ) : (
+                        <>
+                            <p className="text-sm font-semibold" style={{ color: C.navy }}>Provider đang trên đường tới</p>
+                            <p className="text-xs mt-0.5" style={{ color: C.gray }}>Vui lòng để điện thoại bật và chờ cuộc gọi xác nhận.</p>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
