@@ -978,6 +978,24 @@ export class RescueRequestService {
     }
 
     /**
+     * Provider đã đến nơi: IN_PROGRESS → COMPLETED
+     * PATCH /rescue-requests/:id/complete-service
+     */
+    async completeService(requestId: string, providerId: string) {
+        const request = await this.prisma.rescueRequest.findUnique({ where: { id: requestId } });
+        if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.assignedProviderId !== providerId) throw new ForbiddenException('Not assigned to this request');
+        if (request.status === 'COMPLETED') return { success: true, status: 'COMPLETED' };
+        if (request.status !== 'IN_PROGRESS') throw new BadRequestException(`Cannot complete from status: ${request.status}`);
+        await this.prisma.rescueRequest.update({
+            where: { id: requestId },
+            data: { status: 'COMPLETED', completedAt: new Date() },
+        });
+        console.log(`✅ [RescueRequest] Provider ${providerId} completed service → COMPLETED`);
+        return { success: true, status: 'COMPLETED' };
+    }
+
+    /**
      * Provider xem danh sách quotes đã gửi
      */
     async getProviderQuotes(providerId: string) {

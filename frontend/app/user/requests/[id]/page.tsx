@@ -407,6 +407,7 @@ export default function RequestTrackingPage() {
                         distance={status.matchedDistance}
                         eta={status.matchedEta}
                         requestStatus={status.status}
+                        requestId={requestId}
                     />
                 )}
 

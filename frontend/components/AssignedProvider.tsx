@@ -1,5 +1,11 @@
 'use client';
 
+import { useState, lazy, Suspense } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useChat } from '@/lib/hooks/useChat';
+
+const ChatModal = lazy(() => import('@/components/ChatModal'));
+
 const C = {
     orange: '#f97316',
     orangeDark: '#ea6c0a',
@@ -27,6 +33,8 @@ interface AssignedProviderProps {
     eta?: number;
     /** 'ASSIGNED' = chuẩn bị, 'IN_PROGRESS' = đang di chuyển */
     requestStatus?: string;
+    /** requestId to identify which Firestore chat room to use */
+    requestId?: string;
 }
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
@@ -38,7 +46,20 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
     BREAKDOWN_REPAIR: 'Sửa tại chỗ',
 };
 
-export default function AssignedProvider({ provider, distance, eta, requestStatus }: AssignedProviderProps) {
+export default function AssignedProvider({
+    provider,
+    distance,
+    eta,
+    requestStatus,
+    requestId,
+}: AssignedProviderProps) {
+    const [isChatOpen, setIsChatOpen] = useState(false);
+
+    // Get current user identity directly — avoids relying on parent to pass userId correctly
+    const { user: currentUser } = useAuth();
+    const currentUserId = currentUser?.id ?? '';
+    const currentUserName = currentUser?.name ?? currentUser?.email?.split('@')[0] ?? 'Khách hàng';
+
     const displayName = provider.serviceName || provider.name || 'Provider';
     const initials = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
     const serviceLabels = provider.serviceTypes.map(t => SERVICE_TYPE_LABELS[t] || t).join(', ');
@@ -49,7 +70,18 @@ export default function AssignedProvider({ provider, distance, eta, requestStatu
     const displayEta = eta ? `${eta} phút` : '~15 phút';
 
     const handleCall = () => { if (provider.phoneNumber) window.location.href = `tel:${provider.phoneNumber}`; };
-    const handleMessage = () => { if (provider.phoneNumber) window.location.href = `sms:${provider.phoneNumber}`; };
+
+    // Subscribe to unread count even when chat is closed
+    const chatEnabled = !!(requestId && currentUserId);
+    const { unreadCount } = useChat({
+        requestId: requestId ?? '__none__',
+        currentUserId,
+        currentUserRole: 'CUSTOMER',
+        currentUserName,
+        enabled: chatEnabled,
+    });
+
+    const providerDisplayName = provider.serviceName || provider.name || 'Provider';
 
     return (
         <div className="space-y-3">
@@ -74,7 +106,7 @@ export default function AssignedProvider({ provider, distance, eta, requestStatu
                 <div className="flex items-start gap-3 mb-4">
                     <div
                         className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-                        style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark ?? '#ea6c0a'})` }}
+                        style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
                     >
                         {initials}
                     </div>
@@ -137,15 +169,30 @@ export default function AssignedProvider({ provider, distance, eta, requestStatu
                         </svg>
                         Gọi điện
                     </button>
+
+                    {/* In-app chat button with UNREAD BADGE */}
                     <button
-                        onClick={handleMessage}
-                        className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors"
+                        onClick={() => setIsChatOpen(true)}
+                        className="relative flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-colors"
                         style={{ background: C.orangeLight, color: C.orange, border: `1.5px solid ${C.orange}30` }}
                     >
                         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                         Nhắn tin
+                        {/* Unread badge */}
+                        {unreadCount > 0 && (
+                            <span
+                                className="absolute -top-2 -right-2 min-w-[20px] h-[20px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+                                style={{
+                                    background: '#ef4444',
+                                    boxShadow: '0 2px 6px rgba(239,68,68,0.6)',
+                                    animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite',
+                                }}
+                            >
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </span>
+                        )}
                     </button>
                 </div>
             </div>
@@ -169,6 +216,20 @@ export default function AssignedProvider({ provider, distance, eta, requestStatu
                     )}
                 </div>
             </div>
+
+            {/* Chat Modal */}
+            {isChatOpen && requestId && currentUserId && (
+                <Suspense fallback={null}>
+                    <ChatModal
+                        requestId={requestId}
+                        currentUserId={currentUserId}
+                        currentUserRole="CUSTOMER"
+                        currentUserName={currentUserName}
+                        otherPartyName={providerDisplayName}
+                        onClose={() => setIsChatOpen(false)}
+                    />
+                </Suspense>
+            )}
         </div>
     );
 }

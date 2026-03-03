@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useChat } from '@/lib/hooks/useChat';
+import api from '@/lib/api';
+import toast from 'react-hot-toast';
+
+const ChatModal = lazy(() => import('@/components/ChatModal'));
 
 const VIETMAP_API_KEY = process.env.NEXT_PUBLIC_VIETMAP_API_KEY;
 
@@ -78,6 +84,12 @@ interface ProviderNavigationViewProps {
     user: UserInfo;
     eta?: number | null;
     requestId: string;
+    /** Name of the customer (for ChatModal header) */
+    customerName?: string;
+    /** Called when provider presses back (stays in trip flow) */
+    onBack?: () => void;
+    /** Called after service is marked complete */
+    onCompleted?: () => void;
 }
 
 export default function ProviderNavigationView({
@@ -85,6 +97,9 @@ export default function ProviderNavigationView({
     user,
     eta,
     requestId,
+    customerName,
+    onBack,
+    onCompleted,
 }: ProviderNavigationViewProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<any>(null);
@@ -93,7 +108,41 @@ export default function ProviderNavigationView({
     const [locationError, setLocationError] = useState<string | null>(null);
     const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
     const [isLoadingRoute, setIsLoadingRoute] = useState(false);
+    const [isChatOpen, setIsChatOpen] = useState(false);
+    const [showConfirm, setShowConfirm] = useState(false);
+    const [isCompleting, setIsCompleting] = useState(false);
     const routeDrawn = useRef(false);
+
+    // Get provider identity directly from auth — avoids relying on props being undefined
+    const { user: authUser } = useAuth();
+    const providerId = authUser?.id ?? '';
+    const providerName = authUser?.name ?? 'Provider';
+
+    // Chat hook for provider during navigation
+    const chatEnabled = !!(providerId && requestId);
+    const { unreadCount: chatUnreadCount } = useChat({
+        requestId: requestId ?? '__none__',
+        currentUserId: providerId,
+        currentUserRole: 'PROVIDER',
+        currentUserName: providerName,
+        enabled: chatEnabled,
+    });
+
+    // Mark arrival — calls backend PATCH /rescue-requests/:id/complete-service
+    const handleComplete = async () => {
+        setIsCompleting(true);
+        try {
+            await api.patch(`/rescue-requests/${requestId}/complete-service`);
+            toast.success('✅ Dịch vụ hoàn thành! Cảm ơn bạn.');
+            setShowConfirm(false);
+            onCompleted?.();
+        } catch (err: any) {
+            const msg = err.response?.data?.message || 'Không thể hoàn thành. Vui lòng thử lại.';
+            toast.error(msg);
+        } finally {
+            setIsCompleting(false);
+        }
+    };
 
     // ── 1. Get provider's current GPS ───────────────────────────────────────
     useEffect(() => {
@@ -174,12 +223,12 @@ export default function ProviderNavigationView({
                         paint: { 'line-color': C.orange, 'line-width': 5, 'line-opacity': 0.95 },
                     });
 
-                    // FitBounds to show entire route
+                    // FitBounds — leave bottom space for the bottom sheet (140px)
                     const lngs = coords.map(c => c[0]);
                     const lats = coords.map(c => c[1]);
                     map.current.fitBounds(
                         [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-                        { padding: { top: 80, bottom: 200, left: 40, right: 40 }, duration: 1200 }
+                        { padding: { top: 90, bottom: 180, left: 40, right: 40 }, duration: 1200 }
                     );
                 } catch (e) {
                     console.warn('Error drawing route:', e);
@@ -266,98 +315,253 @@ export default function ProviderNavigationView({
     const displayEta = routeInfo ? `${routeInfo.duration} phút` : (eta ? `${eta} phút` : '~');
 
     return (
-        <div className="flex flex-col" style={{ height: '100vh', fontFamily: 'Poppins, sans-serif' }}>
-            {/* ── Info Panel (fixed top overlay on map) ── */}
-            <div
-                className="absolute top-0 left-0 right-0 z-10 px-4 pt-3 pb-4"
-                style={{ background: 'white', borderBottom: `1px solid ${C.border}`, boxShadow: '0 2px 16px rgba(0,0,0,0.10)' }}
-            >
-                {/* Title row */}
-                <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#22c55e' }} />
-                        <span className="text-sm font-bold" style={{ color: C.navy }}>Đang điều hướng đến khách hàng</span>
-                    </div>
-                    {locationError && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: '#fefce8', color: '#ca8a04' }}>
-                            GPS mặc định
-                        </span>
-                    )}
-                </div>
-
-                {/* Customer info */}
-                <div className="flex items-center gap-3 mb-3">
-                    <div
-                        className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
-                        style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
-                    >
-                        {displayName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{displayName}</p>
-                        <p className="text-xs truncate" style={{ color: C.gray }}>
-                            📍 {pickupLocation.addressText}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Stats + Actions row */}
-                <div className="flex items-center gap-3">
-                    {/* Distance chip */}
-                    <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-shrink-0" style={{ background: C.bg }}>
-                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        </svg>
-                        {isLoadingRoute ? (
-                            <div className="w-12 h-3.5 rounded animate-pulse" style={{ background: C.border }} />
-                        ) : (
-                            <span className="text-xs font-bold" style={{ color: C.navy }}>{displayDistance}</span>
+        <>
+            <div className="flex flex-col" style={{ height: '100vh', fontFamily: 'Poppins, sans-serif' }}>
+                {/* ── Top overlay panel ── */}
+                <div
+                    className="absolute top-0 left-0 right-0 z-10 px-4 pt-3 pb-4"
+                    style={{ background: 'white', borderBottom: `1px solid ${C.border}`, boxShadow: '0 2px 16px rgba(0,0,0,0.10)' }}
+                >
+                    {/* Title row — with back button */}
+                    <div className="flex items-center gap-2 mb-3">
+                        {/* Back button stays in trip flow */}
+                        {onBack && (
+                            <button
+                                onClick={onBack}
+                                className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-opacity hover:opacity-70"
+                                style={{ background: C.bg }}
+                            >
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke={C.navy} strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                </svg>
+                            </button>
                         )}
-                    </div>
-                    {/* ETA chip */}
-                    <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-shrink-0" style={{ background: C.bg }}>
-                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        {isLoadingRoute ? (
-                            <div className="w-12 h-3.5 rounded animate-pulse" style={{ background: C.border }} />
-                        ) : (
-                            <span className="text-xs font-bold" style={{ color: C.navy }}>{displayEta}</span>
+                        <div className="flex items-center gap-2 flex-1">
+                            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#22c55e' }} />
+                            <span className="text-sm font-bold" style={{ color: C.navy }}>Đang điều hướng đến khách hàng</span>
+                        </div>
+                        {locationError && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#fefce8', color: '#ca8a04' }}>
+                                GPS mặc định
+                            </span>
                         )}
                     </div>
 
-                    <div className="flex-1" />
-
-                    {/* Call button */}
-                    {displayPhone && (
-                        <a
-                            href={`tel:${displayPhone}`}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white flex-shrink-0"
-                            style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`, boxShadow: `0 2px 8px ${C.orange}40` }}
+                    {/* Customer info */}
+                    <div className="flex items-center gap-3 mb-3">
+                        <div
+                            className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
+                            style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
                         >
-                            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                            Gọi ngay
-                        </a>
-                    )}
-                </div>
-            </div>
-
-            {/* ── VietMap Fullscreen ── */}
-            <div className="relative flex-1">
-                <div ref={mapContainer} style={{ width: '100%', height: '100vh' }} />
-
-                {/* Loading overlay */}
-                {!isMapReady && (
-                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: '#f1f5f9' }}>
-                        <div className="text-center">
-                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-3" style={{ borderColor: C.orange }} />
-                            <p className="text-sm" style={{ color: C.gray }}>Đang tải bản đồ...</p>
+                            {displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold" style={{ color: C.navy }}>{displayName}</p>
+                            <p className="text-xs truncate" style={{ color: C.gray }}>
+                                📍 {pickupLocation.addressText}
+                            </p>
                         </div>
                     </div>
-                )}
+
+                    {/* Stats + Actions row */}
+                    <div className="flex items-center gap-3">
+                        {/* Distance chip */}
+                        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-shrink-0" style={{ background: C.bg }}>
+                            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            </svg>
+                            {isLoadingRoute ? (
+                                <div className="w-12 h-3.5 rounded animate-pulse" style={{ background: C.border }} />
+                            ) : (
+                                <span className="text-xs font-bold" style={{ color: C.navy }}>{displayDistance}</span>
+                            )}
+                        </div>
+                        {/* ETA chip */}
+                        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-shrink-0" style={{ background: C.bg }}>
+                            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {isLoadingRoute ? (
+                                <div className="w-12 h-3.5 rounded animate-pulse" style={{ background: C.border }} />
+                            ) : (
+                                <span className="text-xs font-bold" style={{ color: C.navy }}>{displayEta}</span>
+                            )}
+                        </div>
+
+                        <div className="flex-1" />
+
+                        {/* Floating Chat Button */}
+                        {chatEnabled && (
+                            <button
+                                onClick={() => setIsChatOpen(true)}
+                                className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold flex-shrink-0"
+                                style={{ background: '#eff6ff', color: '#2563eb' }}
+                            >
+                                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#2563eb" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                                Chat
+                                {chatUnreadCount > 0 && (
+                                    <span
+                                        className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-0.5 rounded-full text-[9px] font-bold text-white flex items-center justify-center"
+                                        style={{ background: '#ef4444' }}
+                                    >
+                                        {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                                    </span>
+                                )}
+                            </button>
+                        )}
+
+                        {/* Call button */}
+                        {displayPhone && (
+                            <a
+                                href={`tel:${displayPhone}`}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white flex-shrink-0"
+                                style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`, boxShadow: `0 2px 8px ${C.orange}40` }}
+                            >
+                                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                                Gọi ngay
+                            </a>
+                        )}
+                    </div>
+                </div>
+
+                {/* ── VietMap Fullscreen ── */}
+                <div className="relative flex-1">
+                    <div ref={mapContainer} style={{ width: '100%', height: '100vh' }} />
+
+                    {/* Loading overlay */}
+                    {!isMapReady && (
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: '#f1f5f9' }}>
+                            <div className="text-center">
+                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-3" style={{ borderColor: C.orange }} />
+                                <p className="text-sm" style={{ color: C.gray }}>Đang tải bản đồ...</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Bottom Sheet: Đã đến nơi ── */}
+                <div
+                    className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-6 pt-4"
+                    style={{
+                        background: 'white',
+                        borderTop: `1px solid ${C.border}`,
+                        boxShadow: '0 -4px 20px rgba(0,0,0,0.10)',
+                        borderRadius: '20px 20px 0 0',
+                    }}
+                >
+                    {/* Drag handle */}
+                    <div className="w-10 h-1 rounded-full mx-auto mb-3" style={{ background: C.border }} />
+
+                    {/* ETA row */}
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className="flex-1 rounded-xl p-2.5 text-center" style={{ background: C.bg }}>
+                            <p className="text-[10px] mb-0.5" style={{ color: C.gray }}>Khoảng cách</p>
+                            <p className="text-base font-bold" style={{ color: C.navy }}>{displayDistance}</p>
+                        </div>
+                        <div className="flex-1 rounded-xl p-2.5 text-center" style={{ background: C.bg }}>
+                            <p className="text-[10px] mb-0.5" style={{ color: C.gray }}>Thời gian dự kiến</p>
+                            <p className="text-base font-bold" style={{ color: C.navy }}>{displayEta}</p>
+                        </div>
+                    </div>
+
+                    {/* Arrived button */}
+                    <button
+                        onClick={() => setShowConfirm(true)}
+                        className="w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                        style={{
+                            background: `linear-gradient(135deg, #16a34a, #15803d)`,
+                            boxShadow: '0 4px 16px rgba(22,163,74,0.35)',
+                        }}
+                    >
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Đã đến nơi
+                    </button>
+                </div>
             </div>
-        </div>
+
+            {/* Chat Modal for provider during navigation */}
+            {isChatOpen && providerId && (
+                <Suspense fallback={null}>
+                    <ChatModal
+                        requestId={requestId}
+                        currentUserId={providerId}
+                        currentUserRole="PROVIDER"
+                        currentUserName={providerName ?? 'Provider'}
+                        otherPartyName={customerName ?? user?.name ?? 'Khách hàng'}
+                        onClose={() => setIsChatOpen(false)}
+                    />
+                </Suspense>
+            )}
+
+            {/* Confirmation modal — Đã đến nơi */}
+            {showConfirm && (
+                <div
+                    className="fixed inset-0 z-50 flex items-end justify-center"
+                    style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+                    onClick={() => !isCompleting && setShowConfirm(false)}
+                >
+                    <div
+                        className="w-full max-w-lg mx-auto px-4 pb-8 pt-6"
+                        style={{
+                            background: 'white',
+                            borderRadius: '24px 24px 0 0',
+                            boxShadow: '0 -8px 40px rgba(0,0,0,0.25)',
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Icon */}
+                        <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#f0fdf4' }}>
+                            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                        </div>
+
+                        <h3 className="text-base font-bold text-center mb-1" style={{ color: C.navy }}>
+                            Xác nhận đã đến nơi?
+                        </h3>
+                        <p className="text-sm text-center mb-6" style={{ color: C.gray }}>
+                            Bạn xác nhận đã đến vị trí khách hàng?
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => setShowConfirm(false)}
+                                disabled={isCompleting}
+                                className="py-3.5 rounded-2xl text-sm font-semibold transition-opacity"
+                                style={{ background: C.bg, color: C.gray }}
+                            >
+                                Huỷ bỏ
+                            </button>
+                            <button
+                                onClick={handleComplete}
+                                disabled={isCompleting}
+                                className="py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.97]"
+                                style={{
+                                    background: isCompleting ? C.gray : 'linear-gradient(135deg, #16a34a, #15803d)',
+                                    boxShadow: isCompleting ? 'none' : '0 3px 12px rgba(22,163,74,0.35)',
+                                }}
+                            >
+                                {isCompleting ? (
+                                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                                        <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
+                                    </svg>
+                                ) : (
+                                    'Xác nhận'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }

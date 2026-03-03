@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
+import { useChat } from '@/lib/hooks/useChat';
+
+const ChatModal = lazy(() => import('@/components/ChatModal'));
 
 const ProviderNavigationView = dynamic(
     () => import('@/components/ProviderNavigationView'),
@@ -83,9 +86,21 @@ export default function ProviderRequestDetailPage() {
     const [showNavigationMap, setShowNavigationMap] = useState(false);
     const [isStartingNav, setIsStartingNav] = useState(false);
     const [selectedConfirmImage, setSelectedConfirmImage] = useState<string | null>(null);
+    const [isChatOpen, setIsChatOpen] = useState(false);
 
     // Quote window timer
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
+
+    // Chat hook — subscribe for unread count as soon as we have user.id + requestId
+    // (enabled independently of request loading so the badge shows immediately)
+    const { sendMessage: sendChatMessage, unreadCount: chatUnreadCount } = useChat({
+        requestId: requestId ?? '__none__',
+        currentUserId: user?.id ?? '',
+        currentUserRole: 'PROVIDER',
+        currentUserName: user?.name ?? 'Provider',
+        enabled: !!(user?.id && requestId),
+    });
+
 
     // Quote form state
     const [price, setPrice] = useState<string>('');
@@ -438,6 +453,9 @@ export default function ProviderRequestDetailPage() {
                 user={{ name: request!.user?.name, phoneNumber: request!.contactPhone }}
                 eta={myQuoteDetails?.estimatedArrivalMinutes ?? null}
                 requestId={requestId}
+                customerName={request!.user?.name ?? 'Khách hàng'}
+                onBack={() => setShowNavigationMap(false)}
+                onCompleted={() => router.push('/provider/active')}
             />
         );
     }
@@ -648,6 +666,13 @@ export default function ProviderRequestDetailPage() {
                                 setIsStartingNav(true);
                                 try {
                                     await api.patch(`/rescue-requests/${requestId}/start-navigation`);
+                                    // Send automatic chat message to customer
+                                    const etaText = myQuoteDetails?.estimatedArrivalMinutes
+                                        ? `khoảng ${myQuoteDetails.estimatedArrivalMinutes} phút`
+                                        : 'sớm nhất có thể';
+                                    await sendChatMessage(
+                                        `Xin chào! Provider đang bắt đầu di chuyển đến vị trí của bạn. Tôi sẽ có mặt trong ${etaText}. Vui lòng ở lại vị trí và chờ tôi nhé! 🚗`
+                                    );
                                 } catch (err: any) {
                                     // Ignore if already IN_PROGRESS
                                     console.warn('start-navigation:', err?.response?.data?.message);
@@ -685,6 +710,26 @@ export default function ProviderRequestDetailPage() {
                             Bản đồ điều hướng sẽ mở sau khi bạn bấm
                         </p>
                     </div>
+
+                    {/* Chat button for provider (before navigation) */}
+                    <button
+                        onClick={() => setIsChatOpen(true)}
+                        className="relative w-full py-3.5 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 transition-all"
+                        style={{ background: C.orangeLight, color: C.orange, border: `1.5px solid ${C.orange}30` }}
+                    >
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        Nhắn tin với khách hàng
+                        {chatUnreadCount > 0 && (
+                            <span
+                                className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+                                style={{ background: '#ef4444', boxShadow: '0 1px 4px rgba(239,68,68,0.5)' }}
+                            >
+                                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                            </span>
+                        )}
+                    </button>
 
                 </div>
 
@@ -746,6 +791,20 @@ export default function ProviderRequestDetailPage() {
                             )}
                         </div>
                     </div>
+                )}
+
+                {/* Chat Modal for provider */}
+                {isChatOpen && user && request && (
+                    <Suspense fallback={null}>
+                        <ChatModal
+                            requestId={requestId}
+                            currentUserId={user.id}
+                            currentUserRole="PROVIDER"
+                            currentUserName={user.name ?? 'Provider'}
+                            otherPartyName={request.user?.name ?? 'Khách hàng'}
+                            onClose={() => setIsChatOpen(false)}
+                        />
+                    </Suspense>
                 )}
             </div>
         );

@@ -94,6 +94,11 @@ export class RescueRequestController {
         return this.rescueRequestService.startNavigation(requestId, req.user.id);
     }
 
+    @Patch(':id/complete-service')
+    async completeService(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.completeService(requestId, req.user.id);
+    }
+
     // ==================== QUOTE ENDPOINTS ====================
 
     /**
