@@ -179,10 +179,10 @@ export class RescueRequestService {
                     confirmed: true,
                 },
             });
-            console.log(`✅ [RescueRequest] Confirmed ${dto.videoUploadIds.length} video uploads`);
+            console.log(` [RescueRequest] Confirmed ${dto.videoUploadIds.length} video uploads`);
         }
 
-        console.log('✅ [RescueRequest] Created request:', rescueRequest.id);
+        console.log(' [RescueRequest] Created request:', rescueRequest.id);
         console.log('📊 [RescueRequest] Media created:', mediaItems.length);
         console.log('🔍 [RescueRequest] Phase 1: MATCHING (normal radius), phase expires at:', phaseExpiresAt.toISOString());
         console.log('📋 [RescueRequest] Quote window expires at:', quoteWindowExpiresAt.toISOString());
@@ -451,7 +451,7 @@ export class RescueRequestService {
             },
         });
 
-        console.log(`✅ [RescueRequest] Created retry request: ${newRequest.id}`);
+        console.log(` [RescueRequest] Created retry request: ${newRequest.id}`);
 
         return newRequest;
     }
@@ -718,7 +718,7 @@ export class RescueRequestService {
             throw new BadRequestException('SLOTS_FULL');
         }
 
-        console.log(`✅ [Quote] Window check passed. Expires at: ${rescueRequest.quoteWindowExpiresAt.toISOString()}, now: ${now.toISOString()}, remaining: ${Math.floor((rescueRequest.quoteWindowExpiresAt.getTime() - now.getTime()) / 1000)}s`);
+        console.log(` [Quote] Window check passed. Expires at: ${rescueRequest.quoteWindowExpiresAt.toISOString()}, now: ${now.toISOString()}, remaining: ${Math.floor((rescueRequest.quoteWindowExpiresAt.getTime() - now.getTime()) / 1000)}s`);
 
         // Validate provider
         const provider = await this.prisma.user.findUnique({
@@ -793,7 +793,7 @@ export class RescueRequestService {
             return quote;
         });
 
-        console.log(`✅ [Quote] Quote created: ${result.id}, expires at ${quoteExpiresAt.toISOString()}, count: ${rescueRequest.quoteCount + 1}/${rescueRequest.maxQuotes}`);
+        console.log(` [Quote] Quote created: ${result.id}, expires at ${quoteExpiresAt.toISOString()}, count: ${rescueRequest.quoteCount + 1}/${rescueRequest.maxQuotes}`);
         return result;
     }
 
@@ -929,7 +929,7 @@ export class RescueRequestService {
                 });
             });
 
-            console.log('✅ [Quote] Quote accepted, request ASSIGNED to provider');
+            console.log(' [Quote] Quote accepted, request ASSIGNED to provider');
         } else {
             // Reject quote
             await this.prisma.quote.update({
@@ -973,12 +973,56 @@ export class RescueRequestService {
         if (request.status === 'IN_PROGRESS') return { success: true, status: 'IN_PROGRESS' };
         if (request.status !== 'ASSIGNED') throw new BadRequestException(`Cannot start from status: ${request.status}`);
         await this.prisma.rescueRequest.update({ where: { id: requestId }, data: { status: 'IN_PROGRESS' } });
-        console.log(`🚗 [RescueRequest] Provider ${providerId} started navigation → IN_PROGRESS`);
+        console.log(` [RescueRequest] Provider ${providerId} started navigation → IN_PROGRESS`);
         return { success: true, status: 'IN_PROGRESS' };
     }
 
     /**
-     * Provider đã đến nơi: IN_PROGRESS → COMPLETED
+     * Provider đã đến nơi: IN_PROGRESS → ARRIVED (chờ user xác nhận)
+     * PATCH /rescue-requests/:id/mark-arrived
+     */
+    async markArrived(requestId: string, providerId: string) {
+        const request = await this.prisma.rescueRequest.findUnique({ where: { id: requestId } });
+        if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.assignedProviderId !== providerId) throw new ForbiddenException('Not assigned to this request');
+        if (request.status === 'ARRIVED') return { success: true, status: 'ARRIVED' };
+        if (request.status !== 'IN_PROGRESS') throw new BadRequestException(`Cannot mark arrived from status: ${request.status}`);
+        await this.prisma.rescueRequest.update({ where: { id: requestId }, data: { status: 'ARRIVED' } });
+        console.log(`📍 [RescueRequest] Provider ${providerId} marked arrived → ARRIVED (awaiting user confirmation)`);
+        return { success: true, status: 'ARRIVED' };
+    }
+
+    /**
+     * User xác nhận provider đã đến: ARRIVED → WORKING
+     * PATCH /rescue-requests/:id/confirm-arrival
+     */
+    async confirmArrival(requestId: string, userId: string) {
+        const request = await this.prisma.rescueRequest.findUnique({ where: { id: requestId } });
+        if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.userId !== userId) throw new ForbiddenException('Not your request');
+        if (request.status === 'WORKING') return { success: true, status: 'WORKING' };
+        if (request.status !== 'ARRIVED') throw new BadRequestException(`Cannot confirm arrival from status: ${request.status}`);
+        await this.prisma.rescueRequest.update({ where: { id: requestId }, data: { status: 'WORKING' } });
+        console.log(` [RescueRequest] User ${userId} confirmed arrival → WORKING`);
+        return { success: true, status: 'WORKING' };
+    }
+
+    /**
+     * User từ chối xác nhận: ARRIVED → IN_PROGRESS (provider chưa đến nơi thực sự)
+     * PATCH /rescue-requests/:id/deny-arrival
+     */
+    async denyArrival(requestId: string, userId: string) {
+        const request = await this.prisma.rescueRequest.findUnique({ where: { id: requestId } });
+        if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.userId !== userId) throw new ForbiddenException('Not your request');
+        if (request.status !== 'ARRIVED') throw new BadRequestException(`Cannot deny arrival from status: ${request.status}`);
+        await this.prisma.rescueRequest.update({ where: { id: requestId }, data: { status: 'IN_PROGRESS' } });
+        console.log(`❌ [RescueRequest] User ${userId} denied arrival → back to IN_PROGRESS`);
+        return { success: true, status: 'IN_PROGRESS' };
+    }
+
+    /**
+     * Provider hoàn thành công việc: WORKING → COMPLETED
      * PATCH /rescue-requests/:id/complete-service
      */
     async completeService(requestId: string, providerId: string) {
@@ -986,12 +1030,12 @@ export class RescueRequestService {
         if (!request) throw new NotFoundException('Rescue request not found');
         if (request.assignedProviderId !== providerId) throw new ForbiddenException('Not assigned to this request');
         if (request.status === 'COMPLETED') return { success: true, status: 'COMPLETED' };
-        if (request.status !== 'IN_PROGRESS') throw new BadRequestException(`Cannot complete from status: ${request.status}`);
+        if (!['IN_PROGRESS', 'ARRIVED', 'WORKING'].includes(request.status)) throw new BadRequestException(`Cannot complete from status: ${request.status}`);
         await this.prisma.rescueRequest.update({
             where: { id: requestId },
             data: { status: 'COMPLETED', completedAt: new Date() },
         });
-        console.log(`✅ [RescueRequest] Provider ${providerId} completed service → COMPLETED`);
+        console.log(` [RescueRequest] Provider ${providerId} completed service → COMPLETED`);
         return { success: true, status: 'COMPLETED' };
     }
 

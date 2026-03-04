@@ -490,7 +490,7 @@ export class ProviderService {
         // Step 3: Sort by ETA (MOST IMPORTANT) - providers closest in TIME, not distance
         matchedRequests.sort((a, b) => a.eta - b.eta);
 
-        console.log(`✅ [Provider ${userId}] Matched ${matchedRequests.length} requests with real ETA`);
+        console.log(` [Provider ${userId}] Matched ${matchedRequests.length} requests with real ETA`);
         if (matchedRequests.length > 0) {
             console.log(`   → Best match: ${matchedRequests[0].distance}km, ETA: ${matchedRequests[0].eta} minutes`);
         }
@@ -656,7 +656,7 @@ export class ProviderService {
             },
         });
 
-        console.log(`✅ [Provider ${providerId}] Accepted request ${requestId}`);
+        console.log(` [Provider ${providerId}] Accepted request ${requestId}`);
 
         return {
             success: true,

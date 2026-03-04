@@ -74,7 +74,7 @@ export default function ProviderVerificationUpload() {
                         <div className="flex items-start justify-between mb-4">
                             <div className="flex-1">
                                 <h3 className="font-semibold text-lg text-gray-900 flex items-center gap-2">
-                                    {doc.uploaded ? '✅' : '📄'} {doc.label}
+                                    {doc.uploaded ? '' : '📄'} {doc.label}
                                 </h3>
                                 <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
                             </div>
@@ -134,7 +134,7 @@ export default function ProviderVerificationUpload() {
                 <div className="bg-white rounded-lg shadow-sm border p-6">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <span className="text-2xl">✅</span>
+                            <span className="text-2xl"></span>
                             <div>
                                 <h3 className="text-xl font-bold text-green-700">Hoàn tất!</h3>
                                 <p className="text-sm text-gray-600">

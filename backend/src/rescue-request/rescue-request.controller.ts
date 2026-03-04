@@ -94,6 +94,24 @@ export class RescueRequestController {
         return this.rescueRequestService.startNavigation(requestId, req.user.id);
     }
 
+    /** Provider báo đã đến nơi (chờ user xác nhận) */
+    @Patch(':id/mark-arrived')
+    async markArrived(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.markArrived(requestId, req.user.id);
+    }
+
+    /** User xác nhận provider đã đến → WORKING */
+    @Patch(':id/confirm-arrival')
+    async confirmArrival(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.confirmArrival(requestId, req.user.id);
+    }
+
+    /** User từ chối (provider chưa đến) → IN_PROGRESS */
+    @Patch(':id/deny-arrival')
+    async denyArrival(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.denyArrival(requestId, req.user.id);
+    }
+
     @Patch(':id/complete-service')
     async completeService(@Request() req, @Param('id') requestId: string) {
         return this.rescueRequestService.completeService(requestId, req.user.id);

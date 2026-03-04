@@ -270,7 +270,7 @@ export default function ProviderVerificationSubmit() {
                         <div className="flex items-start justify-between mb-4">
                             <div className="flex-1">
                                 <h3 className="font-semibold text-lg text-gray-900 flex items-center gap-2">
-                                    {doc.uploaded ? '✅' : '📄'} {doc.label}
+                                    {doc.uploaded ? '' : '📄'} {doc.label}
                                     {doc.required && !doc.uploaded && <span className="text-red-500">*</span>}
                                 </h3>
                                 <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
@@ -333,7 +333,7 @@ export default function ProviderVerificationSubmit() {
                         <div className="flex items-center gap-3 mb-2">
                             {allRequiredUploaded ? (
                                 <>
-                                    <span className="text-2xl">✅</span>
+                                    <span className="text-2xl"></span>
                                     <h3 className="text-xl font-bold text-green-700">Sẵn sàng gửi hồ sơ</h3>
                                 </>
                             ) : (

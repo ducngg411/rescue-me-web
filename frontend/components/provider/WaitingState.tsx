@@ -68,7 +68,7 @@ export default function WaitingState() {
                             {/* Current Location Check (GPS) */}
                             {debugInfo.profile.currentLocation?.lat && debugInfo.profile.currentLocation?.lng ? (
                                 <div className="flex items-start gap-2">
-                                    <span className="text-green-600">✅</span>
+                                    <span className="text-green-600"></span>
                                     <div className="flex-1">
                                         <div className="font-medium text-green-700">Đang dùng vị trí GPS THỜI GIAN THỰC</div>
                                         <div className="text-gray-600">Tọa độ: {debugInfo.profile.currentLocation.lat.toFixed(4)}, {debugInfo.profile.currentLocation.lng.toFixed(4)}</div>
@@ -131,7 +131,7 @@ export default function WaitingState() {
                             <div className="flex items-start gap-2">
                                 {debugInfo.profile.serviceTypes?.length > 0 ? (
                                     <>
-                                        <span className="text-green-600">✅</span>
+                                        <span className="text-green-600"></span>
                                         <div className="flex-1">
                                             <div className="font-medium">Dịch vụ: {debugInfo.profile.serviceTypes.join(', ')}</div>
                                         </div>
@@ -150,7 +150,7 @@ export default function WaitingState() {
                             <div className="flex items-start gap-2">
                                 {debugInfo.profile.supportedVehicleTypes?.length > 0 ? (
                                     <>
-                                        <span className="text-green-600">✅</span>
+                                        <span className="text-green-600"></span>
                                         <div className="flex-1">
                                             <div className="font-medium">Hỗ trợ xe: {debugInfo.profile.supportedVehicleTypes.join(', ')}</div>
                                         </div>
@@ -167,7 +167,7 @@ export default function WaitingState() {
 
                             {/* Online Status */}
                             <div className="flex items-start gap-2">
-                                <span className="text-green-600">✅</span>
+                                <span className="text-green-600"></span>
                                 <div className="flex-1">
                                     <div className="font-medium">Trạng thái: Online</div>
                                 </div>
@@ -175,7 +175,7 @@ export default function WaitingState() {
 
                             {/* Verification Status */}
                             <div className="flex items-start gap-2">
-                                <span className="text-green-600">✅</span>
+                                <span className="text-green-600"></span>
                                 <div className="flex-1">
                                     <div className="font-medium">Đã xác minh: APPROVED</div>
                                 </div>

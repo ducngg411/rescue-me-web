@@ -6,6 +6,7 @@ import { useUserGuard } from '@/lib/guards';
 import { useRequestTracking } from '@/lib/hooks/useRequestTracking';
 import MatchingStatus from '@/components/MatchingStatus';
 import AssignedProvider from '@/components/AssignedProvider';
+import ArrivalConfirmation from '@/components/ArrivalConfirmation';
 import ExpiredRetry from '@/components/ExpiredRetry';
 import QuoteSelectionPanel from '@/components/QuoteSelectionPanel';
 import api from '@/lib/api';
@@ -29,6 +30,8 @@ const STATUS_LABELS: Record<string, string> = {
     ASSIGNED: 'Đã có provider',
     ACCEPTED: 'Đã chấp nhận',
     IN_PROGRESS: 'Đang di chuyển',
+    ARRIVED: 'Provider đã đến',
+    WORKING: 'Đang làm việc',
     COMPLETED: 'Hoàn thành',
     CANCELLED: 'Đã hủy',
     REJECTED: 'Bị từ chối',
@@ -41,6 +44,8 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> =
     ASSIGNED: { bg: '#f0fdf4', text: '#16a34a', dot: '#22c55e' },
     ACCEPTED: { bg: '#f0fdf4', text: '#16a34a', dot: '#22c55e' },
     IN_PROGRESS: { bg: '#eff6ff', text: '#2563eb', dot: '#3b82f6' },
+    ARRIVED: { bg: '#fef3c7', text: '#d97706', dot: '#f59e0b' },
+    WORKING: { bg: '#f0fdf4', text: '#16a34a', dot: '#22c55e' },
     COMPLETED: { bg: '#f0fdf4', text: '#16a34a', dot: '#22c55e' },
     CANCELLED: { bg: '#fef2f2', text: '#dc2626', dot: '#ef4444' },
     EXPIRED: { bg: '#fefce8', text: '#ca8a04', dot: '#eab308' },
@@ -220,7 +225,7 @@ export default function RequestTrackingPage() {
             await api.patch(`/rescue-requests/${requestId}/quotes/${quoteId}/respond`, {
                 action: 'ACCEPT',
             });
-            toast.success('✅ Đã chọn báo giá! Provider đang chuẩn bị đến.');
+            toast.success('Đã chọn báo giá! Provider đang chuẩn bị đến.');
             // Tracking hook will poll and catch ASSIGNED status automatically
         } catch (err: any) {
             const msg = err.response?.data?.message || 'Không thể chọn báo giá. Vui lòng thử lại.';
@@ -400,7 +405,7 @@ export default function RequestTrackingPage() {
                     />
                 )}
 
-                {/* ASSIGNED state */}
+                {/* ASSIGNED / IN_PROGRESS state */}
                 {(status.status === 'ASSIGNED' || status.status === 'IN_PROGRESS') && status.assignedProvider && (
                     <AssignedProvider
                         provider={status.assignedProvider}
@@ -409,6 +414,36 @@ export default function RequestTrackingPage() {
                         requestStatus={status.status}
                         requestId={requestId}
                     />
+                )}
+
+                {/* ARRIVED: provider says they're here, ask customer to confirm */}
+                {status.status === 'ARRIVED' && status.assignedProvider && (
+                    <ArrivalConfirmation
+                        requestId={requestId}
+                        providerName={status.assignedProvider.name ?? 'Provider'}
+                        onResponded={(confirmed) => {
+                            // The hook will re-poll and update status automatically
+                        }}
+                    />
+                )}
+
+                {/* WORKING: customer confirmed, service in progress */}
+                {status.status === 'WORKING' && (
+                    <div className="bg-white rounded-2xl p-6 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+                        <div className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#f0fdf4' }}>
+                            <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-sm font-bold mb-1" style={{ color: '#15803d' }}>Provider đang làm việc </h3>
+                        <p className="text-xs mb-2" style={{ color: '#6b7280' }}>
+                            Vui lòng quan sát và hỗ trợ provider trong quá trình sửa chữa.
+                        </p>
+                        <p className="text-xs" style={{ color: '#9ca3af' }}>
+                            ⚡ Hãy yên tâm — provider của bạn đang cố gắng hết sức!
+                        </p>
+                    </div>
                 )}
 
                 {/* EXPIRED state */}

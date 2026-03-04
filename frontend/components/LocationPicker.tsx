@@ -91,7 +91,7 @@ export default function LocationPicker({
 
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
-                    console.log('✅ [LocationPicker] Position received:', {
+                    console.log(' [LocationPicker] Position received:', {
                         lat: position.coords.latitude,
                         lng: position.coords.longitude,
                         accuracy: position.coords.accuracy,

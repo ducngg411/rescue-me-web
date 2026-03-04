@@ -91,7 +91,7 @@ export class VietMapService {
             const durationSeconds = route.time / 1000; // milliseconds → seconds
 
             this.logger.debug(
-                `✅ Route: ${distanceKm.toFixed(3)}km (${route.distance}m), ETA: ${durationMinutes.toFixed(1)} minutes`,
+                ` Route: ${distanceKm.toFixed(3)}km (${route.distance}m), ETA: ${durationMinutes.toFixed(1)} minutes`,
             );
 
             return {

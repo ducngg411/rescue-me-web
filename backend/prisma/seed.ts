@@ -25,7 +25,7 @@ async function main() {
         },
     });
 
-    console.log('✅ Admin user created:', {
+    console.log(' Admin user created:', {
         email: adminEmail,
         password: adminPassword,
         role: admin.role,
@@ -59,7 +59,7 @@ async function main() {
         },
     });
 
-    console.log('✅ Pending provider created:', pendingProvider.email);
+    console.log(' Pending provider created:', pendingProvider.email);
 
     // Create Test Provider 2 - APPROVED
     const approvedProvider = await prisma.user.upsert({
@@ -87,7 +87,7 @@ async function main() {
         },
     });
 
-    console.log('✅ Approved provider created:', approvedProvider.email);
+    console.log(' Approved provider created:', approvedProvider.email);
 
     // Create Test Provider 3 - REJECTED
     const rejectedProvider = await prisma.user.upsert({
@@ -118,7 +118,7 @@ async function main() {
         },
     });
 
-    console.log('✅ Rejected provider created:', rejectedProvider.email);
+    console.log(' Rejected provider created:', rejectedProvider.email);
 
     // Create Test Provider 4 - SUSPENDED
     const suspendedProvider = await prisma.user.upsert({
@@ -148,7 +148,7 @@ async function main() {
         },
     });
 
-    console.log('✅ Suspended provider created:', suspendedProvider.email);
+    console.log(' Suspended provider created:', suspendedProvider.email);
 
     // Create Test Provider 5 - DRAFT
     const draftProvider = await prisma.user.upsert({
@@ -167,7 +167,7 @@ async function main() {
         },
     });
 
-    console.log('✅ Draft provider created:', draftProvider.email);
+    console.log(' Draft provider created:', draftProvider.email);
 
     // Create Regular Users
     const user1 = await prisma.user.upsert({
@@ -184,7 +184,7 @@ async function main() {
         },
     });
 
-    console.log('✅ Regular user created:', user1.email);
+    console.log(' Regular user created:', user1.email);
 
     console.log('\n✨ Database seeding completed!');
     console.log('\n📋 Test Accounts:');

@@ -53,7 +53,7 @@ export class UploadsService {
                 api_key: cloudinaryApiKey,
                 api_secret: cloudinaryApiSecret,
             });
-            console.log('✅ Cloudinary configured:', cloudinaryCloudName);
+            console.log(' Cloudinary configured:', cloudinaryCloudName);
         } else {
             console.warn('⚠️  Cloudinary not configured - video upload features will not work');
         }

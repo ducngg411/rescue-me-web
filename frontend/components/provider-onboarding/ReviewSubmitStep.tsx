@@ -125,7 +125,7 @@ export default function ReviewSubmitStep({ serviceInfo, requiredDocs, optionalDo
                                 {serviceInfo.rescueVehicles.map((vehicle: any, index: number) => (
                                     <div key={index} className="flex items-center gap-2 mb-1">
                                         <span className="text-gray-700">
-                                            {vehicle.type === 'CAR' ? '🚗 Ô tô' : '🏍️ Xe máy'}:
+                                            {vehicle.type === 'CAR' ? ' Ô tô' : '🏍️ Xe máy'}:
                                         </span>
                                         <span className="text-gray-700 font-mono">{vehicle.plateNumber}</span>
                                         {vehicle.isPrimary && (

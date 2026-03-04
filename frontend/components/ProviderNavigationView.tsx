@@ -110,8 +110,12 @@ export default function ProviderNavigationView({
     const [isLoadingRoute, setIsLoadingRoute] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
-    const [isCompleting, setIsCompleting] = useState(false);
+    const [arrivalState, setArrivalState] = useState<'idle' | 'waiting' | 'confirmed' | 'denied' | 'working'>('idle');
+    const [isMarkingArrived, setIsMarkingArrived] = useState(false);
+    const [workingCountdown, setWorkingCountdown] = useState(5);
     const routeDrawn = useRef(false);
+    const pollRef = useRef<NodeJS.Timeout | null>(null);
+    const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
     // Get provider identity directly from auth — avoids relying on props being undefined
     const { user: authUser } = useAuth();
@@ -128,21 +132,60 @@ export default function ProviderNavigationView({
         enabled: chatEnabled,
     });
 
-    // Mark arrival — calls backend PATCH /rescue-requests/:id/complete-service
-    const handleComplete = async () => {
-        setIsCompleting(true);
+    // Mark arrived — calls PATCH mark-arrived, then polls for customer response
+    const handleMarkArrived = async () => {
+        setIsMarkingArrived(true);
         try {
-            await api.patch(`/rescue-requests/${requestId}/complete-service`);
-            toast.success('✅ Dịch vụ hoàn thành! Cảm ơn bạn.');
+            await api.patch(`/rescue-requests/${requestId}/mark-arrived`);
+            setArrivalState('waiting');
             setShowConfirm(false);
-            onCompleted?.();
+            // Poll every 3s for customer response
+            pollRef.current = setInterval(async () => {
+                try {
+                    const res = await api.get(`/rescue-requests/${requestId}/provider-view`);
+                    const status = res.data?.status;
+                    if (status === 'WORKING') {
+                        clearInterval(pollRef.current!);
+                        setArrivalState('confirmed');
+                        toast.success('Khách hàng xác nhận!');
+                    } else if (status === 'IN_PROGRESS') {
+                        // Customer denied — went back to IN_PROGRESS
+                        clearInterval(pollRef.current!);
+                        setArrivalState('denied');
+                        toast.error('Khách chưa thấy bạn đến nơi!');
+                    }
+                } catch { /* ignore poll errors */ }
+            }, 3000);
         } catch (err: any) {
-            const msg = err.response?.data?.message || 'Không thể hoàn thành. Vui lòng thử lại.';
+            const msg = err.response?.data?.message || 'Không thể xác nhận. Thử lại.';
             toast.error(msg);
         } finally {
-            setIsCompleting(false);
+            setIsMarkingArrived(false);
         }
     };
+
+    // Cleanup poll on unmount
+    useEffect(() => () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+        if (countdownRef.current) clearInterval(countdownRef.current);
+    }, []);
+
+    // 5-second auto-countdown when customer confirms arrival
+    useEffect(() => {
+        if (arrivalState !== 'confirmed') return;
+        setWorkingCountdown(5);
+        countdownRef.current = setInterval(() => {
+            setWorkingCountdown(prev => {
+                if (prev <= 1) {
+                    clearInterval(countdownRef.current!);
+                    setArrivalState('working');
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
+    }, [arrivalState]);
 
     // ── 1. Get provider's current GPS ───────────────────────────────────────
     useEffect(() => {
@@ -443,7 +486,8 @@ export default function ProviderNavigationView({
                     )}
                 </div>
 
-                {/* ── Bottom Sheet: Đã đến nơi ── */}
+
+                {/* ── Bottom Sheet: multi-state ── */}
                 <div
                     className="absolute bottom-0 left-0 right-0 z-10 px-4 pb-6 pt-4"
                     style={{
@@ -456,33 +500,173 @@ export default function ProviderNavigationView({
                     {/* Drag handle */}
                     <div className="w-10 h-1 rounded-full mx-auto mb-3" style={{ background: C.border }} />
 
-                    {/* ETA row */}
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="flex-1 rounded-xl p-2.5 text-center" style={{ background: C.bg }}>
-                            <p className="text-[10px] mb-0.5" style={{ color: C.gray }}>Khoảng cách</p>
-                            <p className="text-base font-bold" style={{ color: C.navy }}>{displayDistance}</p>
-                        </div>
-                        <div className="flex-1 rounded-xl p-2.5 text-center" style={{ background: C.bg }}>
-                            <p className="text-[10px] mb-0.5" style={{ color: C.gray }}>Thời gian dự kiến</p>
-                            <p className="text-base font-bold" style={{ color: C.navy }}>{displayEta}</p>
-                        </div>
-                    </div>
+                    {/* === IDLE: normal navigation, show stats + arrive button === */}
+                    {arrivalState === 'idle' && (
+                        <>
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="flex-1 rounded-xl p-2.5 text-center" style={{ background: C.bg }}>
+                                    <p className="text-[10px] mb-0.5" style={{ color: C.gray }}>Khoảng cách</p>
+                                    <p className="text-base font-bold" style={{ color: C.navy }}>{displayDistance}</p>
+                                </div>
+                                <div className="flex-1 rounded-xl p-2.5 text-center" style={{ background: C.bg }}>
+                                    <p className="text-[10px] mb-0.5" style={{ color: C.gray }}>Thời gian dự kiến</p>
+                                    <p className="text-base font-bold" style={{ color: C.navy }}>{displayEta}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowConfirm(true)}
+                                className="w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                                style={{
+                                    background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                                    boxShadow: '0 4px 16px rgba(22,163,74,0.35)',
+                                }}
+                            >
+                                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                Đã đến nơi
+                            </button>
+                        </>
+                    )}
 
-                    {/* Arrived button */}
-                    <button
-                        onClick={() => setShowConfirm(true)}
-                        className="w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                        style={{
-                            background: `linear-gradient(135deg, #16a34a, #15803d)`,
-                            boxShadow: '0 4px 16px rgba(22,163,74,0.35)',
-                        }}
-                    >
-                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        Đã đến nơi
-                    </button>
+                    {/* === WAITING: waiting for customer confirmation === */}
+                    {arrivalState === 'waiting' && (
+                        <div className="flex flex-col items-center py-2">
+                            <div className="relative w-14 h-14 mb-3">
+                                <span className="absolute inset-0 rounded-full animate-ping" style={{ background: '#fef3c7', opacity: 0.7 }} />
+                                <div className="relative w-14 h-14 rounded-full flex items-center justify-center" style={{ background: '#fef9ee' }}>
+                                    <svg className="animate-spin w-6 h-6" viewBox="0 0 24 24" fill="none">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke={C.orange} strokeWidth="4" />
+                                        <path className="opacity-75" fill={C.orange} d="M4 12a8 8 0 018-8v8H4z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <p className="text-sm font-bold mb-1" style={{ color: C.navy }}>Đang đợi khách hàng xác nhận...</p>
+                            <p className="text-xs text-center" style={{ color: C.gray }}>Khách hàng đang được hỏi xem bạn đã đến chưa</p>
+                        </div>
+                    )}
+
+                    {/* === CONFIRMED: 5s countdown then auto-transition to working === */}
+                    {arrivalState === 'confirmed' && (
+                        <div className="flex flex-col items-center py-2">
+                            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ background: '#f0fdf4' }}>
+                                <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <p className="text-sm font-bold mb-1" style={{ color: '#15803d' }}>Khách đã xác nhận! Sẵn sàng bắt đầu?</p>
+                            <p className="text-xs text-center mb-4" style={{ color: C.gray }}>
+                                Tự động bắt đầu sau <span className="font-bold" style={{ color: C.orange }}>{workingCountdown}s</span>...
+                            </p>
+                            <button
+                                onClick={() => {
+                                    if (countdownRef.current) clearInterval(countdownRef.current);
+                                    setArrivalState('working');
+                                }}
+                                className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
+                                style={{
+                                    background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                                    boxShadow: '0 4px 16px rgba(22,163,74,0.3)',
+                                }}
+                            >
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                Bắt đầu làm việc ngay
+                            </button>
+                        </div>
+                    )}
+
+                    {/* === WORKING: provider is doing the job, show motivational tips === */}
+                    {arrivalState === 'working' && (
+                        <div className="py-1">
+                            {/* Header */}
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#f0fdf4' }}>
+                                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold" style={{ color: '#15803d' }}>Đang xử lý đơn hàng</p>
+                                    <p className="text-xs" style={{ color: C.gray }}>Hãy làm việc cẩn thận và an toàn!</p>
+                                </div>
+                            </div>
+                            {/* Tip cards */}
+                            <div className="flex flex-col gap-2 mb-3">
+                                {[
+                                    { icon: '🔍', text: 'Kiểm tra kỹ trước khi bắt đầu để tránh nhầm lẫn' },
+                                    { icon: '💬', text: 'Giao tiếp rõ ràng với khách, báo giá thành toán' },
+                                    { icon: '🛡️', text: 'Sử dụng dụng cụ an toàn, bảo vệ bản thân' },
+                                ].map((tip, i) => (
+                                    <div key={i} className="flex items-start gap-2.5 px-3 py-2 rounded-xl" style={{ background: C.bg }}>
+                                        <span className="text-sm flex-shrink-0 mt-0.5">{tip.icon}</span>
+                                        <p className="text-xs" style={{ color: C.navy }}>{tip.text}</p>
+                                    </div>
+                                ))}
+                            </div>
+                            {/* Complete button */}
+                            <button
+                                onClick={onCompleted}
+                                className="w-full py-3.5 rounded-2xl text-sm font-bold text-white"
+                                style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`, boxShadow: `0 4px 16px ${C.orange}50` }}
+                            >
+                                Hoàn thành dịch vụ
+                            </button>
+                        </div>
+                    )}
+
+                    {/* === DENIED: customer says not here yet → prompt to contact === */}
+                    {arrivalState === 'denied' && (
+                        <div>
+                            <div className="flex items-center gap-3 p-3 rounded-2xl mb-3" style={{ background: '#fef2f2', border: '1.5px solid #fca5a5' }}>
+                                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#dc2626" strokeWidth={2} className="flex-shrink-0">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <div>
+                                    <p className="text-sm font-bold" style={{ color: '#dc2626' }}>Khách chưa thấy bạn đến!</p>
+                                    <p className="text-xs" style={{ color: '#b91c1c' }}>Liên hệ khách hàng ngay để xác nhận vị trí</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                                {displayPhone && (
+                                    <a
+                                        href={`tel:${displayPhone}`}
+                                        className="flex flex-col items-center justify-center py-3 rounded-2xl text-xs font-semibold text-white gap-1"
+                                        style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
+                                    >
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                        </svg>
+                                        Gọi điện
+                                    </a>
+                                )}
+                                <button
+                                    onClick={() => setIsChatOpen(true)}
+                                    className="flex flex-col items-center justify-center py-3 rounded-2xl text-xs font-semibold gap-1"
+                                    style={{ background: '#eff6ff', color: '#2563eb' }}
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                    </svg>
+                                    Nhắn tin
+                                </button>
+                                <button
+                                    onClick={() => setArrivalState('idle')}
+                                    className="flex flex-col items-center justify-center py-3 rounded-2xl text-xs font-semibold gap-1"
+                                    style={{ background: C.bg, color: C.gray }}
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.gray} strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Thử lại
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -500,63 +684,52 @@ export default function ProviderNavigationView({
                 </Suspense>
             )}
 
-            {/* Confirmation modal — Đã đến nơi */}
-            {showConfirm && (
+            {/* Pre-confirmation modal (confirm before sending mark-arrived) */}
+            {showConfirm && arrivalState === 'idle' && (
                 <div
                     className="fixed inset-0 z-50 flex items-end justify-center"
                     style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-                    onClick={() => !isCompleting && setShowConfirm(false)}
+                    onClick={() => !isMarkingArrived && setShowConfirm(false)}
                 >
                     <div
                         className="w-full max-w-lg mx-auto px-4 pb-8 pt-6"
-                        style={{
-                            background: 'white',
-                            borderRadius: '24px 24px 0 0',
-                            boxShadow: '0 -8px 40px rgba(0,0,0,0.25)',
-                        }}
+                        style={{ background: 'white', borderRadius: '24px 24px 0 0', boxShadow: '0 -8px 40px rgba(0,0,0,0.25)' }}
                         onClick={e => e.stopPropagation()}
                     >
-                        {/* Icon */}
                         <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#f0fdf4' }}>
                             <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
                         </div>
-
-                        <h3 className="text-base font-bold text-center mb-1" style={{ color: C.navy }}>
-                            Xác nhận đã đến nơi?
-                        </h3>
+                        <h3 className="text-base font-bold text-center mb-1" style={{ color: C.navy }}>Xác nhận đã đến nơi?</h3>
                         <p className="text-sm text-center mb-6" style={{ color: C.gray }}>
                             Bạn xác nhận đã đến vị trí khách hàng?
                         </p>
-
                         <div className="grid grid-cols-2 gap-3">
                             <button
                                 onClick={() => setShowConfirm(false)}
-                                disabled={isCompleting}
-                                className="py-3.5 rounded-2xl text-sm font-semibold transition-opacity"
+                                disabled={isMarkingArrived}
+                                className="py-3.5 rounded-2xl text-sm font-semibold"
                                 style={{ background: C.bg, color: C.gray }}
                             >
                                 Huỷ bỏ
                             </button>
                             <button
-                                onClick={handleComplete}
-                                disabled={isCompleting}
-                                className="py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.97]"
+                                onClick={handleMarkArrived}
+                                disabled={isMarkingArrived}
+                                className="py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
                                 style={{
-                                    background: isCompleting ? C.gray : 'linear-gradient(135deg, #16a34a, #15803d)',
-                                    boxShadow: isCompleting ? 'none' : '0 3px 12px rgba(22,163,74,0.35)',
+                                    background: isMarkingArrived ? C.gray : 'linear-gradient(135deg, #16a34a, #15803d)',
+                                    boxShadow: isMarkingArrived ? 'none' : '0 3px 12px rgba(22,163,74,0.35)',
                                 }}
                             >
-                                {isCompleting ? (
+                                {isMarkingArrived ? (
                                     <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
                                         <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
                                     </svg>
-                                ) : (
-                                    'Xác nhận'
-                                )}
+                                ) : 'Xác nhận'}
                             </button>
                         </div>
                     </div>
@@ -565,3 +738,5 @@ export default function ProviderNavigationView({
         </>
     );
 }
+
+

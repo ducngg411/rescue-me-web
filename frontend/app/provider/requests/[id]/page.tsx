@@ -334,7 +334,7 @@ export default function ProviderRequestDetailPage() {
             });
 
             toast.success('Đã gửi báo giá thành công! Chờ khách hàng phản hồi.');
-            console.log('✅ Quote submitted successfully, updating UI directly...');
+            console.log(' Quote submitted successfully, updating UI directly...');
 
             // Remove from history after successful quote
             removeFromHistoryStorage(requestId);
@@ -348,7 +348,7 @@ export default function ProviderRequestDetailPage() {
                 status: 'PENDING',
                 providerId: user?.id,
             });
-            console.log('✅ Set hasPendingQuote = true, myQuoteDetails updated');
+            console.log(' Set hasPendingQuote = true, myQuoteDetails updated');
 
             // Reset form
             setPrice('');
@@ -671,7 +671,7 @@ export default function ProviderRequestDetailPage() {
                                         ? `khoảng ${myQuoteDetails.estimatedArrivalMinutes} phút`
                                         : 'sớm nhất có thể';
                                     await sendChatMessage(
-                                        `Xin chào! Provider đang bắt đầu di chuyển đến vị trí của bạn. Tôi sẽ có mặt trong ${etaText}. Vui lòng ở lại vị trí và chờ tôi nhé! 🚗`
+                                        `Xin chào! Provider đang bắt đầu di chuyển đến vị trí của bạn. Tôi sẽ có mặt trong ${etaText}. Vui lòng ở lại vị trí và chờ tôi nhé! `
                                     );
                                 } catch (err: any) {
                                     // Ignore if already IN_PROGRESS
@@ -843,7 +843,7 @@ export default function ProviderRequestDetailPage() {
                             )}
                             {request.status === 'ASSIGNED' && request.assignedProviderId === user?.id && (
                                 <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                                    ✅ Đã được chọn
+                                    Đã được chọn
                                 </span>
                             )}
                             {request.status !== 'MATCHING' && request.assignedProviderId !== user?.id && (

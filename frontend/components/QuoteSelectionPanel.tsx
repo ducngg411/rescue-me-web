@@ -75,7 +75,7 @@ export default function QuoteSelectionPanel({
             await api.patch(`/rescue-requests/${requestId}/quotes/${quoteId}/respond`, {
                 action: 'ACCEPT',
             });
-            toast.success('✅ Đã chọn báo giá! Provider đang chuẩn bị đến.');
+            toast.success('Đã chọn báo giá! Provider đang chuẩn bị đến.');
             onQuoteAccepted();
         } catch (err: any) {
             const msg = err.response?.data?.message || 'Không thể chọn báo giá. Vui lòng thử lại.';

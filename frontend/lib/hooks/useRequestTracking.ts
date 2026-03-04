@@ -152,7 +152,7 @@ export function useRequestTracking({
             const newStatus = await fetchStatus();
 
             // Stop polling only for terminal states (not during active ride)
-            if (newStatus && !['MATCHING', 'CREATED', 'ASSIGNED', 'IN_PROGRESS'].includes(newStatus.status)) {
+            if (newStatus && !['MATCHING', 'CREATED', 'ASSIGNED', 'IN_PROGRESS', 'ARRIVED', 'WORKING'].includes(newStatus.status)) {
                 stopPolling();
             }
         }, pollInterval);

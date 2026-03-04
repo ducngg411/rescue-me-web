@@ -388,7 +388,7 @@ export default function ProviderActivePage() {
                                         <div className="flex items-start justify-between gap-4">
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-3 mb-3">
-                                                    <span className="text-2xl">🚗</span>
+                                                    <span className="text-2xl"></span>
                                                     <div>
                                                         <h3 className="font-semibold text-gray-900">
                                                             {incidentTypeLabels[item.incidentType] || item.incidentType}

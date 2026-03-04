@@ -58,7 +58,9 @@ enum RequestStatus {
   MATCHED // Đã match với provider (legacy)
   ASSIGNED // Provider đã nhận (U2)
   ACCEPTED // Provider đã chấp nhận
-  IN_PROGRESS // Đang thực hiện
+  IN_PROGRESS // Provider đang di chuyển đến nơi
+  ARRIVED // Provider báo đã đến nơi, chờ user xác nhận
+  WORKING // User đã xác nhận provider đến, đang sửa chữa / làm việc
   COMPLETED // Hoàn thành
   CANCELLED // Đã hủy
   REJECTED // Bị từ chối
@@ -301,8 +303,9 @@ model RescueRequest {
   declinedProviders String[] @default([]) // Array of provider IDs who declined this request (to prevent spam)
 
   // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime? // When status changed to COMPLETED
 
   // Relations
   user   User           @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
