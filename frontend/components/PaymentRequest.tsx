@@ -86,11 +86,9 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
         try {
             const parsed = JSON.parse(payment.surchargeNote);
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                // New format: {breakdown: [...], surcharges: [...]}
                 breakdownItems = parsed.breakdown ?? [];
                 surchargeItems = parsed.surcharges ?? [];
             } else if (Array.isArray(parsed)) {
-                // Legacy format: flat array of {label, amount} — treat as breakdown
                 breakdownItems = parsed;
             }
         } catch {
@@ -103,6 +101,7 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
 
     return (
         <>
+            {/* Main Card */}
             <div className="rounded-2xl overflow-hidden" style={{ boxShadow: '0 1px 12px rgba(0,0,0,0.08)' }}>
                 {/* Header */}
                 <div className="px-4 py-3 flex items-center gap-3" style={{ background: 'linear-gradient(135deg, #f97316, #ea6c0a)' }}>
@@ -148,7 +147,6 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
 
                     {showBreakdown && (
                         <div className="rounded-xl overflow-hidden mb-3" style={{ border: `1px solid ${C.border}` }}>
-                            {/* Chi tiết: breakdown of base fee */}
                             {breakdownItems.length > 0 && (
                                 <>
                                     <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ background: '#eff6ff', color: '#2563eb' }}>
@@ -164,7 +162,6 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                                 </>
                             )}
 
-                            {/* Base fee if no breakdown */}
                             {breakdownItems.length === 0 && payment.baseFee > 0 && (
                                 <div className="flex justify-between px-3 py-2.5 text-sm" style={{ color: C.navy }}>
                                     <span style={{ color: C.gray }}>Phí dịch vụ</span>
@@ -172,7 +169,6 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                                 </div>
                             )}
 
-                            {/* Phụ phí: extra on-site charges */}
                             {surchargeItems.length > 0 && (
                                 <>
                                     <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ background: '#fff7ed', color: C.orange }}>
@@ -188,7 +184,6 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                                 </>
                             )}
 
-                            {/* Legacy plain text */}
                             {surchargeText && (
                                 <div className="px-3 py-2 text-xs italic" style={{ color: C.gray, borderTop: `1px solid ${C.border}` }}>
                                     {surchargeText}
@@ -203,55 +198,77 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                             "{payment.note}"
                         </div>
                     )}
+                </div>
+            </div>
 
-                    {/* Already confirmed banner */}
-                    {alreadyConfirmed && (
-                        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl mb-3" style={{ background: C.greenLight }}>
-                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke={C.green} strokeWidth={2.5}>
+            {/* ─── Post-confirm finish state ─── */}
+            {alreadyConfirmed && (
+                <div className="mt-3">
+                    <div
+                        className="rounded-2xl p-4 mb-3 text-center"
+                        style={{ background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', border: '1.5px solid #86efac' }}
+                    >
+                        <div
+                            className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
+                            style={{ background: 'white', boxShadow: '0 2px 8px rgba(22,163,74,0.2)' }}
+                        >
+                            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <p className="text-xs font-semibold" style={{ color: C.green }}>
-                                Bạn đã xác nhận thanh toán. Đang chờ provider xác nhận nhận tiền...
-                            </p>
                         </div>
-                    )}
-                </div>
-
-                {/* Actions */}
-                {!alreadyConfirmed && (
-                    <div className="px-4 pb-4 bg-white space-y-2">
-                        <button
-                            onClick={handleConfirm}
-                            disabled={isConfirming}
-                            className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                            style={{
-                                background: isConfirming ? C.gray : `linear-gradient(135deg, ${C.green}, #15803d)`,
-                                boxShadow: isConfirming ? 'none' : '0 4px 16px rgba(22,163,74,0.35)',
-                            }}
-                        >
-                            {isConfirming ? (
-                                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
-                                    <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
-                                </svg>
-                            ) : (
-                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            )}
-                            Tôi đã thanh toán tiền mặt
-                        </button>
-
-                        <button
-                            onClick={() => setShowDispute(true)}
-                            className="w-full py-3 rounded-2xl text-sm font-semibold"
-                            style={{ background: '#fef2f2', color: '#dc2626' }}
-                        >
-                            Báo sự cố
-                        </button>
+                        <p className="text-sm font-bold mb-1" style={{ color: '#15803d' }}>
+                            Xác nhận thanh toán thành công!
+                        </p>
+                        <p className="text-xs" style={{ color: '#166534' }}>
+                            Cảm ơn bạn đã sử dụng dịch vụ.{' '}
+                            <span className="font-medium">Provider đang xác nhận nhận tiền.</span>
+                        </p>
                     </div>
-                )}
-            </div>
+
+                    <div
+                        className="flex items-center justify-between px-4 py-3 rounded-xl"
+                        style={{ background: C.bg }}
+                    >
+                        <span className="text-xs" style={{ color: C.gray }}>Số tiền đã thanh toán</span>
+                        <span className="text-base font-bold" style={{ color: C.orange }}>{fmt(payment.totalAmount)}</span>
+                    </div>
+                </div>
+            )}
+
+
+            {/* ─── Actions (not yet confirmed) ─── */}
+            {!alreadyConfirmed && (
+                <div className="mt-2 space-y-2">
+                    <button
+                        onClick={handleConfirm}
+                        disabled={isConfirming}
+                        className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                        style={{
+                            background: isConfirming ? C.gray : `linear-gradient(135deg, ${C.green}, #15803d)`,
+                            boxShadow: isConfirming ? 'none' : '0 4px 16px rgba(22,163,74,0.35)',
+                        }}
+                    >
+                        {isConfirming ? (
+                            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                                <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
+                            </svg>
+                        ) : (
+                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        )}
+                        Tôi đã thanh toán tiền mặt
+                    </button>
+                    <button
+                        onClick={() => setShowDispute(true)}
+                        className="w-full py-3 rounded-2xl text-sm font-semibold"
+                        style={{ background: '#fef2f2', color: '#dc2626' }}
+                    >
+                        Báo sự cố
+                    </button>
+                </div>
+            )}
 
             {/* Dispute Modal */}
             {showDispute && (

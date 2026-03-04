@@ -161,6 +161,7 @@ model User {
   rescueRequests   RescueRequest[] @relation("UserRequests")
   assignedRequests RescueRequest[] @relation("AssignedRequests")
   quotes           Quote[]         @relation("ProviderQuotes")
+  providerWallet   ProviderWallet? @relation("ProviderWallet")
 
   @@index([email])
   @@index([googleId])
@@ -448,4 +449,82 @@ model Payment {
   @@index([providerId])
   @@index([userId])
   @@map("payments")
+}
+
+// ─── Provider Wallet ──────────────────────────────────────────────────────────
+
+// Enum cho loại giao dịch ví
+enum WalletTransactionType {
+  CREDIT // Tiền vào ví (thu nhập từ job, hoàn tiền...)
+  DEBIT  // Tiền ra khỏi ví (rút tiền, phí hoa hồng...)
+}
+
+// Enum cho trạng thái giao dịch ví
+enum WalletTransactionStatus {
+  PENDING   // Đang chờ xử lý
+  COMPLETED // Hoàn thành
+  FAILED    // Thất bại
+}
+
+// Enum cho loại tham chiếu giao dịch
+enum WalletReferenceType {
+  JOB        // Thu nhập từ công việc cứu hộ
+  WITHDRAW   // Rút tiền ra tài khoản ngân hàng
+  COMMISSION // Phí hoa hồng nền tảng
+  REFUND     // Hoàn tiền
+  ADJUSTMENT // Điều chỉnh thủ công (admin)
+}
+
+// ProviderWallet Model - Ví của provider
+model ProviderWallet {
+  id         String @id @default(cuid())
+  providerId String @unique // 1 provider chỉ có 1 ví
+
+  // Balance (VND)
+  availableBalance Int @default(0) // Số dư có thể rút được
+  pendingBalance   Int @default(0) // Số dư đang chờ xử lý (chưa về tài khoản)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  provider     User                @relation("ProviderWallet", fields: [providerId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@index([providerId])
+  @@map("provider_wallets")
+}
+
+// WalletTransaction Model - Lịch sử giao dịch ví
+model WalletTransaction {
+  id       String @id @default(cuid())
+  walletId String
+
+  // Transaction details
+  type   WalletTransactionType
+  amount Int // Số tiền giao dịch (VND, luôn dương)
+
+  // Status
+  status WalletTransactionStatus @default(PENDING)
+
+  // Reference
+  referenceType WalletReferenceType
+  referenceId   String // ID của đối tượng tham chiếu (jobId, withdrawId...)
+
+  // Optional note
+  description String? // Mô tả giao dịch
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  // Relations
+  wallet ProviderWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([walletId, status])
+  @@index([walletId, type])
+  @@index([referenceType, referenceId])
+  @@index([createdAt])
+  @@map("wallet_transactions")
 }

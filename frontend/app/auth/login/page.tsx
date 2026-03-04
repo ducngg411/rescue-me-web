@@ -6,6 +6,8 @@ import { useForm } from 'react-hook-form';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { loginWithEmail, loginWithGoogle } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import toast from 'react-hot-toast';
 
 interface LoginFormData {
@@ -16,6 +18,7 @@ interface LoginFormData {
 export default function LoginPage() {
     const router = useRouter();
     const { setUser } = useAuth();
+    const { t, locale } = useLanguage();
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
@@ -27,13 +30,10 @@ export default function LoginPage() {
 
     const onSubmitEmail = async (data: LoginFormData) => {
         setLoading(true);
-        
         try {
             const response = await loginWithEmail(data.email, data.password);
             setUser(response.user);
-
-            toast.success('Đăng nhập thành công!');
-
+            toast.success(t('auth.login.loginSuccess'));
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
             } else if (response.user.role === 'ADMIN') {
@@ -44,7 +44,7 @@ export default function LoginPage() {
                 router.push('/user');
             }
         } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Đăng nhập thất bại');
+            toast.error(err.response?.data?.message || t('auth.login.loginFailed'));
         } finally {
             setLoading(false);
         }
@@ -55,7 +55,7 @@ export default function LoginPage() {
         try {
             const response = await loginWithGoogle(credentialResponse.credential);
             setUser(response.user);
-            toast.success('Đăng nhập thành công');
+            toast.success(t('auth.login.loginSuccess'));
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
             } else if (response.user.role === 'ADMIN') {
@@ -66,14 +66,14 @@ export default function LoginPage() {
                 router.push('/user');
             }
         } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Đăng nhập Google thất bại');
+            toast.error(err.response?.data?.message || t('auth.login.googleLoginFailed'));
         } finally {
             setLoading(false);
         }
     };
 
     const handleGoogleError = () => {
-        toast.error('Đăng nhập Google bị hủy');
+        toast.error(t('auth.login.googleLoginCancelled'));
     };
 
     return (
@@ -92,15 +92,16 @@ export default function LoginPage() {
                 </div>
 
                 {/* ── Right: Auth card ── */}
-                <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-12">
-                    <div className="w-full max-w-sm">
+                <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-12 relative">
+                    {/* Language Switcher top-right */}
+                    <div className="absolute top-4 right-6">
+                        <LanguageSwitcher />
+                    </div>
 
+                    <div className="w-full max-w-sm">
                         {/* Mobile logo */}
                         <div className="flex items-center gap-2 mb-8 lg:hidden">
-                            <div
-                                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                                style={{ background: '#f97316' }}
-                            >
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#f97316' }}>
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                                     <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" />
                                 </svg>
@@ -110,10 +111,10 @@ export default function LoginPage() {
 
                         {/* Heading */}
                         <h1 className="text-2xl font-bold mb-1" style={{ color: '#1a1a2e' }}>
-                            Đăng nhập vào Rescue Me.
+                            {t('auth.login.title')}
                         </h1>
                         <p className="text-sm mb-6" style={{ color: '#6b7280' }}>
-                            Chưa có tài khoản?{' '}
+                            {t('auth.login.noAccount')}{' '}
                             <a
                                 href="/auth/register"
                                 className="font-medium transition-colors"
@@ -121,7 +122,7 @@ export default function LoginPage() {
                                 onMouseEnter={e => (e.currentTarget.style.color = '#ea6c0a')}
                                 onMouseLeave={e => (e.currentTarget.style.color = '#f97316')}
                             >
-                                Tạo tài khoản
+                                {t('auth.login.createAccount')}
                             </a>
                         </p>
 
@@ -136,12 +137,12 @@ export default function LoginPage() {
                                     id="email"
                                     type="email"
                                     autoComplete="email"
-                                    placeholder="Địa chỉ email"
+                                    placeholder={t('auth.login.emailPlaceholder')}
                                     {...register('email', {
-                                        required: 'Email không được để trống',
+                                        required: t('auth.login.emailRequired'),
                                         pattern: {
                                             value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                                            message: 'Email không hợp lệ',
+                                            message: t('auth.login.emailInvalid'),
                                         },
                                     })}
                                     className="w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all"
@@ -161,7 +162,7 @@ export default function LoginPage() {
                             <div>
                                 <div className="flex items-center justify-between mb-1.5">
                                     <label className="block text-sm font-medium" style={{ color: '#374151' }}>
-                                        Mật khẩu
+                                        {t('auth.login.passwordLabel')}
                                     </label>
                                     <a
                                         href="#"
@@ -170,7 +171,7 @@ export default function LoginPage() {
                                         onMouseEnter={e => (e.currentTarget.style.color = '#ea6c0a')}
                                         onMouseLeave={e => (e.currentTarget.style.color = '#f97316')}
                                     >
-                                        Quên mật khẩu?
+                                        {t('auth.login.forgotPassword')}
                                     </a>
                                 </div>
                                 <div className="relative">
@@ -178,9 +179,9 @@ export default function LoginPage() {
                                         id="password"
                                         type={showPassword ? 'text' : 'password'}
                                         autoComplete="current-password"
-                                        placeholder="Mật khẩu"
+                                        placeholder={t('auth.login.passwordPlaceholder')}
                                         {...register('password', {
-                                            required: 'Mật khẩu không được để trống',
+                                            required: t('auth.login.passwordRequired'),
                                         })}
                                         className="w-full px-4 py-2.5 pr-10 rounded-lg text-sm outline-none transition-all"
                                         style={{
@@ -213,7 +214,7 @@ export default function LoginPage() {
                                 )}
                             </div>
 
-                            {/* Submit button */}
+                            {/* Submit */}
                             <button
                                 type="submit"
                                 disabled={loading}
@@ -231,16 +232,16 @@ export default function LoginPage() {
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                                         </svg>
-                                        Đang đăng nhập...
+                                        {t('auth.login.loggingIn')}
                                     </span>
-                                ) : 'Đăng nhập'}
+                                ) : t('auth.login.loginButton')}
                             </button>
                         </form>
 
                         {/* OR divider */}
                         <div className="flex items-center gap-3 my-5">
                             <div className="flex-1 h-px" style={{ background: '#e5e7eb' }} />
-                            <span className="text-xs font-medium" style={{ color: '#9ca3af' }}>HOẶC</span>
+                            <span className="text-xs font-medium" style={{ color: '#9ca3af' }}>{t('common.or')}</span>
                             <div className="flex-1 h-px" style={{ background: '#e5e7eb' }} />
                         </div>
 
@@ -250,7 +251,7 @@ export default function LoginPage() {
                                 onSuccess={handleGoogleSuccess}
                                 onError={handleGoogleError}
                                 text="signin_with"
-                                locale="vi"
+                                locale={locale}
                                 width="360"
                                 shape="rectangular"
                             />

@@ -4,10 +4,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateRescueRequestDto } from './dto/create-rescue-request.dto';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { QuoteStatus } from './dto/quote-response.dto';
+import { CommissionService } from '../wallet/commission.service';
+
 
 @Injectable()
 export class RescueRequestService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private commissionService: CommissionService,
+    ) { }
 
     // Auto-expire MATCHING requests every minute
     @Cron(CronExpression.EVERY_MINUTE)
@@ -1036,6 +1041,28 @@ export class RescueRequestService {
             data: { status: 'COMPLETED', completedAt: new Date() },
         });
         console.log(` [RescueRequest] Provider ${providerId} completed service → COMPLETED`);
+
+        // Deduct platform commission for CASH payments (fire-and-forget, non-blocking)
+        // The commission service will create a DEBIT transaction and reduce availableBalance.
+        // If balance goes negative the provider is blocked from receiving new jobs.
+        setImmediate(async () => {
+            try {
+                const payment = await this.prisma.payment.findUnique({
+                    where: { requestId },
+                });
+                if (payment && payment.paymentMethod === 'CASH') {
+                    const result = await this.commissionService.handleCashJobCompletion(requestId);
+                    console.log(
+                        `💰 [Commission] Cash commission deducted for job ${requestId}: ` +
+                        `${result.commissionAmount} VND (${result.commissionRate * 100}%). ` +
+                        `New balance: ${result.walletSnapshot.availableBalance} VND`,
+                    );
+                }
+            } catch (err) {
+                console.error(`❌ [Commission] Failed to deduct commission for job ${requestId}:`, err.message);
+            }
+        });
+
         return { success: true, status: 'COMPLETED' };
     }
 
@@ -1100,5 +1127,206 @@ export class RescueRequestService {
         return {
             expired: expiredCount,
         };
+    }
+
+    // ==================== PAYMENT METHODS ====================
+
+    /**
+     * Provider tạo yêu cầu thanh toán: WORKING/ARRIVED/IN_PROGRESS → PAYMENT_PENDING
+     * POST /rescue-requests/:id/payment
+     */
+    async createPayment(requestId: string, providerId: string, dto: {
+        totalAmount: number;
+        baseFee?: number;
+        distanceFee?: number;
+        overtimeFee?: number;
+        otherFee?: number;
+        paymentMethod?: 'CASH' | 'QR';
+        surchargeNote?: string;
+        note?: string;
+        photoUrls?: string[];
+    }) {
+        const request = await this.prisma.rescueRequest.findUnique({
+            where: { id: requestId },
+        });
+        if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.assignedProviderId !== providerId) throw new ForbiddenException('Not assigned to this request');
+        if (!['WORKING', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED'].includes(request.status)) {
+            throw new BadRequestException(`Cannot create payment from status: ${request.status}`);
+        }
+
+        // Upsert payment (allow re-submission to update amount)
+        const payment = await this.prisma.payment.upsert({
+            where: { requestId },
+            create: {
+                requestId,
+                providerId,
+                userId: request.userId,
+                totalAmount: dto.totalAmount,
+                baseFee: dto.baseFee ?? dto.totalAmount,
+                distanceFee: dto.distanceFee ?? 0,
+                overtimeFee: dto.overtimeFee ?? 0,
+                otherFee: dto.otherFee ?? 0,
+                paymentMethod: (dto.paymentMethod ?? 'CASH') as any,
+                surchargeNote: dto.surchargeNote,
+                note: dto.note,
+                photoUrls: dto.photoUrls ?? [],
+                status: 'PENDING',
+            },
+            update: {
+                totalAmount: dto.totalAmount,
+                baseFee: dto.baseFee ?? dto.totalAmount,
+                distanceFee: dto.distanceFee ?? 0,
+                overtimeFee: dto.overtimeFee ?? 0,
+                otherFee: dto.otherFee ?? 0,
+                paymentMethod: (dto.paymentMethod ?? 'CASH') as any,
+                surchargeNote: dto.surchargeNote,
+                note: dto.note,
+                photoUrls: dto.photoUrls ?? [],
+                status: 'PENDING',
+            },
+        });
+
+        // Advance status to PAYMENT_PENDING (skip if already past that)
+        if (['WORKING', 'ARRIVED', 'IN_PROGRESS'].includes(request.status)) {
+            await this.prisma.rescueRequest.update({
+                where: { id: requestId },
+                data: { status: 'PAYMENT_PENDING' },
+            });
+        }
+
+        console.log(`💳 [Payment] Provider ${providerId} created payment for request ${requestId}: ${dto.totalAmount} VND`);
+        return payment;
+    }
+
+    /**
+     * User xác nhận đã chuyển tiền / trả tiền mặt
+     * PATCH /rescue-requests/:id/payment/confirm-sent
+     */
+    async confirmPaymentSent(requestId: string, userId: string) {
+        const request = await this.prisma.rescueRequest.findUnique({
+            where: { id: requestId },
+        });
+        if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.userId !== userId) throw new ForbiddenException('Not your request');
+
+        const payment = await this.prisma.payment.findUnique({
+            where: { requestId },
+        });
+        if (!payment) throw new NotFoundException('Payment not found for this request');
+        if (payment.userConfirmedAt) {
+            return payment; // Already confirmed — idempotent
+        }
+
+        const updated = await this.prisma.payment.update({
+            where: { requestId },
+            data: {
+                userConfirmedAt: new Date(),
+                status: 'USER_CONFIRMED',
+            },
+        });
+
+        console.log(`✅ [Payment] User ${userId} confirmed payment sent for request ${requestId}`);
+        return updated;
+    }
+
+    /**
+     * User báo sự cố thanh toán
+     * POST /rescue-requests/:id/payment/dispute
+     */
+    async disputePayment(requestId: string, userId: string, reason: string) {
+        const request = await this.prisma.rescueRequest.findUnique({
+            where: { id: requestId },
+        });
+        if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.userId !== userId) throw new ForbiddenException('Not your request');
+
+        const payment = await this.prisma.payment.findUnique({
+            where: { requestId },
+        });
+        if (!payment) throw new NotFoundException('Payment not found for this request');
+
+        const updated = await this.prisma.payment.update({
+            where: { requestId },
+            data: {
+                status: 'DISPUTED',
+                disputeReason: reason,
+                disputedAt: new Date(),
+            },
+        });
+
+        console.log(`⚠️ [Payment] User ${userId} disputed payment for request ${requestId}: ${reason}`);
+        return updated;
+    }
+
+    /**
+     * Provider xác nhận đã nhận được tiền
+     * PATCH /rescue-requests/:id/payment/confirm-received
+     */
+    async confirmPaymentReceived(requestId: string, providerId: string) {
+        const request = await this.prisma.rescueRequest.findUnique({
+            where: { id: requestId },
+        });
+        if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.assignedProviderId !== providerId) throw new ForbiddenException('Not assigned to this request');
+
+        const payment = await this.prisma.payment.findUnique({
+            where: { requestId },
+        });
+        if (!payment) throw new NotFoundException('Payment not found for this request');
+        if (payment.providerConfirmedAt) {
+            return payment; // Already confirmed — idempotent
+        }
+
+        const updated = await this.prisma.payment.update({
+            where: { requestId },
+            data: {
+                providerConfirmedAt: new Date(),
+                status: 'PROVIDER_CONFIRMED',
+            },
+        });
+
+        // Mark the rescue request as COMPLETED once both sides confirm
+        await this.prisma.rescueRequest.update({
+            where: { id: requestId },
+            data: { status: 'COMPLETED', completedAt: new Date() },
+        });
+
+        // Deduct CASH commission now that provider confirmed receipt
+        setImmediate(async () => {
+            try {
+                if (payment.paymentMethod === 'CASH') {
+                    const result = await this.commissionService.handleCashJobCompletion(requestId);
+                    console.log(
+                        `💰 [Commission] Cash commission deducted on confirm-received for job ${requestId}: ` +
+                        `${result.commissionAmount} VND. New balance: ${result.walletSnapshot.availableBalance} VND`,
+                    );
+                }
+            } catch (err) {
+                console.error(`❌ [Commission] Failed to deduct commission for job ${requestId}:`, err.message);
+            }
+        });
+
+        console.log(`✅ [Payment] Provider ${providerId} confirmed payment received for request ${requestId}`);
+        return updated;
+    }
+
+    /**
+     * Lấy thông tin payment của request (dùng cho real-time polling từ cả hai phía)
+     * GET /rescue-requests/:id/payment
+     */
+    async getPayment(requestId: string, callerId: string) {
+        const request = await this.prisma.rescueRequest.findUnique({
+            where: { id: requestId },
+        });
+        if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.userId !== callerId && request.assignedProviderId !== callerId) {
+            throw new ForbiddenException('Access denied');
+        }
+
+        const payment = await this.prisma.payment.findUnique({
+            where: { requestId },
+        });
+        return payment;
     }
 }

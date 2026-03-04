@@ -13,6 +13,7 @@ import { RescueRequestService } from './rescue-request.service';
 import { CreateRescueRequestDto } from './dto/create-rescue-request.dto';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { RespondQuoteDto } from './dto/respond-quote.dto';
+import { CreatePaymentDto } from './dto/create-payment.dto';
 
 @Controller('rescue-requests')
 @UseGuards(JwtAuthGuard)
@@ -166,5 +167,45 @@ export class RescueRequestController {
             respondQuoteDto.action,
             respondQuoteDto.rejectionReason,
         );
+    }
+
+    // ==================== PAYMENT ENDPOINTS ====================
+
+    /** Provider tạo yêu cầu thanh toán */
+    @Post(':id/payment')
+    async createPayment(
+        @Request() req,
+        @Param('id') requestId: string,
+        @Body() dto: CreatePaymentDto,
+    ) {
+        return this.rescueRequestService.createPayment(requestId, req.user.id, dto);
+    }
+
+    /** Lấy thông tin payment (provider + user) */
+    @Get(':id/payment')
+    async getPayment(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.getPayment(requestId, req.user.id);
+    }
+
+    /** User xác nhận đã thanh toán tiền mặt */
+    @Patch(':id/payment/confirm-sent')
+    async confirmPaymentSent(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.confirmPaymentSent(requestId, req.user.id);
+    }
+
+    /** Provider xác nhận đã nhận được tiền */
+    @Patch(':id/payment/confirm-received')
+    async confirmPaymentReceived(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.confirmPaymentReceived(requestId, req.user.id);
+    }
+
+    /** User báo sự cố thanh toán */
+    @Post(':id/payment/dispute')
+    async disputePayment(
+        @Request() req,
+        @Param('id') requestId: string,
+        @Body() body: { reason: string },
+    ) {
+        return this.rescueRequestService.disputePayment(requestId, req.user.id, body.reason);
     }
 }

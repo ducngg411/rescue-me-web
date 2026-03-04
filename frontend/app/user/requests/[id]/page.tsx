@@ -196,7 +196,120 @@ function PaymentRequestFetcher({ requestId, providerName }: { requestId: string;
     return <PaymentRequest requestId={requestId} payment={payment} providerName={providerName} />;
 }
 
+// ── Completed Card shown after job is COMPLETED ────────────────────────────
+function CompletedCard({ requestId }: { requestId: string }) {
+    const router = useRouter();
+    const [showDispute, setShowDispute] = useState(false);
+    const [disputeReason, setDisputeReason] = useState('');
+    const [isDisputing, setIsDisputing] = useState(false);
+
+    const handleDispute = async () => {
+        if (!disputeReason.trim()) { toast.error('Vui lòng nhập lý do khiếu nại'); return; }
+        setIsDisputing(true);
+        try {
+            await api.post(`/rescue-requests/${requestId}/payment/dispute`, { reason: disputeReason });
+            toast.success('Đã gửi khiếu nại. Chúng tôi sẽ xem xét trong 24h.');
+            setShowDispute(false);
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || 'Gửi khiếu nại thất bại');
+        } finally {
+            setIsDisputing(false);
+        }
+    };
+
+    return (
+        <>
+            <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: '0 1px 12px rgba(0,0,0,0.08)' }}>
+                {/* Success header */}
+                <div className="px-6 pt-8 pb-6 text-center" style={{ background: 'linear-gradient(160deg, #f0fdf4, #dcfce7)' }}>
+                    <div
+                        className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4"
+                        style={{ background: 'white', boxShadow: '0 4px 16px rgba(22,163,74,0.2)' }}
+                    >
+                        <span style={{ fontSize: '38px' }}>🎉</span>
+                    </div>
+                    <h3 className="text-lg font-bold mb-1" style={{ color: '#15803d' }}>Dịch vụ hoàn thành!</h3>
+                    <p className="text-sm" style={{ color: '#166534' }}>
+                        Cảm ơn bạn đã sử dụng dịch vụ RescueMe.
+                    </p>
+                </div>
+
+                {/* Actions */}
+                <div className="px-5 py-5 space-y-3">
+                    <button
+                        onClick={() => router.push('/user')}
+                        className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
+                        style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`, boxShadow: `0 4px 16px ${C.orange}40` }}
+                    >
+                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                        </svg>
+                        Về trang chủ
+                    </button>
+                    <button
+                        onClick={() => setShowDispute(true)}
+                        className="w-full py-3 rounded-2xl text-xs font-semibold flex items-center justify-center gap-1.5"
+                        style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}
+                    >
+                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Khiếu nại / Báo sự cố
+                    </button>
+                </div>
+            </div>
+
+            {/* Dispute bottom sheet */}
+            {showDispute && (
+                <div
+                    className="fixed inset-0 z-[70] flex items-end"
+                    style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+                    onClick={() => setShowDispute(false)}
+                >
+                    <div
+                        className="w-full px-4 pb-10 pt-5"
+                        style={{ background: 'white', borderRadius: '24px 24px 0 0' }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background: '#f1f5f9' }} />
+                        <h3 className="text-sm font-bold mb-1" style={{ color: C.navy }}>Khiếu nại dịch vụ</h3>
+                        <p className="text-xs mb-4" style={{ color: C.gray }}>
+                            Mô tả vấn đề bạn gặp phải. Chúng tôi sẽ xem xét và phản hồi trong 24 giờ.
+                        </p>
+                        <textarea
+                            value={disputeReason}
+                            onChange={e => setDisputeReason(e.target.value)}
+                            placeholder="Ví dụ: Số tiền không đúng, dịch vụ không như cam kết..."
+                            rows={4}
+                            className="w-full py-3 px-4 rounded-xl text-sm outline-none resize-none mb-4"
+                            style={{ background: '#f8fafc', border: '1px solid #f1f5f9', color: C.navy }}
+                        />
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => setShowDispute(false)}
+                                className="py-3 rounded-2xl text-sm font-semibold"
+                                style={{ background: '#f8fafc', color: '#6b7280' }}
+                            >
+                                Huỷ
+                            </button>
+                            <button
+                                onClick={handleDispute}
+                                disabled={isDisputing}
+                                className="py-3 rounded-2xl text-sm font-bold text-white"
+                                style={{ background: '#dc2626' }}
+                            >
+                                {isDisputing ? 'Đang gửi...' : 'Gửi khiếu nại'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
 export default function RequestTrackingPage() {
+
     const router = useRouter();
     const params = useParams();
     const requestId = params.id as string;
@@ -495,22 +608,7 @@ export default function RequestTrackingPage() {
 
                 {/* COMPLETED: service done */}
                 {status.status === 'COMPLETED' && (
-                    <div className="bg-white rounded-2xl p-6 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#f0fdf4' }}>
-                            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </div>
-                        <h3 className="text-base font-bold mb-1" style={{ color: '#15803d' }}>Dịch vụ hoàn thành! 🎉</h3>
-                        <p className="text-sm mb-4" style={{ color: C.gray }}>Cảm ơn bạn đã sử dụng dịch vụ RescueMe.</p>
-                        <button
-                            onClick={() => router.push('/user')}
-                            className="w-full py-3 rounded-xl text-sm font-bold text-white"
-                            style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
-                        >
-                            Về trang chủ
-                        </button>
-                    </div>
+                    <CompletedCard requestId={requestId} />
                 )}
 
                 {/* EXPIRED state */}

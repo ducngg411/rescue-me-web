@@ -325,6 +325,16 @@ export class ProviderService {
             return []; // Chưa verified, không trả request
         }
 
+        // Block provider if wallet balance is negative (outstanding commission debt)
+        const wallet = await this.prisma.providerWallet.findUnique({
+            where: { providerId: userId },
+            select: { availableBalance: true },
+        });
+        if (wallet && wallet.availableBalance < 0) {
+            console.warn(`[Provider ${userId}] Blocked from receiving jobs — negative wallet balance (${wallet.availableBalance} VND)`);
+            return [];
+        }
+
         // Get provider current location (GPS) - fallback to default address
         let providerLocation = user.currentLocation as any;
 

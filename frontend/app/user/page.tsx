@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUserGuard } from '@/lib/guards';
+import { useLanguage } from '@/contexts/LanguageContext';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import dynamic from 'next/dynamic';
 
 const VietMap = dynamic(() => import('@/components/VietMap'), {
@@ -35,32 +37,6 @@ const recentActivity = [
     { id: 2, type: 'tire', title: 'Flat Tire Change', location: 'Highway 101, Exit 42', status: 'Completed', price: '$65.00', date: 'Sep 12' },
 ];
 
-const navItems = [
-    {
-        label: 'Home', href: '/user',
-        icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
-    },
-    {
-        label: 'History', href: '/user/requests',
-        icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-    },
-    {
-        label: 'Profile', href: '/user/profile',
-        icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
-    },
-    {
-        label: 'Settings', href: '#',
-        icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
-    },
-];
-
-function getGreeting() {
-    const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 18) return 'Good afternoon';
-    return 'Good evening';
-}
-
 function BatteryIcon() {
     return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="2" y="7" width="18" height="10" rx="2" /><path d="M22 11v2" strokeLinecap="round" /></svg>;
 }
@@ -71,6 +47,7 @@ function TireIcon() {
 export default function UserDashboard() {
     const router = useRouter();
     const { isReady, user } = useUserGuard();
+    const { t } = useLanguage();
     const [activeNav, setActiveNav] = useState('Home');
     const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
     const [isLoadingLocation, setIsLoadingLocation] = useState(true);
@@ -78,10 +55,36 @@ export default function UserDashboard() {
 
     const DEFAULT_LOCATION: LocationData = { lat: 21.028511, lng: 105.804817, address: 'Hà Nội, Việt Nam' };
 
+    const navItems = [
+        {
+            label: t('user.nav.home'), href: '/user',
+            icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
+        },
+        {
+            label: t('user.nav.history'), href: '/user/requests',
+            icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+        },
+        {
+            label: t('user.nav.profile'), href: '/user/profile',
+            icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
+        },
+        {
+            label: t('user.nav.settings'), href: '#',
+            icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+        },
+    ];
+
+    function getGreeting() {
+        const h = new Date().getHours();
+        if (h < 12) return t('user.dashboard.greeting.morning');
+        if (h < 18) return t('user.dashboard.greeting.afternoon');
+        return t('user.dashboard.greeting.evening');
+    }
+
     useEffect(() => {
         if (!('geolocation' in navigator)) {
             setCurrentLocation(DEFAULT_LOCATION);
-            setLocationError('Browser không hỗ trợ định vị.');
+            setLocationError(t('user.dashboard.browserNoGeo'));
             setIsLoadingLocation(false);
             return;
         }
@@ -92,11 +95,12 @@ export default function UserDashboard() {
             },
             (err) => {
                 setCurrentLocation(DEFAULT_LOCATION);
-                setLocationError(err.code === 1 ? 'Quyền vị trí bị từ chối.' : 'Không lấy được vị trí.');
+                setLocationError(err.code === 1 ? t('user.dashboard.locationDenied') : t('user.dashboard.locationFailed'));
                 setIsLoadingLocation(false);
             },
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
         );
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     if (!isReady) {
@@ -114,34 +118,30 @@ export default function UserDashboard() {
         if (href !== '#') router.push(href);
     };
 
-    /* ── MapSection: shared between mobile inline + desktop side panel ── */
     const MapSection = ({ height }: { height: string }) => (
         <div className="relative w-full overflow-hidden rounded-xl" style={{ height }}>
-            {/* current location pill */}
             {!isLoadingLocation && currentLocation && (
                 <div
                     className="absolute top-2 right-2 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium shadow"
                     style={{ background: 'white', color: C.navy, border: `1px solid ${C.border}` }}
                 >
                     <svg width="10" height="10" viewBox="0 0 24 24" fill={C.orange}><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" /></svg>
-                    {locationError ? 'Default location' : (currentLocation.address?.split(',')[0] ?? 'My location')}
+                    {locationError ? t('user.dashboard.locationDefault') : (currentLocation.address?.split(',')[0] ?? t('user.dashboard.locationDefault'))}
                 </div>
             )}
-            {/* default location warning */}
             {locationError && (
                 <div
                     className="absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-1 rounded-full text-xs shadow"
                     style={{ background: C.orangeLight, color: C.orange, border: `1px solid ${C.orange}30` }}
                 >
                     <svg width="10" height="10" viewBox="0 0 20 20" fill={C.orange}><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
-                    Mặc định
+                    {t('user.dashboard.locationDefault')}
                 </div>
             )}
-
             {isLoadingLocation ? (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-2" style={{ background: '#f1f5f9' }}>
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: C.orange }}></div>
-                    <p className="text-xs" style={{ color: C.gray }}>Đang tải bản đồ...</p>
+                    <p className="text-xs" style={{ color: C.gray }}>{t('user.dashboard.loadingMap')}</p>
                 </div>
             ) : currentLocation ? (
                 <VietMap
@@ -151,8 +151,6 @@ export default function UserDashboard() {
                     markerPosition={[currentLocation.lng, currentLocation.lat]}
                 />
             ) : null}
-
-            {/* Bottom destination bar */}
             <div
                 className="absolute bottom-2 left-2 right-2 z-10 flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg"
                 style={{ background: 'white', border: `1px solid ${C.border}` }}
@@ -161,8 +159,8 @@ export default function UserDashboard() {
                     <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                    <p className="text-[10px]" style={{ color: C.gray }}>Trạm cứu hộ gần nhất</p>
-                    <p className="text-xs font-semibold truncate" style={{ color: C.navy }}>Nearest Service Center</p>
+                    <p className="text-[10px]" style={{ color: C.gray }}>{t('user.dashboard.nearestStation')}</p>
+                    <p className="text-xs font-semibold truncate" style={{ color: C.navy }}>{t('user.dashboard.nearestStation')}</p>
                 </div>
                 <span className="text-xs font-bold flex-shrink-0" style={{ color: C.orange }}>4.2 mi</span>
             </div>
@@ -170,14 +168,13 @@ export default function UserDashboard() {
     );
 
     return (
-        <div className="min-h-screen flex" style={{ fontFamily: 'Poppins, sans-serif', background: C.bg }}>
+        <div className="h-screen overflow-hidden flex" style={{ fontFamily: 'Poppins, sans-serif', background: C.bg }}>
 
-            {/* ═══ DESKTOP Sidebar (md+) ═══ */}
+            {/* ═══ DESKTOP Sidebar ═══ */}
             <aside
                 className="hidden md:flex flex-col justify-between py-6 px-4 flex-shrink-0"
                 style={{ width: '220px', background: '#ffffff', borderRight: `1px solid ${C.border}` }}
             >
-                {/* Logo */}
                 <div>
                     <div className="flex items-center gap-2 mb-8 px-2">
                         <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
@@ -203,67 +200,61 @@ export default function UserDashboard() {
                         })}
                     </nav>
                 </div>
-                {/* User */}
                 <div className="flex items-center gap-3 px-2 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
                     <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: C.orange }}>
                         {displayName.charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0">
                         <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
-                        <p className="text-xs" style={{ color: C.gray }}>Basic Plan</p>
+                        <p className="text-xs" style={{ color: C.gray }}>{t('user.dashboard.basicPlan')}</p>
                     </div>
                 </div>
             </aside>
 
             {/* ═══ Main Area ═══ */}
             <div className="flex-1 flex flex-col min-w-0" style={{ paddingBottom: '64px' }}>
-                {/* paddingBottom = mobile bottom nav height */}
-
                 {/* Top Bar */}
                 <header
                     className="flex items-center justify-between px-4 py-3 flex-shrink-0 sticky top-0 z-20"
                     style={{ background: '#ffffff', borderBottom: `1px solid ${C.border}` }}
                 >
-                    {/* Mobile: show logo. Desktop: show Dashboard title */}
                     <div className="flex items-center gap-2 md:hidden">
                         <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
                         </div>
                         <span className="font-bold text-sm" style={{ color: C.navy }}>RescueMe</span>
                     </div>
-                    <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>Dashboard</h2>
+                    <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>{t('common.dashboard')}</h2>
 
                     <div className="flex items-center gap-3">
                         <div className="hidden sm:flex items-center gap-1.5">
                             <div className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }}></div>
-                            <span className="text-xs font-medium" style={{ color: '#64748b' }}>System Operational</span>
+                            <span className="text-xs font-medium" style={{ color: '#64748b' }}>{t('common.systemOperational')}</span>
                         </div>
+                        {/* Language Switcher */}
+                        <LanguageSwitcher />
                         <button className="p-1.5 rounded-lg" style={{ color: '#94a3b8' }}>
                             <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                             </svg>
                         </button>
-                        {/* Mobile avatar */}
                         <div className="flex md:hidden w-8 h-8 rounded-full items-center justify-center text-white text-xs font-bold" style={{ background: C.orange }}>
                             {displayName.charAt(0).toUpperCase()}
                         </div>
                     </div>
                 </header>
 
-                {/* Body: split on desktop, stacked on mobile */}
+                {/* Body */}
                 <div className="flex-1 flex overflow-hidden">
-
-                    {/* ── Scrollable left/center content ── */}
                     <div className="flex-1 overflow-y-auto">
                         <div className="p-4 md:p-6 space-y-4">
-
                             {/* Greeting */}
                             <div>
                                 <h1 className="text-xl md:text-2xl font-bold" style={{ color: C.navy }}>{getGreeting()}, {displayName} 👋</h1>
-                                <p className="text-xs md:text-sm mt-0.5" style={{ color: C.gray }}>Stay safe on the road. We are here to help.</p>
+                                <p className="text-xs md:text-sm mt-0.5" style={{ color: C.gray }}>{t('user.dashboard.subtitle')}</p>
                             </div>
 
-                            {/* ── MAP: Mobile only (inline, takes full priority) ── */}
+                            {/* MAP: Mobile only */}
                             <div className="lg:hidden">
                                 <MapSection height="220px" />
                             </div>
@@ -282,8 +273,8 @@ export default function UserDashboard() {
                                         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
                                     </div>
                                     <div className="text-left">
-                                        <p className="font-bold text-sm leading-tight">Request Assistance</p>
-                                        <p className="text-xs opacity-80 mt-0.5">Towing, Jump start, Tire change</p>
+                                        <p className="font-bold text-sm leading-tight">{t('user.dashboard.requestAssistance')}</p>
+                                        <p className="text-xs opacity-80 mt-0.5">{t('user.dashboard.requestSubtitle')}</p>
                                     </div>
                                 </div>
                                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
@@ -294,14 +285,14 @@ export default function UserDashboard() {
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: C.orange }}></div>
-                                        <h3 className="font-semibold text-sm" style={{ color: C.navy }}>Rescue in Progress</h3>
+                                        <h3 className="font-semibold text-sm" style={{ color: C.navy }}>{t('user.dashboard.rescueInProgress')}</h3>
                                     </div>
-                                    <span className="text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: C.orangeLight, color: C.orange }}>ETA: 12 Mins</span>
+                                    <span className="text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: C.orangeLight, color: C.orange }}>{t('user.dashboard.eta')}: 12 Mins</span>
                                 </div>
 
                                 {/* Steps */}
                                 <div className="flex items-start justify-between mb-4">
-                                    {['Requested', 'Assigned', 'En Route', 'Arrived'].map((step, i) => {
+                                    {[t('user.dashboard.steps.requested'), t('user.dashboard.steps.assigned'), t('user.dashboard.steps.enRoute'), t('user.dashboard.steps.arrived')].map((step, i) => {
                                         const done = i <= 1;
                                         const active = i === 2;
                                         return (
@@ -334,7 +325,7 @@ export default function UserDashboard() {
                                         <div className="flex items-center gap-1 mt-0.5">
                                             <svg width="10" height="10" viewBox="0 0 20 20" fill="#f59e0b"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
                                             <span className="text-xs font-medium" style={{ color: '#374151' }}>4.9</span>
-                                            <span className="text-xs" style={{ color: C.gray }}>(124 rescues)</span>
+                                            <span className="text-xs" style={{ color: C.gray }}>(124 {t('components.assignedProvider.rescues')})</span>
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
@@ -348,16 +339,16 @@ export default function UserDashboard() {
                                 </div>
 
                                 <div className="flex items-center justify-between mt-3">
-                                    <button className="text-xs font-medium" style={{ color: '#ef4444' }}>Cancel Request</button>
-                                    <button className="text-xs font-semibold" style={{ color: C.orange }}>View Details →</button>
+                                    <button className="text-xs font-medium" style={{ color: '#ef4444' }}>{t('user.dashboard.cancelRequest')}</button>
+                                    <button className="text-xs font-semibold" style={{ color: C.orange }}>{t('common.viewDetails')}</button>
                                 </div>
                             </div>
 
                             {/* Recent Activity */}
                             <div className="bg-white rounded-xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                                 <div className="flex items-center justify-between mb-3">
-                                    <h3 className="font-semibold text-sm" style={{ color: C.navy }}>Recent Activity</h3>
-                                    <button onClick={() => router.push('/user/requests')} className="text-xs font-medium" style={{ color: C.orange }}>View all</button>
+                                    <h3 className="font-semibold text-sm" style={{ color: C.navy }}>{t('user.dashboard.recentActivity')}</h3>
+                                    <button onClick={() => router.push('/user/requests')} className="text-xs font-medium" style={{ color: C.orange }}>{t('common.viewAll')}</button>
                                 </div>
                                 <div className="space-y-2">
                                     {recentActivity.map((item, idx) => (
@@ -382,12 +373,11 @@ export default function UserDashboard() {
                                 </div>
                             </div>
 
-                            {/* Extra bottom space so bottom nav doesn't cover content */}
                             <div className="h-2 md:hidden" />
                         </div>
                     </div>
 
-                    {/* ── DESKTOP Map Panel (lg+) ── */}
+                    {/* DESKTOP Map Panel */}
                     <div
                         className="hidden lg:block flex-shrink-0 overflow-hidden"
                         style={{ width: '380px', borderLeft: `1px solid ${C.border}` }}
@@ -397,7 +387,7 @@ export default function UserDashboard() {
                 </div>
             </div>
 
-            {/* ═══ MOBILE Bottom Navigation (md and below) ═══ */}
+            {/* ═══ MOBILE Bottom Navigation ═══ */}
             <nav
                 className="fixed bottom-0 left-0 right-0 md:hidden z-30 flex items-stretch"
                 style={{ background: '#ffffff', borderTop: `1px solid ${C.border}`, height: '60px' }}

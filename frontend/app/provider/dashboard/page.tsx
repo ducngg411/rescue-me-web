@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Shield, User, Briefcase, AlertTriangle, CheckCircle, XCircle, Clock, RefreshCw, Power, Edit } from 'lucide-react';
+import { Shield, User, Briefcase, AlertTriangle, CheckCircle, XCircle, Clock, RefreshCw, Power, Edit, Wallet } from 'lucide-react';
 import api from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useProviderGuard } from '@/lib/guards';
@@ -242,6 +242,25 @@ export default function ProviderDashboard() {
                             Chỉnh sửa hồ sơ
                         </button>
                     )}
+                </div>
+
+                {/* Wallet Quick Link */}
+                <div
+                    className="bg-white border border-gray-200 rounded-lg p-6 mb-6 cursor-pointer hover:border-blue-300 hover:shadow-md transition-all group"
+                    onClick={() => router.push('/provider/wallet')}
+                >
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                                <Wallet className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                                <h2 className="text-base font-semibold text-gray-900">Ví của tôi</h2>
+                                <p className="text-sm text-gray-500">Xem số dư và lịch sử giao dịch</p>
+                            </div>
+                        </div>
+                        <span className="text-sm text-blue-600 font-medium group-hover:underline">Xem →</span>
+                    </div>
                 </div>
 
                 {/* Online/Offline Toggle */}

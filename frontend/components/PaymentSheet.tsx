@@ -39,14 +39,6 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
         if (defaultAmount > 0 && baseFee === 0) setBaseFee(defaultAmount);
     }, [defaultAmount]);
 
-    // Toast on open to inform provider price was auto-filled
-    useEffect(() => {
-        if (defaultAmount > 0) {
-            toast(`Đã tự điền ${fmt(defaultAmount)} từ báo giá của bạn`, { icon: '💡', duration: 3000 });
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // only on mount
-
     // ── Chi tiết: breakdowns of what makes up baseFee (informational, no total change) ──
     const [breakdownItems, setBreakdownItems] = useState<Item[]>([]);
     const [showBreakdown, setShowBreakdown] = useState(false);

@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { registerWithEmail, loginWithGoogle } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import toast from 'react-hot-toast';
 
 interface RegisterFormData {
@@ -28,6 +30,7 @@ const getPasswordStrength = (password: string): 'weak' | 'medium' | 'strong' => 
 export default function RegisterPage() {
     const router = useRouter();
     const { setUser } = useAuth();
+    const { t, locale } = useLanguage();
     const [loading, setLoading] = useState(false);
     const [passwordStrength, setPasswordStrength] = useState<'weak' | 'medium' | 'strong'>('weak');
     const [passwordValue, setPasswordValue] = useState('');
@@ -50,17 +53,17 @@ export default function RegisterPage() {
     const onSubmitEmail = async (data: RegisterFormData) => {
         setLoading(true);
         if (passwordStrength === 'weak') {
-            toast.error('Mật khẩu không đủ mạnh. Vui lòng chọn mật khẩu mạnh hơn.');
+            toast.error(t('auth.register.passwordWeak'));
             setLoading(false);
             return;
         }
         try {
             const response = await registerWithEmail(data.email, data.password, data.name);
             setUser(response.user);
-            toast.success('Đăng ký thành công');
+            toast.success(t('auth.register.registerSuccess'));
             router.push('/onboarding/role');
         } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Đăng ký thất bại');
+            toast.error(err.response?.data?.message || t('auth.register.registerFailed'));
         } finally {
             setLoading(false);
         }
@@ -71,27 +74,27 @@ export default function RegisterPage() {
         try {
             const response = await loginWithGoogle(credentialResponse.credential);
             setUser(response.user);
-            toast.success('Đăng nhập Google thành công');
+            toast.success(t('auth.register.googleRegisterSuccess'));
             if (response.requiresProfileCompletion) {
                 router.push('/onboarding/role');
             } else {
                 router.push('/');
             }
         } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Đăng nhập Google thất bại');
+            toast.error(err.response?.data?.message || t('auth.login.googleLoginFailed'));
         } finally {
             setLoading(false);
         }
     };
 
     const handleGoogleError = () => {
-        toast.error('Đăng nhập Google bị hủy');
+        toast.error(t('auth.login.googleLoginCancelled'));
     };
 
     const strengthConfig = {
-        weak: { color: '#ef4444', label: 'Yếu', width: '33%' },
-        medium: { color: '#f59e0b', label: 'Trung bình', width: '66%' },
-        strong: { color: '#10b981', label: 'Mạnh', width: '100%' },
+        weak: { color: '#ef4444', label: t('auth.register.strength.weak'), width: '33%' },
+        medium: { color: '#f59e0b', label: t('auth.register.strength.medium'), width: '66%' },
+        strong: { color: '#10b981', label: t('auth.register.strength.strong'), width: '100%' },
     };
 
     const inputBase = "w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all";
@@ -115,9 +118,13 @@ export default function RegisterPage() {
                 </div>
 
                 {/* ── Right: Register card ── */}
-                <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-10">
-                    <div className="w-full max-w-sm">
+                <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-10 relative">
+                    {/* Language Switcher top-right */}
+                    <div className="absolute top-4 right-6">
+                        <LanguageSwitcher />
+                    </div>
 
+                    <div className="w-full max-w-sm">
                         {/* Mobile logo */}
                         <div className="flex items-center gap-2 mb-6 lg:hidden">
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#f97316' }}>
@@ -130,10 +137,10 @@ export default function RegisterPage() {
 
                         {/* Heading */}
                         <h1 className="text-2xl font-bold mb-1" style={{ color: '#1a1a2e' }}>
-                            Tạo tài khoản mới.
+                            {t('auth.register.title')}
                         </h1>
                         <p className="text-sm mb-5" style={{ color: '#6b7280' }}>
-                            Đã có tài khoản?{' '}
+                            {t('auth.register.hasAccount')}{' '}
                             <a
                                 href="/auth/login"
                                 className="font-medium transition-colors"
@@ -141,7 +148,7 @@ export default function RegisterPage() {
                                 onMouseEnter={e => (e.currentTarget.style.color = '#ea6c0a')}
                                 onMouseLeave={e => (e.currentTarget.style.color = '#f97316')}
                             >
-                                Đăng nhập
+                                {t('auth.register.loginLink')}
                             </a>
                         </p>
 
@@ -149,12 +156,12 @@ export default function RegisterPage() {
                         <form onSubmit={handleSubmit(onSubmitEmail)} className="space-y-3.5">
                             {/* Name */}
                             <div>
-                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Họ và tên</label>
+                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>{t('auth.register.nameLabel')}</label>
                                 <input
                                     id="name"
                                     type="text"
-                                    placeholder="Nguyễn Văn A"
-                                    {...register('name', { required: 'Họ và tên không được để trống' })}
+                                    placeholder={t('auth.register.namePlaceholder')}
+                                    {...register('name', { required: t('auth.register.nameRequired') })}
                                     className={inputBase}
                                     style={{ border: errors.name ? borderError : borderNormal, color: '#1a1a2e' }}
                                     onFocus={e => { if (!errors.name) e.target.style.border = borderFocus; }}
@@ -165,15 +172,15 @@ export default function RegisterPage() {
 
                             {/* Email */}
                             <div>
-                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Email</label>
+                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>{t('auth.register.emailLabel')}</label>
                                 <input
                                     id="email"
                                     type="email"
                                     autoComplete="email"
                                     placeholder="email@example.com"
                                     {...register('email', {
-                                        required: 'Email không được để trống',
-                                        pattern: { value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, message: 'Email không hợp lệ' },
+                                        required: t('auth.login.emailRequired'),
+                                        pattern: { value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i, message: t('auth.login.emailInvalid') },
                                     })}
                                     className={inputBase}
                                     style={{ border: errors.email ? borderError : borderNormal, color: '#1a1a2e' }}
@@ -185,16 +192,16 @@ export default function RegisterPage() {
 
                             {/* Password */}
                             <div>
-                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Mật khẩu</label>
+                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>{t('auth.register.passwordLabel')}</label>
                                 <div className="relative">
                                     <input
                                         id="password"
                                         type={showPassword ? 'text' : 'password'}
                                         placeholder="••••••••"
                                         {...register('password', {
-                                            required: 'Mật khẩu không được để trống',
-                                            minLength: { value: 8, message: 'Mật khẩu phải có ít nhất 8 ký tự' },
-                                            pattern: { value: /^(?=.*[A-Z])(?=.*\d)/, message: 'Mật khẩu phải có ít nhất 1 chữ hoa và 1 số' },
+                                            required: t('auth.register.passwordRequired'),
+                                            minLength: { value: 8, message: t('auth.register.passwordMinLength') },
+                                            pattern: { value: /^(?=.*[A-Z])(?=.*\d)/, message: t('auth.register.passwordPattern') },
                                             onChange: handlePasswordChange,
                                         })}
                                         className={`${inputBase} pr-10`}
@@ -204,14 +211,9 @@ export default function RegisterPage() {
                                     />
                                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 flex items-center" style={{ color: '#9ca3af' }}>
                                         {showPassword ? (
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                                            </svg>
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
                                         ) : (
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         )}
                                     </button>
                                 </div>
@@ -219,29 +221,24 @@ export default function RegisterPage() {
                                 {passwordValue && (
                                     <div className="mt-2 flex items-center gap-2">
                                         <div className="flex-1 rounded-full h-1.5 overflow-hidden" style={{ background: '#e5e7eb' }}>
-                                            <div
-                                                className="h-full rounded-full transition-all duration-300"
-                                                style={{ width: strengthConfig[passwordStrength].width, background: strengthConfig[passwordStrength].color }}
-                                            />
+                                            <div className="h-full rounded-full transition-all duration-300" style={{ width: strengthConfig[passwordStrength].width, background: strengthConfig[passwordStrength].color }} />
                                         </div>
-                                        <span className="text-xs font-medium" style={{ color: strengthConfig[passwordStrength].color }}>
-                                            {strengthConfig[passwordStrength].label}
-                                        </span>
+                                        <span className="text-xs font-medium" style={{ color: strengthConfig[passwordStrength].color }}>{strengthConfig[passwordStrength].label}</span>
                                     </div>
                                 )}
                             </div>
 
                             {/* Confirm password */}
                             <div>
-                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>Xác nhận mật khẩu</label>
+                                <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>{t('auth.register.confirmPasswordLabel')}</label>
                                 <div className="relative">
                                     <input
                                         id="confirmPassword"
                                         type={showConfirmPassword ? 'text' : 'password'}
                                         placeholder="••••••••"
                                         {...register('confirmPassword', {
-                                            required: 'Vui lòng xác nhận mật khẩu',
-                                            validate: value => value === getValues('password') || 'Mật khẩu không khớp',
+                                            required: t('auth.register.confirmPasswordRequired'),
+                                            validate: value => value === getValues('password') || t('auth.register.confirmPasswordMismatch'),
                                         })}
                                         className={`${inputBase} pr-10`}
                                         style={{ border: errors.confirmPassword ? borderError : borderNormal, color: '#1a1a2e' }}
@@ -250,14 +247,9 @@ export default function RegisterPage() {
                                     />
                                     <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute inset-y-0 right-3 flex items-center" style={{ color: '#9ca3af' }}>
                                         {showConfirmPassword ? (
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                                            </svg>
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
                                         ) : (
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         )}
                                     </button>
                                 </div>
@@ -273,31 +265,22 @@ export default function RegisterPage() {
                                     background: loading || passwordStrength === 'weak' ? '#fdba74' : '#f97316',
                                     cursor: loading || passwordStrength === 'weak' ? 'not-allowed' : 'pointer',
                                 }}
-                                onMouseEnter={e => {
-                                    if (!loading && passwordStrength !== 'weak')
-                                        (e.currentTarget as HTMLButtonElement).style.background = '#ea6c0a';
-                                }}
-                                onMouseLeave={e => {
-                                    if (!loading && passwordStrength !== 'weak')
-                                        (e.currentTarget as HTMLButtonElement).style.background = '#f97316';
-                                }}
+                                onMouseEnter={e => { if (!loading && passwordStrength !== 'weak') (e.currentTarget as HTMLButtonElement).style.background = '#ea6c0a'; }}
+                                onMouseLeave={e => { if (!loading && passwordStrength !== 'weak') (e.currentTarget as HTMLButtonElement).style.background = '#f97316'; }}
                             >
                                 {loading ? (
                                     <span className="flex items-center justify-center gap-2">
-                                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                                        </svg>
-                                        Đang đăng ký...
+                                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                                        {t('auth.register.registering')}
                                     </span>
-                                ) : 'Đăng ký'}
+                                ) : t('auth.register.registerButton')}
                             </button>
                         </form>
 
                         {/* OR divider */}
                         <div className="flex items-center gap-3 my-4">
                             <div className="flex-1 h-px" style={{ background: '#e5e7eb' }} />
-                            <span className="text-xs font-medium" style={{ color: '#9ca3af' }}>HOẶC</span>
+                            <span className="text-xs font-medium" style={{ color: '#9ca3af' }}>{t('common.or')}</span>
                             <div className="flex-1 h-px" style={{ background: '#e5e7eb' }} />
                         </div>
 
@@ -307,7 +290,7 @@ export default function RegisterPage() {
                                 onSuccess={handleGoogleSuccess}
                                 onError={handleGoogleError}
                                 text="signup_with"
-                                locale="vi"
+                                locale={locale}
                                 width="360"
                                 shape="rectangular"
                             />

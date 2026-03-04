@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
+import ReactConfetti from 'react-confetti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChat } from '@/lib/hooks/useChat';
 import api from '@/lib/api';
@@ -129,6 +130,8 @@ export default function ProviderNavigationView({
     const [workingCountdown, setWorkingCountdown] = useState(5);
     const [isPaymentPending, setIsPaymentPending] = useState(false);
     const [isConfirmingReceived, setIsConfirmingReceived] = useState(false);
+    const [showJobDone, setShowJobDone] = useState(false);
+    const [jobEarnings, setJobEarnings] = useState<{ totalAmount: number; commissionRate: number } | null>(null);
     const routeDrawn = useRef(false);
     const pollRef = useRef<NodeJS.Timeout | null>(null);
     const countdownRef = useRef<NodeJS.Timeout | null>(null);
@@ -772,9 +775,18 @@ export default function ProviderNavigationView({
                         onClick={async () => {
                             setIsConfirmingReceived(true);
                             try {
-                                await api.patch(`/rescue-requests/${requestId}/payment/confirm-received`);
-                                toast.success('Xác nhận thành công!');
-                                onCompleted?.();
+                                const res = await api.patch(`/rescue-requests/${requestId}/payment/confirm-received`);
+                                // Try to load payment info for earnings summary
+                                try {
+                                    const payRes = await api.get(`/rescue-requests/${requestId}/payment`);
+                                    if (payRes.data) {
+                                        setJobEarnings({
+                                            totalAmount: payRes.data.totalAmount,
+                                            commissionRate: 0.1,
+                                        });
+                                    }
+                                } catch { /* ignore */ }
+                                setShowJobDone(true);
                             } catch (err: any) {
                                 toast.error(err.response?.data?.message || 'Xác nhận thất bại');
                             } finally {
@@ -800,6 +812,141 @@ export default function ProviderNavigationView({
                         )}
                         Tôi đã nhận tiền
                     </button>
+                </div>
+            )}
+
+            {/* ─── Job Done – Provider Finish Screen ─── */}
+            {showJobDone && (
+                <div
+                    className="fixed inset-0 z-[100] flex flex-col"
+                    style={{
+                        background: 'linear-gradient(160deg, #0f172a 0%, #1e293b 60%, #0c2340 100%)',
+                        fontFamily: 'Poppins, sans-serif',
+                    }}
+                >
+                    {/* React Confetti */}
+                    <ReactConfetti
+                        width={typeof window !== 'undefined' ? window.innerWidth : 400}
+                        height={typeof window !== 'undefined' ? window.innerHeight : 800}
+                        numberOfPieces={280}
+                        recycle={false}
+                        gravity={0.25}
+                        colors={['#f97316', '#22c55e', '#3b82f6', '#f59e0b', '#a855f7', '#ffffff']}
+                        style={{ position: 'fixed', top: 0, left: 0, zIndex: 101, pointerEvents: 'none' }}
+                    />
+                    {/* Background dots */}
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        {[...Array(18)].map((_, i) => (
+                            <div
+                                key={i}
+                                className="absolute rounded-full animate-ping"
+                                style={{
+                                    width: `${6 + (i % 5) * 3}px`,
+                                    height: `${6 + (i % 5) * 3}px`,
+                                    top: `${5 + (i * 17) % 80}%`,
+                                    left: `${3 + (i * 23) % 90}%`,
+                                    background: ['#f97316', '#22c55e', '#3b82f6', '#f59e0b', '#a855f7'][i % 5],
+                                    opacity: 0.25,
+                                    animationDuration: `${1.5 + (i % 4) * 0.5}s`,
+                                    animationDelay: `${(i % 5) * 0.2}s`,
+                                }}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Main content */}
+                    <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+                        {/* Trophy / check icon */}
+                        <div
+                            className="w-24 h-24 rounded-full flex items-center justify-center mb-5"
+                            style={{ background: 'rgba(249,115,22,0.15)', border: '2px solid rgba(249,115,22,0.3)' }}
+                        >
+                            <span style={{ fontSize: '44px' }}>🎉</span>
+                        </div>
+
+                        <h1 className="text-2xl font-bold text-white mb-2">Hoàn thành!</h1>
+                        <p className="text-sm mb-8" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                            Bạn đã hoàn tất dịch vụ và nhận thanh toán thành công.
+                        </p>
+
+                        {/* Earnings summary card */}
+                        {jobEarnings && (
+                            <div
+                                className="w-full max-w-sm rounded-2xl p-5 mb-6"
+                                style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}
+                            >
+                                <p className="text-xs font-semibold mb-4" style={{ color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em' }}>TỔNG KẾT THU NHẬP</p>
+                                <div className="flex justify-between items-center mb-3">
+                                    <span className="text-sm" style={{ color: 'rgba(255,255,255,0.7)' }}>Giá trị job</span>
+                                    <span className="text-base font-bold text-white">
+                                        {jobEarnings.totalAmount.toLocaleString('vi-VN')}đ
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center mb-3">
+                                    <span className="text-sm" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                                        Hoa hồng nền tảng ({jobEarnings.commissionRate * 100}%)
+                                    </span>
+                                    <span className="text-sm font-semibold" style={{ color: '#f97316' }}>
+                                        −{Math.round(jobEarnings.totalAmount * jobEarnings.commissionRate).toLocaleString('vi-VN')}đ
+                                    </span>
+                                </div>
+                                <div
+                                    className="flex justify-between items-center pt-3"
+                                    style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}
+                                >
+                                    <span className="text-sm font-bold text-white">Thu nhập thực tế</span>
+                                    <span className="text-xl font-bold" style={{ color: '#22c55e' }}>
+                                        {Math.round(jobEarnings.totalAmount * (1 - jobEarnings.commissionRate)).toLocaleString('vi-VN')}đ
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Note about commission */}
+                        <div
+                            className="w-full max-w-sm rounded-xl px-4 py-3 mb-8 flex items-start gap-2"
+                            style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.25)' }}
+                        >
+                            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#f97316" strokeWidth={2} className="flex-shrink-0 mt-0.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                                Hoa hồng đã được trừ vào ví. Kiểm tra số dư để xem cập nhật mới nhất.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Bottom CTAs */}
+                    <div className="px-6 pb-10 space-y-3">
+                        <button
+                            onClick={() => { window.location.href = '/provider/wallet'; }}
+                            className="w-full py-4 rounded-2xl text-sm font-bold flex items-center justify-center gap-2"
+                            style={{
+                                background: 'linear-gradient(135deg, #f97316, #ea6c0a)',
+                                boxShadow: '0 4px 20px rgba(249,115,22,0.4)',
+                                color: 'white',
+                            }}
+                        >
+                            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                            </svg>
+                            Kiểm tra số dư ví
+                        </button>
+                        <button
+                            onClick={() => onCompleted?.()}
+                            className="w-full py-4 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2"
+                            style={{
+                                background: 'rgba(255,255,255,0.08)',
+                                border: '1px solid rgba(255,255,255,0.15)',
+                                color: 'rgba(255,255,255,0.85)',
+                            }}
+                        >
+                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            Về trang chủ
+                        </button>
+                    </div>
                 </div>
             )}
         </>
