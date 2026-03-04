@@ -87,7 +87,7 @@ export default function LocationPicker({
 
     const handleGetCurrentLocation = () => {
         if ('geolocation' in navigator) {
-            console.log('🔍 [LocationPicker] Requesting current position...');
+            console.log(' [LocationPicker] Requesting current position...');
 
             navigator.geolocation.getCurrentPosition(
                 async (position) => {

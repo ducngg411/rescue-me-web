@@ -62,7 +62,7 @@ export default function WaitingState() {
                 {showDebug && debugInfo && (
                     <div className="mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                         <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                            🔍 Thông tin Matching
+                            Thông tin Matching
                         </h4>
                         <div className="space-y-3 text-sm">
                             {/* Current Location Check (GPS) */}
@@ -81,7 +81,7 @@ export default function WaitingState() {
                                 </div>
                             ) : (
                                 <div className="flex items-start gap-2">
-                                    <span className="text-yellow-600">⚠️</span>
+                                    <span className="text-yellow-600"></span>
                                     <div className="flex-1">
                                         <div className="font-medium text-yellow-700">CHƯA CÓ VỊ TRÍ GPS</div>
                                         <div className="text-yellow-600">Hệ thống sẽ dùng địa chỉ mặc định (không chính xác)</div>

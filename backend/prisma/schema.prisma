@@ -50,21 +50,22 @@ enum IncidentType {
   OTHER // Khác
 }
 
-// Enum cho trạng thái rescue request
 enum RequestStatus {
-  CREATED // Vừa tạo
-  MATCHING // Đang tìm kiếm provider (U2)
-  SEARCHING // Đang tìm provider (legacy - deprecated)
-  MATCHED // Đã match với provider (legacy)
-  ASSIGNED // Provider đã nhận (U2)
-  ACCEPTED // Provider đã chấp nhận
-  IN_PROGRESS // Provider đang di chuyển đến nơi
-  ARRIVED // Provider báo đã đến nơi, chờ user xác nhận
-  WORKING // User đã xác nhận provider đến, đang sửa chữa / làm việc
-  COMPLETED // Hoàn thành
-  CANCELLED // Đã hủy
-  REJECTED // Bị từ chối
-  EXPIRED // Hết hạn, không có provider nhận (U2)
+  CREATED         // Vừa tạo
+  MATCHING        // Đang tìm kiếm provider (U2)
+  SEARCHING       // Đang tìm provider (legacy - deprecated)
+  MATCHED         // Đã match với provider (legacy)
+  ASSIGNED        // Provider đã nhận (U2)
+  ACCEPTED        // Provider đã chấp nhận
+  IN_PROGRESS     // Provider đang di chuyển đến nơi
+  ARRIVED         // Provider báo đã đến nơi, chờ user xác nhận
+  WORKING         // User đã xác nhận provider đến, đang sửa chữa / làm việc
+  PAYMENT_PENDING // Provider đã gửi yêu cầu thanh toán, chờ user xác nhận
+  PAID            // Cả 2 bên đã xác nhận thanh toán
+  COMPLETED       // Hoàn thành
+  CANCELLED       // Đã hủy
+  REJECTED        // Bị từ chối
+  EXPIRED         // Hết hạn, không có provider nhận (U2)
 }
 
 // Enum cho trạng thái báo giá
@@ -308,9 +309,10 @@ model RescueRequest {
   completedAt DateTime? // When status changed to COMPLETED
 
   // Relations
-  user   User           @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
-  media  RequestMedia[]
-  quotes Quote[]
+  user    User           @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
+  media   RequestMedia[]
+  quotes  Quote[]
+  payment Payment?
 
   @@index([userId])
   @@index([status])
@@ -385,4 +387,65 @@ model Quote {
   @@index([status, expiresAt]) // Optimized for expiration queries
   @@index([createdAt])
   @@map("quotes")
+}
+
+// Enum for payment method
+enum PaymentMethod {
+  CASH // Tiền mặt
+  QR   // Chuyển khoản QR
+}
+
+// Enum for payment status
+enum PaymentStatus {
+  PENDING           // Provider đã gửi, chờ user
+  USER_CONFIRMED    // User xác nhận đã trả tiền
+  PROVIDER_CONFIRMED // Provider xác nhận đã nhận tiền
+  COMPLETED         // Cả 2 đã xác nhận
+  DISPUTED          // Có tranh chấp
+}
+
+// Payment Model
+model Payment {
+  id              String @id @default(cuid())
+  requestId       String @unique
+  providerId      String
+  userId          String
+
+  // Fee breakdown (VND)
+  baseFee      Int  @default(0) // Phí cơ bản
+  distanceFee  Int  @default(0) // Phí km
+  overtimeFee  Int  @default(0) // Phí ngoài giờ
+  otherFee     Int  @default(0) // Phí khác
+  totalAmount  Int              // Tổng tiền (VND)
+
+  // Optional details
+  surchargeNote  String? // Ghi chú phụ phí
+  note           String? // Ghi chú chung
+  photoUrls      String[] @default([]) // Ảnh hiện trường, sửa xong, hoá đơn
+
+  // Payment method
+  paymentMethod PaymentMethod @default(CASH)
+
+  // Confirmation tracking
+  userConfirmedAt     DateTime? // User xác nhận đã thanh toán
+  providerConfirmedAt DateTime? // Provider xác nhận đã nhận tiền
+
+  // Dispute
+  disputeReason String?
+  disputedAt    DateTime?
+
+  // Status
+  status PaymentStatus @default(PENDING)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  request RescueRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([providerId])
+  @@index([userId])
+  @@map("payments")
 }

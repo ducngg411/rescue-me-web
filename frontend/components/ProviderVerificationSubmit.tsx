@@ -207,7 +207,7 @@ export default function ProviderVerificationSubmit() {
             {error && (
                 <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-sm">
                     <div className="flex items-start gap-3">
-                        <span className="text-red-500 text-xl">⚠️</span>
+                        <span className="text-red-500 text-xl"></span>
                         <p className="text-red-800 font-medium">{error}</p>
                     </div>
                 </div>
@@ -217,7 +217,7 @@ export default function ProviderVerificationSubmit() {
             {validationErrors.missingFields && validationErrors.missingFields.length > 0 && (
                 <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-lg shadow-sm">
                     <div className="flex items-start gap-3">
-                        <span className="text-yellow-500 text-xl">⚠️</span>
+                        <span className="text-yellow-500 text-xl"></span>
                         <div className="flex-1">
                             <h3 className="font-semibold text-yellow-800 mb-2">Thiếu thông tin hồ sơ:</h3>
                             <ul className="list-disc list-inside text-yellow-700 space-y-1">
@@ -338,7 +338,7 @@ export default function ProviderVerificationSubmit() {
                                 </>
                             ) : (
                                 <>
-                                    <span className="text-2xl">⚠️</span>
+                                    <span className="text-2xl"></span>
                                     <h3 className="text-xl font-bold text-yellow-700">Chưa hoàn thành</h3>
                                 </>
                             )}

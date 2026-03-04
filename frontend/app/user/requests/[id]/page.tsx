@@ -7,6 +7,7 @@ import { useRequestTracking } from '@/lib/hooks/useRequestTracking';
 import MatchingStatus from '@/components/MatchingStatus';
 import AssignedProvider from '@/components/AssignedProvider';
 import ArrivalConfirmation from '@/components/ArrivalConfirmation';
+import PaymentRequest from '@/components/PaymentRequest';
 import ExpiredRetry from '@/components/ExpiredRetry';
 import QuoteSelectionPanel from '@/components/QuoteSelectionPanel';
 import api from '@/lib/api';
@@ -32,6 +33,8 @@ const STATUS_LABELS: Record<string, string> = {
     IN_PROGRESS: 'Đang di chuyển',
     ARRIVED: 'Provider đã đến',
     WORKING: 'Đang làm việc',
+    PAYMENT_PENDING: 'Chờ thanh toán',
+    PAID: 'Đã thanh toán',
     COMPLETED: 'Hoàn thành',
     CANCELLED: 'Đã hủy',
     REJECTED: 'Bị từ chối',
@@ -46,6 +49,8 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> =
     IN_PROGRESS: { bg: '#eff6ff', text: '#2563eb', dot: '#3b82f6' },
     ARRIVED: { bg: '#fef3c7', text: '#d97706', dot: '#f59e0b' },
     WORKING: { bg: '#f0fdf4', text: '#16a34a', dot: '#22c55e' },
+    PAYMENT_PENDING: { bg: '#fff7ed', text: '#f97316', dot: '#f97316' },
+    PAID: { bg: '#f0fdf4', text: '#16a34a', dot: '#22c55e' },
     COMPLETED: { bg: '#f0fdf4', text: '#16a34a', dot: '#22c55e' },
     CANCELLED: { bg: '#fef2f2', text: '#dc2626', dot: '#ef4444' },
     EXPIRED: { bg: '#fefce8', text: '#ca8a04', dot: '#eab308' },
@@ -155,6 +160,40 @@ function LiveQuoteCard({
             )}
         </div>
     );
+}
+
+
+// Fetches payment details and renders PaymentRequest for the user
+function PaymentRequestFetcher({ requestId, providerName }: { requestId: string; providerName: string }) {
+    const [payment, setPayment] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let active = true;
+        const load = async () => {
+            try {
+                const res = await api.get(`/rescue-requests/${requestId}/payment`);
+                if (active) setPayment(res.data);
+            } catch { /* ignore — may not exist yet */ }
+            finally { if (active) setLoading(false); }
+        };
+        load();
+        // Re-poll every 5s so userConfirmedAt refreshes after user confirms
+        const t = setInterval(load, 5000);
+        return () => { active = false; clearInterval(t); };
+    }, [requestId]);
+
+    if (loading) return (
+        <div className="bg-white rounded-2xl p-6 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+            <p className="text-sm" style={{ color: '#6b7280' }}>Đang tải thông tin thanh toán...</p>
+        </div>
+    );
+    if (!payment) return (
+        <div className="bg-white rounded-2xl p-6 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+            <p className="text-sm" style={{ color: '#6b7280' }}>Chưa có yêu cầu thanh toán</p>
+        </div>
+    );
+    return <PaymentRequest requestId={requestId} payment={payment} providerName={providerName} />;
 }
 
 export default function RequestTrackingPage() {
@@ -436,13 +475,41 @@ export default function RequestTrackingPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
                         </div>
-                        <h3 className="text-sm font-bold mb-1" style={{ color: '#15803d' }}>Provider đang làm việc </h3>
+                        <h3 className="text-sm font-bold mb-1" style={{ color: '#15803d' }}>Provider đang làm việc</h3>
                         <p className="text-xs mb-2" style={{ color: '#6b7280' }}>
                             Vui lòng quan sát và hỗ trợ provider trong quá trình sửa chữa.
                         </p>
                         <p className="text-xs" style={{ color: '#9ca3af' }}>
                             ⚡ Hãy yên tâm — provider của bạn đang cố gắng hết sức!
                         </p>
+                    </div>
+                )}
+
+                {/* PAYMENT_PENDING: provider sent payment request */}
+                {(status.status === 'PAYMENT_PENDING' || status.status === 'PAID') && status.assignedProvider && (
+                    <PaymentRequestFetcher
+                        requestId={requestId}
+                        providerName={status.assignedProvider.name ?? 'Provider'}
+                    />
+                )}
+
+                {/* COMPLETED: service done */}
+                {status.status === 'COMPLETED' && (
+                    <div className="bg-white rounded-2xl p-6 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+                        <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#f0fdf4' }}>
+                            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-base font-bold mb-1" style={{ color: '#15803d' }}>Dịch vụ hoàn thành! 🎉</h3>
+                        <p className="text-sm mb-4" style={{ color: C.gray }}>Cảm ơn bạn đã sử dụng dịch vụ RescueMe.</p>
+                        <button
+                            onClick={() => router.push('/user')}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white"
+                            style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
+                        >
+                            Về trang chủ
+                        </button>
                     </div>
                 )}
 

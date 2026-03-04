@@ -206,7 +206,7 @@ export default function IncomingRequestModal({
                     {!quoteWindowClosed && quoteWindowCritical && (
                         <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-3">
                             <div className="flex items-center gap-2 text-sm text-orange-700">
-                                <span className="text-lg">⚠️</span>
+                                <span className="text-lg"></span>
                                 <div>
                                     <div className="font-semibold">Sắp hết hạn! Còn {quoteWindowTime}s</div>
                                     <div className="text-xs text-orange-600">Cửa sổ nhận báo giá sắp đóng.</div>

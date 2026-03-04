@@ -250,8 +250,9 @@ export default function ProviderRequestDetailPage() {
             console.log('📋 [Provider View] Assigned to:', requestData.assignedProviderId);
             console.log('📋 [Provider View] Current provider:', user?.id);
 
-            // Check if provider has already sent a quote for this request
-            if (requestData.status === 'MATCHING') {
+            // Check provider's quote for all active statuses (needed to pre-fill PaymentSheet)
+            const shouldFetchQuotes = ['MATCHING', 'ASSIGNED', 'IN_PROGRESS', 'ARRIVED', 'WORKING', 'PAYMENT_PENDING', 'PAID'].includes(requestData.status);
+            if (shouldFetchQuotes) {
                 try {
                     const quotesResponse = await api.get(`/rescue-requests/${requestId}/quotes`);
                     const quotes = quotesResponse.data;
@@ -259,21 +260,23 @@ export default function ProviderRequestDetailPage() {
                     // Check if current provider has a quote
                     const myQuote = quotes.find((q: any) => q.providerId === user?.id);
                     if (myQuote) {
-                        console.log('💰 [Provider View] Found existing quote:', myQuote.status);
+                        console.log(' [Provider View] Found existing quote:', myQuote.status, 'price:', myQuote.price);
                         setMyQuoteDetails(myQuote);
-                        if (myQuote.status === 'PENDING') {
-                            console.log('🟡 Setting hasPendingQuote = true');
-                            setHasPendingQuote(true);
-                        } else if (myQuote.status === 'REJECTED') {
-                            console.log('🔴 Setting hasRejectedQuote = true');
-                            setHasRejectedQuote(true);
-                        } else if (myQuote.status === 'ACCEPTED') {
-                            console.log('🟢 Setting quoteAccepted = true');
-                            setQuoteAccepted(true);
+                        if (requestData.status === 'MATCHING') {
+                            if (myQuote.status === 'PENDING') {
+                                console.log(' Setting hasPendingQuote = true');
+                                setHasPendingQuote(true);
+                            } else if (myQuote.status === 'REJECTED') {
+                                console.log(' Setting hasRejectedQuote = true');
+                                setHasRejectedQuote(true);
+                            } else if (myQuote.status === 'ACCEPTED') {
+                                console.log(' Setting quoteAccepted = true');
+                                setQuoteAccepted(true);
+                            }
                         }
                     }
                 } catch (quoteErr) {
-                    console.log('ℹ️ [Provider View] Could not fetch quotes (user endpoint)');
+                    console.log('ℹ️ [Provider View] Could not fetch quotes');
                 }
             }
 
@@ -454,6 +457,14 @@ export default function ProviderRequestDetailPage() {
                 eta={myQuoteDetails?.estimatedArrivalMinutes ?? null}
                 requestId={requestId}
                 customerName={request!.user?.name ?? 'Khách hàng'}
+                requestDetails={{
+                    incidentType: request!.incidentType,
+                    vehicleType: request!.vehicleType,
+                    description: request!.description,
+                    pickupLocation: request!.pickupLocation,
+                    contactPhone: request!.contactPhone,
+                }}
+                acceptedQuotePrice={myQuoteDetails?.price ?? null}
                 onBack={() => setShowNavigationMap(false)}
                 onCompleted={() => router.push('/provider/active')}
             />
@@ -872,7 +883,7 @@ export default function ProviderRequestDetailPage() {
                                 {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
                             </div>
                             <div className="text-xs opacity-90">
-                                {timeLeft < 60 ? '⚠️ Còn ít thời gian!' : `${request.quoteCount || 0}/${request.maxQuotes || 3} báo giá`}
+                                {timeLeft < 60 ? ' Còn ít thời gian!' : `${request.quoteCount || 0}/${request.maxQuotes || 3} báo giá`}
                             </div>
                         </div>
                     </div>
@@ -988,7 +999,7 @@ export default function ProviderRequestDetailPage() {
                 )}
 
                 {/* Debug info - remove after testing */}
-                {console.log('🔍 [Render] request.status:', request?.status, 'hasPendingQuote:', hasPendingQuote, 'myQuoteDetails:', myQuoteDetails ? 'exists' : 'null')}
+                {console.log(' [Render] request.status:', request?.status, 'hasPendingQuote:', hasPendingQuote, 'myQuoteDetails:', myQuoteDetails ? 'exists' : 'null')}
 
                 {/* Provider has pending quote - waiting for user response */}
                 {request.status === 'MATCHING' && hasPendingQuote && myQuoteDetails && (
@@ -1047,7 +1058,7 @@ export default function ProviderRequestDetailPage() {
                                     <div className="text-sm text-blue-900">
                                         <p className="font-medium mb-1">🔄 Hệ thống đang tự động kiểm tra trạng thái</p>
                                         <p className="text-xs text-blue-800">Bạn sẽ nhận thông báo ngay khi khách hàng chấp nhận hoặc từ chối báo giá.</p>
-                                        <p className="text-xs text-blue-700 font-semibold mt-2">⚠️ Vui lòng giữ màn hình này mở để nhận cập nhật</p>
+                                        <p className="text-xs text-blue-700 font-semibold mt-2"> Vui lòng giữ màn hình này mở để nhận cập nhật</p>
                                     </div>
                                 </div>
                             </div>
@@ -1056,7 +1067,7 @@ export default function ProviderRequestDetailPage() {
                 )}
 
                 {/* Debug Quote Form check */}
-                {console.log('🔍 [Render] Show quote form?', request?.status === 'MATCHING' && !hasPendingQuote)}
+                {console.log(' [Render] Show quote form?', request?.status === 'MATCHING' && !hasPendingQuote)}
 
                 {/* Quote Form - Only show if MATCHING and no pending quote */}
                 {request.status === 'MATCHING' && !hasPendingQuote && (
@@ -1139,7 +1150,7 @@ export default function ProviderRequestDetailPage() {
                             </svg>
                             <div className="flex-1">
                                 <h3 className="font-semibold text-yellow-900 mb-2">
-                                    ⚠️ Yêu cầu không còn khả dụng
+                                    Yêu cầu không còn khả dụng
                                 </h3>
                                 <p className="text-yellow-800 mb-3">
                                     Yêu cầu này không còn ở trạng thái MATCHING. Có thể đã có provider khác được khách hàng chọn hoặc yêu cầu đã hết hạn.

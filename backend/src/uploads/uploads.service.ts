@@ -55,7 +55,7 @@ export class UploadsService {
             });
             console.log(' Cloudinary configured:', cloudinaryCloudName);
         } else {
-            console.warn('⚠️  Cloudinary not configured - video upload features will not work');
+            console.warn('  Cloudinary not configured - video upload features will not work');
         }
     }
 

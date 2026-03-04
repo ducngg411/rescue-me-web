@@ -30,7 +30,7 @@ export class VietMapService {
     constructor(private configService: ConfigService) {
         this.apiKey = this.configService.get<string>('VIETMAP_API_KEY') || '';
         if (!this.apiKey) {
-            this.logger.warn('⚠️ VIETMAP_API_KEY not configured. Route calculation will fail.');
+            this.logger.warn(' VIETMAP_API_KEY not configured. Route calculation will fail.');
         }
     }
 

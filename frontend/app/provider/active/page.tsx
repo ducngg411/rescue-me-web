@@ -151,7 +151,7 @@ export default function ProviderActivePage() {
                 <div className="max-w-4xl mx-auto px-4 py-8">
                     <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6">
                         <div className="flex items-start gap-4">
-                            <div className="text-4xl">⚠️</div>
+                            <div className="text-4xl"></div>
                             <div className="flex-1">
                                 <h3 className="text-lg font-bold text-yellow-900 mb-2">
                                     Tài khoản chưa được xác minh
@@ -313,7 +313,7 @@ export default function ProviderActivePage() {
                                 <div className="max-w-6xl mx-auto px-6 pt-6">
                                     <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
                                         <div className="flex items-start gap-3">
-                                            <span className="text-2xl">⚠️</span>
+                                            <span className="text-2xl"></span>
                                             <div className="flex-1">
                                                 <h4 className="font-semibold text-red-900 mb-1">
                                                     Không thể truy cập vị trí GPS

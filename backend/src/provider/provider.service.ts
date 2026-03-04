@@ -398,7 +398,7 @@ export class ProviderService {
             }
         }
 
-        console.log(`📊 [Provider ${userId}] Found ${candidateRequests.length}/${allMatchingRequests.length} candidates within ${radiusKm * 1.5}km straight-line`);
+        console.log(` [Provider ${userId}] Found ${candidateRequests.length}/${allMatchingRequests.length} candidates within ${radiusKm * 1.5}km straight-line`);
 
         if (candidateRequests.length === 0) {
             return [];
@@ -482,7 +482,7 @@ export class ProviderService {
                     createdAt: request.createdAt,
                 });
             } else if (!routeInfo.success) {
-                console.warn(`⚠️ VietMap route failed for request ${request.id}: ${routeInfo.error}`);
+                console.warn(` VietMap route failed for request ${request.id}: ${routeInfo.error}`);
                 // Could fallback to Haversine here if needed
             }
         }
@@ -608,12 +608,12 @@ export class ProviderService {
                     );
                 } else {
                     this.logger.warn(
-                        `⚠️ VietMap route failed: ${routeInfo.error}`,
+                        ` VietMap route failed: ${routeInfo.error}`,
                     );
                 }
             } else {
                 this.logger.warn(
-                    `⚠️ Cannot calculate route: Provider location (${providerLat}, ${providerLng}), Customer location (${customerLat}, ${customerLng})`,
+                    ` Cannot calculate route: Provider location (${providerLat}, ${providerLng}), Customer location (${customerLat}, ${customerLng})`,
                 );
             }
         } catch (err) {

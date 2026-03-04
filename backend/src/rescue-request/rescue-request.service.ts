@@ -973,7 +973,7 @@ export class RescueRequestService {
         if (request.status === 'IN_PROGRESS') return { success: true, status: 'IN_PROGRESS' };
         if (request.status !== 'ASSIGNED') throw new BadRequestException(`Cannot start from status: ${request.status}`);
         await this.prisma.rescueRequest.update({ where: { id: requestId }, data: { status: 'IN_PROGRESS' } });
-        console.log(` [RescueRequest] Provider ${providerId} started navigation → IN_PROGRESS`);
+        console.log(`🚗 [RescueRequest] Provider ${providerId} started navigation → IN_PROGRESS`);
         return { success: true, status: 'IN_PROGRESS' };
     }
 
