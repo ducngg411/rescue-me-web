@@ -14,6 +14,8 @@ import { CreateRescueRequestDto } from './dto/create-rescue-request.dto';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { RespondQuoteDto } from './dto/respond-quote.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { CreateReviewDto } from './dto/create-review.dto';
+
 
 @Controller('rescue-requests')
 @UseGuards(JwtAuthGuard)
@@ -207,5 +209,20 @@ export class RescueRequestController {
         @Body() body: { reason: string },
     ) {
         return this.rescueRequestService.disputePayment(requestId, req.user.id, body.reason);
+    }
+
+    // ==================== REVIEW ENDPOINT ====================
+
+    /**
+     * User gửi đánh giá cho provider sau khi hoàn thành dịch vụ
+     * POST /rescue-requests/:id/review
+     */
+    @Post(':id/review')
+    async submitReview(
+        @Request() req,
+        @Param('id') requestId: string,
+        @Body() dto: CreateReviewDto,
+    ) {
+        return this.rescueRequestService.submitReview(requestId, req.user.id, dto);
     }
 }

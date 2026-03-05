@@ -3,6 +3,7 @@ import {
     BadRequestException,
     NotFoundException,
     Logger,
+    UnauthorizedException,
 } from '@nestjs/common';
 import {
     WalletReferenceType,
@@ -10,6 +11,7 @@ import {
     WalletTransactionType,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Option types
@@ -22,6 +24,8 @@ export interface CreditOptions {
      */
     status?: WalletTransactionStatus;
     description?: string;
+    /** For PENDING credits (holding): when to auto-release to available (e.g. now + 24h) */
+    holdReleaseAt?: Date;
 }
 
 export interface DebitOptions {
@@ -32,11 +36,16 @@ export interface DebitOptions {
 // Service
 // ─────────────────────────────────────────────────────────────────────────────
 
+const MIN_TOPUP = 1; // TODO: restore to 100_000 after SePay testing
+
 @Injectable()
 export class WalletService {
     private readonly logger = new Logger(WalletService.name);
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly config: ConfigService,
+    ) { }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -126,6 +135,7 @@ export class WalletService {
                     referenceType,
                     referenceId,
                     description,
+                    holdReleaseAt: options.holdReleaseAt,
                 },
             });
 
@@ -523,5 +533,364 @@ export class WalletService {
 
             return { transaction: updatedTx, wallet: updatedWallet };
         });
+    }
+
+    // ── Top-up (SePay VietQR) ──────────────────────────────────────────────────
+
+    /**
+     * Generate a unique transfer code for the provider (idempotent).
+     * Format: RM + 7 uppercase alphanumeric chars, e.g. RM-A3B7C2D
+     */
+    private generateTopupCode(): string {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        const rand = Array.from({ length: 7 }, () =>
+            chars[Math.floor(Math.random() * chars.length)]
+        ).join('');
+        return `RM${rand}`;
+    }
+
+    /**
+     * Ensure the provider's wallet has a topupCode, generate one if missing.
+     */
+    private async ensureTopupCode(walletId: string): Promise<string> {
+        const wallet = await this.prisma.providerWallet.findUnique({
+            where: { id: walletId },
+        });
+        if (!wallet) throw new NotFoundException(`Wallet ${walletId} not found`);
+
+        if (wallet.topupCode) return wallet.topupCode;
+
+        // Try generating a unique code (retry if collision)
+        for (let i = 0; i < 10; i++) {
+            const code = this.generateTopupCode();
+            try {
+                const updated = await this.prisma.providerWallet.update({
+                    where: { id: walletId },
+                    data: { topupCode: code },
+                });
+                return updated.topupCode!;
+            } catch {
+                // unique constraint violation – retry
+            }
+        }
+        throw new Error('Could not generate unique topup code');
+    }
+
+    /**
+     * Provider calls this when they tap "Nạp tiền".
+     * Idempotent: returns existing PENDING non-expired tx if one exists.
+     * Creates a new one with expireAt = now + 5min otherwise.
+     */
+    async initTopup(providerId: string, amount: number) {
+        if (amount < MIN_TOPUP) {
+            throw new BadRequestException(
+                `Số tiền nạp tối thiểu là ${MIN_TOPUP.toLocaleString('vi-VN')}₫`,
+            );
+        }
+
+        const wallet = await this.ensureWallet(providerId);
+        const transferCode = await this.ensureTopupCode(wallet.id);
+
+        const bankAccount = this.config.get('SEPAY_BANK_ACCOUNT', '07729096901');
+        const bankCode = this.config.get('SEPAY_BANK_CODE', 'TPBank');
+
+        const buildQrUrl = (amt: number, code: string) => {
+            const desc = encodeURIComponent(code);
+            return `https://qr.sepay.vn/img?acc=${bankAccount}&bank=${bankCode}&amount=${amt}&des=${desc}&template=compact`;
+        };
+
+        const now = new Date();
+
+        // 1. Check if there is already a PENDING, non-expired tx for this wallet
+        const existing = await this.prisma.topupTransaction.findFirst({
+            where: {
+                walletId: wallet.id,
+                status: 'PENDING',
+                expireAt: { gt: now },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        if (existing) {
+            if (existing.amount === amount) {
+                // Same amount → reuse existing QR
+                this.logger.log(
+                    `TOPUP_INIT reuse existing txId=${existing.id} for providerId=${providerId}`,
+                );
+                return {
+                    topupTxId: existing.id,
+                    transferCode: existing.transferCode,
+                    amount: existing.amount,
+                    expireAt: existing.expireAt,
+                    bankAccount,
+                    bankCode,
+                    qrUrl: buildQrUrl(existing.amount, existing.transferCode),
+                    isReuse: true,
+                };
+            }
+            // Different amount → cancel old tx, create fresh one
+            this.logger.log(
+                `TOPUP_INIT amount changed (${existing.amount}→${amount}), cancelling old txId=${existing.id}`,
+            );
+            await this.prisma.topupTransaction.update({
+                where: { id: existing.id },
+                data: { status: 'CANCELLED' },
+            });
+        }
+
+        // 2. Create new PENDING tx with 5-minute expiry
+        const expireAt = new Date(now.getTime() + 5 * 60 * 1000);
+        const topupTx = await this.prisma.topupTransaction.create({
+            data: {
+                walletId: wallet.id,
+                amount,
+                transferCode,
+                expireAt,
+            },
+        });
+
+        this.logger.log(
+            `TOPUP_INIT providerId=${providerId} wallet=${wallet.id} ` +
+            `amount=${amount} code=${transferCode} txId=${topupTx.id} expireAt=${expireAt.toISOString()}`,
+        );
+
+        return {
+            topupTxId: topupTx.id,
+            transferCode,
+            amount,
+            expireAt,
+            bankAccount,
+            bankCode,
+            qrUrl: buildQrUrl(amount, transferCode),
+            isReuse: false,
+        };
+    }
+
+    /**
+     * SePay calls this webhook when a bank transfer is detected.
+     * Matches the transfer code in content → credits the wallet.
+     */
+    async processSePayWebhook(body: any, authHeader: string | undefined) {
+        // 1. Verify API key from Authorization header
+        const expectedKey = this.config.get<string>('SEPAY_API_KEY');
+        if (expectedKey) {
+            const provided = authHeader?.replace('Apikey ', '').trim();
+            if (provided !== expectedKey) {
+                this.logger.warn('SePay webhook: invalid API key');
+                throw new UnauthorizedException('Invalid API key');
+            }
+        }
+
+        const {
+            id: sepayId,
+            content,
+            transferType,
+            transferAmount,
+            referenceCode: sepayReferenceCode,
+        } = body;
+
+        this.logger.log(
+            `SEPAY_WEBHOOK sepayId=${sepayId} type=${transferType} ` +
+            `amount=${transferAmount} content="${content}"`,
+        );
+
+        // 2. Only handle incoming transfers
+        if (transferType !== 'in') {
+            return { success: true, message: 'Skipped outgoing transfer' };
+        }
+
+        // 3. Dedup: check both topup and job payment tables
+        const existingTopup = await this.prisma.topupTransaction.findUnique({
+            where: { sepayId: Number(sepayId) },
+        });
+        const existingJobPay = await this.prisma.jobPaymentTransaction.findUnique({
+            where: { sepayId: Number(sepayId) },
+        });
+        if (existingTopup || existingJobPay) {
+            this.logger.warn(`SEPAY_WEBHOOK duplicate sepayId=${sepayId}, skip`);
+            return { success: true, message: 'Already processed' };
+        }
+
+        // 4. Find matching transfer code in content
+        //    Job payment codes: RMJ + 7 chars (10 total)
+        //    Topup codes:       RM  + 7 chars (9 total)
+        const jobMatch = String(content || '').match(/RMJ[A-Z0-9]{7}/i);
+        const topupMatch = !jobMatch && String(content || '').match(/RM[A-Z0-9]{7}/i);
+        const match = jobMatch || topupMatch;
+        if (!match) {
+            this.logger.warn(`SEPAY_WEBHOOK no transfer code in content: "${content}"`);
+            return { success: true, message: 'No matching transfer code' };
+        }
+        const transferCode = match[0].toUpperCase();
+
+        // 5. Route by prefix
+        if (jobMatch) {
+            return this.processJobPaymentWebhook(transferCode, Number(sepayId), Number(transferAmount));
+        }
+        // 5. Find the wallet by topupCode
+        const wallet = await this.prisma.providerWallet.findUnique({
+            where: { topupCode: transferCode },
+        });
+        if (!wallet) {
+            this.logger.warn(`SEPAY_WEBHOOK no wallet for code=${transferCode}`);
+            return { success: true, message: 'No wallet found for transfer code' };
+        }
+
+        // 6. Find the most-recent, non-expired PENDING topup transaction for this wallet.
+        //    Match by amount first; fall back to any PENDING if amount differs.
+        //    IMPORTANT: use 'desc' so we update the newest tx (what the frontend is polling),
+        //    not an old stale PENDING tx left over from before expiry was added.
+        const now = new Date();
+        const pendingTx =
+            // Best match: right amount, not yet expired
+            await this.prisma.topupTransaction.findFirst({
+                where: {
+                    walletId: wallet.id,
+                    status: 'PENDING',
+                    amount: Number(transferAmount),
+                    OR: [{ expireAt: null }, { expireAt: { gt: now } }],
+                },
+                orderBy: { createdAt: 'desc' },
+            }) ??
+            // Fallback: any amount, not yet expired
+            await this.prisma.topupTransaction.findFirst({
+                where: {
+                    walletId: wallet.id,
+                    status: 'PENDING',
+                    OR: [{ expireAt: null }, { expireAt: { gt: now } }],
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+
+        // 7. Atomic: credit wallet + mark topup tx COMPLETED
+        await this.prisma.$transaction(async (tx) => {
+            // Credit availableBalance
+            await tx.providerWallet.update({
+                where: { id: wallet.id },
+                data: { availableBalance: { increment: Number(transferAmount) } },
+            });
+
+            // Create WalletTransaction record (CREDIT / TOPUP)
+            await tx.walletTransaction.create({
+                data: {
+                    walletId: wallet.id,
+                    type: WalletTransactionType.CREDIT,
+                    amount: Number(transferAmount),
+                    status: WalletTransactionStatus.COMPLETED,
+                    referenceType: WalletReferenceType.TOPUP,
+                    referenceId: String(sepayId),
+                    description: `Nạp tiền qua SePay · ${transferCode}`,
+                },
+            });
+
+            // Update or create TopupTransaction
+            if (pendingTx) {
+                await tx.topupTransaction.update({
+                    where: { id: pendingTx.id },
+                    data: {
+                        status: 'COMPLETED',
+                        sepayId: Number(sepayId),
+                        sepayReferenceCode,
+                        completedAt: new Date(),
+                    },
+                });
+            } else {
+                // Webhook arrived without a matching pending tx (e.g. direct transfer)
+                await tx.topupTransaction.create({
+                    data: {
+                        walletId: wallet.id,
+                        amount: Number(transferAmount),
+                        status: 'COMPLETED',
+                        transferCode,
+                        sepayId: Number(sepayId),
+                        sepayReferenceCode,
+                        completedAt: new Date(),
+                    },
+                });
+            }
+        });
+
+        this.logger.log(
+            `✅ TOPUP_COMPLETED wallet=${wallet.id} amount=${transferAmount} ` +
+            `code=${transferCode} sepayId=${sepayId}`,
+        );
+
+        return { success: true };
+    }
+
+    /**
+     * Provider polls this to check if their top-up was received.
+     * Auto-expires PENDING transactions that have passed their expireAt.
+     */
+    async getTopupStatus(topupTxId: string, providerId: string) {
+        const wallet = await this.prisma.providerWallet.findUnique({
+            where: { providerId },
+        });
+        if (!wallet) throw new NotFoundException('Wallet not found');
+
+        const tx = await this.prisma.topupTransaction.findFirst({
+            where: { id: topupTxId, walletId: wallet.id },
+        });
+        if (!tx) throw new NotFoundException('Topup transaction not found');
+
+        // Auto-expire if past expireAt and still PENDING
+        if (tx.status === 'PENDING' && tx.expireAt && tx.expireAt < new Date()) {
+            await this.prisma.topupTransaction.update({
+                where: { id: tx.id },
+                data: { status: 'EXPIRED' },
+            });
+            return {
+                id: tx.id,
+                status: 'EXPIRED',
+                amount: tx.amount,
+                expireAt: tx.expireAt,
+                completedAt: null,
+            };
+        }
+
+        return {
+            id: tx.id,
+            status: tx.status,
+            amount: tx.amount,
+            expireAt: tx.expireAt,
+            completedAt: tx.completedAt,
+        };
+    }
+
+    /**
+     * Returns the active (PENDING, non-expired) topup tx for a provider, if any.
+     * Used by the frontend to show a "resume payment" banner.
+     */
+    async getPendingTopup(providerId: string) {
+        const wallet = await this.prisma.providerWallet.findUnique({
+            where: { providerId },
+        });
+        if (!wallet) return null;
+
+        const now = new Date();
+        const tx = await this.prisma.topupTransaction.findFirst({
+            where: {
+                walletId: wallet.id,
+                status: 'PENDING',
+                expireAt: { gt: now },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        if (!tx) return null;
+
+        const bankAccount = this.config.get('SEPAY_BANK_ACCOUNT', '07729096901');
+        const bankCode = this.config.get('SEPAY_BANK_CODE', 'TPBank');
+        const desc = encodeURIComponent(tx.transferCode);
+        const qrUrl = `https://qr.sepay.vn/img?acc=${bankAccount}&bank=${bankCode}&amount=${tx.amount}&des=${desc}&template=compact`;
+
+        return {
+            topupTxId: tx.id,
+            transferCode: tx.transferCode,
+            amount: tx.amount,
+            expireAt: tx.expireAt,
+            bankAccount,
+            bankCode,
+            qrUrl,
+        };
     }
 }

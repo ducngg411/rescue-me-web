@@ -26,13 +26,20 @@ export function useProviderLocation({
 
     const watchIdRef = useRef<number | null>(null);
     const updateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    // Guard: prevents concurrent PATCH /location calls (React StrictMode double-mount,
+    // or initial getCurrentPosition racing with the first interval tick).
+    const isSendingRef = useRef(false);
 
     const updateLocationOnServer = useCallback(async (lat: number, lng: number) => {
+        if (isSendingRef.current) return; // already in-flight, skip
+        isSendingRef.current = true;
         try {
             await api.patch('/me/provider/location', { lat, lng });
             console.log(`📍 Location updated on server: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
         } catch (err: any) {
             console.error('Failed to update location on server:', err);
+        } finally {
+            isSendingRef.current = false;
         }
     }, []);
 
@@ -46,7 +53,7 @@ export function useProviderLocation({
             return;
         }
 
-        // Request permission and get initial position
+        // Request permission and get initial position + send to server immediately
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 const { latitude, longitude } = position.coords;
@@ -82,7 +89,9 @@ export function useProviderLocation({
             }
         );
 
-        // Watch position changes (for real-time tracking)
+        // Watch position changes — only updates LOCAL UI state, NOT the server.
+        // Server updates happen exclusively via the setInterval below to avoid
+        // concurrent requests that cause ERR_HTTP_HEADERS_SENT.
         watchIdRef.current = navigator.geolocation.watchPosition(
             (position) => {
                 const { latitude, longitude } = position.coords;
@@ -104,7 +113,8 @@ export function useProviderLocation({
             }
         );
 
-        // Setup periodic server updates
+        // Periodic server updates — the ONLY place we send location to the server
+        // after the initial push above. This prevents concurrent requests.
         updateIntervalRef.current = setInterval(() => {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
@@ -116,8 +126,8 @@ export function useProviderLocation({
                 },
                 {
                     enableHighAccuracy: true,
-                    timeout: 5000,
-                    maximumAge: 10000,
+                    timeout: 15000,   // increased from 5s – browser geolocation needs more time on desktop
+                    maximumAge: 30000, // reuse cached position up to 30s old
                 }
             );
         }, updateInterval);

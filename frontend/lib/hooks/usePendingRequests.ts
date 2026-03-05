@@ -50,19 +50,40 @@ export function usePendingRequests({
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    // Guard: prevent overlapping concurrent requests (e.g. from React StrictMode double-mount
+    // or when VietMap API is slow and the next poll fires before the previous one finishes).
+    const isFetchingRef = useRef(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     const fetchRequests = useCallback(async () => {
+        // Skip if a previous request is still in-flight
+        if (isFetchingRef.current) return [];
+
+        // Cancel any lingering previous request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+        isFetchingRef.current = true;
+
         try {
-            const response = await api.get<PendingRequest[]>('/me/provider/pending-requests');
+            const response = await api.get<PendingRequest[]>('/me/provider/pending-requests', {
+                signal: abortControllerRef.current.signal,
+            });
             setRequests(response.data);
             setError(null);
             return response.data;
         } catch (err: any) {
+            if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+                // Request was aborted — not an error, just ignore
+                return [];
+            }
             console.error('Error fetching pending requests:', err);
             const errorMsg = err.response?.data?.message || 'Không thể tải requests';
             setError(errorMsg);
             return [];
         } finally {
+            isFetchingRef.current = false;
             setIsLoading(false);
         }
     }, []);
@@ -72,6 +93,12 @@ export function usePendingRequests({
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
         }
+        // Cancel any in-flight request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        isFetchingRef.current = false;
     }, []);
 
     const startPolling = useCallback(() => {
@@ -91,6 +118,7 @@ export function usePendingRequests({
             startPolling();
         } else {
             stopPolling();
+            setRequests([]);
         }
 
         return () => {

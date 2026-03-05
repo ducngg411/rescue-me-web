@@ -236,7 +236,8 @@ export class RescueRequestService {
                         pricePerKm: true,
                         baseFee: true,
                         isOnline: true,
-                        // Add rating/reviews if available in future
+                        averageRating: true,
+                        reviewCount: true,
                     },
                 },
             },
@@ -1329,4 +1330,85 @@ export class RescueRequestService {
         });
         return payment;
     }
+
+    // ==================== REVIEW METHODS ====================
+
+    /**
+     * User submits a star rating + optional comment for the provider
+     * after the rescue request is COMPLETED.
+     */
+    async submitReview(
+        requestId: string,
+        userId: string,
+        dto: { rating: number; comment?: string; tags?: string[] },
+    ) {
+        // Validate rating range
+        if (dto.rating < 1 || dto.rating > 5 || !Number.isInteger(dto.rating)) {
+            throw new BadRequestException('Rating must be an integer between 1 and 5');
+        }
+
+        // Fetch the request (must belong to this user and be COMPLETED)
+        const request = await this.prisma.rescueRequest.findFirst({
+            where: { id: requestId, userId },
+        });
+
+        if (!request) {
+            throw new NotFoundException('Rescue request not found');
+        }
+
+        if (request.status !== 'COMPLETED') {
+            throw new BadRequestException('Can only review completed service requests');
+        }
+
+        if (!request.assignedProviderId) {
+            throw new BadRequestException('No provider assigned to this request');
+        }
+
+        // Prevent duplicate reviews
+        const existing = await this.prisma.review.findUnique({
+            where: { rescueRequestId: requestId },
+        });
+
+        if (existing) {
+            throw new BadRequestException('You have already reviewed this service');
+        }
+
+        const providerId = request.assignedProviderId;
+
+        // Create review + update provider stats in a transaction
+        const review = await this.prisma.$transaction(async (tx) => {
+            const created = await tx.review.create({
+                data: {
+                    rescueRequestId: requestId,
+                    userId,
+                    providerId,
+                    rating: dto.rating,
+                    comment: dto.comment?.trim() || null,
+                    tags: dto.tags || [],
+                },
+            });
+
+            // Recompute provider average rating
+            const agg = await tx.review.aggregate({
+                where: { providerId },
+                _avg: { rating: true },
+                _count: { rating: true },
+            });
+
+            await tx.user.update({
+                where: { id: providerId },
+                data: {
+                    averageRating: agg._avg.rating ?? dto.rating,
+                    reviewCount: agg._count.rating,
+                },
+            });
+
+            return created;
+        });
+
+        console.log(`⭐ [Review] User ${userId} rated provider ${providerId} — ${dto.rating} stars`);
+
+        return review;
+    }
 }
+

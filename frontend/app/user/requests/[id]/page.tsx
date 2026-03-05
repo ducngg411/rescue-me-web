@@ -197,11 +197,33 @@ function PaymentRequestFetcher({ requestId, providerName }: { requestId: string;
 }
 
 // ── Completed Card shown after job is COMPLETED ────────────────────────────
+const QUICK_TAGS = [
+    'Sạch sẽ', 'Chuyên nghiệp', 'Thân thiện', 'Nhanh chóng', 'Đúng giờ', 'Giá hợp lý',
+];
+
+function StarIcon({ filled, size = 32 }: { filled: boolean; size?: number }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? '#f59e0b' : 'none'} stroke={filled ? '#f59e0b' : '#d1d5db'} strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+        </svg>
+    );
+}
+
 function CompletedCard({ requestId }: { requestId: string }) {
     const router = useRouter();
+
+    // Dispute state
     const [showDispute, setShowDispute] = useState(false);
     const [disputeReason, setDisputeReason] = useState('');
     const [isDisputing, setIsDisputing] = useState(false);
+
+    // Review state
+    const [hoveredStar, setHoveredStar] = useState(0);
+    const [selectedStar, setSelectedStar] = useState(0);
+    const [comment, setComment] = useState('');
+    const [selectedTags, setSelectedTags] = useState<string[]>([]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [reviewSubmitted, setReviewSubmitted] = useState(false);
 
     const handleDispute = async () => {
         if (!disputeReason.trim()) { toast.error('Vui lòng nhập lý do khiếu nại'); return; }
@@ -216,6 +238,33 @@ function CompletedCard({ requestId }: { requestId: string }) {
             setIsDisputing(false);
         }
     };
+
+    const toggleTag = (tag: string) => {
+        setSelectedTags(prev =>
+            prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+        );
+    };
+
+    const handleReviewSubmit = async () => {
+        if (selectedStar === 0) { toast.error('Vui lòng chọn ít nhất 1 sao'); return; }
+        setIsSubmitting(true);
+        try {
+            await api.post(`/rescue-requests/${requestId}/review`, {
+                rating: selectedStar,
+                comment: comment.trim() || undefined,
+                tags: selectedTags,
+            });
+            setReviewSubmitted(true);
+            toast.success('Đã gửi đánh giá! Cảm ơn bạn ♥️');
+        } catch (err: any) {
+            const msg = err.response?.data?.message || 'Gửi đánh giá thất bại';
+            toast.error(msg);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const displayStar = hoveredStar || selectedStar;
 
     return (
         <>
@@ -234,8 +283,131 @@ function CompletedCard({ requestId }: { requestId: string }) {
                     </p>
                 </div>
 
-                {/* Actions */}
-                <div className="px-5 py-5 space-y-3">
+                {/* ── Rating block (primary action) ── */}
+                <div className="px-5 pt-5 pb-4">
+                    {reviewSubmitted ? (
+                        /* ── Thank-you state ── */
+                        <div
+                            className="flex flex-col items-center gap-2 py-4 rounded-2xl"
+                            style={{ background: '#fffbeb' }}
+                        >
+                            <span style={{ fontSize: '28px' }}>⭐</span>
+                            <p className="text-sm font-bold" style={{ color: '#92400e' }}>Cảm ơn bạn đã đánh giá!</p>
+                            <div className="flex gap-0.5 mt-1">
+                                {[1, 2, 3, 4, 5].map(s => (
+                                    <StarIcon key={s} filled={s <= selectedStar} size={20} />
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        /* ── Rating form ── */
+                        <div
+                            className="rounded-2xl p-4"
+                            style={{
+                                background: selectedStar ? '#fffbeb' : '#f8fafc',
+                                border: `1.5px solid ${selectedStar ? '#fde68a' : '#f1f5f9'}`,
+                                transition: 'all 0.25s',
+                            }}
+                        >
+                            {/* Title */}
+                            <div className="text-center mb-3">
+                                <p className="text-sm font-bold" style={{ color: C.navy }}>Bạn hài lòng với dịch vụ chứ?</p>
+                                <p className="text-[11px] mt-0.5" style={{ color: C.gray }}>⭐ Chọn số sao trực tiếp tại đây</p>
+                            </div>
+
+                            {/* Stars */}
+                            <div className="flex items-center justify-center gap-1 mb-1">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <button
+                                        key={star}
+                                        onMouseEnter={() => setHoveredStar(star)}
+                                        onMouseLeave={() => setHoveredStar(0)}
+                                        onClick={() => setSelectedStar(star)}
+                                        className="transition-transform active:scale-90"
+                                        style={{ transform: displayStar >= star ? 'scale(1.1)' : 'scale(1)' }}
+                                    >
+                                        <StarIcon filled={displayStar >= star} size={36} />
+                                    </button>
+                                ))}
+                            </div>
+                            {selectedStar > 0 && (
+                                <p className="text-center text-[11px] font-medium mb-3" style={{ color: '#92400e' }}>
+                                    {['', 'Tệ', 'Không tốt', 'Bình thường', 'Tốt', 'Xuất sắc'][selectedStar]}
+                                </p>
+                            )}
+
+                            {/* Comment + quick tags — show after a star is chosen */}
+                            {
+                                selectedStar > 0 && (
+                                    <div
+                                        style={{
+                                            overflow: 'hidden',
+                                            maxHeight: '320px',
+                                            opacity: 1,
+                                            transition: 'max-height 0.3s ease, opacity 0.3s ease',
+                                        }}
+                                    >
+                                        {/* Quick tags */}
+                                        <div className="flex flex-wrap gap-1.5 mb-3">
+                                            {QUICK_TAGS.map(tag => {
+                                                const active = selectedTags.includes(tag);
+                                                return (
+                                                    <button
+                                                        key={tag}
+                                                        onClick={() => toggleTag(tag)}
+                                                        className="px-2.5 py-1 rounded-full text-[11px] font-medium transition-all active:scale-95"
+                                                        style={{
+                                                            background: active ? '#fef3c7' : 'white',
+                                                            color: active ? '#92400e' : '#6b7280',
+                                                            border: `1px solid ${active ? '#fde68a' : '#e5e7eb'}`,
+                                                        }}
+                                                    >
+                                                        {active ? '✓ ' : ''}{tag}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Comment textarea */}
+                                        <textarea
+                                            value={comment}
+                                            onChange={e => setComment(e.target.value)}
+                                            placeholder="Nhận xét thêm (không bắt buộc)..."
+                                            rows={3}
+                                            className="w-full py-2.5 px-3 rounded-xl text-sm outline-none resize-none mb-3"
+                                            style={{ background: 'white', border: '1px solid #e5e7eb', color: C.navy }}
+                                        />
+
+                                        {/* Submit button */}
+                                        <button
+                                            onClick={handleReviewSubmit}
+                                            disabled={isSubmitting}
+                                            className="w-full py-3 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                                            style={{
+                                                background: isSubmitting ? C.gray : 'linear-gradient(135deg, #f59e0b, #d97706)',
+                                                boxShadow: isSubmitting ? 'none' : '0 4px 14px rgba(245,158,11,0.35)',
+                                            }}
+                                        >
+                                            {isSubmitting ? (
+                                                <span className="flex items-center gap-2">
+                                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" /><path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                                                    Đang gửi...
+                                                </span>
+                                            ) : (
+                                                <>
+                                                    <span>⭐</span> Gửi đánh giá
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                )
+                            }
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Secondary actions ── */}
+                <div className="px-5 pb-5 space-y-2.5">
                     <button
                         onClick={() => router.push('/user')}
                         className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"

@@ -11,6 +11,8 @@ export interface User {
     profileCompleted: boolean;
     verificationStatus?: string;
     isOnline?: boolean; // Provider only
+    averageRating?: number | null; // Provider only
+    reviewCount?: number; // Provider only
 }
 
 export interface AuthResponse {

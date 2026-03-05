@@ -280,6 +280,7 @@ const vi = {
                 COMMISSION: 'Hoa hồng nền tảng',
                 REFUND: 'Hoàn tiền',
                 ADJUSTMENT: 'Điều chỉnh',
+                TOPUP: 'Nạp tiền',
             },
             txStatus: {
                 PENDING: 'Đang xử lý',

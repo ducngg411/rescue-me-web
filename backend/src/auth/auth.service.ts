@@ -184,13 +184,18 @@ export class AuthService {
             { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' },
         );
 
-        // Lưu session vào database
-        await this.prisma.session.create({
-            data: {
+        // Lưu session vào database (upsert để tránh lỗi unique constraint khi double-submit)
+        await this.prisma.session.upsert({
+            where: { token: accessToken },
+            create: {
                 userId: user.id,
                 token: accessToken,
                 refreshToken,
                 expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+            },
+            update: {
+                refreshToken,
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
             },
         });
 

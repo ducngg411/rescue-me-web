@@ -2,13 +2,17 @@ import {
     Controller,
     Get,
     Post,
+    Param,
     Body,
     Query,
     UseGuards,
     Request,
+    Headers,
     ParseIntPipe,
     DefaultValuePipe,
     BadRequestException,
+    HttpCode,
+    HttpStatus,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WalletService } from './wallet.service';
@@ -22,8 +26,14 @@ class WithdrawDto {
     amount: number;
 }
 
+class TopupInitDto {
+    @Type(() => Number)
+    @IsNumber()
+    @Min(1) // TODO: restore @Min(100_000) after SePay testing
+    amount: number;
+}
+
 @Controller('wallet')
-@UseGuards(JwtAuthGuard)
 export class WalletController {
     constructor(private readonly walletService: WalletService) { }
 
@@ -32,6 +42,7 @@ export class WalletController {
      * Returns the provider's wallet (creates one if it doesn't exist yet).
      */
     @Get('me')
+    @UseGuards(JwtAuthGuard)
     async getMyWallet(@Request() req) {
         return this.walletService.ensureWallet(req.user.id);
     }
@@ -41,6 +52,7 @@ export class WalletController {
      * Paginated transaction history for the current provider.
      */
     @Get('me/transactions')
+    @UseGuards(JwtAuthGuard)
     async getMyTransactions(
         @Request() req,
         @Query('skip', new DefaultValuePipe(0), ParseIntPipe) skip: number,
@@ -56,9 +68,59 @@ export class WalletController {
      * Initiates a withdrawal request (status = PENDING, balance reserved).
      */
     @Post('withdraw')
+    @UseGuards(JwtAuthGuard)
     async withdraw(@Request() req, @Body() dto: WithdrawDto) {
         const wallet = await this.walletService.ensureWallet(req.user.id);
         const referenceId = `withdraw-${req.user.id}-${Date.now()}`;
         return this.walletService.withdraw(wallet.id, dto.amount, referenceId);
+    }
+
+    // ─── Top-up (SePay) ───────────────────────────────────────────────────────
+
+    /**
+     * POST /wallet/topup/init
+     * Provider calls this to get a QR code and pending topup transaction ID.
+     * Body: { amount: number } — minimum 100,000 VND
+     */
+    @Post('topup/init')
+    @UseGuards(JwtAuthGuard)
+    async initTopup(@Request() req, @Body() dto: TopupInitDto) {
+        return this.walletService.initTopup(req.user.id, dto.amount);
+    }
+
+    /**
+     * POST /wallet/topup/webhook
+     * SePay calls this when a bank transfer matches.
+     * No JWT auth — SePay authenticates via "Authorization: Apikey <key>" header.
+     */
+    @Post('topup/webhook')
+    @HttpCode(HttpStatus.OK)
+    async sePayWebhook(
+        @Body() body: any,
+        @Headers('authorization') authHeader: string,
+    ) {
+        return this.walletService.processSePayWebhook(body, authHeader);
+    }
+
+    /**
+     * GET /wallet/topup/pending
+     * Returns the active PENDING topup tx for the provider (if any) so the
+     * frontend can show a "resume payment" banner.
+     * IMPORTANT: must be declared BEFORE topup/:txId/status to avoid param shadowing.
+     */
+    @Get('topup/pending')
+    @UseGuards(JwtAuthGuard)
+    async getPendingTopup(@Request() req) {
+        return this.walletService.getPendingTopup(req.user.id);
+    }
+
+    /**
+     * GET /wallet/topup/:txId/status
+     * Provider polls this to check if their top-up was received.
+     */
+    @Get('topup/:txId/status')
+    @UseGuards(JwtAuthGuard)
+    async getTopupStatus(@Request() req, @Param('txId') txId: string) {
+        return this.walletService.getTopupStatus(txId, req.user.id);
     }
 }

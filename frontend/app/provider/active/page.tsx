@@ -339,6 +339,10 @@ export default function ProviderActivePage() {
     }, [user, setIsOnline]);
 
     useEffect(() => {
+        if (!authLoading && !user) router.push('/auth/login');
+    }, [authLoading, user, router]);
+
+    useEffect(() => {
         if (filteredRequests.length > 0 && !selectedRequest) setSelectedRequest(filteredRequests[0]);
     }, [filteredRequests, selectedRequest]);
 
@@ -349,7 +353,7 @@ export default function ProviderActivePage() {
         </div>
     );
 
-    if (!user) { router.push('/auth/login'); return null; }
+    if (!user) return null;
 
     if (user.role !== 'PROVIDER') return (
         <div className="min-h-screen flex items-center justify-center p-4" style={{ background: C.bg }}>
@@ -572,8 +576,16 @@ export default function ProviderActivePage() {
                                 <StatCard
                                     icon={<Star style={{ width: 18, height: 18, color: '#ca8a04' }} />}
                                     label={t('provider.dashboard.avgRating')}
-                                    value="4.9 ★"
-                                    sub={t('provider.dashboard.excellentFeedback')}
+                                    value={
+                                        user?.averageRating != null
+                                            ? `${user.averageRating.toFixed(1)} ★`
+                                            : '— ★'
+                                    }
+                                    sub={
+                                        user?.reviewCount
+                                            ? `${user.reviewCount} đánh giá`
+                                            : t('provider.dashboard.excellentFeedback')
+                                    }
                                     bg="#fef9c3"
                                 />
                             </div>

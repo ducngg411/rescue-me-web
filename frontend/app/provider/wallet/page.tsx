@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Wallet, ArrowDownCircle, ArrowUpCircle, Clock, CheckCircle2,
     XCircle, RefreshCw, TrendingUp, Banknote, ChevronDown, ChevronUp,
-    AlertCircle, ShieldX, ArrowLeft, BookOpen, Settings,
+    AlertCircle, ShieldX, ArrowLeft, QrCode, Plus,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { useProviderGuard } from '@/lib/guards';
@@ -41,7 +41,7 @@ interface Transaction {
     type: 'CREDIT' | 'DEBIT';
     amount: number;
     status: 'PENDING' | 'COMPLETED' | 'FAILED';
-    referenceType: 'JOB' | 'WITHDRAW' | 'COMMISSION' | 'REFUND' | 'ADJUSTMENT';
+    referenceType: 'JOB' | 'WITHDRAW' | 'COMMISSION' | 'REFUND' | 'ADJUSTMENT' | 'TOPUP';
     referenceId: string;
     description: string | null;
     createdAt: string;
@@ -56,6 +56,9 @@ interface TransactionsResponse {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const MIN_WITHDRAWAL = 50_000;
+const MIN_TOPUP = 1; // TODO: restore to 100_000 after SePay testing
+
+const TOPUP_QUICK_AMOUNTS = [100_000, 200_000, 500_000, 1_000_000, 2_000_000];
 
 function formatVnd(amount: number) {
     if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M ₫`;
@@ -75,6 +78,360 @@ function formatDate(iso: string) {
 }
 
 // REF_LABEL is now built inside TxRow using useLanguage
+
+
+// ─── Topup Modal (SePay VietQR – 3 step) ─────────────────────────────────────
+function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
+    availableBalance: number;
+    initialQrData?: {
+        topupTxId: string; transferCode: string; qrUrl: string;
+        bankAccount: string; bankCode: string; amount: number; expireAt: string;
+    };
+    onClose: () => void;
+    onSuccess: () => void;
+}) {
+    type Step = 'amount' | 'qr' | 'done' | 'expired';
+    const [step, setStep] = useState<Step>(initialQrData ? 'qr' : 'amount');
+    const [amount, setAmount] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [manualChecking, setManualChecking] = useState(false);
+    const [error, setError] = useState('');
+    const [qrData, setQrData] = useState<{
+        topupTxId: string; transferCode: string; qrUrl: string;
+        bankAccount: string; bankCode: string; amount: number; expireAt: string;
+    } | null>(initialQrData ?? null);
+    const [secsLeft, setSecsLeft] = useState(0);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const numeric = parseInt(amount.replace(/\D/g, ''), 10) || 0;
+    const isBelowMin = numeric > 0 && numeric < MIN_TOPUP;
+    const isDisabled = loading || numeric < MIN_TOPUP;
+
+    const stopAll = () => {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+    };
+
+    // If opened with pre-loaded QR data (resume flow), start polling+countdown immediately
+    useEffect(() => {
+        if (initialQrData) {
+            startPolling(initialQrData.topupTxId);
+            startCountdown(initialQrData.expireAt);
+        }
+        return stopAll;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const startCountdown = (expireAt: string) => {
+        const tick = () => {
+            const left = Math.max(0, Math.floor((new Date(expireAt).getTime() - Date.now()) / 1000));
+            setSecsLeft(left);
+            if (left === 0) { stopAll(); setStep('expired'); }
+        };
+        tick();
+        countdownRef.current = setInterval(tick, 1000);
+    };
+
+    const handlePollResponse = (status: string) => {
+        if (status === 'COMPLETED') {
+            stopAll(); setStep('done'); onSuccess();
+        } else if (status === 'EXPIRED' || status === 'FAILED' || status === 'CANCELLED') {
+            stopAll(); setStep('expired');
+        }
+    };
+
+    const startPolling = (txId: string) => {
+        pollRef.current = setInterval(async () => {
+            try {
+                const res = await api.get(`/wallet/topup/${txId}/status`);
+                handlePollResponse(res.data.status);
+            } catch { /* ignore */ }
+        }, 3000);
+    };
+
+    const handleInit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (isDisabled) return;
+        setLoading(true); setError('');
+        try {
+            const res = await api.post('/wallet/topup/init', { amount: numeric });
+            setQrData(res.data);
+            setStep('qr');
+            startPolling(res.data.topupTxId);
+            startCountdown(res.data.expireAt);
+        } catch (err: any) {
+            setError(err?.response?.data?.message || 'Không thể tạo QR. Vui lòng thử lại.');
+        } finally { setLoading(false); }
+    };
+
+    const handleManualCheck = async () => {
+        if (!qrData) return;
+        setManualChecking(true); setError('');
+        try {
+            const res = await api.get(`/wallet/topup/${qrData.topupTxId}/status`);
+            handlePollResponse(res.data.status);
+            if (res.data.status === 'PENDING') {
+                setError('Chưa nhận được giao dịch. Kiểm tra lại nội dung chuyển khoản.');
+            }
+        } catch { setError('Không thể kiểm tra. Vui lòng thử lại.'); }
+        finally { setManualChecking(false); }
+    };
+
+    const handleClose = () => { stopAll(); onClose(); };
+
+    const mins = String(Math.floor(secsLeft / 60)).padStart(2, '0');
+    const secs = String(secsLeft % 60).padStart(2, '0');
+    const countdownColor = secsLeft < 60 ? '#ef4444' : secsLeft < 120 ? '#f97316' : '#16a34a';
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+            <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+                {/* Drag handle (mobile) */}
+                <div className="flex justify-center pt-3 pb-1 sm:hidden">
+                    <div className="w-10 h-1 rounded-full bg-gray-200" />
+                </div>
+
+                {/* Header */}
+                <div className="flex items-center gap-3 px-6 py-4 border-b" style={{ borderColor: C.border }}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#eff6ff' }}>
+                        <QrCode style={{ width: 20, height: 20, color: '#2563eb' }} />
+                    </div>
+                    <div>
+                        <h2 className="text-base font-bold" style={{ color: C.navy }}>Nạp tiền vào ví</h2>
+                        <p className="text-xs" style={{ color: C.gray }}>
+                            {step === 'amount' ? 'Nhập số tiền cần nạp' :
+                                step === 'qr' ? 'Quét QR để chuyển khoản' :
+                                    step === 'done' ? 'Nạp tiền thành công!' : 'Hết thời gian chờ'}
+                        </p>
+                    </div>
+                    <button onClick={handleClose} className="ml-auto p-2 rounded-xl hover:bg-gray-100 transition-colors">
+                        <XCircle style={{ width: 18, height: 18, color: '#94a3b8' }} />
+                    </button>
+                </div>
+
+                {/* ── Step 1: Amount input ── */}
+                {step === 'amount' && (
+                    <form onSubmit={handleInit} className="p-6 space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1.5" style={{ color: C.navy }}>Số tiền nạp</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={amount}
+                                    onChange={e => {
+                                        const raw = e.target.value.replace(/\D/g, '');
+                                        setAmount(raw ? parseInt(raw, 10).toLocaleString('vi-VN') : '');
+                                        setError('');
+                                    }}
+                                    placeholder="0"
+                                    className="w-full px-4 py-3 pr-16 border rounded-xl text-lg font-semibold focus:outline-none transition-all"
+                                    style={{
+                                        borderColor: isBelowMin ? '#fca5a5' : '#e2e8f0',
+                                        color: isBelowMin ? '#ef4444' : C.navy,
+                                    }}
+                                />
+                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium" style={{ color: C.gray }}>VND</span>
+                            </div>
+                            {isBelowMin ? (
+                                <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" />Tối thiểu {formatVndFull(MIN_TOPUP)}
+                                </p>
+                            ) : numeric > 0 ? (
+                                <p className="mt-1.5 text-xs flex items-center gap-1 font-medium" style={{ color: '#16a34a' }}>
+                                    Số dư sau khi nạp: {formatVndFull(availableBalance + numeric)}
+                                </p>
+                            ) : null}
+                        </div>
+
+                        {/* Quick amounts */}
+                        <div>
+                            <p className="text-xs mb-2" style={{ color: C.gray }}>Chọn nhanh</p>
+                            <div className="flex flex-wrap gap-2">
+                                {TOPUP_QUICK_AMOUNTS.map(a => (
+                                    <button
+                                        key={a}
+                                        type="button"
+                                        onClick={() => setAmount(a.toLocaleString('vi-VN'))}
+                                        className="px-3 py-1.5 text-xs rounded-lg border font-medium transition-all"
+                                        style={{
+                                            borderColor: numeric === a ? '#2563eb' : '#e2e8f0',
+                                            background: numeric === a ? '#eff6ff' : 'white',
+                                            color: numeric === a ? '#2563eb' : C.gray,
+                                        }}
+                                    >
+                                        {formatVnd(a)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {error && (
+                            <div className="flex items-start gap-2 p-3 rounded-xl text-sm" style={{ background: '#fff1f2', color: '#ef4444', border: '1px solid #fecdd3' }}>
+                                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />{error}
+                            </div>
+                        )}
+
+                        <div className="p-3 rounded-xl text-xs" style={{ background: '#eff6ff', color: '#1d4ed8' }}>
+                            💡 Hệ thống tự động xác nhận khi nhận được chuyển khoản
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button type="button" onClick={handleClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium border" style={{ borderColor: '#e2e8f0', color: C.gray }}>
+                                Hủy
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isDisabled}
+                                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-40"
+                                style={{ background: isDisabled ? '#94a3b8' : '#2563eb' }}
+                            >
+                                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+                                {loading ? 'Đang tạo QR...' : 'Tạo mã QR'}
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {/* ── Step 2: QR display + polling ── */}
+                {step === 'qr' && qrData && (
+                    <div className="p-6 space-y-4">
+                        {/* QR image */}
+                        <div className="flex justify-center">
+                            <div className="p-3 rounded-2xl" style={{ background: '#f8fafc', border: '2px solid #e2e8f0' }}>
+                                <img
+                                    src={qrData.qrUrl}
+                                    alt="VietQR"
+                                    className="w-52 h-52 object-contain"
+                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Transfer info table */}
+                        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
+                            <div className="px-4 py-2.5 flex justify-between items-center" style={{ background: '#f8fafc' }}>
+                                <span className="text-xs" style={{ color: C.gray }}>Ngân hàng</span>
+                                <span className="text-sm font-bold" style={{ color: C.navy }}>{qrData.bankCode}</span>
+                            </div>
+                            <div className="px-4 py-2.5 flex justify-between items-center border-t" style={{ borderColor: '#e2e8f0' }}>
+                                <span className="text-xs" style={{ color: C.gray }}>Số tài khoản</span>
+                                <span className="text-sm font-bold" style={{ color: C.navy }}>{qrData.bankAccount}</span>
+                            </div>
+                            <div className="px-4 py-2.5 flex justify-between items-center border-t" style={{ borderColor: '#e2e8f0' }}>
+                                <span className="text-xs" style={{ color: C.gray }}>Số tiền</span>
+                                <span className="text-sm font-bold" style={{ color: '#16a34a' }}>{formatVndFull(qrData.amount)}</span>
+                            </div>
+                            <div className="px-4 py-2.5 border-t" style={{ borderColor: '#e2e8f0' }}>
+                                <div className="flex justify-between items-center mb-1.5">
+                                    <span className="text-xs" style={{ color: C.gray }}>
+                                        Nội dung CK <span className="text-red-500 font-bold">(bắt buộc)</span>
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span
+                                        className="flex-1 text-center py-1.5 rounded-lg text-sm font-bold font-mono tracking-widest"
+                                        style={{ background: '#fef9c3', color: '#92400e', border: '1px dashed #fde68a' }}
+                                    >
+                                        {qrData.transferCode}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => navigator.clipboard?.writeText(qrData.transferCode)}
+                                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-gray-200"
+                                        style={{ background: '#f1f5f9', color: C.gray }}
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Countdown + waiting strip */}
+                        <div className="rounded-xl overflow-hidden" style={{ border: `1.5px solid ${countdownColor}22` }}>
+                            <div className="flex items-center justify-between px-4 py-2.5" style={{ background: `${countdownColor}11` }}>
+                                <div className="flex items-center gap-2">
+                                    <RefreshCw style={{ width: 14, height: 14, color: countdownColor }} className="animate-spin" />
+                                    <span className="text-xs font-semibold" style={{ color: countdownColor }}>Đang chờ xác nhận...</span>
+                                </div>
+                                <span className="text-sm font-bold font-mono" style={{ color: countdownColor }}>Còn lại: {mins}:{secs}</span>
+                            </div>
+                        </div>
+
+                        {error && (
+                            <div className="flex items-start gap-2 p-3 rounded-xl text-sm" style={{ background: '#fff1f2', color: '#ef4444', border: '1px solid #fecdd3' }}>
+                                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />{error}
+                            </div>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={handleClose}
+                                className="flex-1 py-2.5 rounded-xl text-sm font-medium border"
+                                style={{ borderColor: '#e2e8f0', color: C.gray }}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={handleManualCheck}
+                                disabled={manualChecking}
+                                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50"
+                                style={{ background: '#2563eb' }}
+                            >
+                                {manualChecking
+                                    ? <RefreshCw className="w-4 h-4 animate-spin" />
+                                    : <CheckCircle2 className="w-4 h-4" />}
+                                {manualChecking ? 'Đang kiểm tra...' : 'Tôi đã chuyển khoản'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Step 3a: Success ── */}
+                {step === 'done' && (
+                    <div className="p-8 text-center space-y-4">
+                        <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto" style={{ background: '#f0fdf4' }}>
+                            <CheckCircle2 style={{ width: 40, height: 40, color: '#16a34a' }} />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold mb-1" style={{ color: '#15803d' }}>Nạp tiền thành công!</h3>
+                            <p className="text-sm" style={{ color: '#166534' }}>
+                                {qrData && formatVndFull(qrData.amount)} đã được cộng vào ví của bạn.
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleClose}
+                            className="w-full py-3 rounded-xl text-sm font-bold text-white"
+                            style={{ background: '#16a34a' }}
+                        >
+                            Tuyệt vời! ✨
+                        </button>
+                    </div>
+                )}
+
+                {/* ── Step 3b: Expired ── */}
+                {step === 'expired' && (
+                    <div className="p-8 text-center space-y-4">
+                        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto" style={{ background: '#fff7ed' }}>
+                            <Clock style={{ width: 30, height: 30, color: C.orange }} />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-bold mb-1" style={{ color: C.navy }}>QR đã hết hạn</h3>
+                            <p className="text-sm" style={{ color: C.gray }}>
+                                Mã QR đã hết hiệu lực sau 5 phút. Nếu đã chuyển khoản, số dư sẽ được cập nhật tự động.
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={handleClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium border" style={{ borderColor: '#e2e8f0', color: C.gray }}>Đóng</button>
+                            <button onClick={() => { setStep('amount'); setError(''); setSecsLeft(0); }} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white" style={{ background: C.orange }}>Tạo QR mới</button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
 
 // ─── Withdraw Modal ───────────────────────────────────────────────────────────
@@ -252,6 +609,7 @@ function TxRow({ tx }: { tx: Transaction }) {
         COMMISSION: t('provider.wallet.refLabel.COMMISSION'),
         REFUND: t('provider.wallet.refLabel.REFUND'),
         ADJUSTMENT: t('provider.wallet.refLabel.ADJUSTMENT'),
+        TOPUP: t('provider.wallet.refLabel.TOPUP'),
     };
     const statusConfig = {
         PENDING: { label: t('provider.wallet.txStatus.PENDING'), bg: '#fefce8', color: '#ca8a04', Icon: Clock },
@@ -469,13 +827,23 @@ export default function ProviderWalletPage() {
     const [loading, setLoading] = useState(true);
     const [txLoading, setTxLoading] = useState(false);
     const [showModal, setShowModal] = useState(false);
+    const [showTopup, setShowTopup] = useState(false);
     const [page, setPage] = useState(0);
     const [showAll, setShowAll] = useState(false);
+    type PendingTopupData = {
+        topupTxId: string; transferCode: string; qrUrl: string;
+        bankAccount: string; bankCode: string; amount: number; expireAt: string;
+    };
+    const [pendingTopup, setPendingTopup] = useState<PendingTopupData | null>(null);
 
     const loadWallet = useCallback(async () => {
         try {
-            const res = await api.get('/wallet/me');
-            setWallet(res.data);
+            const [walletRes, pendingRes] = await Promise.all([
+                api.get('/wallet/me'),
+                api.get('/wallet/topup/pending').catch(() => ({ data: null })),
+            ]);
+            setWallet(walletRes.data);
+            setPendingTopup(pendingRes.data);
         } catch {
             setWallet(null);
         } finally {
@@ -655,15 +1023,25 @@ export default function ProviderWalletPage() {
                                         <p className="text-sm font-semibold">{formatVndFull(pending)}</p>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => setShowModal(true)}
-                                    disabled={!wallet || available < MIN_WITHDRAWAL}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                    style={{ background: 'white', color: C.orange }}
-                                >
-                                    <Banknote style={{ width: 16, height: 16 }} />
-                                    {t('provider.wallet.withdraw')}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setShowTopup(true)}
+                                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                                        style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.3)' }}
+                                    >
+                                        <Plus style={{ width: 16, height: 16 }} />
+                                        Nạp tiền
+                                    </button>
+                                    <button
+                                        onClick={() => setShowModal(true)}
+                                        disabled={!wallet || available < MIN_WITHDRAWAL}
+                                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                        style={{ background: 'white', color: C.orange }}
+                                    >
+                                        <Banknote style={{ width: 16, height: 16 }} />
+                                        {t('provider.wallet.withdraw')}
+                                    </button>
+                                </div>
                             </div>
                             {available < MIN_WITHDRAWAL && (
                                 <p className="mt-3 text-xs opacity-70 flex items-center gap-1">
@@ -692,6 +1070,33 @@ export default function ProviderWalletPage() {
                                 <p className="text-xs mt-1" style={{ color: C.gray }}>{t('provider.wallet.disbursed24h')}</p>
                             </div>
                         </div>
+
+                        {/* Pending topup resume banner */}
+                        {pendingTopup && !showTopup && (
+                            <div
+                                className="rounded-xl overflow-hidden mb-4 cursor-pointer"
+                                style={{ border: '1.5px solid #bfdbfe', background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)' }}
+                                onClick={() => setShowTopup(true)}
+                            >
+                                <div className="flex items-center justify-between px-4 py-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#2563eb' }}>
+                                            <QrCode style={{ width: 16, height: 16, color: 'white' }} />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold" style={{ color: '#1e40af' }}>Giao dịch đang chờ thanh toán</p>
+                                            <p className="text-xs" style={{ color: '#3b82f6' }}>{formatVndFull(pendingTopup.amount)} • Hết hạn lúc {new Date(pendingTopup.expireAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-white flex-shrink-0"
+                                        style={{ background: '#2563eb' }}
+                                    >
+                                        Tiếp tục thanh toán
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Transaction history */}
                         <div className="bg-white rounded-xl" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
@@ -778,6 +1183,20 @@ export default function ProviderWalletPage() {
                     availableBalance={available}
                     onClose={() => setShowModal(false)}
                     onSuccess={() => { setShowModal(false); loadWallet(); loadTransactions(0); }}
+                />
+            )}
+
+            {/* Topup Modal */}
+            {showTopup && (
+                <TopupModal
+                    availableBalance={available}
+                    initialQrData={pendingTopup ?? undefined}
+                    onClose={() => {
+                        setShowTopup(false);
+                        // Refresh pending topup state after close
+                        api.get('/wallet/topup/pending').catch(() => ({ data: null })).then(r => setPendingTopup(r.data));
+                    }}
+                    onSuccess={() => { setPendingTopup(null); loadWallet(); loadTransactions(0); }}
                 />
             )}
         </div>

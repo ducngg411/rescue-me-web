@@ -265,7 +265,10 @@ export class ProviderService {
         }
 
         if (!user.isOnline) {
-            throw new ForbiddenException('Provider must be online to update location');
+            // Provider is offline — silently ignore instead of throwing.
+            // Throwing 403 on a high-frequency poll endpoint can race with
+            // concurrent requests and cause ERR_HTTP_HEADERS_SENT.
+            return { success: false, message: 'Provider is offline, location not updated' };
         }
 
         const now = new Date();

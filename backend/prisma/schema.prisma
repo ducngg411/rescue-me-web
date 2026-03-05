@@ -155,6 +155,10 @@ model User {
   updatedAt DateTime  @updatedAt
   lastLogin DateTime?
 
+  // Rating stats (for providers)
+  averageRating Float? // Average star rating received (1.0 – 5.0)
+  reviewCount   Int    @default(0) // Total reviews received
+
   // Relations
   sessions         Session[]
   uploads          Upload[]
@@ -162,6 +166,8 @@ model User {
   assignedRequests RescueRequest[] @relation("AssignedRequests")
   quotes           Quote[]         @relation("ProviderQuotes")
   providerWallet   ProviderWallet? @relation("ProviderWallet")
+  reviewsGiven     Review[]        @relation("UserReviews")    // Reviews submitted by this user
+  reviewsReceived  Review[]        @relation("ProviderReviews") // Reviews received as provider
 
   @@index([email])
   @@index([googleId])
@@ -314,6 +320,7 @@ model RescueRequest {
   media   RequestMedia[]
   quotes  Quote[]
   payment Payment?
+  review  Review?
 
   @@index([userId])
   @@index([status])
@@ -468,11 +475,13 @@ enum WalletTransactionStatus {
 
 // Enum cho loại tham chiếu giao dịch
 enum WalletReferenceType {
-  JOB        // Thu nhập từ công việc cứu hộ
-  WITHDRAW   // Rút tiền ra tài khoản ngân hàng
-  COMMISSION // Phí hoa hồng nền tảng
-  REFUND     // Hoàn tiền
-  ADJUSTMENT // Điều chỉnh thủ công (admin)
+  JOB         // Thu nhập từ công việc cứu hộ
+  WITHDRAW    // Rút tiền ra tài khoản ngân hàng
+  COMMISSION  // Phí hoa hồng nền tảng
+  REFUND      // Hoàn tiền
+  ADJUSTMENT  // Điều chỉnh thủ công (admin)
+  TOPUP       // Nạp tiền qua chuyển khoản ngân hàng (SePay)
+  JOB_PAYMENT // Thanh toán job qua chuyển khoản QR (SePay)
 }
 
 // ProviderWallet Model - Ví của provider
@@ -484,13 +493,18 @@ model ProviderWallet {
   availableBalance Int @default(0) // Số dư có thể rút được
   pendingBalance   Int @default(0) // Số dư đang chờ xử lý (chưa về tài khoản)
 
+  // Mã chuyển khoản duy nhất của provider (ví dụ: RM-ABC1234)
+  // Provider dùng mã này làm nội dung chuyển khoản để hệ thống định danh
+  topupCode String? @unique
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  provider     User                @relation("ProviderWallet", fields: [providerId], references: [id], onDelete: Cascade)
-  transactions WalletTransaction[]
+  provider         User                @relation("ProviderWallet", fields: [providerId], references: [id], onDelete: Cascade)
+  transactions     WalletTransaction[]
+  topupTransactions TopupTransaction[]
 
   @@index([providerId])
   @@map("provider_wallets")
@@ -515,6 +529,9 @@ model WalletTransaction {
   // Optional note
   description String? // Mô tả giao dịch
 
+  // Auto-release: when PENDING CREDIT should move to available (for job payment holding)
+  holdReleaseAt DateTime?
+
   // Timestamps
   createdAt DateTime @default(now())
 
@@ -527,4 +544,75 @@ model WalletTransaction {
   @@index([referenceType, referenceId])
   @@index([createdAt])
   @@map("wallet_transactions")
+}
+
+// TopupTransaction Model - Lịch sử nạp tiền qua SePay
+model TopupTransaction {
+  id           String   @id @default(cuid())
+  walletId     String
+  amount       Int      // Số tiền nạp (VND)
+  status       String   @default("PENDING") // PENDING | COMPLETED | FAILED
+
+  // Mã chuyển khoản của provider (bản sao tại thời điểm tạo)
+  transferCode String
+
+  // SePay webhook data (dùng để dedup)
+  sepayId            Int?    @unique  // ID giao dịch duy nhất từ SePay
+  sepayReferenceCode String?          // referenceCode từ SePay
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  expireAt    DateTime?  // null = no expiry; set to createdAt + 5min on creation
+  completedAt DateTime?
+
+  // Relations
+  wallet ProviderWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([walletId, status])
+  @@index([transferCode])
+  @@map("topup_transactions")
+}
+
+// JobPaymentTransaction - QR payment record per rescue job (customer to platform)
+model JobPaymentTransaction {
+  id           String    @id @default(cuid())
+  requestId    String    @unique
+  paymentId    String    @unique
+  transferCode String    @unique
+  amount       Int
+  status       String    @default("PENDING")
+  expireAt     DateTime
+  sepayId      Int?      @unique
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([transferCode])
+  @@index([requestId, status])
+  @@map("job_payment_transactions")
+}
+
+
+model Review {
+  id              String @id @default(cuid())
+  rescueRequestId String @unique // 1 yêu cầu → 1 đánh giá
+  userId          String           // Người đánh giá (user)
+  providerId      String           // Người được đánh giá (provider)
+
+  // Rating details
+  rating  Int              // Số sao: 1 – 5
+  comment String?          // Nhận xét tự do (tuỳ chọn)
+  tags    String[] @default([]) // Quick tags: ["Sạch sẽ", "Chuyên nghiệp", ...]
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  // Relations
+  request  RescueRequest @relation(fields: [rescueRequestId], references: [id], onDelete: Cascade)
+  user     User          @relation("UserReviews", fields: [userId], references: [id])
+  provider User          @relation("ProviderReviews", fields: [providerId], references: [id])
+
+  @@index([providerId])
+  @@index([userId])
+  @@map("reviews")
 }

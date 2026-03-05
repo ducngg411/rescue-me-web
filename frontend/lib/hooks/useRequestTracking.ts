@@ -30,6 +30,8 @@ export interface RequestStatus {
         pricePerKm: number | null;
         baseFee: number | null;
         isOnline: boolean;
+        averageRating: number | null;
+        reviewCount: number;
     };
 }
 
