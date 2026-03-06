@@ -35,7 +35,7 @@ interface WorkingViewProps {
     };
     customerName?: string | null;
     acceptedQuotePrice?: number | null; // Pre-fill from accepted quote
-    onPaymentSubmitted: () => void;
+    onPaymentSubmitted: (method?: 'CASH' | 'QR') => void;
 }
 
 export default function WorkingView({
@@ -205,7 +205,7 @@ export default function WorkingView({
                     requestId={requestId}
                     defaultAmount={acceptedQuotePrice ?? 0}
                     onClose={() => setShowPaymentSheet(false)}
-                    onSubmitted={onPaymentSubmitted}
+                    onSubmitted={(method?: 'CASH' | 'QR') => onPaymentSubmitted(method)}
                 />
             )}
         </>

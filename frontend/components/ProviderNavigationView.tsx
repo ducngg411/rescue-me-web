@@ -129,6 +129,7 @@ export default function ProviderNavigationView({
     const [isMarkingArrived, setIsMarkingArrived] = useState(false);
     const [workingCountdown, setWorkingCountdown] = useState(5);
     const [isPaymentPending, setIsPaymentPending] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR'>('CASH');
     const [isConfirmingReceived, setIsConfirmingReceived] = useState(false);
     const [showJobDone, setShowJobDone] = useState(false);
     const [jobEarnings, setJobEarnings] = useState<{ totalAmount: number; commissionRate: number } | null>(null);
@@ -736,82 +737,137 @@ export default function ProviderNavigationView({
                     request={requestDetails ?? { pickupLocation: { addressText: (pickupLocation as any).addressText } }}
                     customerName={customerName}
                     acceptedQuotePrice={acceptedQuotePrice}
-                    onPaymentSubmitted={() => setIsPaymentPending(true)}
+                    onPaymentSubmitted={(method?: 'CASH' | 'QR') => {
+                        setPaymentMethod(method ?? 'CASH');
+                        setIsPaymentPending(true);
+                    }}
                 />
             )}
 
-            {/* ─── Provider Payment Pending: waiting for customer to confirm ─── */}
+            {/* ─── Provider Payment Pending: waiting for customer ─── */}
             {isPaymentPending && (
                 <div
                     className="fixed inset-0 z-50 flex flex-col items-center justify-center px-5"
                     style={{ background: '#f8fafc' }}
                 >
-                    {/* Pulsing icon */}
-                    <div className="relative mb-5">
-                        <span className="absolute inset-0 w-20 h-20 rounded-full animate-ping" style={{ background: '#fed7aa', opacity: 0.5 }} />
-                        <div className="relative w-20 h-20 rounded-full flex items-center justify-center" style={{ background: '#fff7ed' }}>
-                            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                        </div>
-                    </div>
-
-                    <h2 className="text-base font-bold mb-1 text-center" style={{ color: C.navy }}>Đang chờ khách thanh toán</h2>
-                    <p className="text-xs text-center mb-6" style={{ color: C.gray }}>
-                        Vui lòng đợi khách xác nhận đã thanh toán trước khi bấm nhận tiền
-                    </p>
-
-                    {/* Warning */}
-                    <div className="w-full rounded-2xl p-3 mb-5 flex items-start gap-2" style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
-                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#d97706" strokeWidth={2} className="flex-shrink-0 mt-0.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        <p className="text-xs" style={{ color: '#92400e' }}>
-                            Chỉ bấm "Đã nhận tiền" sau khi khách <strong>thực sự đã trả tiền</strong> cho bạn
-                        </p>
-                    </div>
-
-                    <button
-                        onClick={async () => {
-                            setIsConfirmingReceived(true);
-                            try {
-                                const res = await api.patch(`/rescue-requests/${requestId}/payment/confirm-received`);
-                                // Try to load payment info for earnings summary
-                                try {
-                                    const payRes = await api.get(`/rescue-requests/${requestId}/payment`);
-                                    if (payRes.data) {
-                                        setJobEarnings({
-                                            totalAmount: payRes.data.totalAmount,
-                                            commissionRate: 0.1,
-                                        });
+                    {paymentMethod === 'QR' ? (
+                        /* ── QR: system already processed payment — provider just finalises ── */
+                        <>
+                            <div className="w-20 h-20 rounded-full flex items-center justify-center mb-5" style={{ background: '#f0fdf4' }}>
+                                <svg width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <h2 className="text-base font-bold mb-1 text-center" style={{ color: C.navy }}>Khách hàng đã thanh toán!</h2>
+                            <p className="text-xs text-center mb-6" style={{ color: C.gray }}>
+                                Tiền đã vào hệ thống. Bấm hoàn thành để kết thúc job.
+                            </p>
+                            <div className="w-full rounded-2xl p-3 mb-5 flex items-start gap-2" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke={C.green} strokeWidth={2} className="flex-shrink-0 mt-0.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <p className="text-xs" style={{ color: '#166534' }}>
+                                    Tiền sẽ giải ngân vào ví sau <strong>24 giờ</strong> (trừ hoa hồng 10%)
+                                </p>
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    setIsConfirmingReceived(true);
+                                    try {
+                                        const payRes = await api.get(`/rescue-requests/${requestId}/payment`);
+                                        if (payRes.data) {
+                                            setJobEarnings({
+                                                totalAmount: payRes.data.totalAmount,
+                                                commissionRate: 0.1,
+                                            });
+                                        }
+                                        setShowJobDone(true);
+                                    } catch {
+                                        setShowJobDone(true);
+                                    } finally {
+                                        setIsConfirmingReceived(false);
                                     }
-                                } catch { /* ignore */ }
-                                setShowJobDone(true);
-                            } catch (err: any) {
-                                toast.error(err.response?.data?.message || 'Xác nhận thất bại');
-                            } finally {
-                                setIsConfirmingReceived(false);
-                            }
-                        }}
-                        disabled={isConfirmingReceived}
-                        className="w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
-                        style={{
-                            background: isConfirmingReceived ? C.gray : `linear-gradient(135deg, ${C.green}, #15803d)`,
-                            boxShadow: isConfirmingReceived ? 'none' : '0 4px 16px rgba(22,163,74,0.35)',
-                        }}
-                    >
-                        {isConfirmingReceived ? (
-                            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
-                                <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
-                            </svg>
-                        ) : (
-                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        )}
-                        Tôi đã nhận tiền
-                    </button>
+                                }}
+                                disabled={isConfirmingReceived}
+                                className="w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
+                                style={{
+                                    background: isConfirmingReceived ? C.gray : `linear-gradient(135deg, ${C.green}, #15803d)`,
+                                    boxShadow: isConfirmingReceived ? 'none' : '0 4px 16px rgba(22,163,74,0.35)',
+                                }}
+                            >
+                                {isConfirmingReceived ? (
+                                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                                        <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
+                                    </svg>
+                                ) : (
+                                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                )}
+                                Hoàn thành job
+                            </button>
+                        </>
+                    ) : (
+                        /* ── CASH: provider must physically receive money ── */
+                        <>
+                            <div className="relative mb-5">
+                                <span className="absolute inset-0 w-20 h-20 rounded-full animate-ping" style={{ background: '#fed7aa', opacity: 0.5 }} />
+                                <div className="relative w-20 h-20 rounded-full flex items-center justify-center" style={{ background: '#fff7ed' }}>
+                                    <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <h2 className="text-base font-bold mb-1 text-center" style={{ color: C.navy }}>Đang chờ khách thanh toán</h2>
+                            <p className="text-xs text-center mb-6" style={{ color: C.gray }}>
+                                Vui lòng đợi khách xác nhận đã thanh toán trước khi bấm nhận tiền
+                            </p>
+                            <div className="w-full rounded-2xl p-3 mb-5 flex items-start gap-2" style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#d97706" strokeWidth={2} className="flex-shrink-0 mt-0.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <p className="text-xs" style={{ color: '#92400e' }}>
+                                    Chỉ bấm "Đã nhận tiền" sau khi khách <strong>thực sự đã trả tiền</strong> cho bạn
+                                </p>
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    setIsConfirmingReceived(true);
+                                    try {
+                                        await api.patch(`/rescue-requests/${requestId}/payment/confirm-received`);
+                                        try {
+                                            const payRes = await api.get(`/rescue-requests/${requestId}/payment`);
+                                            if (payRes.data) setJobEarnings({ totalAmount: payRes.data.totalAmount, commissionRate: 0.1 });
+                                        } catch { /* ignore */ }
+                                        setShowJobDone(true);
+                                    } catch (err: any) {
+                                        toast.error(err.response?.data?.message || 'Xác nhận thất bại');
+                                    } finally {
+                                        setIsConfirmingReceived(false);
+                                    }
+                                }}
+                                disabled={isConfirmingReceived}
+                                className="w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2"
+                                style={{
+                                    background: isConfirmingReceived ? C.gray : `linear-gradient(135deg, ${C.green}, #15803d)`,
+                                    boxShadow: isConfirmingReceived ? 'none' : '0 4px 16px rgba(22,163,74,0.35)',
+                                }}
+                            >
+                                {isConfirmingReceived ? (
+                                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                                        <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
+                                    </svg>
+                                ) : (
+                                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                )}
+                                Tôi đã nhận tiền
+                            </button>
+                        </>
+                    )}
                 </div>
             )}
 
@@ -948,7 +1004,8 @@ export default function ProviderNavigationView({
                         </button>
                     </div>
                 </div>
-            )}
+            )
+            }
         </>
     );
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import ReactConfetti from 'react-confetti';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 
@@ -47,6 +48,59 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
     const [disputeReason, setDisputeReason] = useState('');
     const [isDisputing, setIsDisputing] = useState(false);
     const [done, setDone] = useState(false);
+
+    // QR payment state (for QR payment method)
+    const [qrData, setQrData] = useState<{
+        qrUrl: string; transferCode: string; amount: number; expireAt: string; status: string;
+    } | null>(null);
+    const [secsLeft, setSecsLeft] = useState(0);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const cdRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const toastShownRef = useRef(false);
+
+    useEffect(() => {
+        if (payment.paymentMethod !== 'QR') return;
+        // Fetch QR data for customer
+        api.get(`/rescue-requests/${requestId}/payment/qr/status`)
+            .then(res => {
+                if (res.data.status === 'PENDING') {
+                    setQrData(res.data);
+                    // Countdown
+                    const tick = () => {
+                        const left = Math.max(0, Math.floor((new Date(res.data.expireAt).getTime() - Date.now()) / 1000));
+                        setSecsLeft(left);
+                    };
+                    tick();
+                    cdRef.current = setInterval(tick, 1000);
+                    // Poll for completion
+                    pollRef.current = setInterval(async () => {
+                        try {
+                            const s = await api.get(`/rescue-requests/${requestId}/payment/qr/status`);
+                            if (s.data.status === 'COMPLETED') {
+                                clearInterval(pollRef.current!); pollRef.current = null;
+                                clearInterval(cdRef.current!); cdRef.current = null;
+                                if (!toastShownRef.current) {
+                                    toastShownRef.current = true;
+                                    toast.success('Đã thanh toán thành công! Cảm ơn bạn ủng hộ dịch vụ 🎉', { duration: 5000 });
+                                }
+                                setDone(true);
+                            } else if (s.data.status === 'EXPIRED') {
+                                clearInterval(pollRef.current!); pollRef.current = null;
+                                clearInterval(cdRef.current!); cdRef.current = null;
+                                setQrData(prev => prev ? { ...prev, status: 'EXPIRED' } : null);
+                            }
+                        } catch { /* ignore */ }
+                    }, 3000);
+                } else if (res.data.status === 'COMPLETED') {
+                    setDone(true);
+                }
+            })
+            .catch(() => { /* QR not yet initiated */ });
+        return () => {
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+            if (cdRef.current) { clearInterval(cdRef.current); cdRef.current = null; }
+        };
+    }, [requestId, payment.paymentMethod]);
 
     const alreadyConfirmed = !!payment.userConfirmedAt || done;
 
@@ -101,6 +155,19 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
 
     return (
         <>
+            {/* Confetti burst when QR payment is confirmed */}
+            {done && payment.paymentMethod === 'QR' && (
+                <ReactConfetti
+                    width={typeof window !== 'undefined' ? window.innerWidth : 400}
+                    height={typeof window !== 'undefined' ? window.innerHeight : 800}
+                    numberOfPieces={220}
+                    recycle={false}
+                    gravity={0.28}
+                    colors={['#f97316', '#22c55e', '#3b82f6', '#f59e0b', '#a855f7', '#ffffff']}
+                    style={{ position: 'fixed', top: 0, left: 0, zIndex: 200, pointerEvents: 'none' }}
+                />
+            )}
+
             {/* Main Card */}
             <div className="rounded-2xl overflow-hidden" style={{ boxShadow: '0 1px 12px rgba(0,0,0,0.08)' }}>
                 {/* Header */}
@@ -239,27 +306,60 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
             {/* ─── Actions (not yet confirmed) ─── */}
             {!alreadyConfirmed && (
                 <div className="mt-2 space-y-2">
-                    <button
-                        onClick={handleConfirm}
-                        disabled={isConfirming}
-                        className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-                        style={{
-                            background: isConfirming ? C.gray : `linear-gradient(135deg, ${C.green}, #15803d)`,
-                            boxShadow: isConfirming ? 'none' : '0 4px 16px rgba(22,163,74,0.35)',
-                        }}
-                    >
-                        {isConfirming ? (
-                            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
-                                <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
-                            </svg>
+                    {payment.paymentMethod === 'QR' ? (
+                        /* ── QR: show QR code for customer to scan ── */
+                        qrData && qrData.status === 'PENDING' ? (
+                            <div className="rounded-2xl overflow-hidden" style={{ border: '1.5px solid #f1f5f9' }}>
+                                <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#fff7ed' }}>
+                                    <div>
+                                        <p className="text-xs font-bold" style={{ color: C.navy }}>Quét để thanh toán</p>
+                                        <p className="text-xs" style={{ color: C.gray }}>Nội dung: <span className="font-mono font-bold" style={{ color: C.orange }}>{qrData.transferCode}</span></p>
+                                    </div>
+                                    <span className="text-sm font-bold tabular-nums px-2 py-1 rounded-lg" style={{
+                                        background: secsLeft > 60 ? '#f0fdf4' : '#fef2f2',
+                                        color: secsLeft > 60 ? '#16a34a' : '#dc2626',
+                                    }}>
+                                        {String(Math.floor(secsLeft / 60)).padStart(2, '0')}:{String(secsLeft % 60).padStart(2, '0')}
+                                    </span>
+                                </div>
+                                <img src={qrData.qrUrl} alt="QR thanh toán" className="w-full" />
+                                <p className="text-center text-xs py-2" style={{ color: C.gray }}>
+                                    Số tiền: <span className="font-bold" style={{ color: C.orange }}>{fmt(qrData.amount)}</span> · Đang chờ xác nhận...
+                                </p>
+                            </div>
+                        ) : qrData?.status === 'EXPIRED' ? (
+                            <div className="rounded-2xl px-4 py-3 text-center text-sm" style={{ background: '#fef2f2', color: '#dc2626' }}>
+                                QR đã hết hạn. Vui lòng yêu cầu provider gửi lại.
+                            </div>
                         ) : (
-                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        )}
-                        Tôi đã thanh toán tiền mặt
-                    </button>
+                            <div className="rounded-2xl px-4 py-3 text-center text-sm" style={{ background: C.bg, color: C.gray }}>
+                                Đang tải mã QR...
+                            </div>
+                        )
+                    ) : (
+                        /* ── Cash: keep existing confirm button ── */
+                        <button
+                            onClick={handleConfirm}
+                            disabled={isConfirming}
+                            className="w-full py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                            style={{
+                                background: isConfirming ? C.gray : `linear-gradient(135deg, ${C.green}, #15803d)`,
+                                boxShadow: isConfirming ? 'none' : '0 4px 16px rgba(22,163,74,0.35)',
+                            }}
+                        >
+                            {isConfirming ? (
+                                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                                    <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
+                                </svg>
+                            ) : (
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            )}
+                            Tôi đã thanh toán tiền mặt
+                        </button>
+                    )}
                     <button
                         onClick={() => setShowDispute(true)}
                         className="w-full py-3 rounded-2xl text-sm font-semibold"

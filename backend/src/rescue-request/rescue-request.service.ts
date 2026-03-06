@@ -1410,5 +1410,169 @@ export class RescueRequestService {
 
         return review;
     }
+
+    // ── Switch QR → Cash ────────────────────────────────────────────────────────
+
+    /**
+     * Provider switches the payment method from QR to CASH mid-flow.
+     * Updates Payment.paymentMethod = 'CASH' and cancels any open JobPaymentTransaction
+     * so that confirm-received deducts commission correctly instead of treating it as QR.
+     */
+    async switchPaymentToCash(requestId: string, providerId: string) {
+        const request = await this.prisma.rescueRequest.findUnique({ where: { id: requestId } });
+        if (!request) throw new NotFoundException('Request not found');
+        if (request.assignedProviderId !== providerId) throw new ForbiddenException('Not your job');
+
+        const payment = await this.prisma.payment.findUnique({ where: { requestId } });
+        if (!payment) throw new NotFoundException('Payment not found');
+
+        // Cancel any active QR transaction
+        await this.prisma.jobPaymentTransaction.updateMany({
+            where: { requestId, status: { in: ['PENDING'] } },
+            data: { status: 'CANCELLED' },
+        });
+
+        // Switch payment method to CASH
+        const updated = await this.prisma.payment.update({
+            where: { requestId },
+            data: { paymentMethod: 'CASH' },
+        });
+
+        console.log(`🔄 [Payment] Provider ${providerId} switched job ${requestId} from QR to CASH`);
+        return updated;
+    }
+
+    // ── QR Job Payment (SePay) ──────────────────────────────────────────────────
+
+    private generateJobPaymentCode(): string {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        const rand = Array.from({ length: 7 }, () =>
+            chars[Math.floor(Math.random() * chars.length)]
+        ).join('');
+        return `RMJ${rand}`; // e.g. RMJB7X3K9 — distinct from topup RM prefix
+    }
+
+    /**
+     * Provider initiates QR payment for a job.
+     * Idempotent: reuses an existing PENDING non-expired JobPaymentTransaction.
+     * Creates a new one (expireAt = now + 15min) if none found.
+     */
+    async initQrPayment(requestId: string, providerId: string) {
+        // Verify the job payment exists and belongs to this provider
+        const payment = await this.prisma.payment.findUnique({
+            where: { requestId },
+        });
+        if (!payment) throw new NotFoundException('Payment record not found');
+        if (payment.providerId !== providerId) throw new ForbiddenException('Not your job');
+        if (payment.paymentMethod !== 'QR' as any) {
+            throw new BadRequestException('Payment method is not QR');
+        }
+
+        const bankAccount = process.env.SEPAY_BANK_ACCOUNT ?? '07729096901';
+        const bankCode = process.env.SEPAY_BANK_CODE ?? 'TPBank';
+
+        const buildQrUrl = (code: string) => {
+            const desc = encodeURIComponent(code);
+            return `https://qr.sepay.vn/img?acc=${bankAccount}&bank=${bankCode}&amount=${payment.totalAmount}&des=${desc}&template=compact`;
+        };
+
+        const now = new Date();
+
+        // Check for existing PENDING non-expired tx
+        const existing = await (this.prisma as any).jobPaymentTransaction.findUnique({
+            where: { requestId },
+        });
+
+        if (existing) {
+            if (existing.status === 'PENDING' && existing.expireAt > now) {
+                // Reuse
+                return {
+                    jobPaymentTxId: existing.id,
+                    transferCode: existing.transferCode,
+                    amount: existing.amount,
+                    expireAt: existing.expireAt,
+                    qrUrl: buildQrUrl(existing.transferCode),
+                    bankAccount,
+                    bankCode,
+                };
+            }
+            // Expired/cancelled — create new (delete old first to satisfy unique constraint)
+            await (this.prisma as any).jobPaymentTransaction.update({
+                where: { id: existing.id },
+                data: { status: 'CANCELLED' },
+            });
+        }
+
+        // Generate unique code
+        let transferCode: string;
+        for (let i = 0; i < 10; i++) {
+            const candidate = this.generateJobPaymentCode();
+            const taken = await (this.prisma as any).jobPaymentTransaction.findUnique({
+                where: { transferCode: candidate },
+            });
+            if (!taken) { transferCode = candidate; break; }
+        }
+        if (!transferCode!) throw new Error('Could not generate unique job payment code');
+
+        const expireAt = new Date(now.getTime() + 15 * 60 * 1000); // +15min
+
+        const newTx = await (this.prisma as any).jobPaymentTransaction.create({
+            data: {
+                requestId,
+                paymentId: payment.id,
+                transferCode,
+                amount: payment.totalAmount,
+                status: 'PENDING',
+                expireAt,
+            },
+        });
+
+        return {
+            jobPaymentTxId: newTx.id,
+            transferCode: newTx.transferCode,
+            amount: newTx.amount,
+            expireAt: newTx.expireAt,
+            qrUrl: buildQrUrl(newTx.transferCode),
+            bankAccount,
+            bankCode,
+        };
+    }
+
+    /**
+     * Polls the status of a job QR payment transaction.
+     * Auto-expires if past expireAt.
+     */
+    async getQrPaymentStatus(requestId: string) {
+        const tx = await (this.prisma as any).jobPaymentTransaction.findUnique({
+            where: { requestId },
+        });
+        if (!tx) throw new NotFoundException('No QR payment initiated for this job');
+
+        const bankAccount = process.env.SEPAY_BANK_ACCOUNT ?? '07729096901';
+        const bankCode = process.env.SEPAY_BANK_CODE ?? 'TPBank';
+
+        // Auto-expire
+        if (tx.status === 'PENDING' && tx.expireAt < new Date()) {
+            await (this.prisma as any).jobPaymentTransaction.update({
+                where: { id: tx.id },
+                data: { status: 'EXPIRED' },
+            });
+            return { status: 'EXPIRED', amount: tx.amount, expireAt: tx.expireAt, qrUrl: null };
+        }
+
+        const desc = encodeURIComponent(tx.transferCode);
+        const qrUrl = `https://qr.sepay.vn/img?acc=${bankAccount}&bank=${bankCode}&amount=${tx.amount}&des=${desc}&template=compact`;
+
+        return {
+            status: tx.status,
+            amount: tx.amount,
+            expireAt: tx.expireAt,
+            transferCode: tx.transferCode,
+            completedAt: tx.completedAt,
+            qrUrl,
+            bankAccount,
+            bankCode,
+        };
+    }
 }
 

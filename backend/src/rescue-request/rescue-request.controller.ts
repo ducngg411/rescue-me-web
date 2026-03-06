@@ -225,4 +225,24 @@ export class RescueRequestController {
     ) {
         return this.rescueRequestService.submitReview(requestId, req.user.id, dto);
     }
+
+    // ==================== QR PAYMENT ENDPOINTS ====================
+
+    /** Provider generates / retrieves QR code for job payment */
+    @Post(':id/payment/qr/init')
+    async initQrPayment(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.initQrPayment(requestId, req.user.id);
+    }
+
+    /** Provider polls QR payment status */
+    @Get(':id/payment/qr/status')
+    async getQrPaymentStatus(@Param('id') requestId: string) {
+        return this.rescueRequestService.getQrPaymentStatus(requestId);
+    }
+
+    /** Provider switches payment method from QR → CASH mid-flow */
+    @Patch(':id/payment/switch-to-cash')
+    async switchPaymentToCash(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.switchPaymentToCash(requestId, req.user.id);
+    }
 }

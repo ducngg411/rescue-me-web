@@ -5,6 +5,7 @@ import {
     Logger,
     UnauthorizedException,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import {
     WalletReferenceType,
     WalletTransactionStatus,
@@ -892,5 +893,101 @@ export class WalletService {
             bankCode,
             qrUrl,
         };
+    }
+
+    // ── Job Payment Webhook Handler ───────────────────────────────────────────
+
+    /**
+     * Handles incoming SePay webhook for job payments (RMJ... code).
+     * Credits provider pendingBalance (net after commission) with a 24h hold.
+     */
+    async processJobPaymentWebhook(transferCode: string, sepayId: number, transferAmount: number) {
+        const now = new Date();
+        const jobTx = await (this.prisma as any).jobPaymentTransaction.findFirst({
+            where: { transferCode, status: 'PENDING', expireAt: { gt: now } },
+        });
+        if (!jobTx) {
+            this.logger.warn(`JOB_PAYMENT_WEBHOOK no pending tx for code=${transferCode}`);
+            return { success: true, message: 'No pending job payment found' };
+        }
+        if (jobTx.amount !== transferAmount) {
+            this.logger.warn(`JOB_PAYMENT_WEBHOOK amount mismatch: expected=${jobTx.amount} got=${transferAmount}`);
+            return { success: true, message: 'Amount mismatch' };
+        }
+
+        const payment = await this.prisma.payment.findUnique({ where: { requestId: jobTx.requestId } });
+        if (!payment) return { success: true, message: 'Payment record not found' };
+
+        const wallet = await this.ensureWallet(payment.providerId);
+        const commissionRate = parseFloat(process.env.COMMISSION_RATE ?? '0.1');
+        const netAmount = Math.round(transferAmount * (1 - commissionRate));
+        const holdReleaseAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // +24h
+
+        await (this.prisma as any).$transaction(async (tx: any) => {
+            await tx.jobPaymentTransaction.update({
+                where: { id: jobTx.id },
+                data: { status: 'COMPLETED', sepayId, completedAt: new Date() },
+            });
+            await tx.walletTransaction.create({
+                data: {
+                    walletId: wallet.id,
+                    type: WalletTransactionType.CREDIT,
+                    amount: netAmount,
+                    status: WalletTransactionStatus.PENDING,
+                    referenceType: WalletReferenceType.JOB_PAYMENT as any,
+                    referenceId: jobTx.requestId,
+                    description: `Thu nhập job QR • chờ giải ngân 24h • HH ${commissionRate * 100}%`,
+                    holdReleaseAt,
+                } as any,
+            });
+            await tx.providerWallet.update({
+                where: { id: wallet.id },
+                data: { pendingBalance: { increment: netAmount } },
+            });
+            await tx.payment.update({
+                where: { id: payment.id },
+                data: {
+                    status: 'COMPLETED' as any,
+                    userConfirmedAt: new Date(),
+                    providerConfirmedAt: new Date(),
+                },
+            });
+            await tx.rescueRequest.update({
+                where: { id: jobTx.requestId },
+                data: { status: 'COMPLETED' },
+            });
+        });
+
+        this.logger.log(
+            `✅ JOB_PAYMENT_COMPLETED requestId=${jobTx.requestId} amount=${transferAmount} ` +
+            `net=${netAmount} holdReleaseAt=${holdReleaseAt.toISOString()}`,
+        );
+        return { success: true };
+    }
+
+    // ── Auto-release Holding Balance (─────────────────────────────────────────
+
+    /** Every hour: release PENDING credits past holdReleaseAt to available. */
+    @Cron(CronExpression.EVERY_HOUR)
+    async autoReleaseHolding() {
+        const now = new Date();
+        const pending = await this.prisma.walletTransaction.findMany({
+            where: {
+                type: WalletTransactionType.CREDIT,
+                status: WalletTransactionStatus.PENDING,
+                holdReleaseAt: { lte: now } as any,
+            },
+            take: 100,
+        });
+        if (pending.length === 0) return;
+        this.logger.log(`⏰ [AutoRelease] Releasing ${pending.length} holding transactions`);
+        for (const t of pending) {
+            try {
+                await this.settlePendingTransaction(t.id);
+                this.logger.log(`✅ [AutoRelease] txId=${t.id} amount=${t.amount}`);
+            } catch (e: any) {
+                this.logger.error(`❌ [AutoRelease] txId=${t.id}: ${e.message}`);
+            }
+        }
     }
 }

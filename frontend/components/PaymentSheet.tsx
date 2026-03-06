@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 
@@ -24,7 +24,7 @@ interface PaymentSheetProps {
     requestId: string;
     defaultAmount: number;
     onClose: () => void;
-    onSubmitted: () => void;
+    onSubmitted: (method?: 'CASH' | 'QR') => void;
 }
 
 let nextId = 1;
@@ -76,6 +76,50 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
         updateItem(setter, id, 'amount', raw ? parseInt(raw, 10) : 0);
     };
 
+    // ── QR Modal state ────────────────────────────────────────────────────────
+    const [qrData, setQrData] = useState<{
+        jobPaymentTxId: string; transferCode: string; qrUrl: string;
+        bankAccount: string; bankCode: string; amount: number; expireAt: string;
+    } | null>(null);
+    const [qrStep, setQrStep] = useState<'qr' | 'done' | 'expired'>('qr');
+    const [secsLeft, setSecsLeft] = useState(0);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const cdRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const stopAll = () => {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        if (cdRef.current) { clearInterval(cdRef.current); cdRef.current = null; }
+    };
+
+    useEffect(() => () => stopAll(), []);
+
+    const startCountdown = (expireAt: string) => {
+        const tick = () => {
+            const left = Math.max(0, Math.floor((new Date(expireAt).getTime() - Date.now()) / 1000));
+            setSecsLeft(left);
+            if (left === 0) { stopAll(); setQrStep('expired'); }
+        };
+        tick();
+        cdRef.current = setInterval(tick, 1000);
+    };
+
+    const pollStatus = (requestId: string) => {
+        pollRef.current = setInterval(async () => {
+            try {
+                const res = await api.get(`/rescue-requests/${requestId}/payment/qr/status`);
+                if (res.data.status === 'COMPLETED') {
+                    clearInterval(pollRef.current!); pollRef.current = null;
+                    clearInterval(cdRef.current!); cdRef.current = null;
+                    setQrStep('done'); onSubmitted('QR');
+                } else if (res.data.status === 'EXPIRED' || res.data.status === 'CANCELLED') {
+                    clearInterval(pollRef.current!); pollRef.current = null;
+                    clearInterval(cdRef.current!); cdRef.current = null;
+                    setQrStep('expired');
+                }
+            } catch { /* ignore polling errors */ }
+        }, 3000);
+    };
+
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleSubmit = async () => {
         if (totalAmount <= 0) { toast.error('Vui lòng nhập số tiền thanh toán'); return; }
@@ -102,8 +146,18 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
                 photoUrls: [],
                 paymentMethod,
             });
-            toast.success('Đã gửi yêu cầu thanh toán!');
-            onSubmitted();
+
+            if (paymentMethod === 'QR') {
+                // Generate QR code for customer to scan
+                const qrRes = await api.post(`/rescue-requests/${requestId}/payment/qr/init`);
+                setQrData(qrRes.data);
+                setQrStep('qr');
+                startCountdown(qrRes.data.expireAt);
+                pollStatus(requestId);
+            } else {
+                toast.success('Đã gửi yêu cầu thanh toán!');
+                onSubmitted('CASH');
+            }
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Gửi thất bại, thử lại');
         } finally {
@@ -159,245 +213,310 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
     );
 
     return (
-        <div
-            className="fixed inset-0 z-[60] flex items-end"
-            style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-            onClick={onClose}
-        >
+        <>
             <div
-                className="w-full max-h-[92vh] overflow-y-auto"
-                style={{ background: 'white', borderRadius: '24px 24px 0 0', boxShadow: '0 -8px 40px rgba(0,0,0,0.2)' }}
-                onClick={e => e.stopPropagation()}
+                className="fixed inset-0 z-[60] flex items-end"
+                style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+                onClick={onClose}
             >
-                <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-1" style={{ background: C.border }} />
+                <div
+                    className="w-full max-h-[92vh] overflow-y-auto"
+                    style={{ background: 'white', borderRadius: '24px 24px 0 0', boxShadow: '0 -8px 40px rgba(0,0,0,0.2)' }}
+                    onClick={e => e.stopPropagation()}
+                >
+                    <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-1" style={{ background: C.border }} />
 
-                <div className="px-4 pb-6 pt-2">
-                    {/* Title */}
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h2 className="text-base font-bold" style={{ color: C.navy }}>Chốt phí & Thanh toán</h2>
-                            <p className="text-xs" style={{ color: C.gray }}>Xác nhận chi tiết trước khi gửi khách</p>
+                    <div className="px-4 pb-6 pt-2">
+                        {/* Title */}
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 className="text-base font-bold" style={{ color: C.navy }}>Chốt phí & Thanh toán</h2>
+                                <p className="text-xs" style={{ color: C.gray }}>Xác nhận chi tiết trước khi gửi khách</p>
+                            </div>
+                            <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: C.bg }}>
+                                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
                         </div>
-                        <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: C.bg }}>
-                            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
 
-                    {/* ── Tổng tiền — totalAmount is always the hero number ── */}
-                    <div
-                        className="rounded-2xl px-4 py-4 mb-4"
-                        style={{ background: 'linear-gradient(135deg, #fff7ed, #fff)', border: `1.5px solid #fed7aa` }}
-                    >
-                        <p className="text-xs text-center mb-1" style={{ color: C.gray }}>Tổng tiền cần thanh toán</p>
+                        {/* ── Tổng tiền — totalAmount is always the hero number ── */}
+                        <div
+                            className="rounded-2xl px-4 py-4 mb-4"
+                            style={{ background: 'linear-gradient(135deg, #fff7ed, #fff)', border: `1.5px solid #fed7aa` }}
+                        >
+                            <p className="text-xs text-center mb-1" style={{ color: C.gray }}>Tổng tiền cần thanh toán</p>
 
-                        {/* Always-prominent total */}
-                        <p className="text-4xl font-extrabold text-center" style={{ color: C.orange }}>
-                            {totalAmount > 0 ? fmt(totalAmount) : '—'}
-                        </p>
+                            {/* Always-prominent total */}
+                            <p className="text-4xl font-extrabold text-center" style={{ color: C.orange }}>
+                                {totalAmount > 0 ? fmt(totalAmount) : '—'}
+                            </p>
 
-                        {/* Editable base price line */}
-                        <div className="flex items-center justify-center gap-1 mt-3 pt-3" style={{ borderTop: `1px solid #fed7aa` }}>
-                            <span className="text-xs flex-shrink-0" style={{ color: C.gray }}>
-                                {surchargeTotal > 0 ? 'Giá dịch vụ:' : 'Nhập giá:'}
-                            </span>
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                value={baseFee === 0 ? '' : baseFee.toLocaleString('vi-VN')}
-                                onChange={e => {
-                                    const raw = e.target.value.replace(/\D/g, '');
-                                    setBaseFee(raw ? parseInt(raw, 10) : 0);
-                                }}
-                                placeholder="0"
-                                className="text-center text-sm font-bold outline-none bg-transparent w-32"
-                                style={{ color: C.orange, caretColor: C.orange }}
-                            />
-                            <span className="text-sm font-bold" style={{ color: C.orange }}>đ</span>
-                            {defaultAmount > 0 && baseFee !== defaultAmount && (
-                                <button
-                                    onClick={() => setBaseFee(defaultAmount)}
-                                    className="text-xs underline ml-1 flex-shrink-0"
-                                    style={{ color: C.gray }}
-                                >đặt lại</button>
+                            {/* Editable base price line */}
+                            <div className="flex items-center justify-center gap-1 mt-3 pt-3" style={{ borderTop: `1px solid #fed7aa` }}>
+                                <span className="text-xs flex-shrink-0" style={{ color: C.gray }}>
+                                    {surchargeTotal > 0 ? 'Giá dịch vụ:' : 'Nhập giá:'}
+                                </span>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={baseFee === 0 ? '' : baseFee.toLocaleString('vi-VN')}
+                                    onChange={e => {
+                                        const raw = e.target.value.replace(/\D/g, '');
+                                        setBaseFee(raw ? parseInt(raw, 10) : 0);
+                                    }}
+                                    placeholder="0"
+                                    className="text-center text-sm font-bold outline-none bg-transparent w-32"
+                                    style={{ color: C.orange, caretColor: C.orange }}
+                                />
+                                <span className="text-sm font-bold" style={{ color: C.orange }}>đ</span>
+                                {defaultAmount > 0 && baseFee !== defaultAmount && (
+                                    <button
+                                        onClick={() => setBaseFee(defaultAmount)}
+                                        className="text-xs underline ml-1 flex-shrink-0"
+                                        style={{ color: C.gray }}
+                                    >đặt lại</button>
+                                )}
+                            </div>
+
+                            {/* Surcharge & quote reference lines */}
+                            {surchargeTotal > 0 && (
+                                <div className="flex items-center justify-center gap-1 mt-1.5">
+                                    <span className="text-xs" style={{ color: C.gray }}>+ Phụ phí:</span>
+                                    <span className="text-xs font-semibold" style={{ color: '#d97706' }}>{fmt(surchargeTotal)}</span>
+                                </div>
+                            )}
+                            {defaultAmount > 0 && (
+                                <div
+                                    className="flex items-center justify-center gap-1.5 mt-2 px-3 py-1.5 rounded-full mx-auto w-fit"
+                                    style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}
+                                >
+                                    <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#d97706" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <p className="text-xs font-semibold" style={{ color: '#92400e' }}>
+                                        Báo giá bạn đã gửi trước đó: {fmt(defaultAmount)}
+                                    </p>
+                                </div>
                             )}
                         </div>
 
-                        {/* Surcharge & quote reference lines */}
-                        {surchargeTotal > 0 && (
-                            <div className="flex items-center justify-center gap-1 mt-1.5">
-                                <span className="text-xs" style={{ color: C.gray }}>+ Phụ phí:</span>
-                                <span className="text-xs font-semibold" style={{ color: '#d97706' }}>{fmt(surchargeTotal)}</span>
-                            </div>
-                        )}
-                        {defaultAmount > 0 && (
-                            <div
-                                className="flex items-center justify-center gap-1.5 mt-2 px-3 py-1.5 rounded-full mx-auto w-fit"
-                                style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}
-                            >
-                                <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#d97706" strokeWidth={2.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <p className="text-xs font-semibold" style={{ color: '#92400e' }}>
-                                    Báo giá bạn đã gửi trước đó: {fmt(defaultAmount)}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* ── Chi tiết (breakdown of base fee — informational) ── */}
-                    <div className="mb-3">
-                        <div className="flex items-center justify-between mb-2">
-                            <button
-                                className="flex items-center gap-1 text-xs font-semibold"
-                                style={{ color: C.navy }}
-                                onClick={() => setShowBreakdown(v => !v)}
-                            >
-                                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-                                    className={`transition-transform ${showBreakdown ? 'rotate-180' : ''}`}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                </svg>
-                                Chi tiết {breakdownItems.length > 0 && `(${breakdownItems.length})`}
-                            </button>
-                            <button
-                                onClick={() => addTo(setBreakdownItems, () => setShowBreakdown(true))}
-                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold"
-                                style={{ background: '#eff6ff', color: '#2563eb' }}
-                            >
-                                <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                </svg>
-                                Thêm mục
-                            </button>
-                        </div>
-
-                        {showBreakdown && breakdownItems.length > 0 && (
-                            <>
-                                {renderItems(breakdownItems, setBreakdownItems, 'VD: Công thay lốp, Ắc quy...')}
-                                {/* Sum hint */}
-                                {breakdownItems.some(i => i.amount > 0) && (
-                                    <p className="text-right text-xs mt-1.5 pr-1" style={{ color: C.gray }}>
-                                        Tổng chi tiết: <span className="font-semibold">
-                                            {fmt(breakdownItems.reduce((s, i) => s + i.amount, 0))}
-                                        </span>
-                                        {breakdownItems.reduce((s, i) => s + i.amount, 0) !== baseFee && baseFee > 0 && (
-                                            <span style={{ color: '#d97706' }}> ≠ {fmt(baseFee)}</span>
-                                        )}
-                                    </p>
-                                )}
-                            </>
-                        )}
-                        {showBreakdown && breakdownItems.length === 0 && (
-                            <p className="text-xs text-center py-2" style={{ color: C.gray }}>Bấm "+ Thêm mục" để liệt kê những gì trong tổng tiền</p>
-                        )}
-                    </div>
-
-                    {/* ── Phụ phí (extra charges that ADD to total) ── */}
-                    <div className="mb-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <button
-                                className="flex items-center gap-1 text-xs font-semibold"
-                                style={{ color: C.navy }}
-                                onClick={() => setShowSurcharge(v => !v)}
-                            >
-                                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-                                    className={`transition-transform ${showSurcharge ? 'rotate-180' : ''}`}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                </svg>
-                                Phụ phí phát sinh {surchargeItems.length > 0 && `(${surchargeItems.length} • +${fmt(surchargeTotal)})`}
-                            </button>
-                            <button
-                                onClick={() => addTo(setSurchargeItems, () => setShowSurcharge(true))}
-                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold"
-                                style={{ background: '#fff7ed', color: C.orange }}
-                            >
-                                <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                </svg>
-                                Thêm khoản
-                            </button>
-                        </div>
-
-                        {showSurcharge && surchargeItems.length > 0 && renderItems(
-                            surchargeItems, setSurchargeItems, 'VD: Chi phí xe tải, Phụ tùng thêm...'
-                        )}
-                        {showSurcharge && surchargeItems.length === 0 && (
-                            <p className="text-xs text-center py-2" style={{ color: C.gray }}>Bấm "+ Thêm khoản" để thêm phụ phí phát sinh tại hiện trường</p>
-                        )}
-                    </div>
-
-                    {/* ── Ghi chú ── */}
-                    <div className="mb-4">
-                        <p className="text-xs mb-1 font-medium" style={{ color: C.gray }}>Ghi chú (tuỳ chọn)</p>
-                        <textarea
-                            value={note}
-                            onChange={e => setNote(e.target.value)}
-                            placeholder="Ghi chú thêm cho khách hàng..."
-                            rows={2}
-                            className="w-full py-2.5 px-3 rounded-xl text-sm outline-none resize-none"
-                            style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.navy }}
-                        />
-                    </div>
-
-                    {/* ── Phương thức thanh toán ── */}
-                    <div className="mb-5">
-                        <p className="text-xs font-bold mb-2" style={{ color: C.navy }}>Phương thức thanh toán</p>
-                        <div className="space-y-2">
-                            {([
-                                { value: 'CASH', label: 'Tiền mặt', sub: 'Thanh toán trực tiếp tại nơi sửa chữa' },
-                                { value: 'QR', label: 'Chuyển khoản QR', sub: 'Quét mã QR để chuyển tiền' },
-                            ] as const).map(opt => (
+                        {/* ── Chi tiết (breakdown of base fee — informational) ── */}
+                        <div className="mb-3">
+                            <div className="flex items-center justify-between mb-2">
                                 <button
-                                    key={opt.value}
-                                    onClick={() => setPaymentMethod(opt.value)}
-                                    className="w-full flex items-center gap-3 p-3 rounded-2xl text-left"
-                                    style={{
-                                        border: `1.5px solid ${paymentMethod === opt.value ? C.orange : C.border}`,
-                                        background: paymentMethod === opt.value ? '#fff7ed' : 'white',
-                                    }}
+                                    className="flex items-center gap-1 text-xs font-semibold"
+                                    style={{ color: C.navy }}
+                                    onClick={() => setShowBreakdown(v => !v)}
                                 >
-                                    <div
-                                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                                        style={{ borderColor: paymentMethod === opt.value ? C.orange : C.border }}
-                                    >
-                                        {paymentMethod === opt.value && (
-                                            <div className="w-2.5 h-2.5 rounded-full" style={{ background: C.orange }} />
-                                        )}
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{opt.label}</p>
-                                        <p className="text-xs" style={{ color: C.gray }}>{opt.sub}</p>
-                                    </div>
+                                    <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                                        className={`transition-transform ${showBreakdown ? 'rotate-180' : ''}`}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                    Chi tiết {breakdownItems.length > 0 && `(${breakdownItems.length})`}
                                 </button>
-                            ))}
-                        </div>
-                    </div>
+                                <button
+                                    onClick={() => addTo(setBreakdownItems, () => setShowBreakdown(true))}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold"
+                                    style={{ background: '#eff6ff', color: '#2563eb' }}
+                                >
+                                    <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    Thêm mục
+                                </button>
+                            </div>
 
-                    {/* ── Submit ── */}
-                    <button
-                        onClick={handleSubmit}
-                        disabled={isSubmitting || totalAmount <= 0}
-                        className="w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 active:scale-[0.98]"
-                        style={{
-                            background: isSubmitting || totalAmount <= 0 ? C.gray : `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
-                            boxShadow: totalAmount > 0 ? `0 4px 16px ${C.orange}50` : 'none',
-                        }}
-                    >
-                        {isSubmitting ? (
-                            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
-                                <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
-                            </svg>
-                        ) : (
-                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                            </svg>
-                        )}
-                        {isSubmitting ? 'Đang gửi...' : `Gửi yêu cầu thanh toán · ${fmt(totalAmount)}`}
-                    </button>
+                            {showBreakdown && breakdownItems.length > 0 && (
+                                <>
+                                    {renderItems(breakdownItems, setBreakdownItems, 'VD: Công thay lốp, Ắc quy...')}
+                                    {/* Sum hint */}
+                                    {breakdownItems.some(i => i.amount > 0) && (
+                                        <p className="text-right text-xs mt-1.5 pr-1" style={{ color: C.gray }}>
+                                            Tổng chi tiết: <span className="font-semibold">
+                                                {fmt(breakdownItems.reduce((s, i) => s + i.amount, 0))}
+                                            </span>
+                                            {breakdownItems.reduce((s, i) => s + i.amount, 0) !== baseFee && baseFee > 0 && (
+                                                <span style={{ color: '#d97706' }}> ≠ {fmt(baseFee)}</span>
+                                            )}
+                                        </p>
+                                    )}
+                                </>
+                            )}
+                            {showBreakdown && breakdownItems.length === 0 && (
+                                <p className="text-xs text-center py-2" style={{ color: C.gray }}>Bấm "+ Thêm mục" để liệt kê những gì trong tổng tiền</p>
+                            )}
+                        </div>
+
+                        {/* ── Phụ phí (extra charges that ADD to total) ── */}
+                        <div className="mb-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <button
+                                    className="flex items-center gap-1 text-xs font-semibold"
+                                    style={{ color: C.navy }}
+                                    onClick={() => setShowSurcharge(v => !v)}
+                                >
+                                    <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                                        className={`transition-transform ${showSurcharge ? 'rotate-180' : ''}`}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                    Phụ phí phát sinh {surchargeItems.length > 0 && `(${surchargeItems.length} • +${fmt(surchargeTotal)})`}
+                                </button>
+                                <button
+                                    onClick={() => addTo(setSurchargeItems, () => setShowSurcharge(true))}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold"
+                                    style={{ background: '#fff7ed', color: C.orange }}
+                                >
+                                    <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    Thêm khoản
+                                </button>
+                            </div>
+
+                            {showSurcharge && surchargeItems.length > 0 && renderItems(
+                                surchargeItems, setSurchargeItems, 'VD: Chi phí xe tải, Phụ tùng thêm...'
+                            )}
+                            {showSurcharge && surchargeItems.length === 0 && (
+                                <p className="text-xs text-center py-2" style={{ color: C.gray }}>Bấm "+ Thêm khoản" để thêm phụ phí phát sinh tại hiện trường</p>
+                            )}
+                        </div>
+
+                        {/* ── Ghi chú ── */}
+                        <div className="mb-4">
+                            <p className="text-xs mb-1 font-medium" style={{ color: C.gray }}>Ghi chú (tuỳ chọn)</p>
+                            <textarea
+                                value={note}
+                                onChange={e => setNote(e.target.value)}
+                                placeholder="Ghi chú thêm cho khách hàng..."
+                                rows={2}
+                                className="w-full py-2.5 px-3 rounded-xl text-sm outline-none resize-none"
+                                style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.navy }}
+                            />
+                        </div>
+
+                        {/* ── Phương thức thanh toán ── */}
+                        <div className="mb-5">
+                            <p className="text-xs font-bold mb-2" style={{ color: C.navy }}>Phương thức thanh toán</p>
+                            <div className="space-y-2">
+                                {([
+                                    { value: 'CASH', label: 'Tiền mặt', sub: 'Thanh toán trực tiếp tại nơi sửa chữa' },
+                                    { value: 'QR', label: 'Chuyển khoản QR', sub: 'Quét mã QR để chuyển tiền' },
+                                ] as const).map(opt => (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => setPaymentMethod(opt.value)}
+                                        className="w-full flex items-center gap-3 p-3 rounded-2xl text-left"
+                                        style={{
+                                            border: `1.5px solid ${paymentMethod === opt.value ? C.orange : C.border}`,
+                                            background: paymentMethod === opt.value ? '#fff7ed' : 'white',
+                                        }}
+                                    >
+                                        <div
+                                            className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                                            style={{ borderColor: paymentMethod === opt.value ? C.orange : C.border }}
+                                        >
+                                            {paymentMethod === opt.value && (
+                                                <div className="w-2.5 h-2.5 rounded-full" style={{ background: C.orange }} />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold" style={{ color: C.navy }}>{opt.label}</p>
+                                            <p className="text-xs" style={{ color: C.gray }}>{opt.sub}</p>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* ── Submit ── */}
+                        <button
+                            onClick={handleSubmit}
+                            disabled={isSubmitting || totalAmount <= 0}
+                            className="w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 active:scale-[0.98]"
+                            style={{
+                                background: isSubmitting || totalAmount <= 0 ? C.gray : `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
+                                boxShadow: totalAmount > 0 ? `0 4px 16px ${C.orange}50` : 'none',
+                            }}
+                        >
+                            {isSubmitting ? (
+                                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                                    <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
+                                </svg>
+                            ) : (
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                </svg>
+                            )}
+                            {isSubmitting ? 'Đang gửi...' : `Gửi yêu cầu thanh toán · ${fmt(totalAmount)}`}
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
+
+            {/* ── QR Payment Overlay (provider side) ── */}
+            {
+                qrData && (
+                    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}>
+                        <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl overflow-hidden" style={{ background: 'white' }}>
+                            {qrStep === 'done' ? (
+                                <div className="p-8 text-center">
+                                    <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: '#f0fdf4' }}>
+                                        <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    </div>
+                                    <p className="text-lg font-bold mb-1" style={{ color: C.navy }}>Thanh toán thành công!</p>
+                                    <p className="text-sm" style={{ color: C.gray }}>Tiền đã vào hệ thống · Sẽ giải ngân sau 24h</p>
+                                </div>
+                            ) : qrStep === 'expired' ? (
+                                <div className="p-6 text-center">
+                                    <p className="text-base font-bold mb-3" style={{ color: '#dc2626' }}>QR đã hết hạn</p>
+                                    <button onClick={async () => {
+                                        const r = await api.post(`/rescue-requests/${requestId}/payment/qr/init`);
+                                        setQrData(r.data); setQrStep('qr');
+                                        startCountdown(r.data.expireAt); pollStatus(requestId);
+                                    }} className="w-full py-3 rounded-2xl text-sm font-bold text-white mb-3" style={{ background: C.orange }}>Tạo QR mới</button>
+                                    <button onClick={async () => {
+                                        try { await api.patch(`/rescue-requests/${requestId}/payment/switch-to-cash`); } catch { /* ignore */ }
+                                        stopAll(); setQrData(null); onSubmitted('CASH');
+                                    }} className="w-full py-3 rounded-xl text-xs font-semibold transition-all active:scale-[0.98]" style={{ background: '#fff7ed', color: C.orange, border: `1.5px solid ${C.orange}` }}>
+                                        Khách đổi sang tiền mặt
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="px-5 pt-5 pb-6">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div>
+                                            <p className="text-sm font-bold" style={{ color: C.navy }}>Chuyển khoản QR</p>
+                                            <p className="text-xs" style={{ color: C.gray }}>Nội dung: <span className="font-mono font-semibold" style={{ color: C.orange }}>{qrData.transferCode}</span></p>
+                                        </div>
+                                        <span className="text-sm font-bold tabular-nums px-3 py-1 rounded-xl" style={{
+                                            background: secsLeft > 60 ? '#f0fdf4' : secsLeft > 30 ? '#fff7ed' : '#fef2f2',
+                                            color: secsLeft > 60 ? '#16a34a' : secsLeft > 30 ? C.orange : '#dc2626',
+                                        }}>
+                                            {String(Math.floor(secsLeft / 60)).padStart(2, '0')}:{String(secsLeft % 60).padStart(2, '0')}
+                                        </span>
+                                    </div>
+                                    <img src={qrData.qrUrl} alt="QR" className="w-full rounded-2xl mb-3" style={{ border: '2px solid #f1f5f9' }} />
+                                    <p className="text-center text-xs mb-3" style={{ color: C.gray }}>
+                                        Số tiền: <span className="font-bold" style={{ color: C.orange }}>{fmt(qrData.amount)}</span> · Đang chờ khách chuyển khoản...
+                                    </p>
+                                    <button
+                                        onClick={async () => {
+                                            try { await api.patch(`/rescue-requests/${requestId}/payment/switch-to-cash`); } catch { /* ignore */ }
+                                            stopAll(); setQrData(null); onSubmitted('CASH');
+                                        }}
+                                        className="w-full py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-[0.98]"
+                                        style={{ background: '#fff7ed', color: C.orange, border: `1.5px solid ${C.orange}` }}
+                                    >
+                                        Khách đổi sang tiền mặt
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )
+            }
+        </>
     );
 }
