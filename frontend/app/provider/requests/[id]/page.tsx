@@ -849,7 +849,7 @@ export default function ProviderRequestDetailPage() {
                             )}
                             {request.status === 'MATCHING' && hasPendingQuote && (
                                 <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
-                                    ⏳ Đã gửi báo giá
+                                    Đã gửi báo giá
                                 </span>
                             )}
                             {request.status === 'ASSIGNED' && request.assignedProviderId === user?.id && (
@@ -1014,7 +1014,7 @@ export default function ProviderRequestDetailPage() {
                             </div>
                             <div className="flex-1">
                                 <h3 className="text-xl font-bold text-blue-900 mb-2">
-                                    ⏳ Đang chờ khách hàng phản hồi
+                                    Đang chờ khách hàng phản hồi
                                 </h3>
                                 <p className="text-blue-800 mb-4">
                                     Bạn đã gửi báo giá cho yêu cầu này. Vui lòng chờ khách hàng xem xét và phản hồi.

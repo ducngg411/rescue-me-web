@@ -39,6 +39,7 @@ interface Quote {
         createdAt: string;
         completedAt?: string | null;
         user: { id: string; name: string | null; phoneNumber: string | null };
+        payment?: { id: string; totalAmount: number; baseFee: number; distanceFee: number; otherFee: number; status: string; paymentMethod?: string; walletTxStatus?: string | null } | null;
     };
 }
 
@@ -103,7 +104,7 @@ function fmtShortDate(iso: string) {
 function StatusBadge({ status }: { status: RequestStatus }) {
     const cfg: Record<string, { label: string; dot: string; color: string; bg: string }> = {
         COMPLETED: { label: 'Hoàn thành', dot: C.green, color: C.green, bg: C.greenLight },
-        PAID: { label: 'Hoàn thành', dot: C.green, color: C.green, bg: C.greenLight },
+        PAID: { label: 'Chờ giải ngân', dot: '#7c3aed', color: '#7c3aed', bg: '#f5f3ff' },
         PAYMENT_PENDING: { label: 'Chờ thanh toán', dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
         IN_PROGRESS: { label: 'Đang xử lý', dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
         WORKING: { label: 'Đang xử lý', dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
@@ -123,6 +124,34 @@ function StatusBadge({ status }: { status: RequestStatus }) {
             {s.label}
         </span>
     );
+}
+
+function PaymentBadge({ walletTxStatus, paymentMethod }: { walletTxStatus?: string | null; paymentMethod?: string }) {
+    if (walletTxStatus === 'COMPLETED') {
+        return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                style={{ background: C.greenLight, color: C.green }}>
+                Đã giải ngân
+            </span>
+        );
+    }
+    if (walletTxStatus === 'PENDING') {
+        return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                style={{ background: '#f5f3ff', color: '#7c3aed' }}>
+                Chờ giải ngân 24h
+            </span>
+        );
+    }
+    if (paymentMethod === 'CASH') {
+        return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                style={{ background: '#f3f4f6', color: '#374151' }}>
+                Tiền mặt
+            </span>
+        );
+    }
+    return null;
 }
 
 /* ─── Bar Chart ──── */
@@ -224,8 +253,8 @@ function MiniBarChart({ data }: { data: DayStat[] }) {
                                         background: isHovered
                                             ? `linear-gradient(to top, ${C.orangeDark}, ${C.orange})`
                                             : isToday
-                                            ? `linear-gradient(to top, ${C.orangeDark}, ${C.orange})`
-                                            : d.revenue > 0 ? 'rgba(249,115,22,0.32)' : '#f1f5f9',
+                                                ? `linear-gradient(to top, ${C.orangeDark}, ${C.orange})`
+                                                : d.revenue > 0 ? 'rgba(249,115,22,0.32)' : '#f1f5f9',
                                         transition: 'background 0.18s, opacity 0.18s',
                                         opacity: hover !== null && !isHovered && !isToday ? 0.55 : 1,
                                         flexShrink: 0,
@@ -360,7 +389,8 @@ export default function ProviderHistoryPage() {
             const req = q.rescueRequest;
             const { date, time } = fmtDate(q.createdAt);
             const isCompleted = req.status === 'COMPLETED' || req.status === 'PAID';
-            const profit = isCompleted ? Math.round(q.price * 0.9) : 0;
+            const revenueAmount = req.payment?.totalAmount ?? q.price;
+            const profit = isCompleted ? Math.round(revenueAmount * 0.9) : 0;
             return [
                 idx + 1,
                 date,
@@ -368,7 +398,7 @@ export default function ProviderHistoryPage() {
                 req.user.name ?? 'Khách hàng',
                 req.user.phoneNumber ?? '',
                 INCIDENT_LABELS[req.incidentType] ?? req.incidentType,
-                q.price,
+                revenueAmount,
                 profit,
                 STATUS_LABELS[req.status] ?? req.status,
             ];
@@ -629,9 +659,9 @@ export default function ProviderHistoryPage() {
                     {/* ── Table ── */}
                     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden" style={{ borderColor: C.border }}>
                         {/* Desktop header */}
-                        <div className="hidden md:grid grid-cols-[140px_1fr_130px_160px_140px_52px] gap-4 px-5 py-3"
+                        <div className="hidden md:grid grid-cols-[160px_1fr_130px_160px_120px_130px_52px] gap-4 px-5 py-3"
                             style={{ borderBottom: `1px solid ${C.border}`, background: '#f8fafc' }}>
-                            {['NGÀY / GIỜ', 'KHÁCH HÀNG', 'LOẠI DỊCH VỤ', 'DOANH THU / LÃI', 'TRẠNG THÁI', ''].map((h, i) => (
+                            {['NGÀY / MÃ ĐƠN', 'KHÁCH HÀNG', 'LOẠI DỊCH VỤ', 'DOANH THU / LÃI', 'TRẠNG THÁI', 'THANH TOÁN', ''].map((h, i) => (
                                 <span key={i} className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.gray }}>{h}</span>
                             ))}
                         </div>
@@ -652,7 +682,9 @@ export default function ProviderHistoryPage() {
                                 {pageItems.map((q, idx) => {
                                     const req = q.rescueRequest;
                                     const { date, time } = fmtDate(q.createdAt);
-                                    const profit = Math.round(q.price * 0.9);
+                                    // Use actual payment amount when available (includes surcharges)
+                                    const revenueAmount = req.payment?.totalAmount ?? q.price;
+                                    const profit = Math.round(revenueAmount * 0.9);
                                     const incColor = INCIDENT_COLORS[req.incidentType] ?? { bg: '#f3f4f6', color: C.gray };
                                     const isCompleted = req.status === 'COMPLETED' || req.status === 'PAID';
                                     const isPending = req.status === 'PAYMENT_PENDING';
@@ -665,10 +697,11 @@ export default function ProviderHistoryPage() {
                                                 className="w-full text-left transition-colors hover:bg-gray-50/70 active:bg-gray-100/70"
                                             >
                                                 {/* Desktop */}
-                                                <div className="hidden md:grid grid-cols-[140px_1fr_130px_160px_140px_52px] gap-4 items-center px-5 py-4">
+                                                <div className="hidden md:grid grid-cols-[160px_1fr_130px_160px_120px_130px_52px] gap-4 items-center px-5 py-4">
                                                     <div>
                                                         <p className="text-sm font-semibold" style={{ color: C.navy }}>{date}</p>
                                                         <p className="text-xs mt-0.5" style={{ color: C.gray }}>{time}</p>
+                                                        <p className="text-[10px] mt-1 font-mono font-bold" style={{ color: '#94a3b8' }}>#{req.id.slice(0, 8).toUpperCase()}</p>
                                                     </div>
                                                     <div className="flex items-center gap-3 min-w-0">
                                                         <Avatar name={req.user.name ?? 'K'} />
@@ -694,16 +727,18 @@ export default function ProviderHistoryPage() {
                                                             <p className="text-sm line-through" style={{ color: '#9ca3af' }}>{fmtVnd(q.price)}</p>
                                                         ) : (
                                                             <>
-                                                                <p className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(q.price)}</p>
+                                                                <p className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(revenueAmount)}</p>
+                                                                {revenueAmount !== q.price && (
+                                                                    <p className="text-[10px]" style={{ color: C.gray }}>Báo giá: {fmtVnd(q.price)}</p>
+                                                                )}
                                                                 {isCompleted && (
-                                                                    <p className="text-xs font-semibold mt-0.5" style={{ color: C.green }}>
-                                                                        +{fmtVnd(profit)} lãi
-                                                                    </p>
+                                                                    <p className="text-xs font-semibold mt-0.5" style={{ color: C.green }}>+{fmtVnd(profit)} lãi</p>
                                                                 )}
                                                             </>
                                                         )}
                                                     </div>
                                                     <StatusBadge status={req.status} />
+                                                    <PaymentBadge walletTxStatus={req.payment?.walletTxStatus} paymentMethod={req.payment?.paymentMethod} />
                                                     <div className="flex justify-center">
                                                         <ChevronRight size={15} style={{ color: '#cbd5e1' }} />
                                                     </div>
@@ -719,6 +754,7 @@ export default function ProviderHistoryPage() {
                                                                     {req.user.name ?? 'Khách hàng'}
                                                                 </p>
                                                                 <p className="text-xs" style={{ color: C.gray }}>{date} · {time}</p>
+                                                                <p className="text-[10px] font-mono font-bold mt-0.5" style={{ color: '#94a3b8' }}>#{req.id.slice(0, 8).toUpperCase()}</p>
                                                             </div>
                                                         </div>
                                                         <ChevronRight size={15} style={{ color: '#cbd5e1', flexShrink: 0 }} />
@@ -729,9 +765,10 @@ export default function ProviderHistoryPage() {
                                                             {INCIDENT_LABELS[req.incidentType] ?? req.incidentType}
                                                         </span>
                                                         <StatusBadge status={req.status} />
+                                                        <PaymentBadge walletTxStatus={req.payment?.walletTxStatus} paymentMethod={req.payment?.paymentMethod} />
                                                         <span className="ml-auto text-sm font-bold"
                                                             style={{ color: isCancelled ? '#9ca3af' : C.navy }}>
-                                                            {fmtVnd(q.price)}
+                                                            {fmtVnd(revenueAmount)}
                                                         </span>
                                                     </div>
                                                 </div>

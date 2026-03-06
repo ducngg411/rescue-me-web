@@ -5,9 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { useProviderGuard } from '@/lib/guards';
 import {
-    ArrowLeft, CheckCircle2, Clock, XCircle, MapPin, User, Phone,
-    Banknote, Star, Image as ImageIcon, Play, FileText, Wrench,
-    Car, Calendar, Hash, ExternalLink, RefreshCw, ChevronRight,
+    ArrowLeft, CheckCircle2, Clock, XCircle,
+    Banknote, Star, Image as ImageIcon, Play,
+    Wrench, ExternalLink, RefreshCw, ChevronRight,
 } from 'lucide-react';
 
 const C = {
@@ -219,7 +219,7 @@ export default function TxDetailPage() {
                                 <h2 className="text-sm font-bold" style={{ color: C.navy }}>Thông tin đơn hàng</h2>
                             </div>
                             <button
-                                onClick={() => router.push(`/provider/requests/${job.id}`)}
+                                onClick={() => router.push(`/provider/history/${job.id}`)}
                                 className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                                 style={{ background: C.orangeLight, color: C.orange }}
                             >
@@ -236,32 +236,6 @@ export default function TxDetailPage() {
                                 <div>
                                     <p className="text-xs mb-1" style={{ color: C.gray }}>Mô tả sự cố</p>
                                     <p className="text-sm italic" style={{ color: C.navy }}>"{job.description}"</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* ── Customer & Location ── */}
-                {job && (
-                    <div className="rounded-2xl overflow-hidden" style={{ background: 'white', boxShadow: '0 1px 12px rgba(0,0,0,0.07)' }}>
-                        <SectionHeader icon={<User className="w-4 h-4" style={{ color: '#2563eb' }} />} title="Khách hàng & Địa điểm" bg="#eff6ff" />
-                        <div className="px-5 py-4 space-y-3">
-                            {(job.user?.fullName || job.user?.name) && (
-                                <Row label="Tên khách hàng" value={job.user.fullName || job.user.name} />
-                            )}
-                            {job.contactPhone && (
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs" style={{ color: C.gray }}>Điện thoại</span>
-                                    <a href={`tel:${job.contactPhone}`} className="text-xs font-semibold flex items-center gap-1" style={{ color: '#2563eb' }}>
-                                        <Phone className="w-3 h-3" />{job.contactPhone}
-                                    </a>
-                                </div>
-                            )}
-                            {(job.pickupLocation as any)?.addressText && (
-                                <div>
-                                    <p className="text-xs mb-1" style={{ color: C.gray }}><MapPin className="w-3 h-3 inline mr-1" />Địa điểm</p>
-                                    <p className="text-sm font-semibold" style={{ color: C.navy }}>{(job.pickupLocation as any).addressText}</p>
                                 </div>
                             )}
                         </div>
@@ -375,22 +349,6 @@ export default function TxDetailPage() {
                     </div>
                 )}
 
-                {/* ── Timeline ── */}
-                {job && (
-                    <div className="rounded-2xl overflow-hidden" style={{ background: 'white', boxShadow: '0 1px 12px rgba(0,0,0,0.07)' }}>
-                        <SectionHeader icon={<Calendar className="w-4 h-4" style={{ color: C.orange }} />} title="Dòng thời gian" bg={C.orangeLight} />
-                        <div className="px-5 py-4">
-                            <Timeline items={[
-                                { label: 'Tạo đơn hàng', ts: job.createdAt, done: true },
-                                { label: 'Provider nhận việc', ts: job.providerAcceptedAt, done: !!job.providerAcceptedAt },
-                                { label: 'Yêu cầu thanh toán', ts: job.payment?.createdAt, done: !!job.payment },
-                                { label: 'Khách xác nhận', ts: job.payment?.userConfirmedAt, done: !!job.payment?.userConfirmedAt },
-                                { label: 'Hoàn thành đơn', ts: job.completedAt, done: !!job.completedAt },
-                                { label: 'Giao dịch ví ghi nhận', ts: tx.createdAt, done: true },
-                            ]} />
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* Lightbox */}
@@ -425,26 +383,3 @@ function SectionHeader({ icon, title, bg }: { icon: React.ReactNode; title: stri
     );
 }
 
-function Timeline({ items }: { items: { label: string; ts: string | null | undefined; done: boolean }[] }) {
-    return (
-        <div className="space-y-0">
-            {items.map((item, i) => (
-                <div key={i} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                        <div
-                            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                            style={{ background: item.done ? C.greenLight : C.bg, border: `2px solid ${item.done ? C.green : '#e2e8f0'}` }}
-                        >
-                            {item.done && <div className="w-2 h-2 rounded-full" style={{ background: C.green }} />}
-                        </div>
-                        {i < items.length - 1 && <div className="w-0.5 flex-1 min-h-[16px]" style={{ background: '#e2e8f0' }} />}
-                    </div>
-                    <div className="pb-4 min-w-0">
-                        <p className="text-xs font-semibold" style={{ color: item.done ? C.navy : C.gray }}>{item.label}</p>
-                        {item.ts && <p className="text-[10px] mt-0.5" style={{ color: C.gray }}>{fmtDate(item.ts)}</p>}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-}

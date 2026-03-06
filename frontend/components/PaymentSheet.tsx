@@ -50,6 +50,7 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
     const [note, setNote] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR'>('CASH');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [cashSent, setCashSent] = useState(false);  // show cash-pending overlay after CASH submit
 
     const surchargeTotal = surchargeItems.reduce((s, i) => s + i.amount, 0);
     const totalAmount = baseFee + surchargeTotal;
@@ -156,7 +157,7 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
                 pollStatus(requestId);
             } else {
                 toast.success('Đã gửi yêu cầu thanh toán!');
-                onSubmitted('CASH');
+                setCashSent(true); // Show cash-pending overlay instead of closing immediately
             }
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Gửi thất bại, thử lại');
@@ -517,6 +518,63 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
                     </div>
                 )
             }
+
+            {/* ── Cash Pending Overlay ── */}
+            {cashSent && (
+                <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}>
+                    <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl overflow-hidden" style={{ background: 'white' }}>
+                        <div className="px-5 pt-5 pb-6">
+                            {/* Header */}
+                            <div className="text-center mb-5">
+                                <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: '#f0fdf4' }}>
+                                    <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                </div>
+                                <p className="text-base font-bold" style={{ color: C.navy }}>Đã gửi yêu cầu thanh toán</p>
+                                <p className="text-2xl font-bold mt-1" style={{ color: C.orange }}>{fmt(totalAmount)}</p>
+                                <p className="text-xs mt-1" style={{ color: C.gray }}>Tiền mặt · Đang chờ khách xác nhận</p>
+                            </div>
+
+                            {/* Switch to QR */}
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        await api.patch(`/rescue-requests/${requestId}/payment/switch-to-qr`);
+                                    } catch { /* may not exist, proceed anyway */ }
+                                    try {
+                                        const qrRes = await api.post(`/rescue-requests/${requestId}/payment/qr/init`);
+                                        setCashSent(false);
+                                        setPaymentMethod('QR');
+                                        setQrData(qrRes.data);
+                                        setQrStep('qr');
+                                        startCountdown(qrRes.data.expireAt);
+                                        pollStatus(requestId);
+                                    } catch (err: any) {
+                                        toast.error(err.response?.data?.message || 'Không thể chuyển sang QR, thử lại');
+                                    }
+                                }}
+                                className="w-full py-3 rounded-2xl text-sm font-semibold mb-3 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                                style={{ background: '#eff6ff', color: '#2563eb', border: '1.5px solid #bfdbfe' }}
+                            >
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#2563eb" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                </svg>
+                                Khách muốn chuyển khoản QR
+                            </button>
+
+                            {/* Close / confirm cash */}
+                            <button
+                                onClick={() => { setCashSent(false); onSubmitted('CASH'); }}
+                                className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
+                                style={{ background: C.bg, color: C.gray }}
+                            >
+                                Đóng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }

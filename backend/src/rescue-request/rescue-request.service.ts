@@ -1084,13 +1084,52 @@ export class RescueRequestService {
                             },
                         },
                         media: true,
+                        payment: {
+                            select: {
+                                id: true,
+                                totalAmount: true,
+                                baseFee: true,
+                                distanceFee: true,
+                                otherFee: true,
+                                status: true,
+                                paymentMethod: true,
+                            },
+                        },
                     },
                 },
             },
             orderBy: { createdAt: 'desc' },
         });
 
-        return quotes;
+        // Batch-fetch wallet transactions for all requests that have a payment,
+        // so the list can show the correct "chờ giải ngân" state without N+1 queries.
+        const requestIds = quotes
+            .map(q => q.rescueRequest.payment ? q.rescueRequest.id : null)
+            .filter((id): id is string => id !== null);
+
+        const walletTxMap = new Map<string, string>();
+        if (requestIds.length > 0) {
+            const walletTxs = await this.prisma.walletTransaction.findMany({
+                where: { referenceId: { in: requestIds }, type: 'CREDIT' },
+                select: { referenceId: true, status: true },
+            });
+            for (const tx of walletTxs) {
+                if (tx.referenceId) walletTxMap.set(tx.referenceId, tx.status);
+            }
+        }
+
+        return quotes.map(q => ({
+            ...q,
+            rescueRequest: {
+                ...q.rescueRequest,
+                payment: q.rescueRequest.payment
+                    ? {
+                        ...q.rescueRequest.payment,
+                        walletTxStatus: walletTxMap.get(q.rescueRequest.id) ?? null,
+                    }
+                    : null,
+            },
+        }));
     }
 
     /**
@@ -1328,7 +1367,26 @@ export class RescueRequestService {
         const payment = await this.prisma.payment.findUnique({
             where: { requestId },
         });
-        return payment;
+        if (!payment) return null;
+
+        // Find the WalletTransaction linked to this job so the client can
+        // navigate directly to the wallet transaction detail page.
+        // QR jobs get a JOB-type credit; cash jobs only generate a COMMISSION debit.
+        const walletTx = await this.prisma.walletTransaction.findFirst({
+            where: {
+                referenceId: requestId,
+                referenceType: { in: ['JOB', 'JOB_PAYMENT', 'COMMISSION'] as any },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, status: true, type: true },
+        });
+
+        return {
+            ...payment,
+            walletTxId: walletTx?.id ?? null,
+            walletTxStatus: walletTx?.status ?? null,
+            walletTxType: walletTx?.type ?? null,
+        };
     }
 
     // ==================== REVIEW METHODS ====================

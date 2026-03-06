@@ -7,8 +7,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
     ArrowLeft, CheckCircle2, Clock, XCircle, MapPin, Phone,
     Banknote, Star, FileText, Wrench, Car, Calendar,
-    RefreshCw, Image as ImageIcon, Play, User,
+    RefreshCw, Image as ImageIcon, Play, User, ExternalLink, Wallet,
 } from 'lucide-react';
+
 
 const C = {
     orange: '#f97316', orangeDark: '#ea6c0a', orangeLight: '#fff7ed',
@@ -99,7 +100,7 @@ function SectionCard({ title, icon, children }: { title: string; icon: React.Rea
 function StatusBadge({ status }: { status: string }) {
     const cfg: Record<string, { label: string; color: string; bg: string }> = {
         COMPLETED: { label: 'Hoàn thành', color: C.green, bg: C.greenLight },
-        PAID: { label: 'Hoàn thành', color: C.green, bg: C.greenLight },
+        PAID: { label: 'Chờ giải ngân', color: '#7c3aed', bg: '#f5f3ff' },
         PAYMENT_PENDING: { label: 'Chờ thanh toán', color: '#ca8a04', bg: '#fefce8' },
         PROVIDER_CONFIRMED: { label: 'Đã xác nhận', color: C.green, bg: C.greenLight },
         USER_CONFIRMED: { label: 'KH xác nhận', color: C.blue, bg: C.blueLight },
@@ -202,12 +203,18 @@ export default function HistoryJobDetailPage() {
 
     const { req, quote, payment, review } = data;
     const isCompleted = ['COMPLETED', 'PAID'].includes(req.status);
-    const profit = quote ? Math.round(quote.price * 0.9) : 0;
+    // Treat COMPLETED + wallet-tx PENDING the same as PAID (waiting for disbursement)
+    const isPendingDisbursement = req.status === 'PAID' ||
+        (req.status === 'COMPLETED' && payment?.walletTxStatus === 'PENDING');
+    // Use actual payment amount (includes surcharges) when available, fall back to quote price
+    const revenueAmount = payment?.totalAmount ?? quote?.price ?? 0;
+    const profit = Math.round(revenueAmount * 0.9);
+    const quoteProfit = quote ? Math.round(quote.price * 0.9) : 0;
 
     // Status label for rescue request
     const reqStatusCfg: Record<string, { label: string; color: string; bg: string }> = {
         COMPLETED: { label: 'Hoàn thành', color: C.green, bg: C.greenLight },
-        PAID: { label: 'Hoàn thành', color: C.green, bg: C.greenLight },
+        PAID: { label: 'Chờ giải ngân', color: '#7c3aed', bg: '#f5f3ff' },
         PAYMENT_PENDING: { label: 'Chờ thanh toán', color: '#ca8a04', bg: '#fefce8' },
         CANCELLED: { label: 'Đã hủy', color: '#6b7280', bg: '#f3f4f6' },
         IN_PROGRESS: { label: 'Đang xử lý', color: '#ca8a04', bg: '#fefce8' },
@@ -216,6 +223,16 @@ export default function HistoryJobDetailPage() {
         ACCEPTED: { label: 'Đang thực hiện', color: C.blue, bg: C.blueLight },
     };
     const reqStatus = reqStatusCfg[req.status] ?? { label: req.status, color: C.gray, bg: '#f3f4f6' };
+
+    // Payment status badge config (separate from job status)
+    const paymentStatusBadge: { label: string; color: string; bg: string } | null =
+        payment?.walletTxStatus === 'COMPLETED'
+            ? { label: 'Đã giải ngân', color: C.green, bg: C.greenLight }
+            : payment?.walletTxStatus === 'PENDING'
+                ? { label: 'Chờ giải ngân 24h', color: '#7c3aed', bg: '#f5f3ff' }
+                : payment?.paymentMethod === 'CASH'
+                    ? { label: 'Tiền mặt', color: '#374151', bg: '#f3f4f6' }
+                    : null;
 
     const images = (req.media ?? []).filter((m: any) => m.mediaType === 'IMAGE').map((m: any) => m.publicUrl);
     const videos = (req.media ?? []).filter((m: any) => m.mediaType === 'VIDEO').map((m: any) => m.publicUrl);
@@ -237,10 +254,18 @@ export default function HistoryJobDetailPage() {
                         #{requestId.slice(0, 8).toUpperCase()}
                     </p>
                 </div>
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
-                    style={{ background: reqStatus.bg, color: reqStatus.color }}>
-                    {reqStatus.label}
-                </span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
+                        style={{ background: reqStatus.bg, color: reqStatus.color }}>
+                        {reqStatus.label}
+                    </span>
+                    {paymentStatusBadge && (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
+                            style={{ background: paymentStatusBadge.bg, color: paymentStatusBadge.color }}>
+                            {paymentStatusBadge.label}
+                        </span>
+                    )}
+                </div>
             </div>
 
             <div className="max-w-2xl mx-auto px-4 py-5 space-y-4 pb-10">
@@ -250,13 +275,21 @@ export default function HistoryJobDetailPage() {
                     <div className="rounded-2xl p-5 text-white"
                         style={{ background: `linear-gradient(135deg, ${C.navy} 0%, #16213e 60%, #0f3460 100%)` }}>
                         <p className="text-[10px] font-bold uppercase tracking-wider mb-1 opacity-70">Tổng doanh thu</p>
-                        <p className="text-3xl font-bold mb-1">{fmtVnd(quote.price)}</p>
+                        <p className="text-3xl font-bold mb-1">{fmtVnd(revenueAmount)}</p>
                         <div className="flex items-center gap-2">
                             <span className="text-sm opacity-80">Lãi ròng:</span>
                             <span className="text-sm font-bold" style={{ color: '#4ade80' }}>+{fmtVnd(profit)}</span>
                         </div>
-                        <div className="flex items-center gap-3 mt-3 text-xs opacity-70">
-                            <span>Hoàn thành: {req.completedAt ? fmtDateTime(req.completedAt) : '—'}</span>
+                        <div className="flex items-center gap-3 mt-3">
+                            {isPendingDisbursement
+                                ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold" style={{ background: 'rgba(167,139,250,0.18)', color: '#c4b5fd' }}>
+                                        <Clock size={10} />
+                                        Đang giải ngân · tự động sau 24h nếu không có tranh chấp
+                                    </span>
+                                )
+                                : <span className="text-xs opacity-70">Hoàn thành: {req.completedAt ? fmtDateTime(req.completedAt) : '—'}</span>
+                            }
                         </div>
                     </div>
                 )}
@@ -387,7 +420,7 @@ export default function HistoryJobDetailPage() {
                             </div>
                             <div className="rounded-xl p-3" style={{ background: C.bg }}>
                                 <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Lợi nhuận (~90%)</p>
-                                <p className="text-lg font-bold" style={{ color: C.green }}>+{fmtVnd(profit)}</p>
+                                <p className="text-lg font-bold" style={{ color: C.green }}>+{fmtVnd(quoteProfit)}</p>
                             </div>
                             {quote.estimatedArrivalMinutes && (
                                 <div className="rounded-xl p-3" style={{ background: C.bg }}>
@@ -414,8 +447,25 @@ export default function HistoryJobDetailPage() {
                     <SectionCard title="Thanh toán" icon={<Banknote size={16} style={{ color: C.orange }} />}>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="rounded-xl p-3 col-span-2" style={{ background: C.bg }}>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Trạng thái thanh toán</p>
-                                <StatusBadge status={payment.status} />
+                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: C.gray }}>Thu nhập của bạn</p>
+                                {payment.walletTxStatus === 'COMPLETED'
+                                    ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold" style={{ background: C.greenLight, color: C.green }}>
+                                            <CheckCircle2 size={12} /> Đã nhận tiền vào ví
+                                        </span>
+                                    )
+                                    : payment.walletTxStatus === 'PENDING'
+                                        ? (
+                                            <div className="rounded-xl p-3" style={{ background: '#f5f3ff', border: '1.5px solid #ddd6fe' }}>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <Clock size={13} style={{ color: '#7c3aed' }} />
+                                                    <span className="text-xs font-bold" style={{ color: '#7c3aed' }}>Đang chờ giải ngân</span>
+                                                </div>
+                                                <p className="text-[10px] leading-relaxed" style={{ color: '#8b5cf6' }}>Tiền sẽ tự động giải ngân sau 24h nếu không có tranh chấp từ khách hàng.</p>
+                                            </div>
+                                        )
+                                        : <StatusBadge status={payment.status} />
+                                }
                             </div>
                             <div className="rounded-xl p-3" style={{ background: C.bg }}>
                                 <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Phương thức</p>
@@ -451,9 +501,74 @@ export default function HistoryJobDetailPage() {
                         {payment.note && (
                             <p className="text-xs mt-1" style={{ color: C.gray }}>Ghi chú: {payment.note}</p>
                         )}
-                        {payment.surchargeNote && (
-                            <p className="text-xs" style={{ color: C.gray }}>Phụ phí: {payment.surchargeNote}</p>
+                        {(() => {
+                            if (!payment.surchargeNote) return null;
+                            let breakdown: { label: string; amount: number }[] = [];
+                            let surcharges: { label: string; amount: number }[] = [];
+                            let rawText: string | null = null;
+                            try {
+                                const parsed = JSON.parse(payment.surchargeNote);
+                                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                                    breakdown = parsed.breakdown ?? [];
+                                    surcharges = parsed.surcharges ?? [];
+                                } else if (Array.isArray(parsed)) {
+                                    breakdown = parsed;
+                                } else {
+                                    rawText = payment.surchargeNote;
+                                }
+                            } catch {
+                                rawText = payment.surchargeNote;
+                            }
+                            const items = [...breakdown, ...surcharges].filter(i => i.label || i.amount > 0);
+                            if (items.length === 0 && !rawText) return null;
+                            return (
+                                <div className="rounded-xl overflow-hidden border mt-1" style={{ borderColor: C.border }}>
+                                    <div className="px-3 py-1.5" style={{ background: '#fff7ed', borderBottom: `1px solid ${C.border}` }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: C.orange }}>Phụ phí phát sinh</p>
+                                    </div>
+                                    {rawText ? (
+                                        <p className="px-3 py-2 text-xs" style={{ color: C.gray }}>{rawText}</p>
+                                    ) : items.map((item, i) => (
+                                        <div key={i} className="flex items-center justify-between px-3 py-2"
+                                            style={{ borderTop: i > 0 ? `1px solid ${C.border}` : 'none' }}>
+                                            <span className="text-xs" style={{ color: C.gray }}>{item.label || '—'}</span>
+                                            <span className="text-xs font-semibold" style={{ color: C.navy }}>{fmtVnd(item.amount)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })()}
+
+                        {/* Link to wallet transaction */}
+                        {payment.walletTxId && (
+                            <button
+                                onClick={() => router.push(`/provider/wallet/tx/${payment.walletTxId}`)}
+                                className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all active:scale-[0.98]"
+                                style={{
+                                    background: '#eff6ff',
+                                    border: '1.5px solid #bfdbfe',
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: '#dbeafe' }}>
+                                        <Wallet size={15} style={{ color: '#2563eb' }} />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-xs font-bold" style={{ color: '#1e40af' }}>Xem giao dịch ví</p>
+                                        <p className="text-[10px]" style={{ color: '#3b82f6' }}>
+                                            {payment.walletTxType === 'CREDIT' ? 'Thu nhập từ job' : 'Khấu trừ hoa hồng'}
+                                            {payment.walletTxStatus && (
+                                                <span className="ml-2 font-semibold">
+                                                    &middot; {payment.walletTxStatus === 'COMPLETED' ? 'Đã hoàn tất' : payment.walletTxStatus === 'PENDING' ? 'Đang chờ' : payment.walletTxStatus}
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
+                                </div>
+                                <ExternalLink size={14} style={{ color: '#3b82f6' }} />
+                            </button>
                         )}
+
                         {/* Payment photos */}
                         {payment.photoUrls?.length > 0 && (
                             <div>

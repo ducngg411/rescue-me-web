@@ -1,8 +1,10 @@
 'use client';
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useProviderStatus } from '@/lib/hooks/useProviderStatus';
 
 const C = {
     orange: '#f97316',
@@ -24,6 +26,23 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
     const router = useRouter();
     const pathname = usePathname();
     const { t } = useLanguage();
+    const { user, setUser } = useAuth();
+    const { isOnline, isLoading: statusLoading, toggleOnlineStatus, setIsOnline } = useProviderStatus();
+
+    useEffect(() => {
+        if (user?.isOnline !== undefined) setIsOnline(user.isOnline);
+    }, [user?.isOnline]);
+
+    const handleToggle = async () => {
+        if (statusLoading) return;
+        const newStatus = !isOnline;
+        const result = await toggleOnlineStatus(newStatus);
+        if (result?.success && user) {
+            setUser({ ...user, isOnline: newStatus });
+        }
+    };
+
+    const displayName = user?.name?.split(' ').slice(-1)[0] || user?.email?.split('@')[0] || 'Provider';
 
     const currentActiveTab = activeTab || pathname;
 
@@ -85,10 +104,54 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
                         })}
                     </nav>
                 </div>
+                {/* Online Toggle */}
+                <div>
+                    <div className="flex items-center gap-2 px-2 mb-3 pb-3" style={{ borderBottom: `1px solid ${C.border}` }}>
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        <span className="flex-1 text-xs font-medium" style={{ color: C.gray }}>
+                            {isOnline ? t('provider.dashboard.online') : t('provider.dashboard.offline')}
+                        </span>
+                        <button
+                            onClick={handleToggle}
+                            disabled={statusLoading}
+                            aria-label="Toggle online status"
+                            className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none ${isOnline ? 'bg-green-500' : 'bg-gray-300'} ${statusLoading ? 'opacity-50' : ''}`}
+                        >
+                            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${isOnline ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                        </button>
+                    </div>
+                    <div className="flex items-center gap-3 px-2 pt-3">
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: C.orange }}>
+                            {displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
+                            <p className="text-xs" style={{ color: C.gray }}>{t('provider.dashboard.providerRole')}</p>
+                        </div>
+                    </div>
+                </div>
             </aside>
 
             {/* ═══ Main Area ═══ */}
             <div className="flex-1 flex flex-col min-w-0" style={{ paddingBottom: '60px' }}>
+                {/* Mobile Online Toggle Strip */}
+                <div
+                    className="flex md:hidden items-center gap-3 px-4 py-2.5 sticky top-0 z-20"
+                    style={{ background: isOnline ? '#f0fdf4' : '#f8fafc', borderBottom: `1px solid ${isOnline ? '#bbf7d0' : C.border}` }}
+                >
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
+                    <span className="flex-1 text-sm font-medium" style={{ color: isOnline ? '#16a34a' : C.gray }}>
+                        {isOnline ? t('provider.dashboard.online') : t('provider.dashboard.offline')}
+                    </span>
+                    <button
+                        onClick={handleToggle}
+                        disabled={statusLoading}
+                        aria-label="Toggle online status"
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none ${isOnline ? 'bg-green-500' : 'bg-gray-300'} ${statusLoading ? 'opacity-50' : ''}`}
+                    >
+                        <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-md transition-transform ${isOnline ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                </div>
                 <div className="flex-1 overflow-y-auto">
                     {children}
                 </div>

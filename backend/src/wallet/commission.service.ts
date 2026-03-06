@@ -255,7 +255,7 @@ export class CommissionService {
         );
 
         this.logger.log(
-            `⏳ [Escrow] PENDING credit created: txId=${transaction.id} ` +
+            ` [Escrow] PENDING credit created: txId=${transaction.id} ` +
             `amount=${netAmount} VND → pendingBalance=${updatedWallet.pendingBalance} VND`,
         );
 
