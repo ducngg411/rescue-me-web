@@ -1,4 +1,4 @@
-import { Controller, Put, Get, Post, Patch, Param, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Put, Get, Post, Patch, Param, Body, UseGuards, Request, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
 import { ProviderService } from './provider.service';
 import { UpdateProviderProfileDto } from '../auth/dto/auth.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -40,31 +40,14 @@ export class ProviderController {
         return this.providerService.getPendingRequests(req.user.id);
     }
 
-    // DEPRECATED: Direct accept bypasses the quote system
-    // Providers should navigate to request details and submit a quote instead
-    // The quote system ensures proper price negotiation: Provider sends quote → User accepts → ASSIGNED
-    /*
-    @Post('requests/:id/accept')
-    async acceptRequest(@Request() req, @Param('id') requestId: string) {
-        return this.providerService.acceptRequest(req.user.id, requestId);
-    }
-    */
-
-    // DEPRECATED: Decline is no longer needed since providers can simply skip viewing requests
-    // The modal now shows "Skip" instead of "Decline" - no API call needed
-    /*
-    @Post('requests/:id/decline')
-    async declineRequest(@Request() req, @Param('id') requestId: string) {
-        return this.providerService.declineRequest(req.user.id, requestId);
-    }
-    */
-
     // Provider Settings API
     @Patch('settings')
     async updateSettings(@Request() req, @Body() body: {
         serviceRadiusKm?: number;
         phoneNumber?: string;
         emergencyAvailable?: boolean;
+        fullName?: string;
+        serviceName?: string;
     }) {
         return this.providerService.updateSettings(req.user.id, body);
     }
@@ -72,5 +55,26 @@ export class ProviderController {
     @Get('settings')
     async getSettings(@Request() req) {
         return this.providerService.getSettings(req.user.id);
+    }
+
+    // Change password
+    @Patch('change-password')
+    async changePassword(@Request() req, @Body() body: {
+        currentPassword: string;
+        newPassword: string;
+    }) {
+        return this.providerService.changePassword(req.user.id, body.currentPassword, body.newPassword);
+    }
+
+    /**
+     * GET /me/provider/history-stats?days=7
+     * Returns dashboard stats: 7-day revenue, today profit, success rate, avg rating.
+     */
+    @Get('history-stats')
+    async getHistoryStats(
+        @Request() req,
+        @Query('days', new DefaultValuePipe(7), ParseIntPipe) days: number,
+    ) {
+        return this.providerService.getHistoryStats(req.user.id, days);
     }
 }

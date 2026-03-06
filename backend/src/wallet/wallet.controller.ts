@@ -63,6 +63,17 @@ export class WalletController {
     }
 
     /**
+     * GET /wallet/me/transactions/:txId/details
+     * Returns a single transaction with full linked job + media data.
+     */
+    @Get('me/transactions/:txId/details')
+    @UseGuards(JwtAuthGuard)
+    async getTxDetails(@Request() req, @Param('txId') txId: string) {
+        const wallet = await this.walletService.ensureWallet(req.user.id);
+        return this.walletService.getTxDetail(wallet.id, txId);
+    }
+
+    /**
      * POST /wallet/withdraw
      * Body: { amount: number }
      * Initiates a withdrawal request (status = PENDING, balance reserved).

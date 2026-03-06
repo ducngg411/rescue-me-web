@@ -721,6 +721,8 @@ export class ProviderService {
         serviceRadiusKm?: number;
         phoneNumber?: string;
         emergencyAvailable?: boolean;
+        fullName?: string;
+        serviceName?: string;
     }) {
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
@@ -741,13 +743,16 @@ export class ProviderService {
             }
         }
 
+        const updateData: any = {};
+        if (settings.serviceRadiusKm !== undefined) updateData.serviceRadiusKm = settings.serviceRadiusKm;
+        if (settings.phoneNumber !== undefined) updateData.phoneNumber = settings.phoneNumber;
+        if (settings.emergencyAvailable !== undefined) updateData.emergencyAvailable = settings.emergencyAvailable;
+        if (settings.fullName !== undefined) updateData.fullName = settings.fullName;
+        if (settings.serviceName !== undefined) updateData.serviceName = settings.serviceName;
+
         const updatedUser = await this.prisma.user.update({
             where: { id: userId },
-            data: {
-                serviceRadiusKm: settings.serviceRadiusKm,
-                phoneNumber: settings.phoneNumber,
-                emergencyAvailable: settings.emergencyAvailable,
-            },
+            data: updateData,
         });
 
         return {
@@ -757,6 +762,8 @@ export class ProviderService {
                 serviceRadiusKm: updatedUser.serviceRadiusKm,
                 phoneNumber: updatedUser.phoneNumber,
                 emergencyAvailable: updatedUser.emergencyAvailable,
+                fullName: updatedUser.fullName,
+                serviceName: updatedUser.serviceName,
             },
         };
     }
@@ -799,6 +806,135 @@ export class ProviderService {
         return {
             success: true,
             data: user,
+        };
+    }
+
+    async changePassword(userId: string, currentPassword: string, newPassword: string) {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const bcrypt = require('bcryptjs') as typeof import('bcryptjs');
+
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) throw new NotFoundException('User not found');
+
+        if (user.authProvider !== 'EMAIL') {
+            throw new BadRequestException('Tài khoản đăng nhập bằng Google không thể đổi mật khẩu tại đây');
+        }
+
+        if (!user.hashedPassword) {
+            throw new BadRequestException('Tài khoản chưa có mật khẩu');
+        }
+
+        const isValid = await bcrypt.compare(currentPassword, user.hashedPassword);
+        if (!isValid) throw new BadRequestException('Mật khẩu hiện tại không đúng');
+
+        if (newPassword.length < 6) {
+            throw new BadRequestException('Mật khẩu mới phải có ít nhất 6 ký tự');
+        }
+
+        const hashed = await bcrypt.hash(newPassword, 12);
+        await this.prisma.user.update({ where: { id: userId }, data: { hashedPassword: hashed } });
+
+        return { success: true, message: 'Đổi mật khẩu thành công' };
+    }
+
+    /**
+     * GET /me/provider/history-stats?days=7
+     * Returns revenue/profit stats, success rate, and avg rating for the history dashboard.
+     */
+    async getHistoryStats(providerId: string, days = 7) {
+        const now = new Date();
+
+        // ── 7-day daily revenue totals ────────────────────────────────
+        const weeklyRevenue: { date: string; revenue: number; profit: number }[] = [];
+        for (let i = days - 1; i >= 0; i--) {
+            const dayStart = new Date(now);
+            dayStart.setHours(0, 0, 0, 0);
+            dayStart.setDate(dayStart.getDate() - i);
+            const dayEnd = new Date(dayStart);
+            dayEnd.setDate(dayEnd.getDate() + 1);
+
+            const payments = await this.prisma.payment.findMany({
+                where: {
+                    request: { assignedProviderId: providerId, status: { in: ['COMPLETED', 'PAID'] } },
+                    status: { in: ['PROVIDER_CONFIRMED', 'COMPLETED'] },
+                    createdAt: { gte: dayStart, lt: dayEnd },
+                },
+                select: { totalAmount: true },
+            });
+
+            const revenue = payments.reduce((sum: number, p: { totalAmount: number }) => sum + p.totalAmount, 0);
+            weeklyRevenue.push({
+                date: dayStart.toISOString().slice(0, 10),
+                revenue,
+                profit: Math.round(revenue * 0.9),
+            });
+        }
+
+        // ── Today profit ──────────────────────────────────────────────
+        const todayStart = new Date(now);
+        todayStart.setHours(0, 0, 0, 0);
+        const yesterdayStart = new Date(todayStart);
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+
+        const todayPayments = await this.prisma.payment.findMany({
+            where: {
+                request: { assignedProviderId: providerId, status: { in: ['COMPLETED', 'PAID'] } },
+                status: { in: ['PROVIDER_CONFIRMED', 'COMPLETED'] },
+                createdAt: { gte: todayStart },
+            },
+            select: { totalAmount: true },
+        });
+        const yesterdayPayments = await this.prisma.payment.findMany({
+            where: {
+                request: { assignedProviderId: providerId, status: { in: ['COMPLETED', 'PAID'] } },
+                status: { in: ['PROVIDER_CONFIRMED', 'COMPLETED'] },
+                createdAt: { gte: yesterdayStart, lt: todayStart },
+            },
+            select: { totalAmount: true },
+        });
+
+        const todayRevenue = todayPayments.reduce((s: number, p: { totalAmount: number }) => s + p.totalAmount, 0);
+        const yesterdayRevenue = yesterdayPayments.reduce((s: number, p: { totalAmount: number }) => s + p.totalAmount, 0);
+        const todayProfit = Math.round(todayRevenue * 0.9);
+        const yesterdayProfit = Math.round(yesterdayRevenue * 0.9);
+        const profitChangePercent = yesterdayProfit === 0
+            ? (todayProfit > 0 ? 100 : 0)
+            : Math.round(((todayProfit - yesterdayProfit) / yesterdayProfit) * 100);
+
+        // ── Success rate ──────────────────────────────────────────────
+        const totalAccepted = await this.prisma.rescueRequest.count({
+            where: {
+                assignedProviderId: providerId,
+                status: { notIn: ['MATCHING', 'CREATED'] },
+            },
+        });
+        const totalCompleted = await this.prisma.rescueRequest.count({
+            where: {
+                assignedProviderId: providerId,
+                status: { in: ['COMPLETED', 'PAID'] },
+            },
+        });
+        const successRate = totalAccepted === 0 ? 0 : Math.round((totalCompleted / totalAccepted) * 1000) / 10;
+
+        // ── Average rating ────────────────────────────────────────────
+        const reviews = await this.prisma.review.findMany({
+            where: { providerId },
+            select: { rating: true },
+        });
+        const avgRating = reviews.length === 0
+            ? null
+            : Math.round((reviews.reduce((s: number, r: { rating: number }) => s + r.rating, 0) / reviews.length) * 10) / 10;
+
+        return {
+            weeklyRevenue,
+            todayProfit,
+            yesterdayProfit,
+            profitChangePercent,
+            successRate,
+            totalCompleted,
+            totalAccepted,
+            avgRating,
+            reviewCount: reviews.length,
         };
     }
 }

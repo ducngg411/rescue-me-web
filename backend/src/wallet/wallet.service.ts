@@ -373,6 +373,80 @@ export class WalletService {
         return { items, total, skip, take };
     }
 
+    /**
+     * GET /wallet/me/transactions/:txId/details
+     * Returns a single transaction enriched with linked job + media data.
+     */
+    async getTxDetail(walletId: string, txId: string) {
+        const tx = await this.prisma.walletTransaction.findFirst({
+            where: { id: txId, walletId },
+        });
+        if (!tx) throw new NotFoundException('Transaction not found');
+
+        let jobDetail: any = null;
+
+        // For JOB or COMMISSION, referenceId is the rescue-request id
+        if (
+            (tx.referenceType === 'JOB' || tx.referenceType === 'JOB_PAYMENT' || tx.referenceType === 'COMMISSION') &&
+            tx.referenceId
+        ) {
+            const request = await this.prisma.rescueRequest.findUnique({
+                where: { id: tx.referenceId },
+                include: {
+                    user: { select: { id: true, fullName: true, name: true, phoneNumber: true, avatar: true } },
+                    media: { orderBy: { createdAt: 'asc' } },
+                    payment: true,
+                    review: true,
+                    quotes: {
+                        where: { status: 'ACCEPTED' },
+                        take: 1,
+                    },
+                },
+            });
+            if (request) {
+                jobDetail = {
+                    id: request.id,
+                    incidentType: request.incidentType,
+                    vehicleType: request.vehicleType,
+                    description: request.description,
+                    pickupLocation: request.pickupLocation,
+                    contactPhone: request.contactPhone,
+                    status: request.status,
+                    videoUrls: request.videoUrls,
+                    createdAt: request.createdAt,
+                    completedAt: request.completedAt,
+                    user: request.user,
+                    media: request.media.map(m => ({
+                        id: m.id,
+                        mediaType: m.mediaType,
+                        publicUrl: m.publicUrl,
+                        fileName: m.fileName,
+                        createdAt: m.createdAt,
+                    })),
+                    payment: request.payment ? {
+                        totalAmount: request.payment.totalAmount,
+                        baseFee: request.payment.baseFee,
+                        paymentMethod: request.payment.paymentMethod,
+                        status: request.payment.status,
+                        surchargeNote: request.payment.surchargeNote,
+                        createdAt: request.payment.createdAt,
+                        userConfirmedAt: (request.payment as any).userConfirmedAt,
+                        providerConfirmedAt: (request.payment as any).providerConfirmedAt,
+                    } : null,
+                    review: request.review ? {
+                        rating: request.review.rating,
+                        comment: request.review.comment,
+                        tags: request.review.tags,
+                        createdAt: request.review.createdAt,
+                    } : null,
+                    acceptedQuote: request.quotes[0] ?? null,
+                };
+            }
+        }
+
+        return { transaction: tx, jobDetail };
+    }
+
     // ── Withdrawal ─────────────────────────────────────────────────────────────
 
     /**
@@ -432,7 +506,7 @@ export class WalletService {
             });
 
             this.logger.log(
-                `🏦 WITHDRAW_INITIATED wallet=${walletId} amount=${amount} ` +
+                ` WITHDRAW_INITIATED wallet=${walletId} amount=${amount} ` +
                 `txId=${walletTx.id} remaining=${updatedWallet.availableBalance}`,
             );
 
@@ -473,7 +547,7 @@ export class WalletService {
             });
 
             this.logger.log(
-                `✅ WITHDRAW_CONFIRMED txId=${transactionId} amount=${walletTx.amount}`,
+                ` WITHDRAW_CONFIRMED txId=${transactionId} amount=${walletTx.amount}`,
             );
 
             return { transaction: updatedTx };
@@ -812,7 +886,7 @@ export class WalletService {
         });
 
         this.logger.log(
-            `✅ TOPUP_COMPLETED wallet=${wallet.id} amount=${transferAmount} ` +
+            ` TOPUP_COMPLETED wallet=${wallet.id} amount=${transferAmount} ` +
             `code=${transferCode} sepayId=${sepayId}`,
         );
 
@@ -959,7 +1033,7 @@ export class WalletService {
         });
 
         this.logger.log(
-            `✅ JOB_PAYMENT_COMPLETED requestId=${jobTx.requestId} amount=${transferAmount} ` +
+            ` JOB_PAYMENT_COMPLETED requestId=${jobTx.requestId} amount=${transferAmount} ` +
             `net=${netAmount} holdReleaseAt=${holdReleaseAt.toISOString()}`,
         );
         return { success: true };
@@ -984,7 +1058,7 @@ export class WalletService {
         for (const t of pending) {
             try {
                 await this.settlePendingTransaction(t.id);
-                this.logger.log(`✅ [AutoRelease] txId=${t.id} amount=${t.amount}`);
+                this.logger.log(` [AutoRelease] txId=${t.id} amount=${t.amount}`);
             } catch (e: any) {
                 this.logger.error(`❌ [AutoRelease] txId=${t.id}: ${e.message}`);
             }

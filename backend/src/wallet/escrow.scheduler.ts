@@ -30,7 +30,7 @@ export class EscrowScheduler {
 
         if (report.released > 0) {
             this.logger.log(
-                `✅ [EscrowScheduler] Released ${report.released} escrow(s), ` +
+                ` [EscrowScheduler] Released ${report.released} escrow(s), ` +
                 `total ${report.totalAmountVnd} VND moved to availableBalance.`,
             );
         } else {
