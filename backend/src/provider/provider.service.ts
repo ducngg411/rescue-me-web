@@ -792,6 +792,9 @@ export class ProviderService {
                 permanentAddress: true,
                 businessAddress: true,
                 rescueVehicles: true,
+                verificationStatus: true,
+                rejectReasonDetail: true,
+                rejectReasonCode: true,
             },
         });
 
@@ -842,59 +845,95 @@ export class ProviderService {
      * Returns revenue/profit stats, success rate, and avg rating for the history dashboard.
      */
     async getHistoryStats(providerId: string, days = 7) {
-        const now = new Date();
+        // Use +07:00 as the base timezone for the "current day" calculations
+        // to ensure Vietnamese users see midnight rollovers correctly.
+        const VN_TZ_OFFSET_HOURS = 7;
+        const nowUtc = new Date();
+        const nowVn = new Date(nowUtc.getTime() + VN_TZ_OFFSET_HOURS * 60 * 60 * 1000);
+
+        // Helper to extract revenue from a completed request
+        const getRequestRevenue = (req: any) => {
+            if (req.payment?.totalAmount != null) return req.payment.totalAmount;
+            if (req.quotes && req.quotes.length > 0) return req.quotes[0].price;
+            return 0;
+        };
 
         // ── 7-day daily revenue totals ────────────────────────────────
         const weeklyRevenue: { date: string; revenue: number; profit: number }[] = [];
         for (let i = days - 1; i >= 0; i--) {
-            const dayStart = new Date(now);
-            dayStart.setHours(0, 0, 0, 0);
-            dayStart.setDate(dayStart.getDate() - i);
-            const dayEnd = new Date(dayStart);
-            dayEnd.setDate(dayEnd.getDate() + 1);
+            // Calculate start and end of day in VN Time, then translate back to UTC for Prisma query
+            const dayStartVn = new Date(nowVn);
+            dayStartVn.setUTCHours(0, 0, 0, 0);
+            dayStartVn.setUTCDate(dayStartVn.getUTCDate() - i);
 
-            const payments = await this.prisma.payment.findMany({
+            const dayEndVn = new Date(dayStartVn);
+            dayEndVn.setUTCDate(dayEndVn.getUTCDate() + 1);
+
+            // Shift back to UTC for querying the DB
+            const dayStartUtc = new Date(dayStartVn.getTime() - VN_TZ_OFFSET_HOURS * 60 * 60 * 1000);
+            const dayEndUtc = new Date(dayEndVn.getTime() - VN_TZ_OFFSET_HOURS * 60 * 60 * 1000);
+
+            const requests = await this.prisma.rescueRequest.findMany({
                 where: {
-                    request: { assignedProviderId: providerId, status: { in: ['COMPLETED', 'PAID'] } },
-                    status: { in: ['PROVIDER_CONFIRMED', 'COMPLETED'] },
-                    createdAt: { gte: dayStart, lt: dayEnd },
+                    assignedProviderId: providerId,
+                    status: { in: ['COMPLETED', 'PAID'] },
+                    createdAt: { gte: dayStartUtc, lt: dayEndUtc },
                 },
-                select: { totalAmount: true },
+                include: {
+                    payment: { select: { totalAmount: true } },
+                    quotes: {
+                        where: { status: 'ACCEPTED' },
+                        select: { price: true }
+                    }
+                },
             });
 
-            const revenue = payments.reduce((sum: number, p: { totalAmount: number }) => sum + p.totalAmount, 0);
+            const revenue = requests.reduce((sum, req) => sum + getRequestRevenue(req), 0);
             weeklyRevenue.push({
-                date: dayStart.toISOString().slice(0, 10),
+                date: dayStartVn.toISOString().slice(0, 10), // This uses the UTC portion which represents VN date
                 revenue,
                 profit: Math.round(revenue * 0.9),
             });
         }
 
         // ── Today profit ──────────────────────────────────────────────
-        const todayStart = new Date(now);
-        todayStart.setHours(0, 0, 0, 0);
-        const yesterdayStart = new Date(todayStart);
-        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+        // In VN Time
+        const todayStartVn = new Date(nowVn);
+        todayStartVn.setUTCHours(0, 0, 0, 0);
 
-        const todayPayments = await this.prisma.payment.findMany({
+        const yesterdayStartVn = new Date(todayStartVn);
+        yesterdayStartVn.setUTCDate(yesterdayStartVn.getUTCDate() - 1);
+
+        // Convert back to UTC for DB queries
+        const todayStartUtc = new Date(todayStartVn.getTime() - VN_TZ_OFFSET_HOURS * 60 * 60 * 1000);
+        const yesterdayStartUtc = new Date(yesterdayStartVn.getTime() - VN_TZ_OFFSET_HOURS * 60 * 60 * 1000);
+        // today end is implicit
+
+        const todayRequests = await this.prisma.rescueRequest.findMany({
             where: {
-                request: { assignedProviderId: providerId, status: { in: ['COMPLETED', 'PAID'] } },
-                status: { in: ['PROVIDER_CONFIRMED', 'COMPLETED'] },
-                createdAt: { gte: todayStart },
+                assignedProviderId: providerId,
+                status: { in: ['COMPLETED', 'PAID'] },
+                completedAt: { gte: todayStartUtc }, // Use completedAt instead of createdAt for revenue metrics
             },
-            select: { totalAmount: true },
+            include: {
+                payment: { select: { totalAmount: true } },
+                quotes: { where: { status: 'ACCEPTED' }, select: { price: true } }
+            },
         });
-        const yesterdayPayments = await this.prisma.payment.findMany({
+        const yesterdayRequests = await this.prisma.rescueRequest.findMany({
             where: {
-                request: { assignedProviderId: providerId, status: { in: ['COMPLETED', 'PAID'] } },
-                status: { in: ['PROVIDER_CONFIRMED', 'COMPLETED'] },
-                createdAt: { gte: yesterdayStart, lt: todayStart },
+                assignedProviderId: providerId,
+                status: { in: ['COMPLETED', 'PAID'] },
+                completedAt: { gte: yesterdayStartUtc, lt: todayStartUtc }, // Use completedAt
             },
-            select: { totalAmount: true },
+            include: {
+                payment: { select: { totalAmount: true } },
+                quotes: { where: { status: 'ACCEPTED' }, select: { price: true } }
+            },
         });
 
-        const todayRevenue = todayPayments.reduce((s: number, p: { totalAmount: number }) => s + p.totalAmount, 0);
-        const yesterdayRevenue = yesterdayPayments.reduce((s: number, p: { totalAmount: number }) => s + p.totalAmount, 0);
+        const todayRevenue = todayRequests.reduce((s, req) => s + getRequestRevenue(req), 0);
+        const yesterdayRevenue = yesterdayRequests.reduce((s, req) => s + getRequestRevenue(req), 0);
         const todayProfit = Math.round(todayRevenue * 0.9);
         const yesterdayProfit = Math.round(yesterdayRevenue * 0.9);
         const profitChangePercent = yesterdayProfit === 0

@@ -88,6 +88,32 @@ export class WalletService {
         return wallet;
     }
 
+    /**
+     * Weekly earnings stats: sum of CREDIT (JOB / JOB_PAYMENT) transactions
+     * in the last 7 days that are COMPLETED or PENDING (not FAILED).
+     */
+    async getWeeklyStats(providerId: string) {
+        const wallet = await this.prisma.providerWallet.findUnique({ where: { providerId } });
+        if (!wallet) return { todayEarnings: 0, todayJobCount: 0 };
+
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const txs = await this.prisma.walletTransaction.findMany({
+            where: {
+                walletId: wallet.id,
+                type: 'CREDIT',
+                referenceType: { in: ['JOB', 'JOB_PAYMENT'] },
+                status: { not: 'FAILED' },
+                createdAt: { gte: startOfDay },
+            },
+            select: { amount: true },
+        });
+
+        const todayEarnings = txs.reduce((sum, t) => sum + t.amount, 0);
+        return { todayEarnings, todayJobCount: txs.length };
+    }
+
     // ── Credit ─────────────────────────────────────────────────────────────────
 
     /**

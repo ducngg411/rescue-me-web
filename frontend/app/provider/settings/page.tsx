@@ -8,7 +8,7 @@ import ProviderLayout from '@/components/ProviderLayout';
 import {
     User, Phone, MapPin, Zap, Radio, Save, RefreshCw,
     CheckCircle2, AlertCircle, ChevronRight, Shield, Wrench, Lock,
-    Eye, EyeOff, Camera, XCircle,
+    Eye, EyeOff, Camera, XCircle, ArrowLeft,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -109,7 +109,10 @@ function Card({ icon, iconBg, title, children }: {
 // ── Radius Slider ────────────────────────────────────────────────────────────
 function RadiusSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
     const chips = [5, 10, 15, 20, 30, 50];
-    const pct = ((value - 5) / 45) * 100;
+    const chipIndex = chips.indexOf(value) !== -1
+        ? chips.indexOf(value)
+        : Math.max(0, chips.findIndex(c => c >= value));
+    const pct = (chipIndex / (chips.length - 1)) * 100;
     return (
         <div>
             <div className="flex items-center justify-between mb-3">
@@ -117,8 +120,8 @@ function RadiusSlider({ value, onChange }: { value: number; onChange: (v: number
                 <span className="text-base font-bold" style={{ color: C.orange }}>{value} <span className="text-xs font-semibold">km</span></span>
             </div>
             <input
-                type="range" min={5} max={50} step={5} value={value}
-                onChange={e => onChange(Number(e.target.value))}
+                type="range" min={0} max={chips.length - 1} step={1} value={chipIndex}
+                onChange={e => onChange(chips[Number(e.target.value)])}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer mb-3"
                 style={{
                     background: `linear-gradient(to right, ${C.orange} 0%, ${C.orange} ${pct}%, #e2e8f0 ${pct}%, #e2e8f0 100%)`,
@@ -220,6 +223,7 @@ export default function ProviderSettingsPage() {
     const [averageRating, setAverageRating] = useState<number | null>(null);
     const [reviewCount, setReviewCount] = useState(0);
     const [authProvider, setAuthProvider] = useState('');
+    const [rejectionReason, setRejectionReason] = useState('');
 
     // Password state
     const [currentPassword, setCurrentPassword] = useState('');
@@ -255,6 +259,7 @@ export default function ProviderSettingsPage() {
             setAverageRating(d.averageRating ?? null);
             setReviewCount(d.reviewCount ?? 0);
             setAuthProvider(d.authProvider || '');
+            setRejectionReason(d.rejectReasonDetail || d.rejectReasonCode || '');
         } catch {
             toast.error('Không thể tải cài đặt');
         } finally {
@@ -338,14 +343,23 @@ export default function ProviderSettingsPage() {
                     className="flex items-center justify-between px-4 py-3 flex-shrink-0 sticky top-0 z-20"
                     style={{ background: '#ffffff', borderBottom: `1px solid ${C.border}` }}
                 >
-                    {/* Mobile: RescueMe logo | Desktop: page title */}
-                    <div className="flex items-center gap-2 md:hidden">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
+                    {/* Mobile: back arrow + RescueMe | Desktop: page title */}
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => router.push('/provider/active')}
+                            className="flex md:hidden items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 transition-colors"
+                            style={{ color: C.navy }}
+                        >
+                            <ArrowLeft style={{ width: 18, height: 18 }} />
+                        </button>
+                        <div className="flex md:hidden items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
+                            </div>
+                            <span className="font-bold text-sm" style={{ color: C.navy }}>RescueMe</span>
                         </div>
-                        <span className="font-bold text-sm" style={{ color: C.navy }}>RescueMe</span>
+                        <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>{t('provider.nav.settings')}</h2>
                     </div>
-                    <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>{t('provider.nav.settings')}</h2>
 
                     <div className="flex items-center gap-3">
                         <div className="hidden sm:flex items-center gap-1.5">
@@ -499,7 +513,11 @@ export default function ProviderSettingsPage() {
                             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: C.red }} />
                             <div className="flex-1">
                                 <p className="text-sm font-bold mb-1" style={{ color: '#991b1b' }}>Hồ sơ bị từ chối</p>
-                                <p className="text-xs mb-2" style={{ color: '#b91c1c' }}>Vui lòng cập nhật và gửi lại hồ sơ xác minh.</p>
+                                {rejectionReason ? (
+                                    <p className="text-xs mb-2" style={{ color: '#b91c1c' }}>Lý do: {rejectionReason}</p>
+                                ) : (
+                                    <p className="text-xs mb-2" style={{ color: '#b91c1c' }}>Vui lòng cập nhật và gửi lại hồ sơ xác minh.</p>
+                                )}
                                 <button onClick={() => router.push('/provider/onboarding')}
                                     className="text-xs font-bold px-3 py-1.5 rounded-lg text-white"
                                     style={{ background: C.red }}>

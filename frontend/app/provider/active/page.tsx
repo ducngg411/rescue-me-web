@@ -295,6 +295,8 @@ export default function ProviderActivePage() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [declinedIds, setDeclinedIds] = useState<Set<string>>(new Set());
     const [activeNav, setActiveNav] = useState(t('provider.nav.dashboard'));
+    const [weeklyEarnings, setWeeklyEarnings] = useState<number | null>(null);
+    const [weeklyJobCount, setWeeklyJobCount] = useState<number>(0);
 
     const navItems = [
         {
@@ -337,6 +339,15 @@ export default function ProviderActivePage() {
     useEffect(() => {
         if (user?.isOnline !== undefined) setIsOnline(user.isOnline);
     }, [user, setIsOnline]);
+
+    useEffect(() => {
+        api.get('/wallet/me/stats')
+            .then(res => {
+                setWeeklyEarnings(res.data?.todayEarnings ?? 0);
+                setWeeklyJobCount(res.data?.todayJobCount ?? 0);
+            })
+            .catch(() => { /* ignore – widget just stays with null */ });
+    }, []);
 
     useEffect(() => {
         if (!authLoading && !user) router.push('/auth/login');
@@ -568,9 +579,9 @@ export default function ProviderActivePage() {
                                 />
                                 <StatCard
                                     icon={<TrendingUp style={{ width: 18, height: 18, color: '#16a34a' }} />}
-                                    label={t('provider.dashboard.weeklyEarnings')}
-                                    value="4.2M ₫"
-                                    sub="Weekly"
+                                    label={t('provider.dashboard.todayEarnings')}
+                                    value={weeklyEarnings === null ? '—' : formatVnd(weeklyEarnings)}
+                                    sub={weeklyEarnings === null ? 'Hôm nay' : `${weeklyJobCount} chuyến`}
                                     bg="#dcfce7"
                                 />
                                 <StatCard

@@ -9,7 +9,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import {
     Search, ChevronRight, ChevronLeft, Calendar,
     TrendingUp, TrendingDown, CheckCircle2, XCircle,
-    Clock, Star, Filter, Download,
+    Clock, Star, Filter, Download, ArrowLeft,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -155,8 +155,8 @@ function PaymentBadge({ walletTxStatus, paymentMethod }: { walletTxStatus?: stri
 }
 
 /* ─── Bar Chart ──── */
-const CHART_H = 64; // px – bar area
-const LABEL_H = 16; // px – label row
+const CHART_H = 120; // px – bar area (increased for better visibility)
+const LABEL_H = 16;  // px – label row
 
 function MiniBarChart({ data }: { data: DayStat[] }) {
     const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
@@ -174,20 +174,32 @@ function MiniBarChart({ data }: { data: DayStat[] }) {
     const showEvery = data.length <= 7 ? 1 : data.length <= 14 ? 2 : Math.ceil(data.length / 7);
 
     return (
-        <>
+        <div className="mt-1">
+            {/* Legend */}
+            <div className="flex items-center gap-3 mb-2 justify-end text-[10px] font-medium" style={{ color: C.gray }}>
+                <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-sm" style={{ background: C.orange }}></div>
+                    <span>Doanh thu</span>
+                </div>
+                <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-sm" style={{ background: C.green }}></div>
+                    <span>Lợi nhuận</span>
+                </div>
+            </div>
+
             {/* Fixed-position tooltip – never clipped by overflow */}
             {hover && (
                 <div
                     style={{
                         position: 'fixed',
                         left: hover.x,
-                        top: hover.y - 40,
+                        top: hover.y - 65, // Adjust up for taller tooltip
                         transform: 'translateX(-50%)',
                         background: C.navy,
                         color: 'white',
                         fontSize: '11px',
                         fontWeight: 700,
-                        padding: '4px 9px',
+                        padding: '6px 10px',
                         borderRadius: '7px',
                         whiteSpace: 'nowrap',
                         zIndex: 9999,
@@ -195,7 +207,17 @@ function MiniBarChart({ data }: { data: DayStat[] }) {
                         boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
                     }}
                 >
-                    {fmtShortDate(data[hover.idx].date)}: {fmtVnd(data[hover.idx].revenue)}
+                    <div style={{ paddingBottom: 4, marginBottom: 4, borderBottom: '1px solid #4b5563', textAlign: 'center' }}>
+                        {fmtShortDate(data[hover.idx].date)}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '2px' }}>
+                        <span style={{ color: '#fdba74' }}>Doanh thu:</span>
+                        <span>{fmtVnd(data[hover.idx].revenue)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
+                        <span style={{ color: '#86efac' }}>Lợi nhuận:</span>
+                        <span>{fmtVnd(data[hover.idx].profit)}</span>
+                    </div>
                     <div style={{
                         position: 'absolute',
                         top: '100%',
@@ -215,15 +237,14 @@ function MiniBarChart({ data }: { data: DayStat[] }) {
                         display: 'flex',
                         alignItems: 'flex-end',
                         height: `${CHART_H + LABEL_H}px`,
-                        gap: '3px',
-                        // Each bar needs at least 18 px so labels don't smash together
-                        minWidth: `${data.length * 18}px`,
+                        gap: '6px', // Increased gap for clustered bars
+                        // Each group needs more space
+                        minWidth: `${data.length * 30}px`,
                     }}
                 >
                     {data.map((d, i) => {
-                        const barH = d.revenue > 0
-                            ? Math.max(Math.round((d.revenue / maxVal) * CHART_H), 4)
-                            : 2;
+                        const revH = d.revenue > 0 ? Math.max(Math.round((d.revenue / maxVal) * CHART_H), 4) : 2;
+                        const proH = d.profit > 0 ? Math.max(Math.round((d.profit / maxVal) * CHART_H), 4) : 2;
                         const isToday = i === data.length - 1;
                         const isHovered = hover?.idx === i;
                         const showLabel = i % showEvery === 0 || i === data.length - 1;
@@ -244,24 +265,46 @@ function MiniBarChart({ data }: { data: DayStat[] }) {
                                 onMouseMove={e => setHover(h => h ? { ...h, x: e.clientX, y: e.clientY } : null)}
                                 onMouseLeave={() => setHover(null)}
                             >
-                                {/* Bar */}
-                                <div
-                                    style={{
-                                        width: '100%',
-                                        height: `${barH}px`,
-                                        borderRadius: '3px 3px 0 0',
-                                        background: isHovered
-                                            ? `linear-gradient(to top, ${C.orangeDark}, ${C.orange})`
-                                            : isToday
+                                {/* Clustered Bars */}
+                                <div style={{
+                                    display: 'flex',
+                                    width: '100%',
+                                    gap: '2px', // gap between rev and pro bar
+                                    alignItems: 'flex-end',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                }}>
+                                    {/* Revenue Bar */}
+                                    <div
+                                        style={{
+                                            flex: 1,
+                                            maxWidth: '12px',
+                                            height: `${revH}px`,
+                                            borderRadius: '2px 2px 0 0',
+                                            background: isHovered || isToday
                                                 ? `linear-gradient(to top, ${C.orangeDark}, ${C.orange})`
-                                                : d.revenue > 0 ? 'rgba(249,115,22,0.32)' : '#f1f5f9',
-                                        transition: 'background 0.18s, opacity 0.18s',
-                                        opacity: hover !== null && !isHovered && !isToday ? 0.55 : 1,
-                                        flexShrink: 0,
-                                    }}
-                                />
-                                {/* Date label row – fixed height keeps bars flush */}
-                                <div style={{ height: `${LABEL_H}px`, display: 'flex', alignItems: 'center' }}>
+                                                : d.revenue > 0 ? 'rgba(249,115,22,0.4)' : '#f1f5f9',
+                                            transition: 'background 0.18s, opacity 0.18s',
+                                            opacity: hover !== null && !isHovered && !isToday ? 0.55 : 1,
+                                        }}
+                                    />
+                                    {/* Profit Bar */}
+                                    <div
+                                        style={{
+                                            flex: 1,
+                                            maxWidth: '12px',
+                                            height: `${proH}px`,
+                                            borderRadius: '2px 2px 0 0',
+                                            background: isHovered || isToday
+                                                ? `linear-gradient(to top, #16a34a, #4ade80)`
+                                                : d.profit > 0 ? 'rgba(34,197,94,0.4)' : '#f1f5f9',
+                                            transition: 'background 0.18s, opacity 0.18s',
+                                            opacity: hover !== null && !isHovered && !isToday ? 0.55 : 1,
+                                        }}
+                                    />
+                                </div>
+                                {/* Date label row */}
+                                <div style={{ height: `${LABEL_H}px`, display: 'flex', alignItems: 'center', marginTop: '2px' }}>
                                     <span
                                         style={{
                                             fontSize: '8px',
@@ -269,6 +312,7 @@ function MiniBarChart({ data }: { data: DayStat[] }) {
                                             color: isToday ? C.orange : C.gray,
                                             visibility: showLabel ? 'visible' : 'hidden',
                                             userSelect: 'none',
+                                            whiteSpace: 'nowrap',
                                         }}
                                     >
                                         {fmtShortDate(d.date)}
@@ -279,7 +323,7 @@ function MiniBarChart({ data }: { data: DayStat[] }) {
                     })}
                 </div>
             </div>
-        </>
+        </div>
     );
 }
 
@@ -430,7 +474,8 @@ export default function ProviderHistoryPage() {
 
     const todayProfit = stats?.todayProfit ?? 0;
     const profitChange = stats?.profitChangePercent ?? 0;
-    const weeklyTotal = stats?.weeklyRevenue?.reduce((s, d) => s + d.revenue, 0) ?? 0;
+    const weeklyRevenueTotal = stats?.weeklyRevenue?.reduce((s, d) => s + d.revenue, 0) ?? 0;
+    const weeklyProfitTotal = stats?.weeklyRevenue?.reduce((s, d) => s + d.profit, 0) ?? 0;
 
     return (
         <ProviderLayout activeTab="/provider/history">
@@ -441,15 +486,25 @@ export default function ProviderHistoryPage() {
                     className="flex items-center justify-between px-4 py-3 flex-shrink-0 sticky top-0 z-20"
                     style={{ background: '#ffffff', borderBottom: `1px solid ${C.border}` }}
                 >
-                    <div className="flex items-center gap-2 md:hidden">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                                <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" />
-                            </svg>
+                    {/* Mobile: back arrow + RescueMe | Desktop: page title */}
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => router.push('/provider/active')}
+                            className="flex md:hidden items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 transition-colors"
+                            style={{ color: C.navy }}
+                        >
+                            <ArrowLeft style={{ width: 18, height: 18 }} />
+                        </button>
+                        <div className="flex md:hidden items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" />
+                                </svg>
+                            </div>
+                            <span className="font-bold text-sm" style={{ color: C.navy }}>RescueMe</span>
                         </div>
-                        <span className="font-bold text-sm" style={{ color: C.navy }}>RescueMe</span>
+                        <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>Lịch sử công việc</h2>
                     </div>
-                    <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>Lịch sử công việc</h2>
 
                     <div className="flex items-center gap-3">
                         <div className="hidden sm:flex items-center gap-1.5">
@@ -494,9 +549,15 @@ export default function ProviderHistoryPage() {
                         {/* Revenue chart card */}
                         <div className="bg-white rounded-2xl p-5 shadow-sm border" style={{ borderColor: C.border }}>
                             <div className="flex items-center justify-between mb-2">
-                                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.gray }}>
-                                    Doanh thu
-                                </p>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.gray }}>
+                                        Doanh thu / Lợi nhuận
+                                    </p>
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-bold"
+                                        style={{ background: '#fef2f2', color: '#ef4444' }}>
+                                        Phí nền tảng: 10%
+                                    </span>
+                                </div>
                                 <select
                                     className="text-xs font-semibold border rounded-lg px-2 py-1 outline-none"
                                     style={{ borderColor: C.border, color: C.navy }}
@@ -508,7 +569,14 @@ export default function ProviderHistoryPage() {
                                     <option value={30}>30 ngày</option>
                                 </select>
                             </div>
-                            <p className="text-2xl font-bold" style={{ color: C.navy }}>{fmtVnd(weeklyTotal)}</p>
+                            <div className="flex items-baseline gap-2 mt-1">
+                                <p className="text-2xl font-bold" style={{ color: C.navy }}>
+                                    {fmtVnd(weeklyRevenueTotal)}
+                                </p>
+                                <span className="text-xl font-bold" style={{ color: C.green }}>
+                                    / +{fmtVnd(weeklyProfitTotal)}
+                                </span>
+                            </div>
                             <p className="text-xs mb-3" style={{ color: C.green }}>
                                 {(stats?.successRate ?? 0).toFixed(1)}% tỷ lệ thành công
                             </p>

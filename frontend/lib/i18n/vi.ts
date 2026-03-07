@@ -206,6 +206,7 @@ const vi = {
             providerOnly: 'Trang này chỉ dành cho nhà cung cấp dịch vụ.',
             pendingRequests: 'Yêu cầu đang chờ',
             weeklyEarnings: 'Thu nhập tuần',
+            todayEarnings: 'Thu nhập hôm nay',
             avgRating: 'Đánh giá TB',
             excellentFeedback: '"Phản hồi xuất sắc!"',
             myLocation: 'Vị trí của tôi',

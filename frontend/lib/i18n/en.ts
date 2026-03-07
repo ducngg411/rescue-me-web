@@ -206,6 +206,7 @@ const en = {
             providerOnly: 'This page is for service providers only.',
             pendingRequests: 'Pending Requests',
             weeklyEarnings: 'Weekly Earnings',
+            todayEarnings: "Today's Earnings",
             avgRating: 'Avg. Rating',
             excellentFeedback: '"Excellent feedback!"',
             myLocation: 'My Location',

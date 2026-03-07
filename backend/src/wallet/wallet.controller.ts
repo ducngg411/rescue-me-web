@@ -48,6 +48,16 @@ export class WalletController {
     }
 
     /**
+     * GET /wallet/me/stats
+     * Returns weekly earnings and job count for the authenticated provider.
+     */
+    @Get('me/stats')
+    @UseGuards(JwtAuthGuard)
+    async getMyStats(@Request() req) {
+        return this.walletService.getWeeklyStats(req.user.id);
+    }
+
+    /**
      * GET /wallet/me/transactions?skip=0&take=15
      * Paginated transaction history for the current provider.
      */
