@@ -845,11 +845,7 @@ export class ProviderService {
      * Returns revenue/profit stats, success rate, and avg rating for the history dashboard.
      */
     async getHistoryStats(providerId: string, days = 7) {
-        // Use +07:00 as the base timezone for the "current day" calculations
-        // to ensure Vietnamese users see midnight rollovers correctly.
-        const VN_TZ_OFFSET_HOURS = 7;
-        const nowUtc = new Date();
-        const nowVn = new Date(nowUtc.getTime() + VN_TZ_OFFSET_HOURS * 60 * 60 * 1000);
+        const now = new Date();
 
         // Helper to extract revenue from a completed request
         const getRequestRevenue = (req: any) => {
@@ -861,23 +857,17 @@ export class ProviderService {
         // ── 7-day daily revenue totals ────────────────────────────────
         const weeklyRevenue: { date: string; revenue: number; profit: number }[] = [];
         for (let i = days - 1; i >= 0; i--) {
-            // Calculate start and end of day in VN Time, then translate back to UTC for Prisma query
-            const dayStartVn = new Date(nowVn);
-            dayStartVn.setUTCHours(0, 0, 0, 0);
-            dayStartVn.setUTCDate(dayStartVn.getUTCDate() - i);
-
-            const dayEndVn = new Date(dayStartVn);
-            dayEndVn.setUTCDate(dayEndVn.getUTCDate() + 1);
-
-            // Shift back to UTC for querying the DB
-            const dayStartUtc = new Date(dayStartVn.getTime() - VN_TZ_OFFSET_HOURS * 60 * 60 * 1000);
-            const dayEndUtc = new Date(dayEndVn.getTime() - VN_TZ_OFFSET_HOURS * 60 * 60 * 1000);
+            const dayStart = new Date(now);
+            dayStart.setHours(0, 0, 0, 0);
+            dayStart.setDate(dayStart.getDate() - i);
+            const dayEnd = new Date(dayStart);
+            dayEnd.setDate(dayEnd.getDate() + 1);
 
             const requests = await this.prisma.rescueRequest.findMany({
                 where: {
                     assignedProviderId: providerId,
                     status: { in: ['COMPLETED', 'PAID'] },
-                    createdAt: { gte: dayStartUtc, lt: dayEndUtc },
+                    createdAt: { gte: dayStart, lt: dayEnd },
                 },
                 include: {
                     payment: { select: { totalAmount: true } },
@@ -890,30 +880,23 @@ export class ProviderService {
 
             const revenue = requests.reduce((sum, req) => sum + getRequestRevenue(req), 0);
             weeklyRevenue.push({
-                date: dayStartVn.toISOString().slice(0, 10), // This uses the UTC portion which represents VN date
+                date: dayStart.toISOString().slice(0, 10),
                 revenue,
                 profit: Math.round(revenue * 0.9),
             });
         }
 
         // ── Today profit ──────────────────────────────────────────────
-        // In VN Time
-        const todayStartVn = new Date(nowVn);
-        todayStartVn.setUTCHours(0, 0, 0, 0);
-
-        const yesterdayStartVn = new Date(todayStartVn);
-        yesterdayStartVn.setUTCDate(yesterdayStartVn.getUTCDate() - 1);
-
-        // Convert back to UTC for DB queries
-        const todayStartUtc = new Date(todayStartVn.getTime() - VN_TZ_OFFSET_HOURS * 60 * 60 * 1000);
-        const yesterdayStartUtc = new Date(yesterdayStartVn.getTime() - VN_TZ_OFFSET_HOURS * 60 * 60 * 1000);
-        // today end is implicit
+        const todayStart = new Date(now);
+        todayStart.setHours(0, 0, 0, 0);
+        const yesterdayStart = new Date(todayStart);
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
         const todayRequests = await this.prisma.rescueRequest.findMany({
             where: {
                 assignedProviderId: providerId,
                 status: { in: ['COMPLETED', 'PAID'] },
-                completedAt: { gte: todayStartUtc }, // Use completedAt instead of createdAt for revenue metrics
+                createdAt: { gte: todayStart },
             },
             include: {
                 payment: { select: { totalAmount: true } },
@@ -924,7 +907,7 @@ export class ProviderService {
             where: {
                 assignedProviderId: providerId,
                 status: { in: ['COMPLETED', 'PAID'] },
-                completedAt: { gte: yesterdayStartUtc, lt: todayStartUtc }, // Use completedAt
+                createdAt: { gte: yesterdayStart, lt: todayStart },
             },
             include: {
                 payment: { select: { totalAmount: true } },

@@ -38,6 +38,7 @@
     "class-validator": "^0.14.1",
     "cloudinary": "^2.9.0",
     "google-auth-library": "^9.14.1",
+    "moment-timezone": "^0.6.0",
     "nestjs": "^0.0.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",

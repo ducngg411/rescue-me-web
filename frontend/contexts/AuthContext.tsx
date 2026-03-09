@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, logout as logoutApi, User } from '@/lib/auth';
+import toast from 'react-hot-toast';
 
 interface AuthContextType {
     user: User | null;
@@ -54,6 +55,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } finally {
             setUser(null);
             router.push('/auth/login');
+            toast.success('Đăng xuất thành công');
         }
     };
 

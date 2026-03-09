@@ -41,9 +41,7 @@ const VietMap = dynamic(() => import('@/components/VietMap'), {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatVnd(amount: number) {
-    if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M ₫`;
-    if (amount >= 1_000) return `${(amount / 1_000).toFixed(0)}K ₫`;
-    return `${amount} ₫`;
+    return `${amount.toLocaleString('vi-VN')}đ`;
 }
 
 // Greeting and incident labels are now handled via useLanguage() inside the component
@@ -271,7 +269,7 @@ function LiveMapPanel({
                 <div className="flex-1 min-w-0">
                     <p className="text-[10px]" style={{ color: C.gray }}>{t('common.status')}</p>
                     <p className="text-xs font-semibold truncate" style={{ color: C.navy }}>
-                        {isOnline ? `${t('provider.dashboard.statusReceiving')} • ${nearbyCount}` : t('provider.dashboard.offline')}
+                        {isOnline ? t('provider.dashboard.statusReceiving') : t('provider.dashboard.offline')}
                     </p>
                 </div>
                 {!isOnline && (
@@ -285,7 +283,7 @@ function LiveMapPanel({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProviderActivePage() {
     const router = useRouter();
-    const { user, loading: authLoading } = useAuth();
+    const { user, loading: authLoading, logout } = useAuth();
     const { t } = useLanguage();
     const { isOnline, isLoading: statusLoading, toggleOnlineStatus, setIsOnline } = useProviderStatus();
     const { requests } = usePendingRequests({ enabled: isOnline, pollInterval: 5000 });
@@ -294,6 +292,37 @@ export default function ProviderActivePage() {
     const [selectedRequest, setSelectedRequest] = useState<any>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [declinedIds, setDeclinedIds] = useState<Set<string>>(new Set());
+    const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
+
+    // Load persisted session state on mount
+    useEffect(() => {
+        try {
+            const storedDeclined = sessionStorage.getItem('provider_declined_ids');
+            const storedIgnored = sessionStorage.getItem('provider_ignored_ids');
+            if (storedDeclined) setDeclinedIds(new Set(JSON.parse(storedDeclined)));
+            if (storedIgnored) setIgnoredIds(new Set(JSON.parse(storedIgnored)));
+        } catch (e) {
+            console.error('Failed to parse stored ids', e);
+        }
+    }, []);
+
+    // Helper wrappers to persist to session storage
+    const addDeclinedId = (id: string) => {
+        setDeclinedIds(prev => {
+            const next = new Set(prev).add(id);
+            sessionStorage.setItem('provider_declined_ids', JSON.stringify(Array.from(next)));
+            return next;
+        });
+    };
+
+    const addIgnoredId = (id: string) => {
+        setIgnoredIds(prev => {
+            const next = new Set(prev).add(id);
+            sessionStorage.setItem('provider_ignored_ids', JSON.stringify(Array.from(next)));
+            return next;
+        });
+    };
+
     const [activeNav, setActiveNav] = useState(t('provider.nav.dashboard'));
     const [weeklyEarnings, setWeeklyEarnings] = useState<number | null>(null);
     const [weeklyJobCount, setWeeklyJobCount] = useState<number>(0);
@@ -354,8 +383,9 @@ export default function ProviderActivePage() {
     }, [authLoading, user, router]);
 
     useEffect(() => {
-        if (filteredRequests.length > 0 && !selectedRequest) setSelectedRequest(filteredRequests[0]);
-    }, [filteredRequests, selectedRequest]);
+        const freshRequests = filteredRequests.filter(r => !ignoredIds.has(r.id));
+        if (freshRequests.length > 0 && !selectedRequest) setSelectedRequest(freshRequests[0]);
+    }, [filteredRequests, selectedRequest, ignoredIds]);
 
     // ── Guards ────────────────────────────────────────────────────────────────
     if (authLoading) return (
@@ -400,8 +430,13 @@ export default function ProviderActivePage() {
         setSelectedRequest(null);
     };
 
+    const handleIgnoreModal = (req: any) => {
+        addIgnoredId(req.id);
+        if (selectedRequest?.id === req.id) setSelectedRequest(null);
+    };
+
     const handleDecline = async (req: any) => {
-        setDeclinedIds(prev => new Set(prev).add(req.id));
+        addDeclinedId(req.id);
         if (selectedRequest?.id === req.id) setSelectedRequest(null);
         try { await api.post(`/rescue-requests/${req.id}/decline`); } catch { }
     };
@@ -474,6 +509,20 @@ export default function ProviderActivePage() {
                             <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
                             <p className="text-xs" style={{ color: C.gray }}>{t('provider.dashboard.providerRole')}</p>
                         </div>
+                    </div>
+                    {/* Logout Button */}
+                    <div className="px-2 mt-4 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
+                        <button
+                            onClick={logout}
+                            disabled={statusLoading}
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold transition-all hover:bg-red-50"
+                            style={{ color: '#ef4444' }}
+                        >
+                            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                            Đăng xuất
+                        </button>
                     </div>
                 </div>
             </aside>
@@ -681,7 +730,7 @@ export default function ProviderActivePage() {
                 <IncomingRequestModal
                     request={selectedRequest}
                     onViewDetails={() => handleAccept(selectedRequest)}
-                    onDecline={() => handleDecline(selectedRequest)}
+                    onDecline={() => handleIgnoreModal(selectedRequest)}
                     isProcessing={isProcessing}
                 />
             )}

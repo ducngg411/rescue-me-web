@@ -14,6 +14,7 @@ const C = {
     gray: '#6b7280',
     border: '#e2e8f0',
     bg: '#f4f6f9',
+    red: '#ef4444',
 };
 
 interface ProviderLayoutProps {
@@ -26,7 +27,7 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
     const router = useRouter();
     const pathname = usePathname();
     const { t } = useLanguage();
-    const { user, setUser } = useAuth();
+    const { user, setUser, logout } = useAuth();
     const { isOnline, isLoading: statusLoading, toggleOnlineStatus, setIsOnline } = useProviderStatus();
 
     useEffect(() => {
@@ -128,6 +129,20 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
                             <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
                             <p className="text-xs" style={{ color: C.gray }}>{t('provider.dashboard.providerRole')}</p>
                         </div>
+                    </div>
+                    {/* Logout Button */}
+                    <div className="px-2 mt-4 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
+                        <button
+                            onClick={logout}
+                            disabled={statusLoading}
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold transition-all hover:bg-red-50"
+                            style={{ color: C.red }}
+                        >
+                            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                            Đăng xuất
+                        </button>
                     </div>
                 </div>
             </aside>

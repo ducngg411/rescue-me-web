@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
 import { useChat } from '@/lib/hooks/useChat';
+import VietMap from '@/components/VietMap';
 
 const ChatModal = lazy(() => import('@/components/ChatModal'));
 
@@ -822,359 +823,395 @@ export default function ProviderRequestDetailPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 pb-20 md:pb-12">
             {/* Header */}
-            <div className="bg-white shadow-sm border-b">
-                <div className="max-w-4xl mx-auto px-4 py-4">
-                    {/* Only show back button if not waiting for quote response */}
-                    {!hasPendingQuote && (
+            <div className="bg-white shadow-sm sticky top-0 z-10">
+                <div className="max-w-6xl mx-auto px-4 py-3 md:py-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
                         <button
                             onClick={handleCancel}
-                            className="flex items-center text-gray-600 hover:text-gray-900 mb-2"
+                            className="flex items-center justify-center w-10 h-10 bg-gray-50 rounded-xl text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors flex-shrink-0 border-transparent"
+                            title="Quay lại danh sách"
                         >
-                            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                             </svg>
-                            Quay lại
                         </button>
-                    )}
-                    <div className="flex items-center justify-between">
-                        <h1 className="text-2xl font-bold text-gray-900">Chi tiết yêu cầu cứu hộ</h1>
-                        {/* Status Badge */}
-                        <div className="flex items-center gap-2">
-                            {request.status === 'MATCHING' && !hasPendingQuote && (
-                                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                                    📋 Có thể gửi báo giá
-                                </span>
-                            )}
-                            {request.status === 'MATCHING' && hasPendingQuote && (
-                                <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
-                                    Đã gửi báo giá
-                                </span>
-                            )}
-                            {request.status === 'ASSIGNED' && request.assignedProviderId === user?.id && (
-                                <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                                    Đã được chọn
-                                </span>
-                            )}
-                            {request.status !== 'MATCHING' && request.assignedProviderId !== user?.id && (
-                                <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm font-medium">
-                                    🚫 Không khả dụng
-                                </span>
-                            )}
+                        <div className="flex flex-col">
+                            <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">Yêu cầu cứu hộ</h1>
+                            <p className="text-xs md:text-sm font-medium text-gray-500">#{request.id.slice(0, 8).toUpperCase()}</p>
                         </div>
+                    </div>
+                    {/* Status Pill */}
+                    <div className="flex items-center">
+                        {request.status === 'MATCHING' && !hasPendingQuote && (
+                            <span className="px-2.5 md:px-3 py-1 bg-orange-50/70 text-[#f97316] text-[11px] md:text-[13px] font-bold rounded-full flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
+                                Đang tìm provider
+                            </span>
+                        )}
+                        {request.status === 'MATCHING' && hasPendingQuote && (
+                            <span className="px-2.5 md:px-3 py-1 bg-yellow-50/70 text-yellow-600 text-[11px] md:text-[13px] font-bold rounded-full flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
+                                Đang chờ KH
+                            </span>
+                        )}
+                        {request.status === 'ASSIGNED' && request.assignedProviderId === user?.id && (
+                            <span className="px-2.5 md:px-3 py-1 bg-green-50/70 text-green-600 text-[11px] md:text-[13px] font-bold rounded-full flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                Đã được chọn
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Quote Window Timer */}
-            {request.status === 'MATCHING' && !hasPendingQuote && timeLeft !== null && timeLeft > 0 && (
-                <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 px-4 shadow-md">
-                    <div className="max-w-4xl mx-auto flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="text-2xl">⏰</div>
-                            <div>
-                                <div className="text-sm font-medium">Thời gian còn lại để gửi báo giá</div>
-                                <div className="text-xs opacity-90">Vui lòng gửi báo giá trước khi hết thời gian</div>
-                            </div>
-                        </div>
-                        <div className="text-right">
-                            <div className="text-3xl font-bold font-mono">
-                                {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
-                            </div>
-                            <div className="text-xs opacity-90">
-                                {timeLeft < 60 ? ' Còn ít thời gian!' : `${request.quoteCount || 0}/${request.maxQuotes || 3} báo giá`}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-                {/* Request Info Card */}
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Thông tin yêu cầu</h2>
-
-                    <div className="space-y-3">
-                        <div>
-                            <div className="text-sm text-gray-500">Khách hàng</div>
-                            <div className="font-medium">{request.user.name}</div>
-                            <div className="text-sm text-gray-600">{request.user.phoneNumber}</div>
-                        </div>
-
-                        <div>
-                            <div className="text-sm text-gray-500">Loại sự cố</div>
-                            <div className="font-medium">{incidentTypeLabels[request.incidentType] || request.incidentType}</div>
-                        </div>
-
-                        <div>
-                            <div className="text-sm text-gray-500">Loại xe</div>
-                            <div className="font-medium">{vehicleTypeLabels[request.vehicleType] || request.vehicleType}</div>
-                        </div>
-
-                        {request.description && (
-                            <div>
-                                <div className="text-sm text-gray-500">Mô tả</div>
-                                <div className="text-gray-700">{request.description}</div>
-                            </div>
-                        )}
-
-                        {request.user?.licensePlate && (
-                            <div>
-                                <div className="text-sm text-gray-500">Biển số xe</div>
-                                <div className="font-medium">{request.user.licensePlate}</div>
-                            </div>
-                        )}
-
-                        {request.user?.vehicleColor && (
-                            <div>
-                                <div className="text-sm text-gray-500">Màu xe</div>
-                                <div className="font-medium">{request.user.vehicleColor}</div>
-                            </div>
-                        )}
-
-                        <div>
-                            <div className="text-sm text-gray-500">Số điện thoại liên hệ</div>
-                            <div className="font-medium">{request.contactPhone}</div>
-                        </div>
-
-                        <div>
-                            <div className="text-sm text-gray-500">Vị trí đón</div>
-                            <div className="text-gray-700">{request.pickupLocation.addressText}</div>
-                        </div>
-
-                        {request.dropoffLocation && (
-                            <div>
-                                <div className="text-sm text-gray-500">Vị trí trả</div>
-                                <div className="text-gray-700">{request.dropoffLocation.addressText}</div>
-                            </div>
-                        )}
-
-                        <div>
-                            <div className="text-sm text-gray-500">Thời gian tạo</div>
-                            <div className="text-gray-700">
-                                {new Date(request.createdAt).toLocaleString('vi-VN')}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Media */}
-                {request.media && request.media.length > 0 && (
-                    <div className="bg-white rounded-lg shadow-sm p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Hình ảnh & Video</h2>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            {request.media.map((item, index) => (
-                                <div key={index} className="relative group">
-                                    {item.mediaType === 'IMAGE' ? (
-                                        <div
-                                            onClick={() => {
-                                                const imageIndex = request.media
-                                                    .filter(m => m.mediaType === 'IMAGE')
-                                                    .findIndex(m => m.publicUrl === item.publicUrl);
-                                                setSelectedImageIndex(imageIndex);
-                                            }}
-                                            className="cursor-pointer overflow-hidden rounded-lg"
-                                        >
-                                            <img
-                                                src={item.publicUrl}
-                                                alt={`Media ${index + 1}`}
-                                                className="w-full h-48 object-cover rounded-lg transition-transform group-hover:scale-110"
-                                            />
-                                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded-lg flex items-center justify-center">
-                                                <span className="text-white opacity-0 group-hover:opacity-100 text-sm font-medium">Nhấn để xem</span>
-                                            </div>
-                                        </div>
+            <div className="max-w-6xl mx-auto px-4 py-4 md:py-6">
+                <div className="flex flex-col lg:flex-row gap-6">
+                    {/* Left Column: Details */}
+                    <div className="flex-1 space-y-4">
+                        {/* Status Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Status Card */}
+                            <div className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm flex items-center gap-3 md:gap-4">
+                                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                    {request.status === 'MATCHING' && !hasPendingQuote ? (
+                                        <svg width="20" height="20" className="md:w-6 md:h-6" fill="none" stroke="#f97316" viewBox="0 0 24 24" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    ) : hasPendingQuote ? (
+                                        <svg width="20" height="20" className="md:w-6 md:h-6" fill="none" stroke="#eab308" viewBox="0 0 24 24" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                        </svg>
                                     ) : (
-                                        <video
-                                            src={item.publicUrl}
-                                            controls
-                                            className="w-full h-48 object-cover rounded-lg"
-                                        />
+                                        <svg width="20" height="20" className="md:w-6 md:h-6" fill="none" stroke="#6b7280" viewBox="0 0 24 24" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                        </svg>
                                     )}
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Debug info - remove after testing */}
-                {console.log(' [Render] request.status:', request?.status, 'hasPendingQuote:', hasPendingQuote, 'myQuoteDetails:', myQuoteDetails ? 'exists' : 'null')}
-
-                {/* Provider has pending quote - waiting for user response */}
-                {request.status === 'MATCHING' && hasPendingQuote && myQuoteDetails && (
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-6 shadow-lg">
-                        <div className="flex items-start gap-4">
-                            <div className="flex-shrink-0">
-                                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                                    <svg className="h-10 w-10 text-blue-600 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
+                                <div>
+                                    <div className="text-[10px] md:text-xs font-semibold text-gray-500 mb-0.5">Trạng thái hiện tại</div>
+                                    <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
+                                        <span className="text-sm md:text-base font-bold text-[#1a1a2e]">
+                                            {request.status === 'MATCHING' && !hasPendingQuote && 'Đang chờ báo giá'}
+                                            {request.status === 'MATCHING' && hasPendingQuote && 'Đã gửi báo giá, chờ KH'}
+                                            {request.status !== 'MATCHING' && request.assignedProviderId !== user?.id && 'Không khả dụng'}
+                                            {request.status === 'ASSIGNED' && request.assignedProviderId === user?.id && 'Đã được chọn'}
+                                        </span>
+                                        {request.status === 'MATCHING' && (
+                                            <div className="flex items-center gap-1.5 md:gap-2">
+                                                <span className="px-1.5 md:px-2 py-0.5 bg-orange-100 text-[#f97316] text-[8px] md:text-[10px] font-bold rounded uppercase border border-[#fed7aa] flex-shrink-0">
+                                                    Ưu tiên cao
+                                                </span>
+                                                <span className="px-1.5 md:px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] md:text-[10px] font-bold rounded uppercase border border-blue-200 flex-shrink-0 flex items-center gap-1">
+                                                    <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                                    </svg>
+                                                    {request.quoteCount || 0}/{request.maxQuotes || 3} Báo giá
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                            <div className="flex-1">
-                                <h3 className="text-xl font-bold text-blue-900 mb-2">
-                                    Đang chờ khách hàng phản hồi
-                                </h3>
-                                <p className="text-blue-800 mb-4">
-                                    Bạn đã gửi báo giá cho yêu cầu này. Vui lòng chờ khách hàng xem xét và phản hồi.
-                                </p>
 
-                                {/* Quote Details */}
-                                <div className="bg-white rounded-lg p-4 border border-blue-100 mb-4 space-y-3">
-                                    <h4 className="font-semibold text-gray-900 mb-3">📝 Thông tin báo giá của bạn:</h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-green-50 rounded-lg p-3">
-                                            <div className="text-xs text-green-600 mb-1">Giá dịch vụ</div>
-                                            <div className="text-lg font-bold text-green-900">
-                                                {myQuoteDetails.price.toLocaleString()}₫
-                                            </div>
+                            {/* Timer Card */}
+                            {request.status === 'MATCHING' && !hasPendingQuote && timeLeft !== null && timeLeft > 0 ? (
+                                <div className="rounded-2xl p-4 md:p-5 shadow-sm text-white flex items-center justify-between" style={{ background: '#f97316' }}>
+                                    <div className="text-xs md:text-sm font-semibold opacity-90">
+                                        THỜI GIAN CÒN LẠI<br />
+                                        <span className="text-[9px] md:text-[10px] font-normal opacity-80 mt-1 block">Yêu cầu báo giá nhanh</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 md:gap-3 text-center">
+                                        <div className="flex flex-col">
+                                            <span className="text-2xl md:text-3xl font-black leading-none">{Math.floor(timeLeft / 60)}</span>
+                                            <span className="text-[8px] md:text-[10px] uppercase font-bold mt-1">Phút</span>
                                         </div>
-                                        <div className="bg-blue-50 rounded-lg p-3">
-                                            <div className="text-xs text-blue-600 mb-1">Thời gian đến</div>
-                                            <div className="text-lg font-bold text-blue-900">
-                                                {myQuoteDetails.estimatedArrivalMinutes} phút
-                                            </div>
+                                        <div className="text-xl md:text-2xl font-bold opacity-70 mb-2 md:mb-3">:</div>
+                                        <div className="flex flex-col">
+                                            <span className="text-2xl md:text-3xl font-black leading-none">{String(timeLeft % 60).padStart(2, '0')}</span>
+                                            <span className="text-[8px] md:text-[10px] uppercase font-bold mt-1">Giây</span>
                                         </div>
+                                    </div>
+                                </div>
+                            ) : request.status === 'MATCHING' && hasPendingQuote ? (
+                                <div className="rounded-2xl p-5 shadow-sm text-white flex items-center justify-between bg-yellow-500">
+                                    <div className="text-sm font-semibold opacity-90">CHỜ KHÁCH HÀNG CHỌN</div>
+                                    <svg className="w-8 h-8 animate-spin opacity-80" viewBox="0 0 24 24" fill="none">
+                                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                                        <path fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" className="opacity-75" />
+                                    </svg>
+                                </div>
+                            ) : null}
+                        </div>
+
+                        {/* Customer & Vehicle Info Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Customer Info */}
+                            <div className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm space-y-3 md:space-y-4">
+                                <div className="flex items-center gap-2 text-[#1a1a2e] font-semibold text-[13px] md:text-sm border-b pb-2 md:pb-3 border-gray-50">
+                                    <svg width="16" height="16" className="md:w-[18px] md:h-[18px]" fill="none" stroke="#f97316" viewBox="0 0 24 24" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    </svg>
+                                    Thông tin khách hàng
+                                </div>
+                                <div className="flex items-center gap-3 md:gap-4">
+                                    <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-orange-100 flex-shrink-0 flex items-center justify-center text-lg md:text-xl font-bold text-orange-600">
+                                        {request.user.name?.charAt(0).toUpperCase() || 'K'}
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-[#1a1a2e] text-[15px] md:text-base mb-0.5 md:mb-1">{request.user.name}</div>
+                                        <div className="flex items-center gap-1.5 text-xs md:text-sm font-medium text-gray-500">
+                                            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                            </svg>
+                                            {request.contactPhone ? request.contactPhone.replace(/(\d{3})\d{4}(\d{3})/, '$1 *** $2') : 'Chưa có SĐT'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Vehicle Info */}
+                            <div className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm space-y-3 md:space-y-4">
+                                <div className="flex items-center gap-2 text-[#1a1a2e] font-semibold text-[13px] md:text-sm border-b pb-2 md:pb-3 border-gray-50">
+                                    <svg width="16" height="16" className="md:w-[18px] md:h-[18px]" fill="none" stroke="#f97316" viewBox="0 0 24 24" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                    </svg>
+                                    Thông tin phương tiện
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 md:gap-4">
+                                    <div>
+                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">Loại xe</p>
+                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e] truncate">{vehicleTypeLabels[request.vehicleType] || request.vehicleType}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">Biển số</p>
+                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e] uppercase">{request.user.licensePlate || 'Không rõ'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">Màu sắc</p>
+                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e]">{request.user.vehicleColor || 'Không rõ'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">Vấn đề</p>
+                                        <p className="text-[13px] md:text-sm font-bold text-red-600 line-clamp-1">{incidentTypeLabels[request.incidentType] || request.incidentType}</p>
+                                    </div>
+                                </div>
+                                {request.description && (
+                                    <div className="pt-2">
+                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">Mô tả thêm</p>
+                                        <p className="text-[13px] md:text-sm text-gray-700 italic border-l-2 border-gray-200 pl-2 line-clamp-2 md:line-clamp-none">"{request.description}"</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                            <div className="flex items-center gap-2 text-[#1a1a2e] font-semibold text-sm mb-4">
+                                <svg width="18" height="18" fill="none" stroke="#f97316" viewBox="0 0 24 24" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                Vị trí cứu hộ
+                            </div>
+                            <p className="text-sm text-gray-700 mb-4 font-medium">{request.pickupLocation.addressText}</p>
+
+                            {/* VietMap Component */}
+                            <div className="w-full h-48 rounded-xl bg-gray-50 overflow-hidden relative border border-gray-100">
+                                <VietMap
+                                    center={[request.pickupLocation.lng, request.pickupLocation.lat]}
+                                    zoom={15}
+                                    showMarker={true}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Media Section */}
+                        {request.media && request.media.length > 0 && (
+                            <div className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm">
+                                <h2 className="text-[13px] md:text-sm font-semibold text-[#1a1a2e] mb-3 md:mb-4 flex items-center gap-2">
+                                    <svg width="16" height="16" className="md:w-[18px] md:h-[18px]" fill="none" stroke="#f97316" viewBox="0 0 24 24" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    Hình ảnh sự cố ({request.media.length})
+                                </h2>
+                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 md:gap-3">
+                                    {request.media.map((item, index) => (
+                                        <div key={index} className="aspect-square relative group">
+                                            {item.mediaType === 'IMAGE' ? (
+                                                <div
+                                                    onClick={() => setSelectedImageIndex(request.media.filter(m => m.mediaType === 'IMAGE').findIndex(m => m.publicUrl === item.publicUrl))}
+                                                    className="cursor-pointer w-full h-full rounded-xl overflow-hidden border border-gray-200 bg-gray-50"
+                                                >
+                                                    <img src={item.publicUrl} alt={`Media ${index}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                                                        <svg className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <video src={item.publicUrl} controls className="w-full h-full object-cover rounded-xl border border-gray-200 bg-black" />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right Column: Quoting Form / Actions */}
+                    <div className="w-full lg:w-[380px] flex-shrink-0 mt-2 md:mt-0">
+                        {request.status === 'MATCHING' && !hasPendingQuote ? (
+                            <div className="bg-white rounded-3xl p-5 md:p-6 border border-gray-100 shadow-lg md:sticky top-24">
+                                <div className="flex items-center gap-3 mb-5 md:mb-6">
+                                    <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+                                        <svg width="20" height="20" fill="none" stroke="#f97316" viewBox="0 0 24 24" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-base md:text-lg font-bold text-[#1a1a2e]">Gửi báo giá nhanh</h2>
+                                </div>
+
+                                <form onSubmit={handleSubmitQuote} className="space-y-4 md:space-y-5">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">Giá dịch vụ dự kiến (VNĐ)</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={price}
+                                                onChange={(e) => setPrice(e.target.value)}
+                                                placeholder="Ví dụ: 300000"
+                                                min="10000"
+                                                required
+                                                className="w-full pl-4 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#f97316] outline-none transition-colors text-sm font-semibold"
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">₫</span>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">Thời gian đến dự kiến</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={estimatedArrivalMinutes}
+                                                onChange={(e) => setEstimatedArrivalMinutes(e.target.value)}
+                                                placeholder="Ví dụ: 15"
+                                                min="1"
+                                                max="300"
+                                                required
+                                                className="w-full pl-4 pr-14 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#f97316] outline-none transition-colors text-sm font-semibold"
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-semibold">Phút</span>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">Ghi chú cho khách hàng</label>
+                                        <textarea
+                                            value={message}
+                                            onChange={(e) => setMessage(e.target.value)}
+                                            placeholder="Mô tả sơ bộ phương án cứu hộ..."
+                                            rows={3}
+                                            className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#f97316] outline-none transition-colors text-sm resize-none"
+                                        />
+                                    </div>
+
+                                    <div className="pt-2">
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className="w-full py-3.5 rounded-xl font-bold text-white uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                            style={{
+                                                background: 'linear-gradient(135deg, #f97316 0%, #ea6c0a 100%)',
+                                                boxShadow: '0 4px 14px rgba(249,115,22,0.3)'
+                                            }}
+                                        >
+                                            {isSubmitting ? 'Đang gửi...' : 'GỬI BÁO GIÁ'}
+                                            {!isSubmitting && (
+                                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                                                </svg>
+                                            )}
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={handleCancel}
+                                            disabled={isSubmitting}
+                                            className="w-full mt-3 py-3 rounded-xl font-semibold text-gray-500 hover:text-gray-800 transition-colors text-sm"
+                                        >
+                                            Hủy bỏ yêu cầu
+                                        </button>
+                                    </div>
+
+                                    <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 flex gap-3">
+                                        <svg width="16" height="16" fill="none" stroke="#f97316" viewBox="0 0 24 24" className="flex-shrink-0 mt-0.5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <p className="text-[10px] text-gray-600 leading-relaxed">
+                                            Bằng việc gửi báo giá, bạn cam kết có mặt đúng thời hạn và mức giá đã đề xuất. Phí hệ thống (10%) sẽ được trừ sau khi hoàn tất giao dịch.
+                                        </p>
+                                    </div>
+                                </form>
+                            </div>
+                        ) : request.status === 'MATCHING' && hasPendingQuote && myQuoteDetails ? (
+                            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-lg sticky top-24">
+                                <div className="text-center pb-6 border-b border-gray-100">
+                                    <div className="w-16 h-16 mx-auto bg-green-50 text-green-500 rounded-full flex items-center justify-center mb-4">
+                                        <svg width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-xl font-bold text-[#1a1a2e] mb-2">Đã gửi báo giá!</h2>
+                                    <p className="text-sm text-gray-500">Hệ thống đang chờ khách hàng xem xét và lựa chọn.</p>
+                                </div>
+
+                                <div className="py-6 space-y-4">
+                                    <div>
+                                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Mức giá đề xuất</p>
+                                        <p className="text-xl font-black text-green-600">{myQuoteDetails.price.toLocaleString()}đ</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Thời gian đến</p>
+                                        <p className="text-base font-bold text-[#1a1a2e]">{myQuoteDetails.estimatedArrivalMinutes} phút</p>
                                     </div>
                                     {myQuoteDetails.message && (
-                                        <div className="pt-2 border-t border-gray-100">
-                                            <div className="text-xs text-gray-600 mb-1">Lời nhắn</div>
-                                            <div className="text-sm text-gray-800 italic">"{myQuoteDetails.message}"</div>
-                                        </div>
-                                    )}
-                                    <div className="pt-2 border-t border-gray-100">
-                                        <div className="text-xs text-gray-500">
-                                            Trạng thái: <span className="font-semibold text-yellow-600">CHỞ PHẢN HỔI</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Status Info */}
-                                <div className="bg-blue-100 rounded-lg p-4 flex items-start gap-3">
-                                    <svg className="h-5 w-5 text-blue-700 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <div className="text-sm text-blue-900">
-                                        <p className="font-medium mb-1">🔄 Hệ thống đang tự động kiểm tra trạng thái</p>
-                                        <p className="text-xs text-blue-800">Bạn sẽ nhận thông báo ngay khi khách hàng chấp nhận hoặc từ chối báo giá.</p>
-                                        <p className="text-xs text-blue-700 font-semibold mt-2"> Vui lòng giữ màn hình này mở để nhận cập nhật</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Debug Quote Form check */}
-                {console.log(' [Render] Show quote form?', request?.status === 'MATCHING' && !hasPendingQuote)}
-
-                {/* Quote Form - Only show if MATCHING and no pending quote */}
-                {request.status === 'MATCHING' && !hasPendingQuote && (
-                    <div className="bg-white rounded-lg shadow-sm p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Gửi báo giá</h2>
-                        <form onSubmit={handleSubmitQuote} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Giá dịch vụ (VNĐ) <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="number"
-                                    value={price}
-                                    onChange={(e) => setPrice(e.target.value)}
-                                    placeholder="Ví dụ: 300000"
-                                    min="10000"
-                                    required
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <div className="text-xs text-gray-500 mt-1">Tối thiểu 10,000 VNĐ</div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Thời gian đến (phút) <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="number"
-                                    value={estimatedArrivalMinutes}
-                                    onChange={(e) => setEstimatedArrivalMinutes(e.target.value)}
-                                    placeholder="Ví dụ: 15"
-                                    min="1"
-                                    max="300"
-                                    required
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <div className="text-xs text-gray-500 mt-1">Từ 1-300 phút</div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Lời nhắn cho khách hàng
-                                </label>
-                                <textarea
-                                    value={message}
-                                    onChange={(e) => setMessage(e.target.value)}
-                                    placeholder="Ví dụ: Tôi có kinh nghiệm 5 năm, xe cứu hộ đầy đủ trang thiết bị..."
-                                    rows={3}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div className="flex gap-3">
-                                <button
-                                    type="submit"
-                                    disabled={isSubmitting}
-                                    className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
-                                >
-                                    {isSubmitting ? 'Đang gửi...' : 'Gửi báo giá'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleCancel}
-                                    disabled={isSubmitting}
-                                    className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                >
-                                    Hủy
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                )}
-
-                {/* Request not available (assigned to another provider or other status) */}
-                {request.status !== 'MATCHING' && request.assignedProviderId !== user?.id && (
-                    <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6">
-                        <div className="flex items-start gap-3">
-                            <svg className="h-6 w-6 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            <div className="flex-1">
-                                <h3 className="font-semibold text-yellow-900 mb-2">
-                                    Yêu cầu không còn khả dụng
-                                </h3>
-                                <p className="text-yellow-800 mb-3">
-                                    Yêu cầu này không còn ở trạng thái MATCHING. Có thể đã có provider khác được khách hàng chọn hoặc yêu cầu đã hết hạn.
-                                </p>
-                                <div className="bg-white rounded-lg p-3 border border-yellow-100">
-                                    <div className="text-sm text-gray-700">
-                                        <span className="font-medium">Trạng thái hiện tại:</span> <span className="font-semibold text-yellow-800">{request.status}</span>
-                                    </div>
-                                    {request.assignedProviderId && request.assignedProviderId !== user?.id && (
-                                        <div className="text-sm text-gray-700 mt-1">
-                                            <span className="font-medium">Lý do:</span> Yêu cầu đã được gán cho provider khác
+                                        <div>
+                                            <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Lời nhắn của bạn</p>
+                                            <p className="text-sm font-medium italic text-gray-700">"{myQuoteDetails.message}"</p>
                                         </div>
                                     )}
                                 </div>
-                                <button
-                                    onClick={() => router.push('/provider/active')}
-                                    className="mt-4 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 font-medium"
-                                >
-                                    Quay lại trang chủ
-                                </button>
+
+                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                                    <p className="text-xs font-semibold text-blue-800 text-center animate-pulse">
+                                        Vui lòng giữ màn hình này và không rời đi...
+                                    </p>
+                                </div>
                             </div>
-                        </div>
+                        ) : request.status !== 'MATCHING' && request.assignedProviderId !== user?.id ? (
+                            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-lg sticky top-24">
+                                <div className="text-center pb-6">
+                                    <div className="w-16 h-16 mx-auto bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4">
+                                        <svg width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-lg font-bold text-[#1a1a2e] mb-2">Yêu cầu đã kết thúc!</h2>
+                                    <p className="text-sm text-gray-500 mb-6">Yêu cầu này đã được tài xế khác nhận hoặc đã quá hạn gửi báo giá.</p>
+                                    <button
+                                        onClick={handleCancel}
+                                        className="w-full py-3.5 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                                    >
+                                        Quay về màn hình chính
+                                    </button>
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
-                )}
+                </div>
             </div>
 
             {/* Image Viewer Modal */}

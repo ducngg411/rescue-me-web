@@ -25,6 +25,16 @@ const VEHICLE_TYPE_LABELS: Record<string, string> = {
     MOTORCYCLE: 'Xe máy',
 };
 
+const C = {
+    orange: '#f97316',
+    orangeDark: '#ea6c0a',
+    orangeLight: '#fff7ed',
+    navy: '#1a1a2e',
+    gray: '#6b7280',
+    border: '#f1f5f9',
+    bg: '#f8fafc',
+};
+
 export default function IncomingRequestModal({
     request,
     onViewDetails, // Changed from onAccept
@@ -71,73 +81,84 @@ export default function IncomingRequestModal({
     const quoteWindowClosed = !quoteWindowOpen || quoteWindowTime === 0;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-4 rounded-t-lg">
-                    <h2 className="text-xl font-bold">YÊU CẦU CỨU HỘ MỚI</h2>
-                    <p className="text-sm text-red-100 mt-1">Vui lòng phản hồi nhanh để nhận yêu cầu</p>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col">
+                {/* ─── Header ─── */}
+                <div className="relative px-6 py-5 text-white flex-shrink-0" style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}>
+                    <h2 className="text-xl font-bold tracking-tight">YÊU CẦU CỨU HỘ MỚI</h2>
+                    <p className="text-sm text-white/90 mt-1 font-medium">Vui lòng phản hồi nhanh để nhận yêu cầu</p>
+                    {/* Decorative element */}
+                    <div className="absolute top-0 right-0 p-4 opacity-20 pointer-events-none">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" />
+                        </svg>
+                    </div>
                 </div>
 
-                {/* Content */}
-                <div className="p-6 space-y-4">
+                {/* ─── Content ─── */}
+                <div className="p-6 space-y-4 overflow-y-auto">
                     {/* Customer Info */}
-                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                        <div className="text-xs text-gray-500 mb-2">THÔNG TIN KHÁCH HÀNG</div>
-                        <div className="font-semibold text-gray-900 mb-2">{request.user.name || 'Khách hàng'}</div>
-                        <a href={`tel:${request.user.phone}`} className="text-blue-600 hover:underline text-sm font-medium">
-                            {request.user.phone}
-                        </a>
+                    <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0" style={{ background: C.orange }}>
+                            {request.user.name?.charAt(0).toUpperCase() || 'K'}
+                        </div>
+                        <div>
+                            <div className="text-[10px] font-bold tracking-wider mb-0.5" style={{ color: C.gray }}>KHÁCH HÀNG</div>
+                            <div className="font-semibold text-sm" style={{ color: C.navy }}>{request.user.name || 'Khách hàng'}</div>
+                            <div className="text-sm font-medium opacity-70" style={{ color: C.navy }}>
+                                {request.user.phone ? request.user.phone.replace(/(\d{3})\d{4}(\d{3})/, '$1****$2') : ''}
+                            </div>
+                        </div>
                     </div>
 
                     {/* Location */}
-                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                        <div className="text-xs text-blue-600 font-semibold mb-2">VỊ TRÍ GẶP NẠN</div>
-                        <div className="text-sm text-gray-800">{request.pickupLocation.address}</div>
+                    <div className="rounded-2xl p-4" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                        <div className="text-[10px] font-bold tracking-wider mb-1.5" style={{ color: '#16aecb' }}>VỊ TRÍ GẶP NẠN</div>
+                        <div className="text-sm font-medium" style={{ color: C.navy }}>{request.pickupLocation.address}</div>
                     </div>
 
                     {/* Incident Details */}
-                    <div className="bg-white rounded-lg p-4 border border-gray-200 space-y-3">
-                        <div className="text-xs text-gray-500 mb-2">CHI TIẾT SỰ CỐ</div>
+                    <div className="rounded-2xl p-4 space-y-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+                        <div className="text-[10px] font-bold tracking-wider" style={{ color: C.gray }}>CHI TIẾT SỰ CỐ</div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <div className="text-xs text-gray-500">Loại xe</div>
-                                <div className="text-sm font-medium text-gray-900">
+                                <div className="text-[10px] uppercase mb-0.5" style={{ color: C.gray }}>Loại xe</div>
+                                <div className="text-sm font-bold" style={{ color: C.navy }}>
                                     {VEHICLE_TYPE_LABELS[request.vehicleType] || request.vehicleType}
                                 </div>
                             </div>
                             <div>
-                                <div className="text-xs text-gray-500">Sự cố</div>
-                                <div className="text-sm font-medium text-gray-900">
+                                <div className="text-[10px] uppercase mb-0.5" style={{ color: C.gray }}>Sự cố</div>
+                                <div className="text-sm font-bold" style={{ color: C.navy }}>
                                     {INCIDENT_TYPE_LABELS[request.incidentType] || request.incidentType}
                                 </div>
                             </div>
                         </div>
                         {request.description && (
-                            <div className="pt-2 border-t border-gray-100">
-                                <div className="text-xs text-gray-500 mb-1">Mô tả chi tiết</div>
-                                <div className="text-sm text-gray-700 italic">"{request.description}"</div>
+                            <div className="pt-3 mt-1" style={{ borderTop: `1px solid ${C.border}` }}>
+                                <div className="text-[10px] uppercase mb-1" style={{ color: C.gray }}>Mô tả chi tiết</div>
+                                <div className="text-sm font-medium italic" style={{ color: C.navy }}>"{request.description}"</div>
                             </div>
                         )}
                     </div>
 
                     {/* Distance & Earnings */}
                     <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-                            <div className="text-xs text-blue-700 font-medium mb-1">THỜI GIAN ĐẾN</div>
-                            <div className="text-2xl font-bold text-blue-600">
+                        <div className="rounded-2xl p-4 flex flex-col justify-center" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                            <div className="text-[10px] font-bold tracking-wider mb-1" style={{ color: '#2563eb' }}>CÁCH BẠN</div>
+                            <div className="text-2xl font-black tracking-tight" style={{ color: '#1d4ed8' }}>
                                 ~{estimatedMinutes}'
                             </div>
-                            <div className="text-xs text-gray-600 mt-1">
+                            <div className="text-xs font-semibold mt-0.5" style={{ color: '#3b82f6' }}>
                                 {request.distance < 1
                                     ? `${(request.distance * 1000).toFixed(0)} m`
-                                    : `${request.distance.toFixed(2)} km`
+                                    : `${request.distance.toFixed(1)} km`
                                 }
                             </div>
                         </div>
-                        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
-                            <div className="text-xs text-green-700 font-medium mb-1">DỰ KIẾN THU NHẬP</div>
-                            <div className="text-xl font-bold text-green-600">
+                        <div className="rounded-2xl p-4 flex flex-col justify-center" style={{ background: '#ecfdf5', border: '1px solid #a7f3d0' }}>
+                            <div className="text-[10px] font-bold tracking-wider mb-1" style={{ color: '#059669' }}>DỰ KIẾN THU NHẬP</div>
+                            <div className="text-xl font-black tracking-tight" style={{ color: '#047857' }}>
                                 {request.estimatedEarnings.toLocaleString()}₫
                             </div>
                         </div>
@@ -145,25 +166,25 @@ export default function IncomingRequestModal({
 
                     {/* Media Preview */}
                     {request.media && request.media.length > 0 && (
-                        <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                            <div className="text-xs text-purple-700 font-medium mb-2">
-                                HÌNH ẢNH/VIDEO ({request.media.length})
+                        <div className="rounded-2xl p-4" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+                            <div className="text-[10px] font-bold tracking-wider mb-2.5" style={{ color: C.gray }}>
+                                HÌNH ẢNH/VIDEO ĐÍNH KÈM ({request.media.length})
                             </div>
-                            <div className="flex gap-2 overflow-x-auto">
+                            <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                                 {request.media.slice(0, 4).map((media, idx) => (
-                                    <div key={idx} className="flex-shrink-0 w-16 h-16 bg-white rounded border border-purple-200 overflow-hidden">
+                                    <div key={idx} className="flex-shrink-0 w-16 h-16 bg-white rounded-xl border overflow-hidden" style={{ borderColor: C.border }}>
                                         {media.type === 'IMAGE' ? (
                                             <img src={media.url} alt="" className="w-full h-full object-cover" />
                                         ) : (
-                                            <div className="w-full h-full flex items-center justify-center bg-gray-100 text-xs text-gray-500">
+                                            <div className="w-full h-full flex items-center justify-center bg-gray-100 text-xs text-gray-500 font-medium">
                                                 VIDEO
                                             </div>
                                         )}
                                     </div>
                                 ))}
                                 {request.media.length > 4 && (
-                                    <div className="flex-shrink-0 w-16 h-16 bg-purple-100 rounded border border-purple-200 flex items-center justify-center">
-                                        <span className="text-xs font-medium text-purple-600">+{request.media.length - 4}</span>
+                                    <div className="flex-shrink-0 w-16 h-16 rounded-xl border flex items-center justify-center" style={{ background: C.bg, borderColor: C.border }}>
+                                        <span className="text-xs font-bold" style={{ color: C.navy }}>+{request.media.length - 4}</span>
                                     </div>
                                 )}
                             </div>
@@ -171,66 +192,74 @@ export default function IncomingRequestModal({
                     )}
 
                     {/* Countdown Timer */}
-                    <div>
-                        <div className="text-center mb-2">
-                            <div className="text-2xl font-bold text-gray-900">
+                    <div className="pt-2">
+                        <div className="text-center mb-3">
+                            <div className="text-3xl font-black tracking-tight" style={{ color: C.navy }}>
                                 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
                             </div>
-                            <div className="text-xs text-gray-600">
+                            <div className="text-xs font-medium mt-0.5" style={{ color: C.gray }}>
                                 {request.quoteWindowTimeRemaining
-                                    ? 'Thời gian còn lại để gửi báo giá'
+                                    ? 'Thời gian còn lại để nhận cuốc'
                                     : 'Thời gian phản hồi'
                                 }
                             </div>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                        <div className="w-full rounded-full h-2.5 overflow-hidden" style={{ background: C.border }}>
                             <div
-                                className="bg-blue-500 h-full transition-all duration-1000"
-                                style={{ width: `${progressPercent}%` }}
+                                className="h-full transition-all duration-1000 rounded-full"
+                                style={{
+                                    width: `${progressPercent}%`,
+                                    background: progressPercent < 25 ? '#ef4444' : C.orange
+                                }}
                             />
                         </div>
                     </div>
 
                     {/* Quote Window Status Warning */}
                     {quoteWindowClosed && (
-                        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3">
-                            <div className="flex items-center gap-2 text-sm text-red-700">
+                        <div className="rounded-xl p-3" style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
+                            <div className="flex items-center gap-2.5">
                                 <span className="text-lg">⏰</span>
                                 <div>
-                                    <div className="font-semibold">Đã hết hạn nhận báo giá!</div>
-                                    <div className="text-xs text-red-600">Yêu cầu này đã đóng cửa sổ nhận báo giá.</div>
+                                    <div className="text-sm font-bold" style={{ color: '#991b1b' }}>Đã hết hạn nhận cuốc!</div>
+                                    <div className="text-xs font-medium" style={{ color: '#b91c1c' }}>Yêu cầu này đã đóng hệ thống nhận mốc báo giá.</div>
                                 </div>
                             </div>
                         </div>
                     )}
                     {!quoteWindowClosed && quoteWindowCritical && (
-                        <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-3">
-                            <div className="flex items-center gap-2 text-sm text-orange-700">
-                                <span className="text-lg"></span>
+                        <div className="rounded-xl p-3" style={{ background: C.orangeLight, border: `1px solid #fed7aa` }}>
+                            <div className="flex items-center gap-2.5">
+                                <span className="text-lg">⚡</span>
                                 <div>
-                                    <div className="font-semibold">Sắp hết hạn! Còn {quoteWindowTime}s</div>
-                                    <div className="text-xs text-orange-600">Cửa sổ nhận báo giá sắp đóng.</div>
+                                    <div className="text-sm font-bold" style={{ color: '#9a3412' }}>Sắp hết hạn! Còn {quoteWindowTime}s</div>
+                                    <div className="text-xs font-medium" style={{ color: C.orangeDark }}>Đang chờ bạn phản hồi ngay lập tức.</div>
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {/* Action Buttons */}
-                    <div className="grid grid-cols-2 gap-3 pt-2">
+                    <div className="grid grid-cols-2 gap-3 pt-4">
                         <button
                             onClick={onDecline}
                             disabled={isProcessing}
-                            className="px-4 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-3.5 border-2 text-sm font-bold rounded-2xl hover:bg-gray-50 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{ borderColor: C.border, color: C.gray }}
                         >
                             Bỏ qua
                         </button>
                         <button
                             onClick={onViewDetails}
                             disabled={isProcessing || quoteWindowClosed}
-                            className={`px-4 py-3 font-semibold rounded-lg transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${quoteWindowClosed
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800'
+                            className={`px-4 py-3.5 text-sm font-bold shadow-md rounded-2xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${quoteWindowClosed
+                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                : 'text-white'
                                 }`}
+                            style={!quoteWindowClosed ? {
+                                background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
+                                boxShadow: `0 4px 14px ${C.orange}40`
+                            } : {}}
                             title={quoteWindowClosed ? 'Cửa sổ nhận báo giá đã đóng' : ''}
                         >
                             {quoteWindowClosed ? 'Đã hết hạn' : 'Xem chi tiết & Gửi báo giá'}
