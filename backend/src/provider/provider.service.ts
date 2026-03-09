@@ -879,8 +879,10 @@ export class ProviderService {
             });
 
             const revenue = requests.reduce((sum, req) => sum + getRequestRevenue(req), 0);
+            // Use local date string (not UTC) to avoid timezone offset bug (e.g. UTC+7)
+            const localDateStr = `${dayStart.getFullYear()}-${String(dayStart.getMonth() + 1).padStart(2, '0')}-${String(dayStart.getDate()).padStart(2, '0')}`;
             weeklyRevenue.push({
-                date: dayStart.toISOString().slice(0, 10),
+                date: localDateStr,
                 revenue,
                 profit: Math.round(revenue * 0.9),
             });

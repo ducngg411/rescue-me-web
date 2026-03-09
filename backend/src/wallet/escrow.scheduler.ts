@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import { WalletTransactionStatus, WalletTransactionType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -19,10 +18,10 @@ export class EscrowScheduler {
 
     constructor(private readonly prisma: PrismaService) { }
 
-    // ── Cron ───────────────────────────────────────────────────────────────────
-    // Runs every hour at minute 0  (e.g. 00:00, 01:00, 02:00 …)
-    // Change the expression if you want a different cadence.
-    @Cron('0 * * * *')
+    // ── Cron DISABLED — WalletService.autoReleaseHolding() is now the single
+    // source of truth for releasing PENDING credits (via holdReleaseAt field).
+    // Having two schedulers was causing double-release → negative pendingBalance.
+    // Method kept for manual / admin trigger use only.
     async autoReleaseEscrow(): Promise<EscrowReleaseReport> {
         this.logger.log('⏰ [EscrowScheduler] Starting 24h escrow auto-release run…');
 

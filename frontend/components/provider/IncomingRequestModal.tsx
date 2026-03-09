@@ -5,8 +5,9 @@ import { PendingRequest } from '@/lib/hooks/usePendingRequests';
 
 interface IncomingRequestModalProps {
     request: PendingRequest;
-    onViewDetails: () => void; // Changed from onAccept
-    onDecline: () => void;
+    onViewDetails: () => void;
+    onClose: () => void;    // just closes the modal, request stays in inbox
+    onDecline: () => void;  // actually declines the request
     isProcessing: boolean;
 }
 
@@ -37,7 +38,8 @@ const C = {
 
 export default function IncomingRequestModal({
     request,
-    onViewDetails, // Changed from onAccept
+    onViewDetails,
+    onClose,
     onDecline,
     isProcessing,
 }: IncomingRequestModalProps) {
@@ -57,7 +59,7 @@ export default function IncomingRequestModal({
             setTimeLeft((prev) => {
                 if (prev <= 1) {
                     clearInterval(interval);
-                    onDecline(); // Auto-decline when time runs out
+                    onClose(); // Auto-close when time runs out (request stays in inbox until backend expires it)
                     return 0;
                 }
                 return prev - 1;
@@ -65,7 +67,7 @@ export default function IncomingRequestModal({
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [onDecline]); // Removed initialTime from dependencies
+    }, [onClose]); // updated dependency
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
@@ -239,22 +241,33 @@ export default function IncomingRequestModal({
                         </div>
                     )}
 
-                    {/* Action Buttons */}
-                    <div className="grid grid-cols-2 gap-3 pt-4">
+                    {/* Action Buttons: 3 buttons in a row */}
+                    <div className="grid grid-cols-3 gap-2 pt-4">
+                        {/* Đóng – only closes modal */}
+                        <button
+                            onClick={onClose}
+                            disabled={isProcessing}
+                            className="px-2 py-3.5 border-2 text-xs font-bold rounded-2xl hover:bg-gray-50 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{ borderColor: C.border, color: C.gray }}
+                        >
+                            Đóng
+                        </button>
+                        {/* Từ chối – declines the request */}
                         <button
                             onClick={onDecline}
                             disabled={isProcessing}
-                            className="px-4 py-3.5 border-2 text-sm font-bold rounded-2xl hover:bg-gray-50 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{ borderColor: C.border, color: C.gray }}
+                            className="px-2 py-3.5 text-xs font-bold rounded-2xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}
                         >
-                            Bỏ qua
+                            Từ chối
                         </button>
+                        {/* Xem chi tiết & Gửi báo giá */}
                         <button
                             onClick={onViewDetails}
                             disabled={isProcessing || quoteWindowClosed}
-                            className={`px-4 py-3.5 text-sm font-bold shadow-md rounded-2xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${quoteWindowClosed
-                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                : 'text-white'
+                            className={`px-2 py-3.5 text-xs font-bold shadow-md rounded-2xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${quoteWindowClosed
+                                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                    : 'text-white'
                                 }`}
                             style={!quoteWindowClosed ? {
                                 background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,

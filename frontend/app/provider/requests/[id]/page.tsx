@@ -91,6 +91,7 @@ export default function ProviderRequestDetailPage() {
 
     // Quote window timer
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
+    const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
 
     // Chat hook — subscribe for unread count as soon as we have user.id + requestId
     // (enabled independently of request loading so the badge shows immediately)
@@ -390,18 +391,30 @@ export default function ProviderRequestDetailPage() {
         }
     };
 
-    const handleCancel = async () => {
-        // If provider hasn't sent a quote yet, decline to prevent spam
-        if (request && request.status === 'MATCHING' && !hasPendingQuote) {
-            try {
-                await api.post(`/rescue-requests/${requestId}/decline`);
-                console.log(`🚫 Declined request ${requestId} on cancel`);
-            } catch (err) {
-                console.error('Error declining request:', err);
-                // Continue anyway
-            }
-        }
+    const handleCancel = () => {
+        // Just navigate back — request stays in inbox (Cảnh báo đến)
+        // Provider must explicitly use the Decline button to remove it
+        router.push('/provider/active');
+    };
 
+    const handleDeclineRequest = () => {
+        setShowDeclineConfirm(true);
+    };
+
+    const confirmDeclineAction = async () => {
+        setShowDeclineConfirm(false);
+        try {
+            await api.post(`/rescue-requests/${requestId}/decline`);
+            // Persist declined id so dashboard hides it immediately
+            try {
+                const stored = sessionStorage.getItem('provider_declined_ids');
+                const ids: string[] = stored ? JSON.parse(stored) : [];
+                if (!ids.includes(requestId)) {
+                    ids.push(requestId);
+                    sessionStorage.setItem('provider_declined_ids', JSON.stringify(ids));
+                }
+            } catch { }
+        } catch { }
         router.push('/provider/active');
     };
 
@@ -842,13 +855,26 @@ export default function ProviderRequestDetailPage() {
                             <p className="text-xs md:text-sm font-medium text-gray-500">#{request.id.slice(0, 8).toUpperCase()}</p>
                         </div>
                     </div>
-                    {/* Status Pill */}
-                    <div className="flex items-center">
+                    {/* Status Pill + Decline button */}
+                    <div className="flex items-center gap-2">
                         {request.status === 'MATCHING' && !hasPendingQuote && (
-                            <span className="px-2.5 md:px-3 py-1 bg-orange-50/70 text-[#f97316] text-[11px] md:text-[13px] font-bold rounded-full flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                                Đang tìm provider
-                            </span>
+                            <>
+                                <span className="px-2.5 md:px-3 py-1 bg-orange-50/70 text-[#f97316] text-[11px] md:text-[13px] font-bold rounded-full flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
+                                    Đang tìm provider
+                                </span>
+                                <button
+                                    onClick={handleDeclineRequest}
+                                    className="px-2.5 py-1 rounded-full text-[11px] md:text-[13px] font-bold flex items-center gap-1 transition-colors"
+                                    style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}
+                                    title="Từ chối yêu cầu này"
+                                >
+                                    <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    Từ chối
+                                </button>
+                            </>
                         )}
                         {request.status === 'MATCHING' && hasPendingQuote && (
                             <span className="px-2.5 md:px-3 py-1 bg-yellow-50/70 text-yellow-600 text-[11px] md:text-[13px] font-bold rounded-full flex items-center gap-1.5">
@@ -1142,7 +1168,7 @@ export default function ProviderRequestDetailPage() {
                                             disabled={isSubmitting}
                                             className="w-full mt-3 py-3 rounded-xl font-semibold text-gray-500 hover:text-gray-800 transition-colors text-sm"
                                         >
-                                            Hủy bỏ yêu cầu
+                                            Quay lại
                                         </button>
                                     </div>
 
@@ -1280,6 +1306,38 @@ export default function ProviderRequestDetailPage() {
                                 </svg>
                             </button>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Custom Decline Confirmation Dialog */}
+            {showDeclineConfirm && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+                        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+                            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#dc2626" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-base font-bold text-center mb-1 text-gray-900">Từ chối yêu cầu?</h3>
+                        <p className="text-sm text-center text-gray-500 mb-6">
+                            Yêu cầu này sẽ bị xóa khỏi <strong>Cảnh báo đến</strong> của bạn và bạn sẽ không thể xem lại.
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => setShowDeclineConfirm(false)}
+                                className="py-3 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                onClick={confirmDeclineAction}
+                                className="py-3 rounded-xl text-sm font-bold text-white transition-colors"
+                                style={{ background: '#dc2626' }}
+                            >
+                                Từ chối
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

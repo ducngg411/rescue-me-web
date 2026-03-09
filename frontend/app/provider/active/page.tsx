@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
 import {
     Wallet, Settings, BookOpen, TrendingUp,
-    Star, Zap, Flame, CheckCircle2,
+    Star, CheckCircle2,
     Bell, Clock, Wifi, WifiOff,
 } from 'lucide-react';
 
@@ -63,7 +63,7 @@ function StatCard({ icon, label, value, sub, bg }: { icon: React.ReactNode; labe
 }
 
 // ─── Incoming Alert Card ──────────────────────────────────────────────────────
-function AlertCard({ request, onAccept, onDecline }: { request: any; onAccept: () => void; onDecline: () => void }) {
+function AlertCard({ request, onView }: { request: any; onView: () => void }) {
     const timeAgo = request.createdAt
         ? Math.floor((Date.now() - new Date(request.createdAt).getTime()) / 60000)
         : 0;
@@ -78,6 +78,9 @@ function AlertCard({ request, onAccept, onDecline }: { request: any; onAccept: (
         LOCKED_OUT: t('provider.incidents.LOCKED_OUT'),
         OTHER: t('provider.incidents.OTHER'),
     };
+
+    const customerName = request.user?.name || request.user?.phone || 'Khách hàng';
+
     return (
         <div className="rounded-xl p-3.5 mb-2 last:mb-0" style={{ background: '#fff5f5', border: '1px solid #fee2e2' }}>
             <div className="flex items-start gap-2.5 mb-3">
@@ -93,6 +96,10 @@ function AlertCard({ request, onAccept, onDecline }: { request: any; onAccept: (
                             {timeAgo < 1 ? t('common.justNow') : `${timeAgo}${t('common.minutesAgo')}`}
                         </span>
                     </div>
+                    {/* Customer name */}
+                    <p className="text-xs font-medium mt-0.5" style={{ color: C.navy }}>
+                        {customerName}
+                    </p>
                     <p className="text-xs truncate mt-0.5" style={{ color: C.gray }}>
                         {request.pickupLocation?.address || t('components.incomingRequest.unknownLocation')}
                     </p>
@@ -103,66 +110,18 @@ function AlertCard({ request, onAccept, onDecline }: { request: any; onAccept: (
                     )}
                 </div>
             </div>
-            <div className="flex gap-2">
-                <button
-                    onClick={onAccept}
-                    className="flex-1 py-1.5 rounded-lg text-xs font-bold text-white transition-all active:scale-95"
-                    style={{ background: C.orange }}
-                >
-                    {t('provider.dashboard.accept')}
-                </button>
-                <button
-                    onClick={onDecline}
-                    className="flex-1 py-1.5 rounded-lg border text-xs font-bold transition-all active:scale-95"
-                    style={{ border: '1px solid #e5e7eb', color: C.gray, background: 'white' }}
-                >
-                    {t('provider.dashboard.decline')}
-                </button>
-            </div>
+            <button
+                onClick={onView}
+                className="w-full py-1.5 rounded-lg text-xs font-bold text-white transition-all active:scale-95"
+                style={{ background: C.orange }}
+            >
+                Xem chi tiết
+            </button>
         </div>
     );
 }
 
-// ─── Daily Quest ──────────────────────────────────────────────────────────────
-function DailyQuest({ t }: { t: (k: string) => string }) {
-    return (
-        <div className="bg-white rounded-xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-            <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold" style={{ color: C.navy }}>{t('provider.dailyQuest.title')}</h3>
-                <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ background: '#dbeafe', color: '#2563eb' }}>Lv 12</span>
-            </div>
-            <div className="mb-3">
-                <div className="flex justify-between text-xs mb-1">
-                    <span style={{ color: C.gray }}>{t('provider.dailyQuest.serviceHours')}</span>
-                    <span className="font-semibold" style={{ color: C.navy }}>6.5 / 10h</span>
-                </div>
-                <div className="h-2 rounded-full overflow-hidden" style={{ background: C.border }}>
-                    <div className="h-full rounded-full transition-all" style={{ width: '65%', background: '#3b82f6' }} />
-                </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-                <div className="flex items-center gap-2 p-2.5 rounded-lg" style={{ background: C.orangeLight }}>
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fed7aa' }}>
-                        <Flame style={{ width: 14, height: 14, color: C.orange }} />
-                    </div>
-                    <div>
-                        <p className="text-xs" style={{ color: C.gray }}>{t('provider.dailyQuest.streak')}</p>
-                        <p className="text-xs font-bold" style={{ color: C.navy }}>5 Days</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2 p-2.5 rounded-lg" style={{ background: '#fefce8' }}>
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#fef9c3' }}>
-                        <Zap style={{ width: 14, height: 14, color: '#ca8a04' }} />
-                    </div>
-                    <div>
-                        <p className="text-xs" style={{ color: C.gray }}>{t('provider.dailyQuest.xpEarned')}</p>
-                        <p className="text-xs font-bold" style={{ color: C.navy }}>+450</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
+
 
 // ─── Quick Actions ────────────────────────────────────────────────────────────
 function QuickActions({ router, t }: { router: ReturnType<typeof useRouter>; t: (k: string) => string }) {
@@ -291,22 +250,26 @@ export default function ProviderActivePage() {
 
     const [selectedRequest, setSelectedRequest] = useState<any>(null);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [declinedIds, setDeclinedIds] = useState<Set<string>>(new Set());
-    const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
-
-    // Load persisted session state on mount
-    useEffect(() => {
+    const [confirmDeclineReq, setConfirmDeclineReq] = useState<any>(null); // request pending decline confirmation
+    // Load declinedIds synchronously in the initializer so it's ready before the
+    // first render and before the auto-popup useEffect can run.
+    const [declinedIds, setDeclinedIds] = useState<Set<string>>(() => {
         try {
-            const storedDeclined = sessionStorage.getItem('provider_declined_ids');
-            const storedIgnored = sessionStorage.getItem('provider_ignored_ids');
-            if (storedDeclined) setDeclinedIds(new Set(JSON.parse(storedDeclined)));
-            if (storedIgnored) setIgnoredIds(new Set(JSON.parse(storedIgnored)));
-        } catch (e) {
-            console.error('Failed to parse stored ids', e);
-        }
-    }, []);
+            const stored = sessionStorage.getItem('provider_declined_ids');
+            if (stored) return new Set<string>(JSON.parse(stored));
+        } catch { }
+        return new Set<string>();
+    });
+    // dismissed modal ids: persisted to sessionStorage so they survive navigation back to this page
+    const dismissedModalIds = useRef<Set<string>>((() => {
+        try {
+            const stored = sessionStorage.getItem('provider_dismissed_modal_ids');
+            if (stored) return new Set<string>(JSON.parse(stored));
+        } catch { }
+        return new Set<string>();
+    })());
 
-    // Helper wrappers to persist to session storage
+    // Helper to persist declined ids to session storage
     const addDeclinedId = (id: string) => {
         setDeclinedIds(prev => {
             const next = new Set(prev).add(id);
@@ -315,12 +278,15 @@ export default function ProviderActivePage() {
         });
     };
 
-    const addIgnoredId = (id: string) => {
-        setIgnoredIds(prev => {
-            const next = new Set(prev).add(id);
-            sessionStorage.setItem('provider_ignored_ids', JSON.stringify(Array.from(next)));
-            return next;
-        });
+    // Helper to add to dismissed set + persist so it survives remount
+    const addDismissedModalId = (id: string) => {
+        dismissedModalIds.current.add(id);
+        try {
+            sessionStorage.setItem(
+                'provider_dismissed_modal_ids',
+                JSON.stringify(Array.from(dismissedModalIds.current))
+            );
+        } catch { }
     };
 
     const [activeNav, setActiveNav] = useState(t('provider.nav.dashboard'));
@@ -382,10 +348,13 @@ export default function ProviderActivePage() {
         if (!authLoading && !user) router.push('/auth/login');
     }, [authLoading, user, router]);
 
+    // Auto-popup: show modal for the first request not yet dismissed by the provider.
+    // dismissed = provider explicitly pressed "Đóng" (close) — request stays in inbox list.
     useEffect(() => {
-        const freshRequests = filteredRequests.filter(r => !ignoredIds.has(r.id));
-        if (freshRequests.length > 0 && !selectedRequest) setSelectedRequest(freshRequests[0]);
-    }, [filteredRequests, selectedRequest, ignoredIds]);
+        if (selectedRequest) return; // modal already open
+        const next = filteredRequests.find(r => !dismissedModalIds.current.has(r.id));
+        if (next) setSelectedRequest(next);
+    }, [filteredRequests, selectedRequest]);
 
     // ── Guards ────────────────────────────────────────────────────────────────
     if (authLoading) return (
@@ -425,17 +394,31 @@ export default function ProviderActivePage() {
         if (result.success) toast.success(result.message); else toast.error(result.message);
     };
 
-    const handleAccept = (req: any) => {
+    const handleViewDetails = (req: any) => {
+        // Dismiss the modal for this request before navigating so that
+        // pressing Back from the detail page won't re-trigger the auto-popup.
+        addDismissedModalId(req.id);
         router.push(`/provider/requests/${req.id}`);
         setSelectedRequest(null);
     };
 
-    const handleIgnoreModal = (req: any) => {
-        addIgnoredId(req.id);
-        if (selectedRequest?.id === req.id) setSelectedRequest(null);
+    // Closing the modal suppresses auto-popup for this request (persisted across navigation).
+    const handleCloseModal = () => {
+        if (selectedRequest) {
+            addDismissedModalId(selectedRequest.id);
+        }
+        setSelectedRequest(null);
     };
 
     const handleDecline = async (req: any) => {
+        // Show custom confirm dialog instead of window.confirm
+        setConfirmDeclineReq(req);
+    };
+
+    const confirmDecline = async () => {
+        const req = confirmDeclineReq;
+        if (!req) return;
+        setConfirmDeclineReq(null);
         addDeclinedId(req.id);
         if (selectedRequest?.id === req.id) setSelectedRequest(null);
         try { await api.post(`/rescue-requests/${req.id}/decline`); } catch { }
@@ -676,16 +659,12 @@ export default function ProviderActivePage() {
                                             <AlertCard
                                                 key={req.id}
                                                 request={req}
-                                                onAccept={() => handleAccept(req)}
-                                                onDecline={() => handleDecline(req)}
+                                                onView={() => handleViewDetails(req)}
                                             />
                                         ))}
                                     </div>
                                 )}
                             </div>
-
-                            {/* Daily Quest */}
-                            <DailyQuest t={t} />
 
                             {/* Quick Actions */}
                             <QuickActions router={router} t={t} />
@@ -729,10 +708,42 @@ export default function ProviderActivePage() {
             {selectedRequest && (
                 <IncomingRequestModal
                     request={selectedRequest}
-                    onViewDetails={() => handleAccept(selectedRequest)}
-                    onDecline={() => handleIgnoreModal(selectedRequest)}
+                    onViewDetails={() => handleViewDetails(selectedRequest)}
+                    onClose={handleCloseModal}
+                    onDecline={() => handleDecline(selectedRequest)}
                     isProcessing={isProcessing}
                 />
+            )}
+            {/* Custom Decline Confirmation Dialog */}
+            {confirmDeclineReq && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+                        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+                            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#dc2626" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-base font-bold text-center mb-1" style={{ color: '#1a1a2e' }}>Từ chối yêu cầu?</h3>
+                        <p className="text-sm text-center text-gray-500 mb-6">
+                            Yêu cầu này sẽ bị xóa khỏi <strong>Cảnh báo đến</strong> của bạn.
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => setConfirmDeclineReq(null)}
+                                className="py-3 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                onClick={confirmDecline}
+                                className="py-3 rounded-xl text-sm font-bold text-white transition-colors"
+                                style={{ background: '#dc2626' }}
+                            >
+                                Từ chối
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

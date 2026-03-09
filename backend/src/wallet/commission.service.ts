@@ -242,7 +242,10 @@ export class CommissionService {
         // 4. Ensure provider wallet exists
         const wallet = await this.walletService.ensureWallet(payment.providerId);
 
-        // 5. Create a PENDING CREDIT — money sits in pendingBalance
+        // 5. Create a PENDING CREDIT — money sits in pendingBalance for 24h
+        // holdReleaseAt ensures ONLY WalletService.autoReleaseHolding releases this,
+        // preventing double-release by EscrowScheduler (which queries by createdAt).
+        const holdReleaseAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
         const { transaction, wallet: updatedWallet } = await this.walletService.credit(
             wallet.id,
             netAmount,
@@ -251,6 +254,7 @@ export class CommissionService {
             {
                 status: WalletTransactionStatus.PENDING,
                 description: `Thu nhập job QR #${jobId} (chờ giải ngân) — hoa hồng ${rate * 100}% đã khấu trừ`,
+                holdReleaseAt,
             },
         );
 
