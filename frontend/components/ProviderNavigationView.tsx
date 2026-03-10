@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react';
 import ReactConfetti from 'react-confetti';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useChat } from '@/lib/hooks/useChat';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -139,6 +140,7 @@ export default function ProviderNavigationView({
 
     // Get provider identity directly from auth — avoids relying on props being undefined
     const { user: authUser } = useAuth();
+    const { t } = useLanguage();
     const providerId = authUser?.id ?? '';
     const providerName = authUser?.name ?? 'Provider';
 
@@ -167,17 +169,17 @@ export default function ProviderNavigationView({
                     if (status === 'WORKING') {
                         clearInterval(pollRef.current!);
                         setArrivalState('confirmed');
-                        toast.success('Khách hàng xác nhận!');
+                        toast.success(t('provider.navigation.toastArrivalConfirmed'));
                     } else if (status === 'IN_PROGRESS') {
                         // Customer denied — went back to IN_PROGRESS
                         clearInterval(pollRef.current!);
                         setArrivalState('denied');
-                        toast.error('Khách chưa thấy bạn đến nơi!');
+                        toast.error(t('provider.navigation.toastArrivalDenied'));
                     }
                 } catch { /* ignore poll errors */ }
             }, 3000);
         } catch (err: any) {
-            const msg = err.response?.data?.message || 'Không thể xác nhận. Thử lại.';
+            const msg = err.response?.data?.message || t('provider.navigation.confirmModal.confirming');
             toast.error(msg);
         } finally {
             setIsMarkingArrived(false);
@@ -341,7 +343,7 @@ export default function ProviderNavigationView({
         `;
         new vgl.Marker(providerEl)
             .setLngLat([providerLocation.lng, providerLocation.lat])
-            .setPopup(new vgl.Popup({ offset: 25 }).setText('Vị trí của bạn'))
+            .setPopup(new vgl.Popup({ offset: 25 }).setText(t('provider.navigation.providerMarker')))
             .addTo(map.current);
 
         // ── User/pickup marker (red pin) ──
@@ -356,7 +358,7 @@ export default function ProviderNavigationView({
         `;
         new vgl.Marker(userEl)
             .setLngLat([pickupLocation.lng, pickupLocation.lat])
-            .setPopup(new vgl.Popup({ offset: 36 }).setText(user?.name ? `Khách: ${user.name}` : 'Vị trí khách hàng'))
+            .setPopup(new vgl.Popup({ offset: 36 }).setText(user?.name ? t('provider.navigation.customerMarkerNamed').replace('{name}', user.name) : t('provider.navigation.customerMarker')))
             .addTo(map.current);
 
         // Draw route
@@ -372,10 +374,10 @@ export default function ProviderNavigationView({
         };
     }, [isMapReady, providerLocation, pickupLocation, drawRoute]);
 
-    const displayName = user?.name || 'Khách hàng';
+    const displayName = user?.name || t('provider.navigation.customerMarker');
     const displayPhone = user?.phoneNumber;
     const displayDistance = routeInfo ? `${routeInfo.distance} km` : '~';
-    const displayEta = routeInfo ? `${routeInfo.duration} phút` : (eta ? `${eta} phút` : '~');
+    const displayEta = routeInfo ? `${routeInfo.duration} ${t('provider.requestDetail.minutesLabel')}` : (eta ? `${eta} ${t('provider.requestDetail.minutesLabel')}` : '~');
 
     return (
         <>
@@ -401,11 +403,11 @@ export default function ProviderNavigationView({
                         )}
                         <div className="flex items-center gap-2 flex-1">
                             <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#22c55e' }} />
-                            <span className="text-sm font-bold" style={{ color: C.navy }}>Đang điều hướng đến khách hàng</span>
+                            <span className="text-sm font-bold" style={{ color: C.navy }}>{t('provider.navigation.headerTitle')}</span>
                         </div>
                         {locationError && (
                             <span className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#fefce8', color: '#ca8a04' }}>
-                                GPS mặc định
+                                {t('provider.navigation.gpsDefault')}
                             </span>
                         )}
                     </div>
@@ -463,7 +465,7 @@ export default function ProviderNavigationView({
                                 <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#2563eb" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                 </svg>
-                                Chat
+                                {t('provider.navigation.chatBtn')}
                                 {chatUnreadCount > 0 && (
                                     <span
                                         className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-0.5 rounded-full text-[9px] font-bold text-white flex items-center justify-center"
@@ -485,7 +487,7 @@ export default function ProviderNavigationView({
                                 <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                 </svg>
-                                Gọi ngay
+                                {t('provider.navigation.callBtn')}
                             </a>
                         )}
                     </div>
@@ -500,7 +502,7 @@ export default function ProviderNavigationView({
                         <div className="absolute inset-0 flex items-center justify-center" style={{ background: '#f1f5f9' }}>
                             <div className="text-center">
                                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-3" style={{ borderColor: C.orange }} />
-                                <p className="text-sm" style={{ color: C.gray }}>Đang tải bản đồ...</p>
+                                <p className="text-sm" style={{ color: C.gray }}>{t('provider.navigation.loadingMap')}</p>
                             </div>
                         </div>
                     )}
@@ -525,11 +527,11 @@ export default function ProviderNavigationView({
                         <>
                             <div className="flex items-center gap-3 mb-3">
                                 <div className="flex-1 rounded-xl p-2.5 text-center" style={{ background: C.bg }}>
-                                    <p className="text-[10px] mb-0.5" style={{ color: C.gray }}>Khoảng cách</p>
+                                    <p className="text-[10px] mb-0.5" style={{ color: C.gray }}>{t('provider.navigation.distanceLabel')}</p>
                                     <p className="text-base font-bold" style={{ color: C.navy }}>{displayDistance}</p>
                                 </div>
                                 <div className="flex-1 rounded-xl p-2.5 text-center" style={{ background: C.bg }}>
-                                    <p className="text-[10px] mb-0.5" style={{ color: C.gray }}>Thời gian dự kiến</p>
+                                    <p className="text-[10px] mb-0.5" style={{ color: C.gray }}>{t('provider.navigation.etaLabel')}</p>
                                     <p className="text-base font-bold" style={{ color: C.navy }}>{displayEta}</p>
                                 </div>
                             </div>
@@ -545,7 +547,7 @@ export default function ProviderNavigationView({
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
-                                Đã đến nơi
+                                {t('provider.navigation.arrivedBtn')}
                             </button>
                         </>
                     )}
@@ -562,8 +564,8 @@ export default function ProviderNavigationView({
                                     </svg>
                                 </div>
                             </div>
-                            <p className="text-sm font-bold mb-1" style={{ color: C.navy }}>Đang đợi khách hàng xác nhận...</p>
-                            <p className="text-xs text-center" style={{ color: C.gray }}>Khách hàng đang được hỏi xem bạn đã đến chưa</p>
+                            <p className="text-sm font-bold mb-1" style={{ color: C.navy }}>{t('provider.navigation.waiting.title')}</p>
+                            <p className="text-xs text-center" style={{ color: C.gray }}>{t('provider.navigation.waiting.desc')}</p>
                         </div>
                     )}
 
@@ -575,9 +577,9 @@ export default function ProviderNavigationView({
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </div>
-                            <p className="text-sm font-bold mb-1" style={{ color: '#15803d' }}>Khách đã xác nhận! Sẵn sàng bắt đầu?</p>
+                            <p className="text-sm font-bold mb-1" style={{ color: '#15803d' }}>{t('provider.navigation.confirmed.title')}</p>
                             <p className="text-xs text-center mb-4" style={{ color: C.gray }}>
-                                Tự động bắt đầu sau <span className="font-bold" style={{ color: C.orange }}>{workingCountdown}s</span>...
+                                {t('provider.navigation.confirmed.autoStart').replace('{count}', String(workingCountdown))}
                             </p>
                             <button
                                 onClick={() => {
@@ -594,7 +596,7 @@ export default function ProviderNavigationView({
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
-                                Bắt đầu làm việc ngay
+                                {t('provider.navigation.confirmed.startBtn')}
                             </button>
                         </div>
                     )}
@@ -608,8 +610,8 @@ export default function ProviderNavigationView({
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
                             </div>
-                            <p className="text-sm font-bold" style={{ color: '#15803d' }}>Đang làm việc...</p>
-                            <p className="text-xs text-center" style={{ color: C.gray }}>Xem chi tiết đơn hàng bên dưới</p>
+                            <p className="text-sm font-bold" style={{ color: '#15803d' }}>{t('provider.navigation.working.title')}</p>
+                            <p className="text-xs text-center" style={{ color: C.gray }}>{t('provider.navigation.working.desc')}</p>
                         </div>
                     )}
 
@@ -621,8 +623,8 @@ export default function ProviderNavigationView({
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                 </svg>
                                 <div>
-                                    <p className="text-sm font-bold" style={{ color: '#dc2626' }}>Khách chưa thấy bạn đến!</p>
-                                    <p className="text-xs" style={{ color: '#b91c1c' }}>Liên hệ khách hàng ngay để xác nhận vị trí</p>
+                                    <p className="text-sm font-bold" style={{ color: '#dc2626' }}>{t('provider.navigation.denied.title')}</p>
+                                    <p className="text-xs" style={{ color: '#b91c1c' }}>{t('provider.navigation.denied.desc')}</p>
                                 </div>
                             </div>
                             <div className="grid grid-cols-3 gap-2">
@@ -635,7 +637,7 @@ export default function ProviderNavigationView({
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                         </svg>
-                                        Gọi điện
+                                        {t('provider.navigation.denied.callBtn')}
                                     </a>
                                 )}
                                 <button
@@ -646,7 +648,7 @@ export default function ProviderNavigationView({
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                     </svg>
-                                    Nhắn tin
+                                    {t('provider.navigation.denied.chatBtn')}
                                 </button>
                                 <button
                                     onClick={() => setArrivalState('idle')}
@@ -656,7 +658,7 @@ export default function ProviderNavigationView({
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.gray} strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
-                                    Thử lại
+                                    {t('provider.navigation.denied.retryBtn')}
                                 </button>
                             </div>
                         </div>
@@ -672,7 +674,7 @@ export default function ProviderNavigationView({
                         currentUserId={providerId}
                         currentUserRole="PROVIDER"
                         currentUserName={providerName ?? 'Provider'}
-                        otherPartyName={customerName ?? user?.name ?? 'Khách hàng'}
+                        otherPartyName={customerName ?? user?.name ?? t('provider.navigation.customerMarker')}
                         onClose={() => setIsChatOpen(false)}
                     />
                 </Suspense>
@@ -696,9 +698,9 @@ export default function ProviderNavigationView({
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
                         </div>
-                        <h3 className="text-base font-bold text-center mb-1" style={{ color: C.navy }}>Xác nhận đã đến nơi?</h3>
+                        <h3 className="text-base font-bold text-center mb-1" style={{ color: C.navy }}>{t('provider.navigation.confirmModal.title')}</h3>
                         <p className="text-sm text-center mb-6" style={{ color: C.gray }}>
-                            Bạn xác nhận đã đến vị trí khách hàng?
+                            {t('provider.navigation.confirmModal.desc')}
                         </p>
                         <div className="grid grid-cols-2 gap-3">
                             <button
@@ -707,7 +709,7 @@ export default function ProviderNavigationView({
                                 className="py-3.5 rounded-2xl text-sm font-semibold"
                                 style={{ background: C.bg, color: C.gray }}
                             >
-                                Huỷ bỏ
+                                {t('provider.navigation.confirmModal.cancelBtn')}
                             </button>
                             <button
                                 onClick={handleMarkArrived}
@@ -723,7 +725,7 @@ export default function ProviderNavigationView({
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
                                         <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
                                     </svg>
-                                ) : 'Xác nhận'}
+                                ) : t('provider.navigation.confirmModal.confirmBtn')}
                             </button>
                         </div>
                     </div>
@@ -758,16 +760,16 @@ export default function ProviderNavigationView({
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </div>
-                            <h2 className="text-base font-bold mb-1 text-center" style={{ color: C.navy }}>Khách hàng đã thanh toán!</h2>
+                            <h2 className="text-base font-bold mb-1 text-center" style={{ color: C.navy }}>{t('provider.navigation.payment.qr.title')}</h2>
                             <p className="text-xs text-center mb-6" style={{ color: C.gray }}>
-                                Tiền đã vào hệ thống. Bấm hoàn thành để kết thúc job.
+                                {t('provider.navigation.payment.qr.desc')}
                             </p>
                             <div className="w-full rounded-2xl p-3 mb-5 flex items-start gap-2" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
                                 <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke={C.green} strokeWidth={2} className="flex-shrink-0 mt-0.5">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <p className="text-xs" style={{ color: '#166534' }}>
-                                    Tiền sẽ giải ngân vào ví sau <strong>24 giờ</strong> (trừ hoa hồng 10%)
+                                    {t('provider.navigation.payment.qr.note')}
                                 </p>
                             </div>
                             <button
@@ -805,7 +807,7 @@ export default function ProviderNavigationView({
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 )}
-                                Hoàn thành job
+                                {t('provider.navigation.payment.qr.completeBtn')}
                             </button>
                         </>
                     ) : (
@@ -819,16 +821,16 @@ export default function ProviderNavigationView({
                                     </svg>
                                 </div>
                             </div>
-                            <h2 className="text-base font-bold mb-1 text-center" style={{ color: C.navy }}>Đang chờ khách thanh toán</h2>
+                            <h2 className="text-base font-bold mb-1 text-center" style={{ color: C.navy }}>{t('provider.navigation.payment.cash.title')}</h2>
                             <p className="text-xs text-center mb-6" style={{ color: C.gray }}>
-                                Vui lòng đợi khách xác nhận đã thanh toán trước khi bấm nhận tiền
+                                {t('provider.navigation.payment.cash.desc')}
                             </p>
                             <div className="w-full rounded-2xl p-3 mb-5 flex items-start gap-2" style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}>
                                 <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#d97706" strokeWidth={2} className="flex-shrink-0 mt-0.5">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                 </svg>
                                 <p className="text-xs" style={{ color: '#92400e' }}>
-                                    Chỉ bấm "Đã nhận tiền" sau khi khách <strong>thực sự đã trả tiền</strong> cho bạn
+                                    {t('provider.navigation.payment.cash.note')}
                                 </p>
                             </div>
                             <button
@@ -842,7 +844,7 @@ export default function ProviderNavigationView({
                                         } catch { /* ignore */ }
                                         setShowJobDone(true);
                                     } catch (err: any) {
-                                        toast.error(err.response?.data?.message || 'Xác nhận thất bại');
+                                        toast.error(err.response?.data?.message || t('provider.navigation.toastArrivalDenied'));
                                     } finally {
                                         setIsConfirmingReceived(false);
                                     }
@@ -864,7 +866,7 @@ export default function ProviderNavigationView({
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 )}
-                                Tôi đã nhận tiền
+                                {t('provider.navigation.payment.cash.receivedBtn')}
                             </button>
                         </>
                     )}
@@ -920,9 +922,9 @@ export default function ProviderNavigationView({
                             <span style={{ fontSize: '44px' }}>🎉</span>
                         </div>
 
-                        <h1 className="text-2xl font-bold text-white mb-2">Hoàn thành!</h1>
+                        <h1 className="text-2xl font-bold text-white mb-2">{t('provider.navigation.jobDone.title')}</h1>
                         <p className="text-sm mb-8" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                            Bạn đã hoàn tất dịch vụ và nhận thanh toán thành công.
+                            {t('provider.navigation.jobDone.desc')}
                         </p>
 
                         {/* Earnings summary card */}
@@ -931,16 +933,16 @@ export default function ProviderNavigationView({
                                 className="w-full max-w-sm rounded-2xl p-5 mb-6"
                                 style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}
                             >
-                                <p className="text-xs font-semibold mb-4" style={{ color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em' }}>TỔNG KẾT THU NHẬP</p>
+                                <p className="text-xs font-semibold mb-4" style={{ color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em' }}>{t('provider.navigation.jobDone.earningsTitle')}</p>
                                 <div className="flex justify-between items-center mb-3">
-                                    <span className="text-sm" style={{ color: 'rgba(255,255,255,0.7)' }}>Giá trị job</span>
+                                    <span className="text-sm" style={{ color: 'rgba(255,255,255,0.7)' }}>{t('provider.navigation.jobDone.jobValue')}</span>
                                     <span className="text-base font-bold text-white">
                                         {jobEarnings.totalAmount.toLocaleString('vi-VN')}đ
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center mb-3">
                                     <span className="text-sm" style={{ color: 'rgba(255,255,255,0.7)' }}>
-                                        Hoa hồng nền tảng ({jobEarnings.commissionRate * 100}%)
+                                        {t('provider.navigation.jobDone.commission').replace('{rate}', String(jobEarnings.commissionRate * 100))}
                                     </span>
                                     <span className="text-sm font-semibold" style={{ color: '#f97316' }}>
                                         −{Math.round(jobEarnings.totalAmount * jobEarnings.commissionRate).toLocaleString('vi-VN')}đ
@@ -950,7 +952,7 @@ export default function ProviderNavigationView({
                                     className="flex justify-between items-center pt-3"
                                     style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}
                                 >
-                                    <span className="text-sm font-bold text-white">Thu nhập thực tế</span>
+                                    <span className="text-sm font-bold text-white">{t('provider.navigation.jobDone.netEarnings')}</span>
                                     <span className="text-xl font-bold" style={{ color: '#22c55e' }}>
                                         {Math.round(jobEarnings.totalAmount * (1 - jobEarnings.commissionRate)).toLocaleString('vi-VN')}đ
                                     </span>
@@ -967,7 +969,7 @@ export default function ProviderNavigationView({
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <p className="text-xs" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                                Hoa hồng đã được trừ vào ví. Kiểm tra số dư để xem cập nhật mới nhất.
+                                {t('provider.navigation.jobDone.commissionNote')}
                             </p>
                         </div>
                     </div>
@@ -986,7 +988,7 @@ export default function ProviderNavigationView({
                             <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                             </svg>
-                            Kiểm tra số dư ví
+                            {t('provider.navigation.jobDone.walletBtn')}
                         </button>
                         <button
                             onClick={() => onCompleted?.()}
@@ -1000,7 +1002,7 @@ export default function ProviderNavigationView({
                             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                             </svg>
-                            Về trang chủ
+                            {t('provider.navigation.jobDone.homeBtn')}
                         </button>
                     </div>
                 </div>

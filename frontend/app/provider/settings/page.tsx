@@ -108,6 +108,7 @@ function Card({ icon, iconBg, title, children }: {
 
 // ── Radius Slider ────────────────────────────────────────────────────────────
 function RadiusSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+    const { t } = useLanguage();
     const chips = [5, 10, 15, 20, 30, 50];
     const chipIndex = chips.indexOf(value) !== -1
         ? chips.indexOf(value)
@@ -116,7 +117,7 @@ function RadiusSlider({ value, onChange }: { value: number; onChange: (v: number
     return (
         <div>
             <div className="flex items-center justify-between mb-3">
-                <span className="text-xs" style={{ color: C.gray }}>Khoảng cách nhận đơn</span>
+                <span className="text-xs" style={{ color: C.gray }}>{t('provider.settings.workArea.radiusLabel')}</span>
                 <span className="text-base font-bold" style={{ color: C.orange }}>{value} <span className="text-xs font-semibold">km</span></span>
             </div>
             <input
@@ -146,7 +147,7 @@ function RadiusSlider({ value, onChange }: { value: number; onChange: (v: number
                     <span className="text-[8px] text-white font-bold">i</span>
                 </div>
                 <p className="text-xs" style={{ color: '#92400e' }}>
-                    Provider sẽ nhận đơn cứu hộ trong bán kính <strong>{value}km</strong> tính từ vị trí hiện tại. Bán kính lớn hơn = nhiều đơn hơn, nhưng quãng đường di chuyển xa hơn.
+                    {t('provider.settings.workArea.radiusHint').replace('{value}', String(value))}
                 </p>
             </div>
         </div>
@@ -197,6 +198,7 @@ export default function ProviderSettingsPage() {
     const { user, loading: authLoading, logout } = useAuth();
     const router = useRouter();
     const fileRef = useRef<HTMLInputElement>(null);
+    const { t } = useLanguage();
 
     // Auth guard: redirect if not logged in or not a provider
     useEffect(() => {
@@ -261,7 +263,7 @@ export default function ProviderSettingsPage() {
             setAuthProvider(d.authProvider || '');
             setRejectionReason(d.rejectReasonDetail || d.rejectReasonCode || '');
         } catch {
-            toast.error('Không thể tải cài đặt');
+            toast.error(t('provider.settings.toasts.loadFail'));
         } finally {
             setLoading(false);
         }
@@ -276,12 +278,12 @@ export default function ProviderSettingsPage() {
         setPhoneNumber(snapshot.current.phoneNumber);
         setServiceRadiusKm(snapshot.current.serviceRadiusKm);
         setEmergencyAvailable(snapshot.current.emergencyAvailable);
-        toast('Đã huỷ thay đổi', { icon: '↩️' });
+        toast(t('provider.settings.toasts.canceled'), { icon: '↩️' });
     };
 
     const handleSave = async () => {
-        if (!phoneNumber.trim()) { toast.error('Số điện thoại không được để trống'); return; }
-        if (!fullName.trim()) { toast.error('Họ tên không được để trống'); return; }
+        if (!phoneNumber.trim()) { toast.error(t('provider.settings.toasts.phoneRequired')); return; }
+        if (!fullName.trim()) { toast.error(t('provider.settings.toasts.nameRequired')); return; }
         setSaving(true);
         try {
             await api.patch('/me/provider/settings', {
@@ -292,36 +294,36 @@ export default function ProviderSettingsPage() {
                 emergencyAvailable,
             });
             snapshot.current = { fullName, serviceName, phoneNumber, serviceRadiusKm, emergencyAvailable };
-            toast.success(' Đã lưu thay đổi!');
+            toast.success(t('provider.settings.toasts.saveSuccess'));
         } catch (e: any) {
-            toast.error(e?.response?.data?.message || 'Lưu thất bại');
+            toast.error(e?.response?.data?.message || t('provider.settings.toasts.saveFail'));
         } finally {
             setSaving(false);
         }
     };
 
     const handleChangePassword = async () => {
-        if (!currentPassword) { toast.error('Nhập mật khẩu hiện tại'); return; }
-        if (newPassword.length < 6) { toast.error('Mật khẩu mới ít nhất 6 ký tự'); return; }
-        if (newPassword !== confirmPassword) { toast.error('Mật khẩu xác nhận không khớp'); return; }
+        if (!currentPassword) { toast.error(t('provider.settings.toasts.pwCurrentRequired')); return; }
+        if (newPassword.length < 6) { toast.error(t('provider.settings.toasts.pwTooShort')); return; }
+        if (newPassword !== confirmPassword) { toast.error(t('provider.settings.toasts.pwMismatch')); return; }
         setChangingPassword(true);
         try {
             await api.patch('/me/provider/change-password', { currentPassword, newPassword });
-            toast.success(' Đổi mật khẩu thành công!');
+            toast.success(t('provider.settings.toasts.pwSuccess'));
             setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
         } catch (e: any) {
-            toast.error(e?.response?.data?.message || 'Đổi mật khẩu thất bại');
+            toast.error(e?.response?.data?.message || t('provider.settings.toasts.pwFail'));
         } finally {
             setChangingPassword(false);
         }
     };
 
     const statusMap: Record<string, { label: string; color: string; bg: string }> = {
-        APPROVED: { label: 'Đã xác thực', color: C.green, bg: C.greenLight },
-        PENDING: { label: 'Chờ xét duyệt', color: '#d97706', bg: '#fefce8' },
-        REJECTED: { label: 'Bị từ chối', color: C.red, bg: C.redLight },
-        DRAFT: { label: 'Bản nháp', color: C.gray, bg: '#f1f5f9' },
-        SUSPENDED: { label: 'Tạm ngưng', color: C.red, bg: C.redLight },
+        APPROVED: { label: t('provider.settings.statusBadge.APPROVED'), color: C.green, bg: C.greenLight },
+        PENDING: { label: t('provider.settings.statusBadge.PENDING'), color: '#d97706', bg: '#fefce8' },
+        REJECTED: { label: t('provider.settings.statusBadge.REJECTED'), color: C.red, bg: C.redLight },
+        DRAFT: { label: t('provider.settings.statusBadge.DRAFT'), color: C.gray, bg: '#f1f5f9' },
+        SUSPENDED: { label: t('provider.settings.statusBadge.SUSPENDED'), color: C.red, bg: C.redLight },
     };
     const statusInfo = statusMap[verificationStatus] ?? statusMap.DRAFT;
 
@@ -332,7 +334,6 @@ export default function ProviderSettingsPage() {
     );
 
     const initials = (fullName || 'P').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-    const { t } = useLanguage();
 
     return (
         <ProviderLayout activeTab="/provider/settings">
@@ -400,7 +401,7 @@ export default function ProviderSettingsPage() {
 
                             {/* Info */}
                             <div className="flex-1 min-w-0">
-                                <h2 className="text-base font-bold text-white truncate">{fullName || 'Chưa đặt tên'}</h2>
+                                <h2 className="text-base font-bold text-white truncate">{fullName || t('provider.settings.profileCard.noName')}</h2>
                                 <p className="text-xs mb-2 truncate" style={{ color: '#94a3b8' }}>{email}</p>
                                 <div className="flex items-center flex-wrap gap-2">
                                     {providerId && (
@@ -426,7 +427,7 @@ export default function ProviderSettingsPage() {
                             <button onClick={() => router.push('/provider/dashboard')}
                                 className="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
                                 style={{ background: 'rgba(255,255,255,0.12)', color: 'white', border: '1px solid rgba(255,255,255,0.15)' }}>
-                                Hồ sơ công khai
+                                {t('provider.settings.profileCard.publicProfile')}
                             </button>
                         </div>
                     </div>
@@ -435,20 +436,20 @@ export default function ProviderSettingsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                         {/* Personal info */}
-                        <Card icon={<User className="w-4 h-4" style={{ color: '#2563eb' }} />} iconBg="#eff6ff" title="Thông tin cá nhân">
-                            <Input label="Họ và tên" value={fullName} onChange={setFullName} placeholder="Nguyễn Văn A" />
+                        <Card icon={<User className="w-4 h-4" style={{ color: '#2563eb' }} />} iconBg="#eff6ff" title={t('provider.settings.personalInfo.title')}>
+                            <Input label={t('provider.settings.personalInfo.fullNameLabel')} value={fullName} onChange={setFullName} placeholder="Nguyễn Văn A" />
                             <div>
-                                <Input label="Tên dịch vụ hiển thị" value={serviceName} onChange={setServiceName} placeholder="VD: Cứu hộ Minh Tân" />
+                                <Input label={t('provider.settings.personalInfo.displayNameLabel')} value={serviceName} onChange={setServiceName} placeholder="VD: Cứu hộ Minh Tân" />
                                 <p className="text-[10px] mt-1.5 italic" style={{ color: '#94a3b8' }}>
-                                    Tên này sẽ hiển thị cho khách hàng khi bạn gửi báo giá.
+                                    {t('provider.settings.personalInfo.displayNameHint')}
                                 </p>
                             </div>
                         </Card>
 
                         {/* Contact */}
-                        <Card icon={<Phone className="w-4 h-4" style={{ color: C.green }} />} iconBg={C.greenLight} title="Liên hệ">
-                            <Input label="Số điện thoại" value={phoneNumber} onChange={setPhoneNumber} placeholder="0912345678" type="tel" />
-                            <Input label="Email (không thể thay đổi)" value={email} disabled />
+                        <Card icon={<Phone className="w-4 h-4" style={{ color: C.green }} />} iconBg={C.greenLight} title={t('provider.settings.contact.title')}>
+                            <Input label={t('provider.settings.contact.phoneLabel')} value={phoneNumber} onChange={setPhoneNumber} placeholder="0912345678" type="tel" />
+                            <Input label={t('provider.settings.contact.emailLabel')} value={email} disabled />
                         </Card>
                     </div>
 
@@ -456,15 +457,15 @@ export default function ProviderSettingsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                         {/* Radius */}
-                        <Card icon={<MapPin className="w-4 h-4" style={{ color: C.orange }} />} iconBg={C.orangeLight} title="Khu vực hoạt động">
+                        <Card icon={<MapPin className="w-4 h-4" style={{ color: C.orange }} />} iconBg={C.orangeLight} title={t('provider.settings.workArea.title')}>
                             <RadiusSlider value={serviceRadiusKm} onChange={setServiceRadiusKm} />
                         </Card>
 
                         {/* Service options */}
-                        <Card icon={<Zap className="w-4 h-4" style={{ color: '#7c3aed' }} />} iconBg="#f5f3ff" title="Tuỳ chọn dịch vụ">
+                        <Card icon={<Zap className="w-4 h-4" style={{ color: '#7c3aed' }} />} iconBg="#f5f3ff" title={t('provider.settings.serviceOptions.title')}>
                             <Toggle
-                                label="Nhận đơn khẩn cấp"
-                                description="Ưu tiên hiển thị khi khách cần cứu hộ gấp, thường có phụ phí cao hơn 20%."
+                                label={t('provider.settings.serviceOptions.emergencyLabel')}
+                                description={t('provider.settings.serviceOptions.emergencyDesc')}
                                 value={emergencyAvailable}
                                 onChange={setEmergencyAvailable}
                             />
@@ -473,13 +474,13 @@ export default function ProviderSettingsPage() {
 
                     {/* ── Change Password ── */}
                     {authProvider !== 'GOOGLE' && (
-                        <Card icon={<Lock className="w-4 h-4" style={{ color: '#64748b' }} />} iconBg="#f1f5f9" title="Đổi mật khẩu">
-                            <PasswordInput label="Mật khẩu hiện tại" value={currentPassword} onChange={setCurrentPassword} placeholder="••••••••" />
-                            <PasswordInput label="Mật khẩu mới" value={newPassword} onChange={setNewPassword} placeholder="Tối thiểu 6 ký tự" />
-                            <PasswordInput label="Xác nhận mật khẩu mới" value={confirmPassword} onChange={setConfirmPassword} placeholder="Nhập lại mật khẩu mới" />
+                        <Card icon={<Lock className="w-4 h-4" style={{ color: '#64748b' }} />} iconBg="#f1f5f9" title={t('provider.settings.changePassword.title')}>
+                            <PasswordInput label={t('provider.settings.changePassword.currentLabel')} value={currentPassword} onChange={setCurrentPassword} placeholder="••••••••" />
+                            <PasswordInput label={t('provider.settings.changePassword.newLabel')} value={newPassword} onChange={setNewPassword} placeholder={t('provider.settings.changePassword.newPlaceholder')} />
+                            <PasswordInput label={t('provider.settings.changePassword.confirmLabel')} value={confirmPassword} onChange={setConfirmPassword} placeholder={t('provider.settings.changePassword.confirmPlaceholder')} />
                             {newPassword && confirmPassword && newPassword !== confirmPassword && (
                                 <p className="text-xs flex items-center gap-1" style={{ color: C.red }}>
-                                    <XCircle className="w-3 h-3" /> Mật khẩu không khớp
+                                    <XCircle className="w-3 h-3" /> {t('provider.settings.changePassword.mismatch')}
                                 </p>
                             )}
                             <button onClick={handleChangePassword} disabled={changingPassword}
@@ -488,7 +489,7 @@ export default function ProviderSettingsPage() {
                                     background: changingPassword ? '#d1d5db' : '#1e293b',
                                     opacity: changingPassword ? 0.7 : 1,
                                 }}>
-                                {changingPassword ? <><RefreshCw className="w-4 h-4 animate-spin" /> Đang xử lý...</> : <><Lock className="w-4 h-4" /> Xác nhận đổi mật khẩu</>}
+                                {changingPassword ? <><RefreshCw className="w-4 h-4 animate-spin" /> {t('provider.settings.changePassword.submitting')}</> : <><Lock className="w-4 h-4" /> {t('provider.settings.changePassword.submitBtn')}</>}
                             </button>
                         </Card>
                     )}
@@ -497,31 +498,31 @@ export default function ProviderSettingsPage() {
                     <LinkRow
                         icon={<Wrench className="w-5 h-5" style={{ color: C.green }} />}
                         iconBg="#dcfce7"
-                        title="Ví & Lịch sử giao dịch"
-                        subtitle="Xem số dư và các khoản thu nhập"
+                        title={t('provider.settings.links.walletHistory')}
+                        subtitle={t('provider.settings.links.walletHistoryDesc')}
                         onClick={() => router.push('/provider/wallet')}
                     />
                     <LinkRow
                         icon={<Radio className="w-5 h-5" style={{ color: C.orange }} />}
                         iconBg={C.orangeLight}
-                        title="Hồ sơ & Xác minh"
-                        subtitle="Xem trạng thái xét duyệt tài khoản"
+                        title={t('provider.settings.links.verification')}
+                        subtitle={t('provider.settings.links.verificationDesc')}
                         onClick={() => router.push('/provider/dashboard')}
                     />
                     {verificationStatus === 'REJECTED' && (
                         <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: C.redLight, border: `1.5px solid #fecaca` }}>
                             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: C.red }} />
                             <div className="flex-1">
-                                <p className="text-sm font-bold mb-1" style={{ color: '#991b1b' }}>Hồ sơ bị từ chối</p>
+                                <p className="text-sm font-bold mb-1" style={{ color: '#991b1b' }}>{t('provider.settings.rejectedCard.title')}</p>
                                 {rejectionReason ? (
-                                    <p className="text-xs mb-2" style={{ color: '#b91c1c' }}>Lý do: {rejectionReason}</p>
+                                    <p className="text-xs mb-2" style={{ color: '#b91c1c' }}>{t('provider.settings.rejectedCard.reason')} {rejectionReason}</p>
                                 ) : (
-                                    <p className="text-xs mb-2" style={{ color: '#b91c1c' }}>Vui lòng cập nhật và gửi lại hồ sơ xác minh.</p>
+                                    <p className="text-xs mb-2" style={{ color: '#b91c1c' }}>{t('provider.settings.rejectedCard.updatePrompt')}</p>
                                 )}
                                 <button onClick={() => router.push('/provider/onboarding')}
                                     className="text-xs font-bold px-3 py-1.5 rounded-lg text-white"
                                     style={{ background: C.red }}>
-                                    Cập nhật hồ sơ →
+                                    {t('provider.settings.rejectedCard.updateBtn')}
                                 </button>
                             </div>
                         </div>
@@ -536,7 +537,7 @@ export default function ProviderSettingsPage() {
                         <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                         </svg>
-                        <span className="text-sm font-bold">Đăng xuất</span>
+                        <span className="text-sm font-bold">{t('provider.settings.logoutBtn')}</span>
                     </button>
                 </div>
 
@@ -547,7 +548,7 @@ export default function ProviderSettingsPage() {
                         <button onClick={handleCancel}
                             className="flex-1 py-3.5 rounded-2xl text-sm font-bold transition-all active:scale-[0.98]"
                             style={{ background: 'white', color: C.navy, border: `1.5px solid ${C.border}`, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                            Huỷ
+                            {t('provider.settings.cancelBtn')}
                         </button>
                         <button onClick={handleSave} disabled={saving}
                             className="flex-[2] py-3.5 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2.5 transition-all active:scale-[0.98]"
@@ -556,8 +557,8 @@ export default function ProviderSettingsPage() {
                                 boxShadow: saving ? 'none' : `0 6px 24px ${C.orange}50`,
                             }}>
                             {saving
-                                ? <><RefreshCw className="w-4 h-4 animate-spin" /> Đang lưu...</>
-                                : <><Save className="w-4 h-4" /> Lưu tất cả thay đổi</>}
+                                ? <><RefreshCw className="w-4 h-4 animate-spin" /> {t('provider.settings.saving')}</>
+                                : <><Save className="w-4 h-4" /> {t('provider.settings.saveAll')}</>}
                         </button>
                     </div>
                 </div>

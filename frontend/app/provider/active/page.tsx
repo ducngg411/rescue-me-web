@@ -79,7 +79,7 @@ function AlertCard({ request, onView }: { request: any; onView: () => void }) {
         OTHER: t('provider.incidents.OTHER'),
     };
 
-    const customerName = request.user?.name || request.user?.phone || 'Khách hàng';
+    const customerName = request.user?.name || request.user?.phone || t('provider.history.customerFallback');
 
     return (
         <div className="rounded-xl p-3.5 mb-2 last:mb-0" style={{ background: '#fff5f5', border: '1px solid #fee2e2' }}>
@@ -115,7 +115,7 @@ function AlertCard({ request, onView }: { request: any; onView: () => void }) {
                 className="w-full py-1.5 rounded-lg text-xs font-bold text-white transition-all active:scale-95"
                 style={{ background: C.orange }}
             >
-                Xem chi tiết
+                {t('provider.active.viewDetails')}
             </button>
         </div>
     );
@@ -504,7 +504,7 @@ export default function ProviderActivePage() {
                             <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                             </svg>
-                            Đăng xuất
+                            {t('common.logout')}
                         </button>
                     </div>
                 </div>
@@ -613,7 +613,7 @@ export default function ProviderActivePage() {
                                     icon={<TrendingUp style={{ width: 18, height: 18, color: '#16a34a' }} />}
                                     label={t('provider.dashboard.todayEarnings')}
                                     value={weeklyEarnings === null ? '—' : formatVnd(weeklyEarnings)}
-                                    sub={weeklyEarnings === null ? 'Hôm nay' : `${weeklyJobCount} chuyến`}
+                                    sub={weeklyEarnings === null ? t('provider.active.todayLabel') : `${weeklyJobCount} ${t('provider.active.tripsLabel')}`}
                                     bg="#dcfce7"
                                 />
                                 <StatCard
@@ -626,7 +626,7 @@ export default function ProviderActivePage() {
                                     }
                                     sub={
                                         user?.reviewCount
-                                            ? `${user.reviewCount} đánh giá`
+                                            ? `${user.reviewCount} ${t('provider.active.reviewsLabel')}`
                                             : t('provider.dashboard.excellentFeedback')
                                     }
                                     bg="#fef9c3"
@@ -723,23 +723,23 @@ export default function ProviderActivePage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                             </svg>
                         </div>
-                        <h3 className="text-base font-bold text-center mb-1" style={{ color: '#1a1a2e' }}>Từ chối yêu cầu?</h3>
+                        <h3 className="text-base font-bold text-center mb-1" style={{ color: '#1a1a2e' }}>{t('provider.active.declineConfirm.title')}</h3>
                         <p className="text-sm text-center text-gray-500 mb-6">
-                            Yêu cầu này sẽ bị xóa khỏi <strong>Cảnh báo đến</strong> của bạn.
+                            {t('provider.active.declineConfirm.desc')}
                         </p>
                         <div className="grid grid-cols-2 gap-3">
                             <button
                                 onClick={() => setConfirmDeclineReq(null)}
                                 className="py-3 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
                             >
-                                Hủy bỏ
+                                {t('provider.active.declineConfirm.cancel')}
                             </button>
                             <button
                                 onClick={confirmDecline}
                                 className="py-3 rounded-xl text-sm font-bold text-white transition-colors"
                                 style={{ background: '#dc2626' }}
                             >
-                                Từ chối
+                                {t('provider.active.declineConfirm.confirm')}
                             </button>
                         </div>
                     </div>

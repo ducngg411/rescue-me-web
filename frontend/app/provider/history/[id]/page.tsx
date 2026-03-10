@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     ArrowLeft, CheckCircle2, Clock, XCircle, MapPin, Phone,
     Banknote, Star, FileText, Wrench, Car, Calendar,
@@ -18,16 +19,6 @@ const C = {
     red: '#ef4444', redLight: '#fef2f2',
     blue: '#2563eb', blueLight: '#eff6ff',
     yellow: '#f59e0b',
-};
-
-const INCIDENT_LABELS: Record<string, string> = {
-    BREAKDOWN: 'Hỏng xe', ACCIDENT: 'Tai nạn', FLAT_TIRE: 'Lốp xe hỏng',
-    BATTERY_DEAD: 'Hết bình điện', OUT_OF_FUEL: 'Hết nhiên liệu',
-    LOCKED_OUT: 'Khóa xe', OTHER: 'Khác',
-};
-
-const VEHICLE_LABELS: Record<string, string> = {
-    CAR: 'Ô tô', MOTORCYCLE: 'Xe máy',
 };
 
 function fmtVnd(n: number) {
@@ -98,24 +89,26 @@ function SectionCard({ title, icon, children }: { title: string; icon: React.Rea
 
 /* ── Status Badge ── */
 function StatusBadge({ status }: { status: string }) {
-    const cfg: Record<string, { label: string; color: string; bg: string }> = {
-        COMPLETED: { label: 'Hoàn thành', color: C.green, bg: C.greenLight },
-        PAID: { label: 'Chờ giải ngân', color: '#7c3aed', bg: '#f5f3ff' },
-        PAYMENT_PENDING: { label: 'Chờ thanh toán', color: '#ca8a04', bg: '#fefce8' },
-        PROVIDER_CONFIRMED: { label: 'Đã xác nhận', color: C.green, bg: C.greenLight },
-        USER_CONFIRMED: { label: 'KH xác nhận', color: C.blue, bg: C.blueLight },
-        PENDING: { label: 'Chờ xử lý', color: '#ca8a04', bg: '#fefce8' },
-        DISPUTED: { label: 'Tranh chấp', color: C.red, bg: C.redLight },
-        IN_PROGRESS: { label: 'Đang xử lý', color: '#ca8a04', bg: '#fefce8' },
-        WORKING: { label: 'Đang làm', color: '#ca8a04', bg: '#fefce8' },
-        CANCELLED: { label: 'Đã hủy', color: '#6b7280', bg: '#f3f4f6' },
-        EXPIRED: { label: 'Hết hạn', color: '#6b7280', bg: '#f3f4f6' },
+    const { t } = useLanguage();
+    const cfg: Record<string, { color: string; bg: string }> = {
+        COMPLETED: { color: C.green, bg: C.greenLight },
+        PAID: { color: '#7c3aed', bg: '#f5f3ff' },
+        PAYMENT_PENDING: { color: '#ca8a04', bg: '#fefce8' },
+        PROVIDER_CONFIRMED: { color: C.green, bg: C.greenLight },
+        USER_CONFIRMED: { color: C.blue, bg: C.blueLight },
+        PENDING: { color: '#ca8a04', bg: '#fefce8' },
+        DISPUTED: { color: C.red, bg: C.redLight },
+        IN_PROGRESS: { color: '#ca8a04', bg: '#fefce8' },
+        WORKING: { color: '#ca8a04', bg: '#fefce8' },
+        CANCELLED: { color: '#6b7280', bg: '#f3f4f6' },
+        EXPIRED: { color: '#6b7280', bg: '#f3f4f6' },
     };
-    const s = cfg[status] ?? { label: status, color: C.gray, bg: '#f3f4f6' };
+    const s = cfg[status] ?? { color: C.gray, bg: '#f3f4f6' };
+    const label = t(`provider.historyDetail.statusBadge.${status}` as any) || status;
     return (
         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
             style={{ background: s.bg, color: s.color }}>
-            {s.label}
+            {label}
         </span>
     );
 }
@@ -125,6 +118,7 @@ export default function HistoryJobDetailPage() {
     const router = useRouter();
     const params = useParams();
     const { user, loading: authLoading } = useAuth();
+    const { t } = useLanguage();
     const requestId = params.id as string;
 
     const [data, setData] = useState<any>(null);
@@ -162,7 +156,7 @@ export default function HistoryJobDetailPage() {
 
             setData({ req, quote, payment, review });
         } catch (e: any) {
-            setError(e?.response?.data?.message || 'Không thể tải chi tiết đơn hàng');
+            setError(e?.response?.data?.message || t('provider.historyDetail.loadError'));
         } finally {
             setLoading(false);
         }
@@ -178,7 +172,7 @@ export default function HistoryJobDetailPage() {
             <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
                 <div className="flex flex-col items-center gap-3">
                     <RefreshCw className="w-8 h-8 animate-spin" style={{ color: C.orange }} />
-                    <p className="text-sm" style={{ color: C.gray }}>Đang tải chi tiết...</p>
+                    <p className="text-sm" style={{ color: C.gray }}>{t('provider.historyDetail.loading')}</p>
                 </div>
             </div>
         );
@@ -189,12 +183,12 @@ export default function HistoryJobDetailPage() {
             <div className="min-h-screen flex items-center justify-center p-4" style={{ background: C.bg }}>
                 <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center" style={{ boxShadow: '0 1px 12px rgba(0,0,0,0.08)' }}>
                     <XCircle className="w-12 h-12 mx-auto mb-3" style={{ color: C.red }} />
-                    <h2 className="text-lg font-bold mb-2" style={{ color: C.navy }}>Không tìm thấy đơn hàng</h2>
+                    <h2 className="text-lg font-bold mb-2" style={{ color: C.navy }}>{t('provider.historyDetail.notFoundTitle')}</h2>
                     <p className="text-sm mb-5" style={{ color: C.gray }}>{error}</p>
                     <button onClick={() => router.back()}
                         className="px-6 py-2.5 rounded-xl text-sm font-bold text-white"
                         style={{ background: C.orange }}>
-                        Quay lại
+                        {t('provider.historyDetail.goBack')}
                     </button>
                 </div>
             </div>
@@ -212,26 +206,28 @@ export default function HistoryJobDetailPage() {
     const quoteProfit = quote ? Math.round(quote.price * 0.9) : 0;
 
     // Status label for rescue request
-    const reqStatusCfg: Record<string, { label: string; color: string; bg: string }> = {
-        COMPLETED: { label: 'Hoàn thành', color: C.green, bg: C.greenLight },
-        PAID: { label: 'Chờ giải ngân', color: '#7c3aed', bg: '#f5f3ff' },
-        PAYMENT_PENDING: { label: 'Chờ thanh toán', color: '#ca8a04', bg: '#fefce8' },
-        CANCELLED: { label: 'Đã hủy', color: '#6b7280', bg: '#f3f4f6' },
-        IN_PROGRESS: { label: 'Đang xử lý', color: '#ca8a04', bg: '#fefce8' },
-        WORKING: { label: 'Đang làm', color: '#ca8a04', bg: '#fefce8' },
-        ARRIVED: { label: 'Đã đến', color: C.blue, bg: C.blueLight },
-        ACCEPTED: { label: 'Đang thực hiện', color: C.blue, bg: C.blueLight },
+    const reqStatusCfg: Record<string, { color: string; bg: string }> = {
+        COMPLETED: { color: C.green, bg: C.greenLight },
+        PAID: { color: '#7c3aed', bg: '#f5f3ff' },
+        PAYMENT_PENDING: { color: '#ca8a04', bg: '#fefce8' },
+        CANCELLED: { color: '#6b7280', bg: '#f3f4f6' },
+        IN_PROGRESS: { color: '#ca8a04', bg: '#fefce8' },
+        WORKING: { color: '#ca8a04', bg: '#fefce8' },
+        ARRIVED: { color: C.blue, bg: C.blueLight },
+        ACCEPTED: { color: C.blue, bg: C.blueLight },
     };
-    const reqStatus = reqStatusCfg[req.status] ?? { label: req.status, color: C.gray, bg: '#f3f4f6' };
+    const reqStatusStyle = reqStatusCfg[req.status] ?? { color: C.gray, bg: '#f3f4f6' };
+    const reqStatusLabel = t(`provider.historyDetail.statusBadge.${req.status}` as any) || req.status;
+    const reqStatus = { ...reqStatusStyle, label: reqStatusLabel };
 
     // Payment status badge config (separate from job status)
     const paymentStatusBadge: { label: string; color: string; bg: string } | null =
         payment?.walletTxStatus === 'COMPLETED'
-            ? { label: 'Đã giải ngân', color: C.green, bg: C.greenLight }
+            ? { label: t('provider.historyDetail.paymentBadge.COMPLETED' as any), color: C.green, bg: C.greenLight }
             : payment?.walletTxStatus === 'PENDING'
-                ? { label: 'Chờ giải ngân 24h', color: '#7c3aed', bg: '#f5f3ff' }
+                ? { label: t('provider.historyDetail.paymentBadge.PENDING' as any), color: '#7c3aed', bg: '#f5f3ff' }
                 : payment?.paymentMethod === 'CASH'
-                    ? { label: 'Tiền mặt', color: '#374151', bg: '#f3f4f6' }
+                    ? { label: t('provider.historyDetail.paymentBadge.CASH' as any), color: '#374151', bg: '#f3f4f6' }
                     : null;
 
     const images = (req.media ?? []).filter((m: any) => m.mediaType === 'IMAGE').map((m: any) => m.publicUrl);
@@ -249,7 +245,7 @@ export default function HistoryJobDetailPage() {
                     <ArrowLeft size={18} />
                 </button>
                 <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: C.gray }}>Chi tiết đơn hàng</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: C.gray }}>{t('provider.historyDetail.title')}</p>
                     <p className="text-sm font-bold truncate" style={{ color: C.navy }}>
                         #{requestId.slice(0, 8).toUpperCase()}
                     </p>
@@ -274,10 +270,10 @@ export default function HistoryJobDetailPage() {
                 {isCompleted && quote && (
                     <div className="rounded-2xl p-5 text-white"
                         style={{ background: `linear-gradient(135deg, ${C.navy} 0%, #16213e 60%, #0f3460 100%)` }}>
-                        <p className="text-[10px] font-bold uppercase tracking-wider mb-1 opacity-70">Tổng doanh thu</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider mb-1 opacity-70">{t('provider.historyDetail.banner.revenue')}</p>
                         <p className="text-3xl font-bold mb-1">{fmtVnd(revenueAmount)}</p>
                         <div className="flex items-center gap-2">
-                            <span className="text-sm opacity-80">Lãi ròng:</span>
+                            <span className="text-sm opacity-80">{t('provider.historyDetail.banner.profit')}</span>
                             <span className="text-sm font-bold" style={{ color: '#4ade80' }}>+{fmtVnd(profit)}</span>
                         </div>
                         <div className="flex items-center gap-3 mt-3">
@@ -285,24 +281,24 @@ export default function HistoryJobDetailPage() {
                                 ? (
                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold" style={{ background: 'rgba(167,139,250,0.18)', color: '#c4b5fd' }}>
                                         <Clock size={10} />
-                                        Đang giải ngân · tự động sau 24h nếu không có tranh chấp
+                                        {t('provider.historyDetail.banner.disbursing')}
                                     </span>
                                 )
-                                : <span className="text-xs opacity-70">Hoàn thành: {req.completedAt ? fmtDateTime(req.completedAt) : '—'}</span>
+                                : <span className="text-xs opacity-70">{t('provider.historyDetail.banner.completedAt')} {req.completedAt ? fmtDateTime(req.completedAt) : '—'}</span>
                             }
                         </div>
                     </div>
                 )}
 
                 {/* ── Customer info ── */}
-                <SectionCard title="Thông tin khách hàng" icon={<User size={16} style={{ color: C.blue }} />}>
+                <SectionCard title={t('provider.historyDetail.sections.customerInfo')} icon={<User size={16} style={{ color: C.blue }} />}>
                     <div className="flex items-center gap-3">
                         <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
                             style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}>
                             {(req.user?.name || 'K').charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="font-bold" style={{ color: C.navy }}>{req.user?.name || 'Khách hàng'}</p>
+                            <p className="font-bold" style={{ color: C.navy }}>{req.user?.name || t('provider.historyDetail.customer.fallback')}</p>
                             <p className="text-xs mt-0.5" style={{ color: C.gray }}>{req.contactPhone}</p>
                         </div>
                         {req.contactPhone && (
@@ -316,59 +312,59 @@ export default function HistoryJobDetailPage() {
                 </SectionCard>
 
                 {/* ── Rescue details ── */}
-                <SectionCard title="Chi tiết cứu hộ" icon={<Wrench size={16} style={{ color: C.orange }} />}>
+                <SectionCard title={t('provider.historyDetail.sections2.rescueDetails')} icon={<Wrench size={16} style={{ color: C.orange }} />}>
                     {req.incidentType && (
                         <InfoRow
                             icon={<FileText size={13} style={{ color: C.orange }} />}
-                            label="Loại sự cố"
-                            value={INCIDENT_LABELS[req.incidentType] ?? req.incidentType}
+                            label={t('provider.historyDetail.labels.incidentType')}
+                            value={t(`provider.historyDetail.incidentLabels.${req.incidentType}` as any) ?? req.incidentType}
                         />
                     )}
                     {req.vehicleType && (
                         <InfoRow
                             icon={<Car size={13} style={{ color: C.orange }} />}
-                            label="Loại xe"
-                            value={VEHICLE_LABELS[req.vehicleType] ?? req.vehicleType}
+                            label={t('provider.historyDetail.labels.vehicleType')}
+                            value={t(`provider.historyDetail.vehicleLabels.${req.vehicleType}` as any) ?? req.vehicleType}
                         />
                     )}
                     {req.user?.licensePlate && (
                         <InfoRow
-                            icon={<span style={{ color: C.orange, fontSize: 11, fontWeight: 700 }}>BSX</span>}
-                            label="Biển số"
+                            icon={<span style={{ color: C.orange, fontSize: 11, fontWeight: 700 }}>{t('provider.historyDetail.infoLabels2.bsx')}</span>}
+                            label={t('provider.historyDetail.infoLabels2.licensePlate')}
                             value={req.user.licensePlate}
                         />
                     )}
                     {req.user?.vehicleColor && (
                         <InfoRow
-                            icon={<span style={{ color: C.orange, fontSize: 11, fontWeight: 700 }}>Màu</span>}
-                            label="Màu xe"
+                            icon={<span style={{ color: C.orange, fontSize: 11, fontWeight: 700 }}>{t('provider.historyDetail.infoLabels2.color')}</span>}
+                            label={t('provider.historyDetail.infoLabels2.vehicleColor')}
                             value={req.user.vehicleColor}
                         />
                     )}
                     {req.pickupLocation?.addressText && (
                         <InfoRow
                             icon={<MapPin size={13} style={{ color: C.orange }} />}
-                            label="Vị trí đón"
+                            label={t('provider.historyDetail.labels.pickupLocation')}
                             value={req.pickupLocation.addressText}
                         />
                     )}
                     {req.dropoffLocation?.addressText && (
                         <InfoRow
                             icon={<MapPin size={13} style={{ color: C.orange }} />}
-                            label="Vị trí đến"
+                            label={t('provider.historyDetail.infoLabels2.dropoffLocation')}
                             value={req.dropoffLocation.addressText}
                         />
                     )}
                     {req.description && (
                         <InfoRow
                             icon={<FileText size={13} style={{ color: C.orange }} />}
-                            label="Mô tả"
+                            label={t('provider.historyDetail.labels.description')}
                             value={req.description}
                         />
                     )}
                     <InfoRow
                         icon={<Calendar size={13} style={{ color: C.orange }} />}
-                        label="Thời điểm tạo"
+                        label={t('provider.historyDetail.labels.createdAt')}
                         value={fmtDateTime(req.createdAt)}
                     />
                 </SectionCard>
@@ -376,7 +372,7 @@ export default function HistoryJobDetailPage() {
                 {/* ── Media ── */}
                 {(images.length > 0 || videos.length > 0) && (
                     <SectionCard
-                        title={`Media từ khách hàng (${images.length + videos.length})`}
+                        title={t('provider.historyDetail.sections2.media').replace('{count}', String(images.length + videos.length))}
                         icon={<ImageIcon size={16} style={{ color: C.blue }} />}
                     >
                         {images.length > 0 && (
@@ -412,30 +408,30 @@ export default function HistoryJobDetailPage() {
 
                 {/* ── Quote info ── */}
                 {quote && (
-                    <SectionCard title="Báo giá của bạn" icon={<Banknote size={16} style={{ color: C.green }} />}>
+                    <SectionCard title={t('provider.historyDetail.sections2.quote')} icon={<Banknote size={16} style={{ color: C.green }} />}>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Giá báo</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.quoteInfo.quotedPrice')}</p>
                                 <p className="text-lg font-bold" style={{ color: C.navy }}>{fmtVnd(quote.price)}</p>
                             </div>
                             <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Lợi nhuận (~90%)</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.quoteInfo.profit')}</p>
                                 <p className="text-lg font-bold" style={{ color: C.green }}>+{fmtVnd(quoteProfit)}</p>
                             </div>
                             {quote.estimatedArrivalMinutes && (
                                 <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>ETA báo giá</p>
-                                    <p className="text-lg font-bold" style={{ color: C.navy }}>{quote.estimatedArrivalMinutes} phút</p>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.quoteInfo.eta')}</p>
+                                    <p className="text-lg font-bold" style={{ color: C.navy }}>{quote.estimatedArrivalMinutes} {t('provider.historyDetail.quoteInfo.minutes')}</p>
                                 </div>
                             )}
                             <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>TT báo giá</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.quoteInfo.status')}</p>
                                 <StatusBadge status={quote.status} />
                             </div>
                         </div>
                         {quote.message && (
                             <div className="rounded-xl p-3" style={{ background: '#fff7ed', border: `1px solid #fed7aa` }}>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.orange }}>Tin nhắn của bạn</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.orange }}>{t('provider.historyDetail.quoteInfo.yourMessage')}</p>
                                 <p className="text-sm" style={{ color: C.navy }}>{quote.message}</p>
                             </div>
                         )}
@@ -444,14 +440,14 @@ export default function HistoryJobDetailPage() {
 
                 {/* ── Payment ── */}
                 {payment && (
-                    <SectionCard title="Thanh toán" icon={<Banknote size={16} style={{ color: C.orange }} />}>
+                    <SectionCard title={t('provider.historyDetail.sections2.payment')} icon={<Banknote size={16} style={{ color: C.orange }} />}>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="rounded-xl p-3 col-span-2" style={{ background: C.bg }}>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: C.gray }}>Thu nhập của bạn</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: C.gray }}>{t('provider.historyDetail.payment.yourIncome')}</p>
                                 {payment.walletTxStatus === 'COMPLETED'
                                     ? (
                                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold" style={{ background: C.greenLight, color: C.green }}>
-                                            <CheckCircle2 size={12} /> Đã nhận tiền vào ví
+                                            <CheckCircle2 size={12} /> {t('provider.historyDetail.payment.received')}
                                         </span>
                                     )
                                     : payment.walletTxStatus === 'PENDING'
@@ -459,32 +455,32 @@ export default function HistoryJobDetailPage() {
                                             <div className="rounded-xl p-3" style={{ background: '#f5f3ff', border: '1.5px solid #ddd6fe' }}>
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <Clock size={13} style={{ color: '#7c3aed' }} />
-                                                    <span className="text-xs font-bold" style={{ color: '#7c3aed' }}>Đang chờ giải ngân</span>
+                                                    <span className="text-xs font-bold" style={{ color: '#7c3aed' }}>{t('provider.historyDetail.payment.disbursing')}</span>
                                                 </div>
-                                                <p className="text-[10px] leading-relaxed" style={{ color: '#8b5cf6' }}>Tiền sẽ tự động giải ngân sau 24h nếu không có tranh chấp từ khách hàng.</p>
+                                                <p className="text-[10px] leading-relaxed" style={{ color: '#8b5cf6' }}>{t('provider.historyDetail.payment.disbursingDesc')}</p>
                                             </div>
                                         )
                                         : <StatusBadge status={payment.status} />
                                 }
                             </div>
                             <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Phương thức</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.payment.method')}</p>
                                 <p className="text-sm font-bold" style={{ color: C.navy }}>
-                                    {payment.paymentMethod === 'CASH' ? ' Tiền mặt' : ' Chuyển khoản'}
+                                    {payment.paymentMethod === 'CASH' ? t('provider.historyDetail.labels.cash') : t('provider.historyDetail.labels.transfer')}
                                 </p>
                             </div>
                             <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Tổng tiền</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.payment.total')}</p>
                                 <p className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(payment.totalAmount)}</p>
                             </div>
                         </div>
                         {/* Fee breakdown */}
                         <div className="rounded-xl overflow-hidden border" style={{ borderColor: C.border }}>
                             {[
-                                { label: 'Phí cơ bản', val: payment.baseFee },
-                                { label: 'Phí khoảng cách', val: payment.distanceFee },
-                                payment.overtimeFee > 0 && { label: 'Phí ngoài giờ', val: payment.overtimeFee },
-                                payment.otherFee > 0 && { label: 'Phí khác', val: payment.otherFee },
+                                { label: t('provider.historyDetail.feeItems.base'), val: payment.baseFee },
+                                { label: t('provider.historyDetail.feeItems.distance'), val: payment.distanceFee },
+                                payment.overtimeFee > 0 && { label: t('provider.historyDetail.feeItems.overtime'), val: payment.overtimeFee },
+                                payment.otherFee > 0 && { label: t('provider.historyDetail.feeItems.other'), val: payment.otherFee },
                             ].filter(Boolean).map((row: any, i: number, arr) => (
                                 <div key={i} className="flex items-center justify-between px-4 py-2.5"
                                     style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
@@ -494,12 +490,12 @@ export default function HistoryJobDetailPage() {
                             ))}
                             <div className="flex items-center justify-between px-4 py-3"
                                 style={{ background: '#f8fafc', borderTop: `1px solid ${C.border}` }}>
-                                <span className="text-sm font-bold" style={{ color: C.navy }}>Tổng cộng</span>
+                                <span className="text-sm font-bold" style={{ color: C.navy }}>{t('provider.historyDetail.feeItems.total')}</span>
                                 <span className="text-sm font-bold" style={{ color: C.orange }}>{fmtVnd(payment.totalAmount)}</span>
                             </div>
                         </div>
                         {payment.note && (
-                            <p className="text-xs mt-1" style={{ color: C.gray }}>Ghi chú: {payment.note}</p>
+                            <p className="text-xs mt-1" style={{ color: C.gray }}>{t('provider.historyDetail.payment.notes')} {payment.note}</p>
                         )}
                         {(() => {
                             if (!payment.surchargeNote) return null;
@@ -524,7 +520,7 @@ export default function HistoryJobDetailPage() {
                             return (
                                 <div className="rounded-xl overflow-hidden border mt-1" style={{ borderColor: C.border }}>
                                     <div className="px-3 py-1.5" style={{ background: '#fff7ed', borderBottom: `1px solid ${C.border}` }}>
-                                        <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: C.orange }}>Phụ phí phát sinh</p>
+                                        <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: C.orange }}>{t('provider.historyDetail.payment.surcharges')}</p>
                                     </div>
                                     {rawText ? (
                                         <p className="px-3 py-2 text-xs" style={{ color: C.gray }}>{rawText}</p>
@@ -554,12 +550,12 @@ export default function HistoryJobDetailPage() {
                                         <Wallet size={15} style={{ color: '#2563eb' }} />
                                     </div>
                                     <div className="text-left">
-                                        <p className="text-xs font-bold" style={{ color: '#1e40af' }}>Xem giao dịch ví</p>
+                                        <p className="text-xs font-bold" style={{ color: '#1e40af' }}>{t('provider.historyDetail.payment.walletLink.title')}</p>
                                         <p className="text-[10px]" style={{ color: '#3b82f6' }}>
-                                            {payment.walletTxType === 'CREDIT' ? 'Thu nhập từ job' : 'Khấu trừ hoa hồng'}
+                                            {payment.walletTxType === 'CREDIT' ? t('provider.historyDetail.payment.walletLink.income') : t('provider.historyDetail.payment.walletLink.commission')}
                                             {payment.walletTxStatus && (
                                                 <span className="ml-2 font-semibold">
-                                                    &middot; {payment.walletTxStatus === 'COMPLETED' ? 'Đã hoàn tất' : payment.walletTxStatus === 'PENDING' ? 'Đang chờ' : payment.walletTxStatus}
+                                                    &middot; {payment.walletTxStatus === 'COMPLETED' ? t('provider.historyDetail.payment.walletLink.completed') : payment.walletTxStatus === 'PENDING' ? t('provider.historyDetail.payment.walletLink.pending') : payment.walletTxStatus}
                                                 </span>
                                             )}
                                         </p>
@@ -573,7 +569,7 @@ export default function HistoryJobDetailPage() {
                         {payment.photoUrls?.length > 0 && (
                             <div>
                                 <p className="text-[10px] font-bold uppercase tracking-wide mb-2" style={{ color: C.gray }}>
-                                    Ảnh hiện trường ({payment.photoUrls.length})
+                                    {t('provider.historyDetail.payment.photos').replace('{count}', String(payment.photoUrls.length))}
                                 </p>
                                 <div className="grid grid-cols-3 gap-2">
                                     {payment.photoUrls.map((src: string, i: number) => (
@@ -591,7 +587,7 @@ export default function HistoryJobDetailPage() {
 
                 {/* ── Review ── */}
                 {review && (
-                    <SectionCard title="Đánh giá từ khách hàng" icon={<Star size={16} style={{ color: C.yellow }} />}>
+                    <SectionCard title={t('provider.historyDetail.sections2.review')} icon={<Star size={16} style={{ color: C.yellow }} />}>
                         <div className="flex items-center gap-3">
                             <Stars rating={review.rating} />
                             <span className="text-lg font-bold" style={{ color: C.navy }}>{review.rating}/5</span>
@@ -612,19 +608,19 @@ export default function HistoryJobDetailPage() {
                             </div>
                         )}
                         <p className="text-xs" style={{ color: C.gray }}>
-                            Gửi lúc: {fmtDateTime(review.createdAt)}
+                            {t('provider.historyDetail.review.postedAt')} {fmtDateTime(review.createdAt)}
                         </p>
                     </SectionCard>
                 )}
 
                 {/* ── Timeline ── */}
-                <SectionCard title="Dòng thời gian" icon={<Clock size={16} style={{ color: C.blue }} />}>
+                <SectionCard title={t('provider.historyDetail.sections2.timeline')} icon={<Clock size={16} style={{ color: C.blue }} />}>
                     <div className="space-y-0">
                         {[
-                            { label: 'Tạo yêu cầu', time: req.createdAt, done: true },
-                            { label: 'Provider nhận', time: req.assignedAt, done: !!req.assignedAt },
-                            { label: 'Thanh toán', time: payment?.createdAt, done: !!payment },
-                            { label: 'Hoàn thành', time: req.completedAt, done: isCompleted },
+                            { label: t('provider.historyDetail.timeline.created'), time: req.createdAt, done: true },
+                            { label: t('provider.historyDetail.timeline.assigned'), time: req.assignedAt, done: !!req.assignedAt },
+                            { label: t('provider.historyDetail.timeline.payment'), time: payment?.createdAt, done: !!payment },
+                            { label: t('provider.historyDetail.timeline.completed'), time: req.completedAt, done: isCompleted },
                         ].map((step, i, arr) => (
                             <div key={i} className="flex gap-3">
                                 <div className="flex flex-col items-center">
@@ -650,7 +646,7 @@ export default function HistoryJobDetailPage() {
                                     {step.time ? (
                                         <p className="text-xs mt-0.5" style={{ color: C.gray }}>{fmtDateTime(step.time)}</p>
                                     ) : (
-                                        <p className="text-xs mt-0.5" style={{ color: '#d1d5db' }}>Chưa thực hiện</p>
+                                        <p className="text-xs mt-0.5" style={{ color: '#d1d5db' }}>{t('provider.historyDetail.timeline.notDone')}</p>
                                     )}
                                 </div>
                             </div>

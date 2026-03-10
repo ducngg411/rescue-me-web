@@ -92,6 +92,7 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
     onSuccess: () => void;
 }) {
     type Step = 'amount' | 'qr' | 'done' | 'expired';
+    const { t } = useLanguage();
     const [step, setStep] = useState<Step>(initialQrData ? 'qr' : 'amount');
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
@@ -162,7 +163,7 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
             startPolling(res.data.topupTxId);
             startCountdown(res.data.expireAt);
         } catch (err: any) {
-            setError(err?.response?.data?.message || 'Không thể tạo QR. Vui lòng thử lại.');
+            setError(err?.response?.data?.message || t('provider.topup.createError'));
         } finally { setLoading(false); }
     };
 
@@ -173,9 +174,9 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
             const res = await api.get(`/wallet/topup/${qrData.topupTxId}/status`);
             handlePollResponse(res.data.status);
             if (res.data.status === 'PENDING') {
-                setError('Chưa nhận được giao dịch. Kiểm tra lại nội dung chuyển khoản.');
+                setError(t('provider.topup.notReceived'));
             }
-        } catch { setError('Không thể kiểm tra. Vui lòng thử lại.'); }
+        } catch { setError(t('provider.topup.checkError')); }
         finally { setManualChecking(false); }
     };
 
@@ -199,11 +200,11 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                         <QrCode style={{ width: 20, height: 20, color: '#2563eb' }} />
                     </div>
                     <div>
-                        <h2 className="text-base font-bold" style={{ color: C.navy }}>Nạp tiền vào ví</h2>
+                        <h2 className="text-base font-bold" style={{ color: C.navy }}>{t('provider.topup.title')}</h2>
                         <p className="text-xs" style={{ color: C.gray }}>
-                            {step === 'amount' ? 'Nhập số tiền cần nạp' :
-                                step === 'qr' ? 'Quét QR để chuyển khoản' :
-                                    step === 'done' ? 'Nạp tiền thành công!' : 'Hết thời gian chờ'}
+                            {step === 'amount' ? t('provider.topup.stepAmount') :
+                                step === 'qr' ? t('provider.topup.stepQr') :
+                                    step === 'done' ? t('provider.topup.stepDone') : t('provider.topup.stepExpired')}
                         </p>
                     </div>
                     <button onClick={handleClose} className="ml-auto p-2 rounded-xl hover:bg-gray-100 transition-colors">
@@ -215,7 +216,7 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                 {step === 'amount' && (
                     <form onSubmit={handleInit} className="p-6 space-y-4">
                         <div>
-                            <label className="block text-sm font-medium mb-1.5" style={{ color: C.navy }}>Số tiền nạp</label>
+                            <label className="block text-sm font-medium mb-1.5" style={{ color: C.navy }}>{t('provider.topup.amountLabel')}</label>
                             <div className="relative">
                                 <input
                                     type="text"
@@ -237,18 +238,18 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                             </div>
                             {isBelowMin ? (
                                 <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
-                                    <AlertCircle className="w-3 h-3" />Tối thiểu {formatVndFull(MIN_TOPUP)}
+                                    <AlertCircle className="w-3 h-3" />{t('provider.topup.belowMin').replace('{amount}', formatVndFull(MIN_TOPUP))}
                                 </p>
                             ) : numeric > 0 ? (
                                 <p className="mt-1.5 text-xs flex items-center gap-1 font-medium" style={{ color: '#16a34a' }}>
-                                    Số dư sau khi nạp: {formatVndFull(availableBalance + numeric)}
+                                    {t('provider.topup.afterTopup').replace('{amount}', formatVndFull(availableBalance + numeric))}
                                 </p>
                             ) : null}
                         </div>
 
                         {/* Quick amounts */}
                         <div>
-                            <p className="text-xs mb-2" style={{ color: C.gray }}>Chọn nhanh</p>
+                            <p className="text-xs mb-2" style={{ color: C.gray }}>{t('provider.topup.quickSelect')}</p>
                             <div className="flex flex-wrap gap-2">
                                 {TOPUP_QUICK_AMOUNTS.map(a => (
                                     <button
@@ -275,12 +276,12 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                         )}
 
                         <div className="p-3 rounded-xl text-xs" style={{ background: '#eff6ff', color: '#1d4ed8' }}>
-                            💡 Hệ thống tự động xác nhận khi nhận được chuyển khoản
+                            {t('provider.topup.autoConfirm')}
                         </div>
 
                         <div className="flex gap-3">
                             <button type="button" onClick={handleClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium border" style={{ borderColor: '#e2e8f0', color: C.gray }}>
-                                Hủy
+                                {t('provider.topup.cancel')}
                             </button>
                             <button
                                 type="submit"
@@ -289,7 +290,7 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                                 style={{ background: isDisabled ? '#94a3b8' : '#2563eb' }}
                             >
                                 {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
-                                {loading ? 'Đang tạo QR...' : 'Tạo mã QR'}
+                                {loading ? t('provider.topup.creatingQr') : t('provider.topup.createQr')}
                             </button>
                         </div>
                     </form>
@@ -313,22 +314,20 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                         {/* Transfer info table */}
                         <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #e2e8f0' }}>
                             <div className="px-4 py-2.5 flex justify-between items-center" style={{ background: '#f8fafc' }}>
-                                <span className="text-xs" style={{ color: C.gray }}>Ngân hàng</span>
+                                <span className="text-xs" style={{ color: C.gray }}>{t('provider.topup.bank')}</span>
                                 <span className="text-sm font-bold" style={{ color: C.navy }}>{qrData.bankCode}</span>
                             </div>
                             <div className="px-4 py-2.5 flex justify-between items-center border-t" style={{ borderColor: '#e2e8f0' }}>
-                                <span className="text-xs" style={{ color: C.gray }}>Số tài khoản</span>
+                                <span className="text-xs" style={{ color: C.gray }}>{t('provider.topup.accountNumber')}</span>
                                 <span className="text-sm font-bold" style={{ color: C.navy }}>{qrData.bankAccount}</span>
                             </div>
                             <div className="px-4 py-2.5 flex justify-between items-center border-t" style={{ borderColor: '#e2e8f0' }}>
-                                <span className="text-xs" style={{ color: C.gray }}>Số tiền</span>
+                                <span className="text-xs" style={{ color: C.gray }}>{t('provider.topup.amount2')}</span>
                                 <span className="text-sm font-bold" style={{ color: '#16a34a' }}>{formatVndFull(qrData.amount)}</span>
                             </div>
                             <div className="px-4 py-2.5 border-t" style={{ borderColor: '#e2e8f0' }}>
                                 <div className="flex justify-between items-center mb-1.5">
-                                    <span className="text-xs" style={{ color: C.gray }}>
-                                        Nội dung CK <span className="text-red-500 font-bold">(bắt buộc)</span>
-                                    </span>
+                                    <span className="text-xs" style={{ color: C.gray }}>{t('provider.topup.transferContent')}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span
@@ -354,9 +353,9 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                             <div className="flex items-center justify-between px-4 py-2.5" style={{ background: `${countdownColor}11` }}>
                                 <div className="flex items-center gap-2">
                                     <RefreshCw style={{ width: 14, height: 14, color: countdownColor }} className="animate-spin" />
-                                    <span className="text-xs font-semibold" style={{ color: countdownColor }}>Đang chờ xác nhận...</span>
+                                    <span className="text-xs font-semibold" style={{ color: countdownColor }}>{t('provider.topup.waitingConfirm')}</span>
                                 </div>
-                                <span className="text-sm font-bold font-mono" style={{ color: countdownColor }}>Còn lại: {mins}:{secs}</span>
+                                <span className="text-sm font-bold font-mono" style={{ color: countdownColor }}>{t('provider.topup.timeLeft')}: {mins}:{secs}</span>
                             </div>
                         </div>
 
@@ -372,7 +371,7 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                                 className="flex-1 py-2.5 rounded-xl text-sm font-medium border"
                                 style={{ borderColor: '#e2e8f0', color: C.gray }}
                             >
-                                Hủy
+                                {t('provider.topup.cancel')}
                             </button>
                             <button
                                 onClick={handleManualCheck}
@@ -383,7 +382,7 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                                 {manualChecking
                                     ? <RefreshCw className="w-4 h-4 animate-spin" />
                                     : <CheckCircle2 className="w-4 h-4" />}
-                                {manualChecking ? 'Đang kiểm tra...' : 'Tôi đã chuyển khoản'}
+                                {manualChecking ? t('provider.topup.checking') : t('provider.topup.iTransferred')}
                             </button>
                         </div>
                     </div>
@@ -396,9 +395,9 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                             <CheckCircle2 style={{ width: 40, height: 40, color: '#16a34a' }} />
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold mb-1" style={{ color: '#15803d' }}>Nạp tiền thành công!</h3>
+                            <h3 className="text-lg font-bold mb-1" style={{ color: '#15803d' }}>{t('provider.topup.successTitle')}</h3>
                             <p className="text-sm" style={{ color: '#166534' }}>
-                                {qrData && formatVndFull(qrData.amount)} đã được cộng vào ví của bạn.
+                                {t('provider.topup.successNote')}
                             </p>
                         </div>
                         <button
@@ -406,7 +405,7 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                             className="w-full py-3 rounded-xl text-sm font-bold text-white"
                             style={{ background: '#16a34a' }}
                         >
-                            Tuyệt vời! ✨
+                            {t('provider.topup.close')}
                         </button>
                     </div>
                 )}
@@ -418,14 +417,14 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                             <Clock style={{ width: 30, height: 30, color: C.orange }} />
                         </div>
                         <div>
-                            <h3 className="text-base font-bold mb-1" style={{ color: C.navy }}>QR đã hết hạn</h3>
+                            <h3 className="text-base font-bold mb-1" style={{ color: C.navy }}>{t('provider.topup.expiredTitle')}</h3>
                             <p className="text-sm" style={{ color: C.gray }}>
-                                Mã QR đã hết hiệu lực sau 5 phút. Nếu đã chuyển khoản, số dư sẽ được cập nhật tự động.
+                                {t('provider.topup.expiredNote')}
                             </p>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={handleClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium border" style={{ borderColor: '#e2e8f0', color: C.gray }}>Đóng</button>
-                            <button onClick={() => { setStep('amount'); setError(''); setSecsLeft(0); }} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white" style={{ background: C.orange }}>Tạo QR mới</button>
+                            <button onClick={handleClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium border" style={{ borderColor: '#e2e8f0', color: C.gray }}>{t('provider.topup.close')}</button>
+                            <button onClick={() => { setStep('amount'); setError(''); setSecsLeft(0); }} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white" style={{ background: C.orange }}>{t('provider.topup.retry')}</button>
                         </div>
                     </div>
                 )}
@@ -587,26 +586,45 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
 }
 
 // ─── Transaction Row (expandable) ────────────────────────────────────────────
-const INCIDENT_LABELS_MAP: Record<string, string> = {
-    BREAKDOWN: 'Hỏng xe',
-    ACCIDENT: 'Tai nạn',
-    FLAT_TIRE: 'Lốp xe hỏng',
-    BATTERY_DEAD: 'Hết bình điện',
-    OUT_OF_FUEL: 'Hết nhiên liệu',
-    LOCKED_OUT: 'Khóa xe',
-    OTHER: 'Khác',
-};
-
 function TxRow({ tx }: { tx: Transaction }) {
     const { t } = useLanguage();
+    const incidentLabels: Record<string, string> = {
+        BREAKDOWN: t('provider.txDetail.incidentLabels.BREAKDOWN'),
+        ACCIDENT: t('provider.txDetail.incidentLabels.ACCIDENT'),
+        FLAT_TIRE: t('provider.txDetail.incidentLabels.FLAT_TIRE'),
+        BATTERY_DEAD: t('provider.txDetail.incidentLabels.BATTERY_DEAD'),
+        OUT_OF_FUEL: t('provider.txDetail.incidentLabels.OUT_OF_FUEL'),
+        LOCKED_OUT: t('provider.txDetail.incidentLabels.LOCKED_OUT'),
+        OTHER: t('provider.txDetail.incidentLabels.OTHER'),
+    };
     const [expanded, setExpanded] = useState(false);
     const [jobDetails, setJobDetails] = useState<any>(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
 
     const isCredit = tx.type === 'CREDIT';
+
+    // Build a translated description based on referenceType (avoids raw backend Vietnamese strings)
+    const txDescription = (() => {
+        const shortId = tx.referenceId?.slice(0, 8).toUpperCase() ?? '';
+        switch (tx.referenceType) {
+            case 'COMMISSION':
+                return t('provider.wallet.txDesc.commission').replace('{id}', shortId);
+            case 'JOB_PAYMENT':
+                return t('provider.wallet.txDesc.jobPayment');
+            case 'TOPUP': {
+                const code = tx.description?.split('·')[1]?.trim() ?? shortId;
+                return t('provider.wallet.txDesc.topup').replace('{code}', code);
+            }
+            case 'WITHDRAW':
+                return t('provider.wallet.txDesc.withdraw').replace('{id}', shortId);
+            default:
+                return null; // fall through to refLabel
+        }
+    })();
+
     const refLabel: Record<Transaction['referenceType'], string> = {
         JOB: t('provider.wallet.refLabel.JOB'),
-        JOB_PAYMENT: 'Thu nhập chuyển khoản QR',
+        JOB_PAYMENT: t('provider.wallet.refLabel.JOB_PAYMENT'),
         WITHDRAW: t('provider.wallet.refLabel.WITHDRAW'),
         COMMISSION: t('provider.wallet.refLabel.COMMISSION'),
         REFUND: t('provider.wallet.refLabel.REFUND'),
@@ -659,7 +677,7 @@ function TxRow({ tx }: { tx: Transaction }) {
                 </div>
                 <div className="flex-1 min-w-0 text-left">
                     <p className="text-sm font-medium truncate" style={{ color: C.navy }}>
-                        {tx.description || refLabel[tx.referenceType]}
+                        {txDescription ?? refLabel[tx.referenceType]}
                     </p>
                     <p className="text-xs mt-0.5" style={{ color: C.gray }}>{formatDate(tx.createdAt)}</p>
                 </div>
@@ -691,13 +709,13 @@ function TxRow({ tx }: { tx: Transaction }) {
                     {loadingDetails ? (
                         <div className="flex items-center justify-center py-4 gap-2">
                             <RefreshCw style={{ width: 14, height: 14, color: C.orange }} className="animate-spin" />
-                            <span className="text-xs" style={{ color: C.gray }}>Đang tải chi tiết...</span>
+                            <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.loading')}</span>
                         </div>
                     ) : jobDetails ? (
                         <div className="px-3 pt-3 space-y-2">
                             {/* Header label */}
                             <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: C.orange }}>
-                                Chi tiết giao dịch
+                                {t('provider.txDetail.title')}
                             </p>
 
                             {/* Not payment-only: full request data */}
@@ -705,15 +723,15 @@ function TxRow({ tx }: { tx: Transaction }) {
                                 <>
                                     {jobDetails.incidentType && (
                                         <div className="flex justify-between items-center">
-                                            <span className="text-xs" style={{ color: C.gray }}>Loại sự cố</span>
+                                            <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.labels.incidentType')}</span>
                                             <span className="text-xs font-semibold" style={{ color: C.navy }}>
-                                                {INCIDENT_LABELS_MAP[jobDetails.incidentType] || jobDetails.incidentType}
+                                                {incidentLabels[jobDetails.incidentType] || jobDetails.incidentType}
                                             </span>
                                         </div>
                                     )}
                                     {(jobDetails.user?.name || jobDetails.user?.fullName) && (
                                         <div className="flex justify-between items-center">
-                                            <span className="text-xs" style={{ color: C.gray }}>Khách hàng</span>
+                                            <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.labels.customer')}</span>
                                             <span className="text-xs font-semibold" style={{ color: C.navy }}>
                                                 {jobDetails.user?.fullName || jobDetails.user?.name}
                                             </span>
@@ -721,7 +739,7 @@ function TxRow({ tx }: { tx: Transaction }) {
                                     )}
                                     {jobDetails.pickupLocation?.addressText && (
                                         <div className="flex justify-between items-start gap-4">
-                                            <span className="text-xs flex-shrink-0" style={{ color: C.gray }}>Địa điểm</span>
+                                            <span className="text-xs flex-shrink-0" style={{ color: C.gray }}>{t('provider.wallet.txRow.location')}</span>
                                             <span className="text-xs font-semibold text-right" style={{ color: C.navy }}>
                                                 {jobDetails.pickupLocation.addressText}
                                             </span>
@@ -734,7 +752,7 @@ function TxRow({ tx }: { tx: Transaction }) {
                             <div className="pt-2 mt-2" style={{ borderTop: '1px solid #e2e8f0' }}>
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs" style={{ color: C.gray }}>
-                                        {tx.referenceType === 'COMMISSION' ? 'Hoa hồng nền tảng' : 'Số tiền giao dịch'}
+                                        {tx.referenceType === 'COMMISSION' ? t('provider.wallet.refLabel.COMMISSION') : t('provider.wallet.txRow.transactionAmount')}
                                     </span>
                                     <span
                                         className="text-sm font-bold"
@@ -745,7 +763,7 @@ function TxRow({ tx }: { tx: Transaction }) {
                                 </div>
                                 {tx.referenceType === 'COMMISSION' && jobDetails.totalAmount && !jobDetails._paymentOnly && (
                                     <div className="flex justify-between items-center mt-1">
-                                        <span className="text-xs" style={{ color: C.gray }}>Tổng thu từ khách</span>
+                                        <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.labels.grossRevenue')}</span>
                                         <span className="text-xs font-semibold" style={{ color: C.navy }}>
                                             {formatVndFull(jobDetails.totalAmount)}
                                         </span>
@@ -764,33 +782,33 @@ function TxRow({ tx }: { tx: Transaction }) {
                                     style={{ background: C.orangeLight, color: C.orange }}
                                 >
                                     <ExternalLink style={{ width: 10, height: 10 }} />
-                                    Xem chi tiết
+                                    {t('provider.wallet.txRow.viewDetails')}
                                 </button>
                             </div>
                         </div>
                     ) : canFetchDetails ? (
                         <div className="flex items-center justify-center py-3 gap-2">
-                            <span className="text-xs" style={{ color: C.gray }}>Không tải được chi tiết</span>
+                            <span className="text-xs" style={{ color: C.gray }}>{t('provider.wallet.txRow.cannotLoadDetails')}</span>
                         </div>
                     ) : (
                         <div className="px-3 pt-3 space-y-2">
                             <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: C.orange }}>
-                                Chi tiết giao dịch
+                                {t('provider.txDetail.title')}
                             </p>
                             <div className="flex justify-between items-center">
-                                <span className="text-xs" style={{ color: C.gray }}>Loại</span>
+                                <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.rowLabels.type')}</span>
                                 <span className="text-xs font-semibold" style={{ color: C.navy }}>
                                     {refLabel[tx.referenceType]}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-xs" style={{ color: C.gray }}>Số tiền</span>
+                                <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.labels.amount')}</span>
                                 <span className="text-sm font-bold" style={{ color: isCredit ? '#16a34a' : '#ef4444' }}>
                                     {isCredit ? '+' : '-'}{formatVndFull(tx.amount)}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-xs" style={{ color: C.gray }}>Mã GD</span>
+                                <span className="text-xs" style={{ color: C.gray }}>{t('provider.wallet.txRow.txCode')}</span>
                                 <span className="text-[10px] font-mono" style={{ color: '#94a3b8' }}>
                                     #{tx.id.slice(0, 12).toUpperCase()}
                                 </span>
@@ -974,7 +992,7 @@ export default function ProviderWalletPage() {
                                 style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.3)' }}
                             >
                                 <Plus style={{ width: 16, height: 16 }} />
-                                Nạp tiền
+                                {t('provider.wallet.deposit')}
                             </button>
                             <button
                                 onClick={() => setShowModal(true)}
@@ -1028,15 +1046,15 @@ export default function ProviderWalletPage() {
                                     <QrCode style={{ width: 16, height: 16, color: 'white' }} />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-bold" style={{ color: '#1e40af' }}>Giao dịch đang chờ thanh toán</p>
-                                    <p className="text-xs" style={{ color: '#3b82f6' }}>{formatVndFull(pendingTopup.amount)} • Hết hạn lúc {new Date(pendingTopup.expireAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
+                                    <p className="text-xs font-bold" style={{ color: '#1e40af' }}>{t('provider.wallet.pendingTopup.waiting')}</p>
+                                    <p className="text-xs" style={{ color: '#3b82f6' }}>{formatVndFull(pendingTopup.amount)} • {t('provider.wallet.pendingTopup.expiresAt')} {new Date(pendingTopup.expireAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
                                 </div>
                             </div>
                             <button
                                 className="px-3 py-1.5 rounded-lg text-xs font-bold text-white flex-shrink-0"
                                 style={{ background: '#2563eb' }}
                             >
-                                Tiếp tục thanh toán
+                                {t('provider.wallet.pendingTopup.continue')}
                             </button>
                         </div>
                     </div>

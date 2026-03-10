@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { useProviderGuard } from '@/lib/guards';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     ArrowLeft, CheckCircle2, Clock, XCircle,
     Banknote, Star, Image as ImageIcon, Play,
@@ -22,26 +23,6 @@ const C = {
     greenLight: '#f0fdf4',
     red: '#ef4444',
     redLight: '#fef2f2',
-};
-
-const INCIDENT_LABELS: Record<string, string> = {
-    BREAKDOWN: 'Hỏng xe',
-    ACCIDENT: 'Tai nạn',
-    FLAT_TIRE: 'Lốp xe hỏng',
-    BATTERY_DEAD: 'Hết bình điện',
-    OUT_OF_FUEL: 'Hết nhiên liệu',
-    LOCKED_OUT: 'Khóa xe',
-    OTHER: 'Khác',
-};
-
-const REF_LABELS: Record<string, string> = {
-    JOB: 'Thu nhập từ job',
-    JOB_PAYMENT: 'Thanh toán chuyển khoản',
-    COMMISSION: 'Hoa hồng nền tảng',
-    WITHDRAW: 'Rút tiền',
-    TOPUP: 'Nạp tiền',
-    REFUND: 'Hoàn tiền',
-    ADJUSTMENT: 'Điều chỉnh',
 };
 
 function fmt(n: number) {
@@ -90,6 +71,7 @@ export default function TxDetailPage() {
     useProviderGuard();
     const router = useRouter();
     const params = useParams();
+    const { t } = useLanguage();
     const txId = params?.id as string;
 
     const [data, setData] = useState<any>(null);
@@ -104,7 +86,7 @@ export default function TxDetailPage() {
             const res = await api.get(`/wallet/me/transactions/${txId}/details`);
             setData(res.data);
         } catch (e: any) {
-            setError(e?.response?.data?.message || 'Không thể tải chi tiết giao dịch');
+            setError(e?.response?.data?.message || t('provider.txDetail.labels.loadError'));
         } finally {
             setLoading(false);
         }
@@ -117,7 +99,7 @@ export default function TxDetailPage() {
             <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
                 <div className="flex flex-col items-center gap-3">
                     <RefreshCw className="w-8 h-8 animate-spin" style={{ color: C.orange }} />
-                    <p className="text-sm" style={{ color: C.gray }}>Đang tải chi tiết...</p>
+                    <p className="text-sm" style={{ color: C.gray }}>{t('provider.txDetail.loading')}</p>
                 </div>
             </div>
         );
@@ -129,9 +111,9 @@ export default function TxDetailPage() {
                 <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: C.redLight }}>
                     <XCircle className="w-8 h-8" style={{ color: C.red }} />
                 </div>
-                <p className="text-sm font-semibold text-center" style={{ color: C.navy }}>{error || 'Không tìm thấy giao dịch'}</p>
+                <p className="text-sm font-semibold text-center" style={{ color: C.navy }}>{error || t('provider.txDetail.notFoundError')}</p>
                 <button onClick={() => router.back()} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.orange }}>
-                    Quay lại
+                    {t('provider.txDetail.goBack')}
                 </button>
             </div>
         );
@@ -140,9 +122,9 @@ export default function TxDetailPage() {
     const { transaction: tx, jobDetail: job } = data;
     const isCredit = tx.type === 'CREDIT';
     const statusConfig = {
-        PENDING: { label: 'Đang chờ', bg: '#fefce8', color: '#ca8a04', Icon: Clock },
-        COMPLETED: { label: 'Hoàn thành', bg: C.greenLight, color: C.green, Icon: CheckCircle2 },
-        FAILED: { label: 'Thất bại', bg: C.redLight, color: C.red, Icon: XCircle },
+        PENDING: { label: t('provider.txDetail.statusLabels.PENDING' as any), bg: '#fefce8', color: '#ca8a04', Icon: Clock },
+        COMPLETED: { label: t('provider.txDetail.statusLabels.COMPLETED' as any), bg: C.greenLight, color: C.green, Icon: CheckCircle2 },
+        FAILED: { label: t('provider.txDetail.statusLabels.FAILED' as any), bg: C.redLight, color: C.red, Icon: XCircle },
     }[tx.status as 'PENDING' | 'COMPLETED' | 'FAILED'] ?? { label: tx.status, bg: C.bg, color: C.gray, Icon: Clock };
 
     const images = (job?.media ?? []).filter((m: any) => m.mediaType === 'IMAGE');
@@ -168,7 +150,7 @@ export default function TxDetailPage() {
                     <ArrowLeft className="w-4 h-4" style={{ color: C.navy }} />
                 </button>
                 <div className="flex-1 min-w-0">
-                    <h1 className="text-sm font-bold truncate" style={{ color: C.navy }}>Chi tiết giao dịch</h1>
+                    <h1 className="text-sm font-bold truncate" style={{ color: C.navy }}>{t('provider.txDetail.title')}</h1>
                     <p className="text-[10px] font-mono" style={{ color: C.gray }}>#{tx.id.slice(0, 16).toUpperCase()}</p>
                 </div>
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: statusConfig.bg, color: statusConfig.color }}>
@@ -191,16 +173,16 @@ export default function TxDetailPage() {
                             {isCredit ? '+' : '−'}{fmt(tx.amount)}
                         </p>
                         <p className="text-xs font-medium" style={{ color: '#6b7280' }}>
-                            {REF_LABELS[tx.referenceType] ?? tx.referenceType}
+                            {t(`provider.txDetail.refLabels.${tx.referenceType}` as any) || t(`provider.txDetail.refLabels2.${tx.referenceType}` as any) || tx.referenceType}
                         </p>
                     </div>
                     <div className="px-5 py-4 space-y-3">
-                        <Row label="Ngày giao dịch" value={fmtDate(tx.createdAt)} />
-                        <Row label="Loại" value={isCredit ? 'Tiền vào' : 'Tiền ra'} />
-                        <Row label="Trạng thái" value={statusConfig.label} valueColor={statusConfig.color} />
-                        {tx.description && <Row label="Mô tả" value={tx.description} />}
+                        <Row label={t('provider.txDetail.rowLabels.date')} value={fmtDate(tx.createdAt)} />
+                        <Row label={t('provider.txDetail.rowLabels.type')} value={isCredit ? t('provider.txDetail.rowLabels.credit') : t('provider.txDetail.rowLabels.debit')} />
+                        <Row label={t('provider.txDetail.labels.status')} value={statusConfig.label} valueColor={statusConfig.color} />
+                        {tx.description && <Row label={t('provider.txDetail.rowLabels.description')} value={tx.description} />}
                         {tx.holdReleaseAt && (
-                            <Row label="Giải ngân lúc" value={fmtDate(tx.holdReleaseAt)} valueColor={C.orange} />
+                            <Row label={t('provider.txDetail.rowLabels.disbursedAt')} value={fmtDate(tx.holdReleaseAt)} valueColor={C.orange} />
                         )}
                         <div className="flex items-center justify-between pt-1" style={{ borderTop: `1px dashed ${C.border}` }}>
                             <span className="text-[10px] font-mono" style={{ color: '#94a3b8' }}>TX#{tx.id.slice(0, 20).toUpperCase()}</span>
@@ -216,25 +198,25 @@ export default function TxDetailPage() {
                                 <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: C.orangeLight }}>
                                     <Wrench className="w-4 h-4" style={{ color: C.orange }} />
                                 </div>
-                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Thông tin đơn hàng</h2>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>{t('provider.txDetail.job.title')}</h2>
                             </div>
                             <button
                                 onClick={() => router.push(`/provider/history/${job.id}`)}
                                 className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                                 style={{ background: C.orangeLight, color: C.orange }}
                             >
-                                Xem đơn <ChevronRight className="w-3 h-3" />
+                                {t('provider.txDetail.job.viewBtn')} <ChevronRight className="w-3 h-3" />
                             </button>
                         </div>
                         <div className="px-5 py-4 space-y-3">
-                            <Row label="Mã đơn" value={`#${job.id.slice(0, 10).toUpperCase()}`} mono />
-                            {job.incidentType && <Row label="Loại sự cố" value={INCIDENT_LABELS[job.incidentType] ?? job.incidentType} />}
-                            {job.vehicleType && <Row label="Phương tiện" value={job.vehicleType === 'CAR' ? ' Ô tô' : '🏍️ Xe máy'} />}
-                            {job.createdAt && <Row label="Tạo lúc" value={fmtDate(job.createdAt)} />}
-                            {job.completedAt && <Row label="Hoàn thành" value={fmtDate(job.completedAt)} />}
+                            <Row label={t('provider.txDetail.job.id')} value={`#${job.id.slice(0, 10).toUpperCase()}`} mono />
+                            {job.incidentType && <Row label={t('provider.txDetail.labels.incidentType')} value={t(`provider.txDetail.incidentLabels.${job.incidentType}` as any) || job.incidentType} />}
+                            {job.vehicleType && <Row label={t('provider.txDetail.job.vehicleTypeLabel')} value={job.vehicleType === 'CAR' ? ` ${t('provider.txDetail.job.vehicleCar')}` : `🏍️ ${t('provider.txDetail.job.vehicleMotorcycle')}`} />}
+                            {job.createdAt && <Row label={t('provider.txDetail.job.createdAt')} value={fmtDate(job.createdAt)} />}
+                            {job.completedAt && <Row label={t('provider.txDetail.job.completedAt')} value={fmtDate(job.completedAt)} />}
                             {job.description && (
                                 <div>
-                                    <p className="text-xs mb-1" style={{ color: C.gray }}>Mô tả sự cố</p>
+                                    <p className="text-xs mb-1" style={{ color: C.gray }}>{t('provider.txDetail.job.descriptionLabel')}</p>
                                     <p className="text-sm italic" style={{ color: C.navy }}>"{job.description}"</p>
                                 </div>
                             )}
@@ -245,22 +227,22 @@ export default function TxDetailPage() {
                 {/* ── Payment Breakdown ── */}
                 {job?.payment && (
                     <div className="rounded-2xl overflow-hidden" style={{ background: 'white', boxShadow: '0 1px 12px rgba(0,0,0,0.07)' }}>
-                        <SectionHeader icon={<Banknote className="w-4 h-4" style={{ color: C.green }} />} title="Chi tiết thanh toán" bg={C.greenLight} />
+                        <SectionHeader icon={<Banknote className="w-4 h-4" style={{ color: C.green }} />} title={t('provider.txDetail.payment.title')} bg={C.greenLight} />
                         <div className="px-5 py-4 space-y-3">
-                            <Row label="Phương thức" value={job.payment.paymentMethod === 'QR' ? ' Chuyển khoản' : ' Tiền mặt'} />
-                            {job.payment.baseFee > 0 && <Row label="Giá cơ bản" value={fmt(job.payment.baseFee)} />}
+                            <Row label={t('provider.txDetail.payment.method')} value={job.payment.paymentMethod === 'QR' ? `🏦 ${t('provider.txDetail.payment.transfer')}` : `💵 ${t('provider.txDetail.payment.cash')}`} />
+                            {job.payment.baseFee > 0 && <Row label={t('provider.txDetail.payment.basePrice')} value={fmt(job.payment.baseFee)} />}
                             {breakdown.map((b, i) => (
-                                <Row key={i} label={b.label || 'Chi phí'} value={fmt(b.amount)} />
+                                <Row key={i} label={b.label || t('provider.txDetail.payment.basePrice')} value={fmt(b.amount)} />
                             ))}
                             {surcharges.map((s, i) => (
-                                <Row key={i} label={`Phụ phí: ${s.label}`} value={`+${fmt(s.amount)}`} valueColor={C.orange} />
+                                <Row key={i} label={t('provider.txDetail.payment.surcharge').replace('{label}', s.label)} value={`+${fmt(s.amount)}`} valueColor={C.orange} />
                             ))}
                             <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${C.border}` }}>
-                                <span className="text-sm font-bold" style={{ color: C.navy }}>Tổng thanh toán</span>
+                                <span className="text-sm font-bold" style={{ color: C.navy }}>{t('provider.txDetail.payment.total')}</span>
                                 <span className="text-base font-bold" style={{ color: C.orange }}>{fmt(job.payment.totalAmount)}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-xs" style={{ color: C.gray }}>Thu nhập sau commission (10%)</span>
+                                <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.payment.netIncome')}</span>
                                 <span className="text-sm font-bold" style={{ color: C.green }}>{fmt(Math.round(job.payment.totalAmount * 0.9))}</span>
                             </div>
                         </div>
@@ -270,11 +252,11 @@ export default function TxDetailPage() {
                 {/* ── Media Gallery ── */}
                 {(images.length > 0 || allVideos.length > 0) && (
                     <div className="rounded-2xl overflow-hidden" style={{ background: 'white', boxShadow: '0 1px 12px rgba(0,0,0,0.07)' }}>
-                        <SectionHeader icon={<ImageIcon className="w-4 h-4" style={{ color: '#7c3aed' }} />} title={`Hình ảnh & Video (${images.length + allVideos.length})`} bg="#f5f3ff" />
+                        <SectionHeader icon={<ImageIcon className="w-4 h-4" style={{ color: '#7c3aed' }} />} title={t('provider.txDetail.media.title').replace('{count}', String(images.length + allVideos.length))} bg="#f5f3ff" />
                         <div className="px-4 py-4">
                             {images.length > 0 && (
                                 <>
-                                    <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: C.gray }}>Ảnh</p>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: C.gray }}>{t('provider.txDetail.media.photos')}</p>
                                     <div className="grid grid-cols-3 gap-2 mb-3">
                                         {images.map((img: any, i: number) => (
                                             <button
@@ -294,7 +276,7 @@ export default function TxDetailPage() {
                             )}
                             {allVideos.length > 0 && (
                                 <>
-                                    <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: C.gray }}>Video</p>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: C.gray }}>{t('provider.txDetail.media.videos')}</p>
                                     <div className="space-y-2">
                                         {allVideos.map((v: any, i: number) => (
                                             <a
@@ -324,7 +306,7 @@ export default function TxDetailPage() {
                 {/* ── Review ── */}
                 {job?.review && (
                     <div className="rounded-2xl overflow-hidden" style={{ background: 'white', boxShadow: '0 1px 12px rgba(0,0,0,0.07)' }}>
-                        <SectionHeader icon={<Star className="w-4 h-4" style={{ color: '#f59e0b' }} />} title="Đánh giá từ khách hàng" bg="#fefce8" />
+                        <SectionHeader icon={<Star className="w-4 h-4" style={{ color: '#f59e0b' }} />} title={t('provider.txDetail.review.title')} bg="#fefce8" />
                         <div className="px-5 py-4 space-y-3">
                             <div className="flex items-center gap-3">
                                 <Stars rating={job.review.rating} />
@@ -344,7 +326,7 @@ export default function TxDetailPage() {
                                     ))}
                                 </div>
                             )}
-                            <p className="text-[10px]" style={{ color: C.gray }}>Đánh giá lúc: {fmtDate(job.review.createdAt)}</p>
+                            <p className="text-[10px]" style={{ color: C.gray }}>{t('provider.txDetail.review.postedAt')} {fmtDate(job.review.createdAt)}</p>
                         </div>
                     </div>
                 )}

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import api from '@/lib/api';
 import ProviderLayout from '@/components/ProviderLayout';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -102,19 +103,20 @@ function fmtShortDate(iso: string) {
 /* ─────────────────────── Sub-components ────────────── */
 
 function StatusBadge({ status }: { status: RequestStatus }) {
+    const { t } = useLanguage();
     const cfg: Record<string, { label: string; dot: string; color: string; bg: string }> = {
-        COMPLETED: { label: 'Hoàn thành', dot: C.green, color: C.green, bg: C.greenLight },
-        PAID: { label: 'Chờ giải ngân', dot: '#7c3aed', color: '#7c3aed', bg: '#f5f3ff' },
-        PAYMENT_PENDING: { label: 'Chờ thanh toán', dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
-        IN_PROGRESS: { label: 'Đang xử lý', dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
-        WORKING: { label: 'Đang xử lý', dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
-        ARRIVED: { label: 'Đã đến', dot: C.blue, color: C.blue, bg: C.blueLight },
-        CANCELLED: { label: 'Đã hủy', dot: '#9ca3af', color: '#6b7280', bg: '#f9fafb' },
-        EXPIRED: { label: 'Hết hạn', dot: '#9ca3af', color: '#6b7280', bg: '#f9fafb' },
-        FAILED: { label: 'Thất bại', dot: C.red, color: C.red, bg: C.redLight },
-        ACCEPTED: { label: 'Đã nhận', dot: C.blue, color: C.blue, bg: C.blueLight },
-        ASSIGNED: { label: 'Được giao', dot: C.blue, color: C.blue, bg: C.blueLight },
-        MATCHING: { label: 'Đang tìm', dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
+        COMPLETED: { label: t('provider.history.statusBadge.COMPLETED'), dot: C.green, color: C.green, bg: C.greenLight },
+        PAID: { label: t('provider.history.statusBadge.PAID'), dot: '#7c3aed', color: '#7c3aed', bg: '#f5f3ff' },
+        PAYMENT_PENDING: { label: t('provider.history.statusBadge.PAYMENT_PENDING'), dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
+        IN_PROGRESS: { label: t('provider.history.statusBadge.IN_PROGRESS'), dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
+        WORKING: { label: t('provider.history.statusBadge.WORKING'), dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
+        ARRIVED: { label: t('provider.history.statusBadge.ARRIVED'), dot: C.blue, color: C.blue, bg: C.blueLight },
+        CANCELLED: { label: t('provider.history.statusBadge.CANCELLED'), dot: '#9ca3af', color: '#6b7280', bg: '#f9fafb' },
+        EXPIRED: { label: t('provider.history.statusBadge.EXPIRED'), dot: '#9ca3af', color: '#6b7280', bg: '#f9fafb' },
+        FAILED: { label: t('provider.history.statusBadge.FAILED'), dot: C.red, color: C.red, bg: C.redLight },
+        ACCEPTED: { label: t('provider.history.statusBadge.ACCEPTED'), dot: C.blue, color: C.blue, bg: C.blueLight },
+        ASSIGNED: { label: t('provider.history.statusBadge.ASSIGNED'), dot: C.blue, color: C.blue, bg: C.blueLight },
+        MATCHING: { label: t('provider.history.statusBadge.MATCHING'), dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
     };
     const s = cfg[status] ?? { label: status, dot: C.gray, color: C.gray, bg: '#f3f4f6' };
     return (
@@ -127,11 +129,12 @@ function StatusBadge({ status }: { status: RequestStatus }) {
 }
 
 function PaymentBadge({ walletTxStatus, paymentMethod }: { walletTxStatus?: string | null; paymentMethod?: string }) {
+    const { t } = useLanguage();
     if (walletTxStatus === 'COMPLETED') {
         return (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
                 style={{ background: C.greenLight, color: C.green }}>
-                Đã giải ngân
+                {t('provider.history.paymentBadge.disbursed')}
             </span>
         );
     }
@@ -139,7 +142,7 @@ function PaymentBadge({ walletTxStatus, paymentMethod }: { walletTxStatus?: stri
         return (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
                 style={{ background: '#f5f3ff', color: '#7c3aed' }}>
-                Chờ giải ngân 24h
+                {t('provider.history.paymentBadge.waitingDisbursement')}
             </span>
         );
     }
@@ -147,7 +150,7 @@ function PaymentBadge({ walletTxStatus, paymentMethod }: { walletTxStatus?: stri
         return (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
                 style={{ background: '#f3f4f6', color: '#374151' }}>
-                Tiền mặt
+                {t('provider.history.paymentBadge.cash')}
             </span>
         );
     }
@@ -159,12 +162,13 @@ const CHART_H = 120; // px – bar area (increased for better visibility)
 const LABEL_H = 16;  // px – label row
 
 function MiniBarChart({ data }: { data: DayStat[] }) {
+    const { t } = useLanguage();
     const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
 
     if (!data || data.length === 0) {
         return (
             <div className="h-20 flex items-center justify-center">
-                <p className="text-xs" style={{ color: C.gray }}>Chưa có dữ liệu doanh thu</p>
+                <p className="text-xs" style={{ color: C.gray }}>{t('provider.history.chart.noData')}</p>
             </div>
         );
     }
@@ -179,11 +183,11 @@ function MiniBarChart({ data }: { data: DayStat[] }) {
             <div className="flex items-center gap-3 mb-2 justify-end text-[10px] font-medium" style={{ color: C.gray }}>
                 <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-sm" style={{ background: C.orange }}></div>
-                    <span>Doanh thu</span>
+                    <span>{t('provider.history.chart.revenue')}</span>
                 </div>
                 <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-sm" style={{ background: C.green }}></div>
-                    <span>Lợi nhuận</span>
+                    <span>{t('provider.history.chart.profit')}</span>
                 </div>
             </div>
 
@@ -211,11 +215,11 @@ function MiniBarChart({ data }: { data: DayStat[] }) {
                         {fmtShortDate(data[hover.idx].date)}
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '2px' }}>
-                        <span style={{ color: '#fdba74' }}>Doanh thu:</span>
+                        <span style={{ color: '#fdba74' }}>{t('provider.history.chart.revenue')}:</span>
                         <span>{fmtVnd(data[hover.idx].revenue)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
-                        <span style={{ color: '#86efac' }}>Lợi nhuận:</span>
+                        <span style={{ color: '#86efac' }}>{t('provider.history.chart.profit')}:</span>
                         <span>{fmtVnd(data[hover.idx].profit)}</span>
                     </div>
                     <div style={{
@@ -342,6 +346,7 @@ function Avatar({ name }: { name: string }) {
 /* ═══════════════════ Main Page ═══════════════════ */
 export default function ProviderHistoryPage() {
     const router = useRouter();
+    const { t } = useLanguage();
     const { user, loading: authLoading } = useAuth();
 
     const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -416,18 +421,18 @@ export default function ProviderHistoryPage() {
 
     /* ── CSV Export ── */
     const handleExportCsv = () => {
-        if (filtered.length === 0) { toast.error('Không có dữ liệu để xuất'); return; }
+        if (filtered.length === 0) { toast.error(t('provider.history.noExport')); return; }
 
         const STATUS_LABELS: Record<string, string> = {
-            COMPLETED: 'Hoàn thành', PAID: 'Hoàn thành',
-            PAYMENT_PENDING: 'Chờ thanh toán', CANCELLED: 'Đã hủy',
-            EXPIRED: 'Hết hạn', FAILED: 'Thất bại',
-            IN_PROGRESS: 'Đang xử lý', WORKING: 'Đang xử lý',
-            ARRIVED: 'Đã đến', ACCEPTED: 'Đã nhận',
-            ASSIGNED: 'Được giao', MATCHING: 'Đang tìm',
+            COMPLETED: t('provider.history.statusBadge.COMPLETED'), PAID: t('provider.history.statusBadge.COMPLETED'),
+            PAYMENT_PENDING: t('provider.history.statusBadge.PAYMENT_PENDING'), CANCELLED: t('provider.history.statusBadge.CANCELLED'),
+            EXPIRED: t('provider.history.statusBadge.EXPIRED'), FAILED: t('provider.history.statusBadge.FAILED'),
+            IN_PROGRESS: t('provider.history.statusBadge.IN_PROGRESS'), WORKING: t('provider.history.statusBadge.WORKING'),
+            ARRIVED: t('provider.history.statusBadge.ARRIVED'), ACCEPTED: t('provider.history.statusBadge.ACCEPTED'),
+            ASSIGNED: t('provider.history.statusBadge.ASSIGNED'), MATCHING: t('provider.history.statusBadge.MATCHING'),
         };
 
-        const headers = ['STT', 'Ngày', 'Giờ', 'Khách hàng', 'Số điện thoại', 'Loại dịch vụ', 'Doanh thu (đ)', 'Lợi nhuận ước tính (đ)', 'Trạng thái'];
+        const headers = ['#', 'Date', 'Time', t('provider.history.tableHeader.customer'), 'Phone', t('provider.history.tableHeader.service'), `${t('provider.history.chart.revenue')} (₫)`, `${t('provider.history.chart.profit')} (₫)`, t('provider.history.tableHeader.status')];
 
         const rows = filtered.map((q, idx) => {
             const req = q.rescueRequest;
@@ -439,9 +444,9 @@ export default function ProviderHistoryPage() {
                 idx + 1,
                 date,
                 time,
-                req.user.name ?? 'Khách hàng',
+                req.user.name ?? t('provider.history.customerFallback'),
                 req.user.phoneNumber ?? '',
-                INCIDENT_LABELS[req.incidentType] ?? req.incidentType,
+                (t(`provider.incidents.${req.incidentType}`) || req.incidentType),
                 revenueAmount,
                 profit,
                 STATUS_LABELS[req.status] ?? req.status,
@@ -461,7 +466,7 @@ export default function ProviderHistoryPage() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        toast.success(`Đã xuất ${filtered.length} đơn hàng`);
+        toast.success(t('provider.history.exported').replace('{count}', String(filtered.length)));
     };
 
     if (authLoading || !user) {
@@ -503,13 +508,13 @@ export default function ProviderHistoryPage() {
                             </div>
                             <span className="font-bold text-sm" style={{ color: C.navy }}>RescueMe</span>
                         </div>
-                        <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>Lịch sử công việc</h2>
+                        <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>{t('provider.history.title')}</h2>
                     </div>
 
                     <div className="flex items-center gap-3">
                         <div className="hidden sm:flex items-center gap-1.5">
                             <div className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }} />
-                            <span className="text-xs font-medium" style={{ color: '#64748b' }}>Hệ thống hoạt động</span>
+                            <span className="text-xs font-medium" style={{ color: '#64748b' }}>{t('provider.history.systemOk')}</span>
                         </div>
                         <LanguageSwitcher />
                         <button className="p-1.5 rounded-lg" style={{ color: '#94a3b8' }}>
@@ -529,8 +534,8 @@ export default function ProviderHistoryPage() {
                     {/* ── Title row ── */}
                     <div className="flex items-start justify-between mb-5 flex-wrap gap-3">
                         <div>
-                            <h1 className="text-xl font-bold" style={{ color: C.navy }}>Lịch sử công việc</h1>
-                            <p className="text-sm mt-0.5" style={{ color: C.gray }}>Quản lý và theo dõi hiệu suất cứu hộ của bạn.</p>
+                            <h1 className="text-xl font-bold" style={{ color: C.navy }}>{t('provider.history.title')}</h1>
+                            <p className="text-sm mt-0.5" style={{ color: C.gray }}>{t('provider.history.subtitle')}</p>
                         </div>
                         <button
                             onClick={handleExportCsv}
@@ -539,7 +544,7 @@ export default function ProviderHistoryPage() {
                             style={{ borderColor: C.border, color: C.gray, background: 'white' }}
                         >
                             <Download size={14} />
-                            Xuất CSV
+                            {t('provider.history.exportCsv')}
                         </button>
                     </div>
 
@@ -551,11 +556,11 @@ export default function ProviderHistoryPage() {
                             <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-2">
                                     <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.gray }}>
-                                        Doanh thu / Lợi nhuận
+                                        {t('provider.history.chart.revenueProfit')}
                                     </p>
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-bold"
                                         style={{ background: '#fef2f2', color: '#ef4444' }}>
-                                        Phí nền tảng: 10%
+                                        {t('provider.history.chart.platformFee')}
                                     </span>
                                 </div>
                                 <select
@@ -564,9 +569,9 @@ export default function ProviderHistoryPage() {
                                     value={period}
                                     onChange={e => setPeriod(Number(e.target.value) as 7 | 14 | 30)}
                                 >
-                                    <option value={7}>7 ngày</option>
-                                    <option value={14}>14 ngày</option>
-                                    <option value={30}>30 ngày</option>
+                                    <option value={7}>{t('provider.history.chart.days7')}</option>
+                                    <option value={14}>{t('provider.history.chart.days14')}</option>
+                                    <option value={30}>{t('provider.history.chart.days30')}</option>
                                 </select>
                             </div>
                             <div className="flex items-baseline gap-2 mt-1">
@@ -578,7 +583,7 @@ export default function ProviderHistoryPage() {
                                 </span>
                             </div>
                             <p className="text-xs mb-3" style={{ color: C.green }}>
-                                {(stats?.successRate ?? 0).toFixed(1)}% tỷ lệ thành công
+                                {(stats?.successRate ?? 0).toFixed(1)}% {t('provider.history.successRate.successful')}
                             </p>
                             {statsLoading ? (
                                 <div className="h-20 flex items-center justify-center">
@@ -594,13 +599,13 @@ export default function ProviderHistoryPage() {
                         <div className="bg-white rounded-2xl p-5 shadow-sm border flex flex-col justify-between" style={{ borderColor: C.border }}>
                             <div>
                                 <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: C.gray }}>
-                                    Lợi nhuận hôm nay
+                                    {t('provider.history.todayProfit.label')}
                                 </p>
                                 <p className="text-3xl font-bold" style={{ color: C.navy }}>{fmtVnd(todayProfit)}</p>
                             </div>
                             <div className="mt-4">
                                 <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-xs" style={{ color: C.gray }}>So với hôm qua</span>
+                                    <span className="text-xs" style={{ color: C.gray }}>{t('provider.history.todayProfit.vsYesterday')}</span>
                                     <span className="text-xs font-bold flex items-center gap-1"
                                         style={{ color: profitChange >= 0 ? C.green : C.red }}>
                                         {profitChange >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -627,7 +632,7 @@ export default function ProviderHistoryPage() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.gray }}>
-                                            Tỷ lệ thành công
+                                            {t('provider.history.successRate.label')}
                                         </p>
                                         <p className="text-xl font-bold" style={{ color: C.navy }}>
                                             {statsLoading ? '...' : `${(stats?.successRate ?? 0).toFixed(1)}%`}
@@ -638,15 +643,15 @@ export default function ProviderHistoryPage() {
                                     <div className="mt-3 flex items-center gap-3 text-xs" style={{ color: C.gray }}>
                                         <span className="flex items-center gap-1">
                                             <CheckCircle2 size={11} style={{ color: C.green }} />
-                                            {stats.totalCompleted} thành công
+                                            {stats.totalCompleted} {t('provider.history.successRate.successful')}
                                         </span>
                                         <span>·</span>
                                         <span className="flex items-center gap-1">
                                             <XCircle size={11} style={{ color: C.red }} />
-                                            {stats.totalAccepted - stats.totalCompleted} thất bại
+                                            {stats.totalAccepted - stats.totalCompleted} {t('provider.history.successRate.failed')}
                                         </span>
                                         <span>·</span>
-                                        <span>{stats.totalAccepted} tổng</span>
+                                        <span>{stats.totalAccepted} {t('provider.history.successRate.total')}</span>
                                     </div>
                                 )}
                             </div>
@@ -659,16 +664,16 @@ export default function ProviderHistoryPage() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.gray }}>
-                                            Đánh giá trung bình
+                                            {t('provider.history.avgRating.label')}
                                         </p>
                                         <p className="text-xl font-bold" style={{ color: C.navy }}>
-                                            {statsLoading ? '...' : stats?.avgRating != null ? `${stats.avgRating}/5.0` : 'Chưa có'}
+                                            {statsLoading ? '...' : stats?.avgRating != null ? `${stats.avgRating}/5.0` : t('provider.history.avgRating.noRating')}
                                         </p>
                                     </div>
                                 </div>
                                 {!statsLoading && stats && stats.reviewCount > 0 && (
                                     <p className="mt-2 text-xs" style={{ color: C.gray }}>
-                                        Từ {stats.reviewCount} đánh giá của khách hàng
+                                        {t('provider.history.avgRating.fromReviews').replace('{count}', String(stats.reviewCount))}
                                     </p>
                                 )}
                             </div>
@@ -682,7 +687,7 @@ export default function ProviderHistoryPage() {
                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#94a3b8' }} />
                             <input
                                 type="text"
-                                placeholder="Tìm kiếm khách hàng, mã đơn..."
+                                placeholder={t('provider.history.filter.searchPlaceholder')}
                                 className="w-full pl-9 pr-3 py-2.5 rounded-xl border text-sm outline-none"
                                 style={{ borderColor: C.border, color: C.navy }}
                                 value={search}
@@ -702,9 +707,9 @@ export default function ProviderHistoryPage() {
                             value={filterService}
                             onChange={e => { setFilterService(e.target.value); resetPage(); }}
                         >
-                            <option value="all">Tất cả dịch vụ</option>
-                            {Object.entries(INCIDENT_LABELS).map(([k, v]) => (
-                                <option key={k} value={k}>{v}</option>
+                            <option value="all">{t('provider.history.filter.allServices')}</option>
+                            {(Object.keys(INCIDENT_LABELS) as IncidentType[]).map((k) => (
+                                <option key={k} value={k}>{t(`provider.incidents.${k}`)}</option>
                             ))}
                         </select>
                         <select
@@ -713,11 +718,11 @@ export default function ProviderHistoryPage() {
                             value={filterStatus}
                             onChange={e => { setFilterStatus(e.target.value); resetPage(); }}
                         >
-                            <option value="all">Tất cả trạng thái</option>
-                            <option value="completed">Hoàn thành</option>
-                            <option value="pending">Chờ thanh toán</option>
-                            <option value="active">Đang xử lý</option>
-                            <option value="cancelled">Đã hủy</option>
+                            <option value="all">{t('provider.history.filter.allStatuses')}</option>
+                            <option value="completed">{t('provider.history.filter.completed')}</option>
+                            <option value="pending">{t('provider.history.filter.waitingPayment')}</option>
+                            <option value="active">{t('provider.history.filter.inProgress')}</option>
+                            <option value="cancelled">{t('provider.history.filter.cancelled')}</option>
                         </select>
                         <button className="p-2.5 rounded-xl border" style={{ borderColor: C.border }}>
                             <Filter size={15} style={{ color: C.gray }} />
@@ -729,7 +734,7 @@ export default function ProviderHistoryPage() {
                         {/* Desktop header */}
                         <div className="hidden md:grid grid-cols-[160px_1fr_130px_160px_120px_130px_52px] gap-4 px-5 py-3"
                             style={{ borderBottom: `1px solid ${C.border}`, background: '#f8fafc' }}>
-                            {['NGÀY / MÃ ĐƠN', 'KHÁCH HÀNG', 'LOẠI DỊCH VỤ', 'DOANH THU / LÃI', 'TRẠNG THÁI', 'THANH TOÁN', ''].map((h, i) => (
+                            {[t('provider.history.tableHeader.dateId'), t('provider.history.tableHeader.customer'), t('provider.history.tableHeader.service'), t('provider.history.tableHeader.revenueProfit'), t('provider.history.tableHeader.status'), t('provider.history.tableHeader.payment'), ''].map((h, i) => (
                                 <span key={i} className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.gray }}>{h}</span>
                             ))}
                         </div>
@@ -742,8 +747,8 @@ export default function ProviderHistoryPage() {
                         ) : pageItems.length === 0 ? (
                             <div className="text-center py-16">
                                 <Clock size={36} className="mx-auto mb-3" style={{ color: '#e2e8f0' }} />
-                                <p className="font-semibold" style={{ color: C.navy }}>Không có đơn hàng nào</p>
-                                <p className="text-sm mt-1" style={{ color: C.gray }}>Thử thay đổi bộ lọc hoặc tìm kiếm khác.</p>
+                                <p className="font-semibold" style={{ color: C.navy }}>{t('provider.history.empty')}</p>
+                                <p className="text-sm mt-1" style={{ color: C.gray }}>{t('provider.history.emptySub')}</p>
                             </div>
                         ) : (
                             <div>
@@ -775,7 +780,7 @@ export default function ProviderHistoryPage() {
                                                         <Avatar name={req.user.name ?? 'K'} />
                                                         <div className="min-w-0">
                                                             <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>
-                                                                {req.user.name ?? 'Khách hàng'}
+                                                                {req.user.name ?? t('provider.history.customerFallback')}
                                                             </p>
                                                             {req.user.phoneNumber && (
                                                                 <p className="text-xs truncate" style={{ color: C.gray }}>
@@ -786,21 +791,21 @@ export default function ProviderHistoryPage() {
                                                     </div>
                                                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold w-fit"
                                                         style={{ background: incColor.bg, color: incColor.color }}>
-                                                        {INCIDENT_LABELS[req.incidentType] ?? req.incidentType}
+                                                        {t(`provider.incidents.${req.incidentType}`) || req.incidentType}
                                                     </span>
                                                     <div>
                                                         {isPending ? (
-                                                            <p className="text-sm font-bold" style={{ color: C.orange }}>Chờ thanh toán</p>
+                                                            <p className="text-sm font-bold" style={{ color: C.orange }}>{t('provider.history.waitingPayment')}</p>
                                                         ) : isCancelled ? (
                                                             <p className="text-sm line-through" style={{ color: '#9ca3af' }}>{fmtVnd(q.price)}</p>
                                                         ) : (
                                                             <>
                                                                 <p className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(revenueAmount)}</p>
                                                                 {revenueAmount !== q.price && (
-                                                                    <p className="text-[10px]" style={{ color: C.gray }}>Báo giá: {fmtVnd(q.price)}</p>
+                                                                    <p className="text-[10px]" style={{ color: C.gray }}>{t('provider.history.quoteLabel')}: {fmtVnd(q.price)}</p>
                                                                 )}
                                                                 {isCompleted && (
-                                                                    <p className="text-xs font-semibold mt-0.5" style={{ color: C.green }}>+{fmtVnd(profit)} lãi</p>
+                                                                    <p className="text-xs font-semibold mt-0.5" style={{ color: C.green }}>+{fmtVnd(profit)} {t('provider.history.profitLabel')}</p>
                                                                 )}
                                                             </>
                                                         )}
@@ -819,7 +824,7 @@ export default function ProviderHistoryPage() {
                                                             <Avatar name={req.user.name ?? 'K'} />
                                                             <div className="min-w-0">
                                                                 <p className="font-semibold text-sm truncate" style={{ color: C.navy }}>
-                                                                    {req.user.name ?? 'Khách hàng'}
+                                                                    {req.user.name ?? t('provider.history.customerFallback')}
                                                                 </p>
                                                                 <p className="text-xs" style={{ color: C.gray }}>{date} · {time}</p>
                                                                 <p className="text-[10px] font-mono font-bold mt-0.5" style={{ color: '#94a3b8' }}>#{req.id.slice(0, 8).toUpperCase()}</p>
@@ -830,7 +835,7 @@ export default function ProviderHistoryPage() {
                                                     <div className="flex items-center gap-2 mt-3 flex-wrap">
                                                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
                                                             style={{ background: incColor.bg, color: incColor.color }}>
-                                                            {INCIDENT_LABELS[req.incidentType] ?? req.incidentType}
+                                                            {t(`provider.incidents.${req.incidentType}`) || req.incidentType}
                                                         </span>
                                                         <StatusBadge status={req.status} />
                                                         <PaymentBadge walletTxStatus={req.payment?.walletTxStatus} paymentMethod={req.payment?.paymentMethod} />
@@ -852,7 +857,10 @@ export default function ProviderHistoryPage() {
                             <div className="flex items-center justify-between px-5 py-3.5 flex-wrap gap-3"
                                 style={{ borderTop: `1px solid #f1f5f9`, background: '#fafafa' }}>
                                 <p className="text-sm" style={{ color: C.gray }}>
-                                    {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} / {filtered.length} đơn
+                                    {t('provider.history.ordersCount')
+                                        .replace('{min}', String(Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)))
+                                        .replace('{max}', String(Math.min(page * PAGE_SIZE, filtered.length)))
+                                        .replace('{total}', String(filtered.length))}
                                 </p>
                                 <div className="flex items-center gap-1">
                                     <button

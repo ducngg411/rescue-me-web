@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import PaymentSheet from './PaymentSheet';
 
 const C = {
@@ -14,15 +15,7 @@ const C = {
     greenLight: '#f0fdf4',
 };
 
-const INCIDENT_LABELS: Record<string, string> = {
-    BREAKDOWN: 'Hỏng xe',
-    ACCIDENT: 'Tai nạn',
-    FLAT_TIRE: 'Lốp xe hỏng',
-    BATTERY_DEAD: 'Hết bình điện',
-    OUT_OF_FUEL: 'Hết nhiên liệu',
-    LOCKED_OUT: 'Khóa xe',
-    OTHER: 'Sự cố khác',
-};
+
 
 interface WorkingViewProps {
     requestId: string;
@@ -45,13 +38,24 @@ export default function WorkingView({
     acceptedQuotePrice,
     onPaymentSubmitted,
 }: WorkingViewProps) {
+    const { t } = useLanguage();
     const [showPaymentSheet, setShowPaymentSheet] = useState(false);
 
+    const incidentLabels: Record<string, string> = {
+        BREAKDOWN: t('provider.requestDetail.incidentLabels.BREAKDOWN'),
+        ACCIDENT: t('provider.requestDetail.incidentLabels.ACCIDENT'),
+        FLAT_TIRE: t('provider.requestDetail.incidentLabels.FLAT_TIRE'),
+        BATTERY_DEAD: t('provider.requestDetail.incidentLabels.BATTERY_DEAD'),
+        OUT_OF_FUEL: t('provider.requestDetail.incidentLabels.OUT_OF_FUEL'),
+        LOCKED_OUT: t('provider.requestDetail.incidentLabels.LOCKED_OUT'),
+        OTHER: t('provider.requestDetail.incidentLabels.OTHER'),
+    };
+
     const tips = [
-        { icon: '', text: 'Kiểm tra kỹ trước khi bắt đầu để tránh nhầm lẫn' },
-        { icon: '', text: 'Giao tiếp rõ ràng với khách hàng về tiến độ công việc' },
-        { icon: '', text: 'Sử dụng dụng cụ an toàn, bảo vệ bản thân luôn nhé' },
-        { icon: '', text: 'Khi xong việc, bấm "Hoàn thành" để chốt thanh toán' },
+        { icon: '', text: t('provider.working.tip1') },
+        { icon: '', text: t('provider.working.tip2') },
+        { icon: '', text: t('provider.working.tip3') },
+        { icon: '', text: t('provider.working.tip4') },
     ];
 
     return (
@@ -76,14 +80,14 @@ export default function WorkingView({
                             </svg>
                         </div>
                         <div>
-                            <p className="text-xs font-medium" style={{ color: C.green }}>ĐANG XỬ LÝ</p>
-                            <h1 className="text-base font-bold" style={{ color: C.navy }}>Đang làm việc</h1>
+                            <p className="text-xs font-medium" style={{ color: C.green }}>{t('provider.working.headerBadge')}</p>
+                            <h1 className="text-base font-bold" style={{ color: C.navy }}>{t('provider.working.headerTitle')}</h1>
                         </div>
                         <div
                             className="ml-auto px-3 py-1 rounded-full text-xs font-semibold"
                             style={{ background: C.greenLight, color: C.green }}
                         >
-                            Đang hoạt động
+                            {t('provider.working.activeBadge')}
                         </div>
                     </div>
                 </div>
@@ -95,7 +99,7 @@ export default function WorkingView({
                         style={{ background: 'white', boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}
                     >
                         <h2 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: C.gray }}>
-                            Thông tin đơn hàng
+                            {t('provider.working.requestInfoTitle')}
                         </h2>
 
                         <div className="space-y-3">
@@ -107,10 +111,10 @@ export default function WorkingView({
                                     </svg>
                                 </div>
                                 <div>
-                                    <p className="text-xs" style={{ color: C.gray }}>Sự cố</p>
+                                    <p className="text-xs" style={{ color: C.gray }}>{t('provider.working.incidentLabel')}</p>
                                     <p className="text-sm font-semibold" style={{ color: C.navy }}>
-                                        {INCIDENT_LABELS[request.incidentType ?? ''] ?? request.incidentType ?? '—'}
-                                        {request.vehicleType && <span className="ml-1 text-xs font-normal" style={{ color: C.gray }}>({request.vehicleType === 'CAR' ? 'Ô tô' : 'Xe máy'})</span>}
+                                        {incidentLabels[request.incidentType ?? ''] ?? request.incidentType ?? '—'}
+                                        {request.vehicleType && <span className="ml-1 text-xs font-normal" style={{ color: C.gray }}>({t(`provider.requestDetail.vehicleLabels.${request.vehicleType}` as any) ?? request.vehicleType})</span>}
                                     </p>
                                 </div>
                             </div>
@@ -124,7 +128,7 @@ export default function WorkingView({
                                     </svg>
                                 </div>
                                 <div>
-                                    <p className="text-xs" style={{ color: C.gray }}>Địa điểm</p>
+                                    <p className="text-xs" style={{ color: C.gray }}>{t('provider.working.locationLabel')}</p>
                                     <p className="text-sm font-semibold" style={{ color: C.navy }}>
                                         {request.pickupLocation?.addressText ?? '—'}
                                     </p>
@@ -139,7 +143,7 @@ export default function WorkingView({
                                     </svg>
                                 </div>
                                 <div>
-                                    <p className="text-xs" style={{ color: C.gray }}>Khách hàng</p>
+                                    <p className="text-xs" style={{ color: C.gray }}>{t('provider.working.customerLabel')}</p>
                                     <p className="text-sm font-semibold" style={{ color: C.navy }}>{customerName ?? '—'}</p>
                                     {request.contactPhone && (
                                         <p className="text-xs" style={{ color: C.gray }}>{request.contactPhone}</p>
@@ -162,7 +166,7 @@ export default function WorkingView({
                         style={{ background: 'white', boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}
                     >
                         <h2 className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: C.gray }}>
-                            Nhắc nhở khi làm việc
+                            {t('provider.working.tipsTitle')}
                         </h2>
                         <div className="space-y-2">
                             {tips.map((tip, i) => (
@@ -191,10 +195,10 @@ export default function WorkingView({
                         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Hoàn thành dịch vụ
+                        {t('provider.working.completeBtn')}
                     </button>
                     <p className="text-center text-xs mt-2" style={{ color: C.gray }}>
-                        Bấm khi đã sửa xong để chốt thanh toán
+                        {t('provider.working.completeHint')}
                     </p>
                 </div>
             </div>

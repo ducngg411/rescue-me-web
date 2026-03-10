@@ -3,6 +3,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
@@ -54,25 +55,11 @@ interface RescueRequest {
     maxQuotes?: number;
 }
 
-const incidentTypeLabels: Record<string, string> = {
-    BREAKDOWN: 'Hỏng xe',
-    ACCIDENT: 'Tai nạn',
-    FLAT_TIRE: 'Lốp xe hỏng',
-    BATTERY_DEAD: 'Hết bình điện',
-    OUT_OF_FUEL: 'Hết nhiên liệu',
-    LOCKED_OUT: 'Khóa xe',
-    OTHER: 'Khác',
-};
-
-const vehicleTypeLabels: Record<string, string> = {
-    CAR: 'Ô tô',
-    MOTORCYCLE: 'Xe máy',
-};
-
 export default function ProviderRequestDetailPage() {
     const router = useRouter();
     const params = useParams();
     const { user, loading: authLoading } = useAuth();
+    const { t } = useLanguage();
     const requestId = params.id as string;
 
     const [request, setRequest] = useState<RescueRequest | null>(null);
@@ -152,7 +139,7 @@ export default function ProviderRequestDetailPage() {
                     // My quote was rejected
                     setHasPendingQuote(false);
                     setHasRejectedQuote(true);
-                    toast.error('❌ Báo giá của bạn bị từ chối', { duration: 3000 });
+                    toast.error('❌ ' + t('provider.requestDetail.quoteRejected'), { duration: 3000 });
                     // Remove from history
                     removeFromHistoryStorage(requestId);
                 }
@@ -163,7 +150,7 @@ export default function ProviderRequestDetailPage() {
             if (requestResponse.data.status === 'ASSIGNED' && requestResponse.data.assignedProviderId !== user?.id) {
                 // Another provider was chosen
                 setHasPendingQuote(false);
-                toast.error('💔 Khách hàng đã chọn provider khác', { duration: 4000 });
+                toast.error('💔 ' + t('provider.requestDetail.otherProviderChosen'), { duration: 4000 });
                 // Remove from history
                 removeFromHistoryStorage(requestId);
                 // Redirect after delay
@@ -305,7 +292,7 @@ export default function ProviderRequestDetailPage() {
                     router.push('/provider/active');
                 }, 2000);
             } else {
-                setError(errorMessage || 'Không thể tải thông tin request');
+                setError(errorMessage || t('provider.requestDetail.loadError'));
             }
         } finally {
             setIsLoading(false);
@@ -320,12 +307,12 @@ export default function ProviderRequestDetailPage() {
         const etaNum = parseInt(estimatedArrivalMinutes);
 
         if (!priceNum || priceNum < 10000) {
-            toast.error('Giá báo giá phải từ 10,000 VNĐ trở lên');
+            toast.error(t('provider.requestDetail.quote.priceError'));
             return;
         }
 
         if (!etaNum || etaNum < 1 || etaNum > 300) {
-            toast.error('Thời gian đến phải từ 1-300 phút');
+            toast.error(t('provider.requestDetail.quote.etaError'));
             return;
         }
 
@@ -338,7 +325,7 @@ export default function ProviderRequestDetailPage() {
                 message: message || undefined,
             });
 
-            toast.success('Đã gửi báo giá thành công! Chờ khách hàng phản hồi.');
+            toast.success(t('provider.requestDetail.quoteSuccess'));
             console.log(' Quote submitted successfully, updating UI directly...');
 
             // Remove from history after successful quote
@@ -444,13 +431,13 @@ export default function ProviderRequestDetailPage() {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-lg shadow-sm p-8 max-w-md">
-                    <h2 className="text-xl font-bold text-red-600 mb-4">Lỗi</h2>
-                    <p className="text-gray-700 mb-4">{error || 'Không tìm thấy request'}</p>
+                    <h2 className="text-xl font-bold text-red-600 mb-4">{t('provider.requestDetail.errorTitle')}</h2>
+                    <p className="text-gray-700 mb-4">{error || t('provider.requestDetail.notFound')}</p>
                     <button
                         onClick={handleCancel}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                     >
-                        Quay lại
+                        {t('provider.requestDetail.goBack')}
                     </button>
                 </div>
             </div>
@@ -470,7 +457,7 @@ export default function ProviderRequestDetailPage() {
                 user={{ name: request!.user?.name, phoneNumber: request!.contactPhone }}
                 eta={myQuoteDetails?.estimatedArrivalMinutes ?? null}
                 requestId={requestId}
-                customerName={request!.user?.name ?? 'Khách hàng'}
+                customerName={request!.user?.name ?? t('provider.requestDetail.customerFallback')}
                 requestDetails={{
                     incidentType: request!.incidentType,
                     vehicleType: request!.vehicleType,
@@ -496,8 +483,8 @@ export default function ProviderRequestDetailPage() {
                 {/* Header */}
                 <div className="sticky top-0 z-10 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ borderColor: C.border }}>
                     <div className="flex-1">
-                        <p className="text-xs font-semibold" style={{ color: C.gray }}>Báo giá được chấp nhận</p>
-                        <h1 className="text-sm font-bold" style={{ color: C.navy }}>Yêu cầu cứu hộ #{req.id.slice(0, 8).toUpperCase()}</h1>
+                        <p className="text-xs font-semibold" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.headerSubtitle')}</p>
+                        <h1 className="text-sm font-bold" style={{ color: C.navy }}>{t('provider.requestDetail.pageTitle')} #{req.id.slice(0, 8).toUpperCase()}</h1>
                     </div>
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: '#f0fdf4', color: '#16a34a' }}>
                         <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -512,19 +499,19 @@ export default function ProviderRequestDetailPage() {
                         <div className="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center text-3xl" style={{ background: '#f0fdf4' }}>
                             🎉
                         </div>
-                        <h2 className="text-base font-bold mb-1" style={{ color: C.navy }}>Bạn được chọn!</h2>
-                        <p className="text-sm" style={{ color: C.gray }}>Khách hàng đã chấp nhận báo giá của bạn. Hãy xem thông tin bên dưới và chuẩn bị xuất phát.</p>
+                        <h2 className="text-base font-bold mb-1" style={{ color: C.navy }}>{t('provider.requestDetail.accepted.congrats')}</h2>
+                        <p className="text-sm" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.congratsDesc')}</p>
                     </div>
 
                     {/* Customer info */}
                     <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>THÔNG TIN KHÁCH HÀNG</p>
+                        <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.customerInfo')}</p>
                         <div className="flex items-center gap-3 mb-3">
                             <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}>
                                 {(req.user?.name || 'K').charAt(0).toUpperCase()}
                             </div>
                             <div>
-                                <p className="text-sm font-bold" style={{ color: C.navy }}>{req.user?.name || 'Khách hàng'}</p>
+                                <p className="text-sm font-bold" style={{ color: C.navy }}>{req.user?.name || t('provider.requestDetail.customerFallback')}</p>
                                 <p className="text-xs" style={{ color: C.gray }}>{req.contactPhone}</p>
                             </div>
                             <a
@@ -541,7 +528,7 @@ export default function ProviderRequestDetailPage() {
 
                     {/* Rescue details */}
                     <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>THÔNG TIN CỨU HỘ</p>
+                        <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.rescueInfo')}</p>
                         <div className="space-y-3">
                             <div className="flex gap-3">
                                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight }}>
@@ -550,8 +537,8 @@ export default function ProviderRequestDetailPage() {
                                     </svg>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-medium" style={{ color: C.gray }}>Loại sự cố</p>
-                                    <p className="text-sm font-semibold" style={{ color: C.navy }}>{incidentTypeLabels[req.incidentType] || req.incidentType}</p>
+                                    <p className="text-[10px] font-medium" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.incidentType')}</p>
+                                    <p className="text-sm font-semibold" style={{ color: C.navy }}>{t(`provider.requestDetail.incidentLabels.${req.incidentType}` as any) || req.incidentType}</p>
                                 </div>
                             </div>
                             <div className="flex gap-3">
@@ -562,8 +549,8 @@ export default function ProviderRequestDetailPage() {
                                     </svg>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-medium" style={{ color: C.gray }}>Loại xe</p>
-                                    <p className="text-sm font-semibold" style={{ color: C.navy }}>{vehicleTypeLabels[req.vehicleType] || req.vehicleType}</p>
+                                    <p className="text-[10px] font-medium" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.vehicleType')}</p>
+                                    <p className="text-sm font-semibold" style={{ color: C.navy }}>{t(`provider.requestDetail.vehicleLabels.${req.vehicleType}` as any) || req.vehicleType}</p>
                                 </div>
                             </div>
                             <div className="flex gap-3">
@@ -574,7 +561,7 @@ export default function ProviderRequestDetailPage() {
                                     </svg>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-[10px] font-medium" style={{ color: C.gray }}>Vị trí đón</p>
+                                    <p className="text-[10px] font-medium" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.pickupLocation')}</p>
                                     <p className="text-sm font-semibold" style={{ color: C.navy }}>{req.pickupLocation.addressText}</p>
                                 </div>
                             </div>
@@ -586,7 +573,7 @@ export default function ProviderRequestDetailPage() {
                                         </svg>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-medium" style={{ color: C.gray }}>Mô tả</p>
+                                        <p className="text-[10px] font-medium" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.description')}</p>
                                         <p className="text-sm" style={{ color: C.navy }}>{req.description}</p>
                                     </div>
                                 </div>
@@ -600,7 +587,7 @@ export default function ProviderRequestDetailPage() {
                                         </svg>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-medium" style={{ color: C.gray }}>Biển số xe</p>
+                                        <p className="text-[10px] font-medium" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.licensePlate')}</p>
                                         <p className="text-sm font-semibold" style={{ color: C.navy }}>{req.user.licensePlate}</p>
                                     </div>
                                 </div>
@@ -613,7 +600,7 @@ export default function ProviderRequestDetailPage() {
                                         </svg>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] font-medium" style={{ color: C.gray }}>Màu xe</p>
+                                        <p className="text-[10px] font-medium" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.vehicleColor')}</p>
                                         <p className="text-sm font-semibold" style={{ color: C.navy }}>{req.user.vehicleColor}</p>
                                     </div>
                                 </div>
@@ -624,7 +611,7 @@ export default function ProviderRequestDetailPage() {
                     {/* Media / Photos & Videos */}
                     {req.media && req.media.length > 0 && (
                         <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                            <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>MEDIA TỪ KHÁCH ({req.media.length})</p>
+                            <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.mediaFromCustomer')} ({req.media.length})</p>
                             <div className="grid grid-cols-3 gap-2">
                                 {req.media.map((item, idx) => {
                                     if (item.mediaType === 'IMAGE') {
@@ -670,15 +657,15 @@ export default function ProviderRequestDetailPage() {
                     {/* My quote summary */}
                     {myQuoteDetails && (
                         <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                            <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>BÁO GIÁ CỦA BẠN</p>
+                            <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.yourQuote')}</p>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                    <p className="text-[10px]" style={{ color: C.gray }}>Giá</p>
-                                    <p className="text-base font-bold" style={{ color: C.navy }}>{Number(myQuoteDetails.price).toLocaleString('vi-VN')}₫</p>
+                                    <p className="text-[10px]" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.price')}</p>
+                                    <p className="text-base font-bold" style={{ color: C.navy }}>{myQuoteDetails.price.toLocaleString()}đ</p>
                                 </div>
                                 <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                    <p className="text-[10px]" style={{ color: C.gray }}>Thời gian đến</p>
-                                    <p className="text-base font-bold" style={{ color: C.navy }}>{myQuoteDetails.estimatedArrivalMinutes} phút</p>
+                                    <p className="text-[10px]" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.eta')}</p>
+                                    <p className="text-base font-bold" style={{ color: C.navy }}>{myQuoteDetails.estimatedArrivalMinutes} {t('provider.requestDetail.accepted.minutes')}</p>
                                 </div>
                             </div>
                         </div>
@@ -727,12 +714,12 @@ export default function ProviderRequestDetailPage() {
                                     <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                                     </svg>
-                                    Bắt đầu di chuyển
+                                    {t('provider.requestDetail.accepted.startNavBtn')}
                                 </>
                             )}
                         </button>
                         <p className="text-center text-xs mt-2" style={{ color: C.gray }}>
-                            Bản đồ điều hướng sẽ mở sau khi bạn bấm
+                            {t('provider.requestDetail.accepted.navHint')}
                         </p>
                     </div>
 
@@ -745,15 +732,13 @@ export default function ProviderRequestDetailPage() {
                         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
-                        Nhắn tin với khách hàng
-                        {chatUnreadCount > 0 && (
-                            <span
-                                className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
-                                style={{ background: '#ef4444', boxShadow: '0 1px 4px rgba(239,68,68,0.5)' }}
-                            >
-                                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
-                            </span>
-                        )}
+                        {t('provider.requestDetail.accepted.chatBtn')}
+                        <span
+                            className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+                            style={{ background: '#ef4444', boxShadow: '0 1px 4px rgba(239,68,68,0.5)' }}
+                        >
+                            {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                        </span>
                     </button>
 
                 </div>
@@ -851,7 +836,7 @@ export default function ProviderRequestDetailPage() {
                             </svg>
                         </button>
                         <div className="flex flex-col">
-                            <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">Yêu cầu cứu hộ</h1>
+                            <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">{t('provider.requestDetail.pageTitle')}</h1>
                             <p className="text-xs md:text-sm font-medium text-gray-500">#{request.id.slice(0, 8).toUpperCase()}</p>
                         </div>
                     </div>
@@ -861,38 +846,39 @@ export default function ProviderRequestDetailPage() {
                             <>
                                 <span className="px-2.5 md:px-3 py-1 bg-orange-50/70 text-[#f97316] text-[11px] md:text-[13px] font-bold rounded-full flex items-center gap-1.5">
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                                    Đang tìm provider
+                                    {t('provider.requestDetail.statusBadge.searching')}
                                 </span>
                                 <button
                                     onClick={handleDeclineRequest}
                                     className="px-2.5 py-1 rounded-full text-[11px] md:text-[13px] font-bold flex items-center gap-1 transition-colors"
                                     style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}
-                                    title="Từ chối yêu cầu này"
+                                    title={t('provider.requestDetail.declineConfirm.title')}
                                 >
                                     <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                     </svg>
-                                    Từ chối
+                                    {t('provider.requestDetail.declineConfirm.confirm')}
                                 </button>
                             </>
                         )}
                         {request.status === 'MATCHING' && hasPendingQuote && (
-                            <span className="px-2.5 md:px-3 py-1 bg-yellow-50/70 text-yellow-600 text-[11px] md:text-[13px] font-bold rounded-full flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
-                                Đang chờ KH
-                            </span>
-                        )}
-                        {request.status === 'ASSIGNED' && request.assignedProviderId === user?.id && (
-                            <span className="px-2.5 md:px-3 py-1 bg-green-50/70 text-green-600 text-[11px] md:text-[13px] font-bold rounded-full flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                Đã được chọn
-                            </span>
+                            <>
+                                <span className="px-2.5 md:px-3 py-1 bg-yellow-50/70 text-yellow-600 text-[11px] md:text-[13px] font-bold rounded-full flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
+                                    {t('provider.requestDetail.statusBadge.waitingCustomer')}
+                                </span>
+                                <span className="px-2.5 md:px-3 py-1 bg-green-50/70 text-green-600 text-[11px] md:text-[13px] font-bold rounded-full flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                    {t('provider.requestDetail.statusBadge.selected')}
+                                </span>
+                            </>
                         )}
                     </div>
                 </div>
             </div>
 
-            <div className="max-w-6xl mx-auto px-4 py-4 md:py-6">
+            {/* Main Content */}
+            <div className="max-w-6xl mx-auto px-4 py-6">
                 <div className="flex flex-col lg:flex-row gap-6">
                     {/* Left Column: Details */}
                     <div className="flex-1 space-y-4">
@@ -916,24 +902,24 @@ export default function ProviderRequestDetailPage() {
                                     )}
                                 </div>
                                 <div>
-                                    <div className="text-[10px] md:text-xs font-semibold text-gray-500 mb-0.5">Trạng thái hiện tại</div>
+                                    <div className="text-[10px] md:text-xs font-semibold text-gray-500 mb-0.5">{t('provider.requestDetail.currentStatus')}</div>
                                     <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
                                         <span className="text-sm md:text-base font-bold text-[#1a1a2e]">
-                                            {request.status === 'MATCHING' && !hasPendingQuote && 'Đang chờ báo giá'}
-                                            {request.status === 'MATCHING' && hasPendingQuote && 'Đã gửi báo giá, chờ KH'}
-                                            {request.status !== 'MATCHING' && request.assignedProviderId !== user?.id && 'Không khả dụng'}
-                                            {request.status === 'ASSIGNED' && request.assignedProviderId === user?.id && 'Đã được chọn'}
+                                            {request.status === 'MATCHING' && !hasPendingQuote && t('provider.requestDetail.statusLabel.waiting')}
+                                            {request.status === 'MATCHING' && hasPendingQuote && t('provider.requestDetail.statusLabel.sent')}
+                                            {request.status !== 'MATCHING' && request.assignedProviderId !== user?.id && t('provider.requestDetail.statusLabel.unavailable')}
+                                            {request.status === 'ASSIGNED' && request.assignedProviderId === user?.id && t('provider.requestDetail.statusLabel.selected')}
                                         </span>
                                         {request.status === 'MATCHING' && (
                                             <div className="flex items-center gap-1.5 md:gap-2">
                                                 <span className="px-1.5 md:px-2 py-0.5 bg-orange-100 text-[#f97316] text-[8px] md:text-[10px] font-bold rounded uppercase border border-[#fed7aa] flex-shrink-0">
-                                                    Ưu tiên cao
+                                                    {t('provider.requestDetail.statusBadge.highPriority')}
                                                 </span>
                                                 <span className="px-1.5 md:px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] md:text-[10px] font-bold rounded uppercase border border-blue-200 flex-shrink-0 flex items-center gap-1">
                                                     <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                                                     </svg>
-                                                    {request.quoteCount || 0}/{request.maxQuotes || 3} Báo giá
+                                                    {t('provider.requestDetail.statusBadge.quotesCount').replace('{count}', String(request.quoteCount || 0)).replace('{max}', String(request.maxQuotes || 3))}
                                                 </span>
                                             </div>
                                         )}
@@ -945,24 +931,24 @@ export default function ProviderRequestDetailPage() {
                             {request.status === 'MATCHING' && !hasPendingQuote && timeLeft !== null && timeLeft > 0 ? (
                                 <div className="rounded-2xl p-4 md:p-5 shadow-sm text-white flex items-center justify-between" style={{ background: '#f97316' }}>
                                     <div className="text-xs md:text-sm font-semibold opacity-90">
-                                        THỜI GIAN CÒN LẠI<br />
-                                        <span className="text-[9px] md:text-[10px] font-normal opacity-80 mt-1 block">Yêu cầu báo giá nhanh</span>
+                                        {t('provider.requestDetail.timerTitle')}<br />
+                                        <span className="text-[9px] md:text-[10px] font-normal opacity-80 mt-1 block">{t('provider.requestDetail.timerSubtitle')}</span>
                                     </div>
                                     <div className="flex items-center gap-2 md:gap-3 text-center">
                                         <div className="flex flex-col">
                                             <span className="text-2xl md:text-3xl font-black leading-none">{Math.floor(timeLeft / 60)}</span>
-                                            <span className="text-[8px] md:text-[10px] uppercase font-bold mt-1">Phút</span>
+                                            <span className="text-[8px] md:text-[10px] uppercase font-bold mt-1">{t('provider.requestDetail.minutesLabel')}</span>
                                         </div>
                                         <div className="text-xl md:text-2xl font-bold opacity-70 mb-2 md:mb-3">:</div>
                                         <div className="flex flex-col">
                                             <span className="text-2xl md:text-3xl font-black leading-none">{String(timeLeft % 60).padStart(2, '0')}</span>
-                                            <span className="text-[8px] md:text-[10px] uppercase font-bold mt-1">Giây</span>
+                                            <span className="text-[8px] md:text-[10px] uppercase font-bold mt-1">{t('provider.requestDetail.secondsLabel')}</span>
                                         </div>
                                     </div>
                                 </div>
                             ) : request.status === 'MATCHING' && hasPendingQuote ? (
                                 <div className="rounded-2xl p-5 shadow-sm text-white flex items-center justify-between bg-yellow-500">
-                                    <div className="text-sm font-semibold opacity-90">CHỜ KHÁCH HÀNG CHỌN</div>
+                                    <div className="text-sm font-semibold opacity-90">{t('provider.requestDetail.waitingCustomerLabel')}</div>
                                     <svg className="w-8 h-8 animate-spin opacity-80" viewBox="0 0 24 24" fill="none">
                                         <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
                                         <path fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" className="opacity-75" />
@@ -979,9 +965,9 @@ export default function ProviderRequestDetailPage() {
                                     <svg width="16" height="16" className="md:w-[18px] md:h-[18px]" fill="none" stroke="#f97316" viewBox="0 0 24 24" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                     </svg>
-                                    Thông tin khách hàng
+                                    {t('provider.requestDetail.customerInfoSection')}
                                 </div>
-                                <div className="flex items-center gap-3 md:gap-4">
+                                <div className="flex items-center gap-3">
                                     <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-orange-100 flex-shrink-0 flex items-center justify-center text-lg md:text-xl font-bold text-orange-600">
                                         {request.user.name?.charAt(0).toUpperCase() || 'K'}
                                     </div>
@@ -991,7 +977,7 @@ export default function ProviderRequestDetailPage() {
                                             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                             </svg>
-                                            {request.contactPhone ? request.contactPhone.replace(/(\d{3})\d{4}(\d{3})/, '$1 *** $2') : 'Chưa có SĐT'}
+                                            {request.contactPhone ? request.contactPhone.replace(/(\d{3})\d{4}(\d{3})/, '$1 *** $2') : t('provider.requestDetail.noPhone')}
                                         </div>
                                     </div>
                                 </div>
@@ -1003,29 +989,29 @@ export default function ProviderRequestDetailPage() {
                                     <svg width="16" height="16" className="md:w-[18px] md:h-[18px]" fill="none" stroke="#f97316" viewBox="0 0 24 24" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                                     </svg>
-                                    Thông tin phương tiện
+                                    {t('provider.requestDetail.vehicleInfoSection')}
                                 </div>
-                                <div className="grid grid-cols-2 gap-3 md:gap-4">
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                                     <div>
-                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">Loại xe</p>
-                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e] truncate">{vehicleTypeLabels[request.vehicleType] || request.vehicleType}</p>
+                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">{t('provider.requestDetail.infoLabels.vehicleType')}</p>
+                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e] truncate">{t(`provider.requestDetail.vehicleLabels.${request.vehicleType}` as any) || request.vehicleType}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">Biển số</p>
-                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e] uppercase">{request.user.licensePlate || 'Không rõ'}</p>
+                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">{t('provider.requestDetail.infoLabels.licensePlate')}</p>
+                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e] uppercase">{request.user.licensePlate || t('common.unknown')}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">Màu sắc</p>
-                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e]">{request.user.vehicleColor || 'Không rõ'}</p>
+                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">{t('provider.requestDetail.infoLabels.vehicleColor')}</p>
+                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e]">{request.user.vehicleColor || t('common.unknown')}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">Vấn đề</p>
-                                        <p className="text-[13px] md:text-sm font-bold text-red-600 line-clamp-1">{incidentTypeLabels[request.incidentType] || request.incidentType}</p>
+                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">{t('provider.requestDetail.infoLabels.incidentType')}</p>
+                                        <p className="text-[13px] md:text-sm font-bold text-red-600 line-clamp-1">{t(`provider.requestDetail.incidentLabels.${request.incidentType}` as any) || request.incidentType}</p>
                                     </div>
                                 </div>
                                 {request.description && (
                                     <div className="pt-2">
-                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">Mô tả thêm</p>
+                                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">{t('provider.requestDetail.infoLabels.description')}</p>
                                         <p className="text-[13px] md:text-sm text-gray-700 italic border-l-2 border-gray-200 pl-2 line-clamp-2 md:line-clamp-none">"{request.description}"</p>
                                     </div>
                                 )}
@@ -1038,7 +1024,7 @@ export default function ProviderRequestDetailPage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
-                                Vị trí cứu hộ
+                                {t('provider.requestDetail.rescueLocation')}
                             </div>
                             <p className="text-sm text-gray-700 mb-4 font-medium">{request.pickupLocation.addressText}</p>
 
@@ -1059,7 +1045,7 @@ export default function ProviderRequestDetailPage() {
                                     <svg width="16" height="16" className="md:w-[18px] md:h-[18px]" fill="none" stroke="#f97316" viewBox="0 0 24 24" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                     </svg>
-                                    Hình ảnh sự cố ({request.media.length})
+                                    {t('provider.requestDetail.scenePhotos').replace('{count}', String(request.media.length))}
                                 </h2>
                                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 md:gap-3">
                                     {request.media.map((item, index) => (
@@ -1096,18 +1082,18 @@ export default function ProviderRequestDetailPage() {
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                         </svg>
                                     </div>
-                                    <h2 className="text-base md:text-lg font-bold text-[#1a1a2e]">Gửi báo giá nhanh</h2>
+                                    <h2 className="text-base md:text-lg font-bold text-[#1a1a2e]">{t('provider.requestDetail.quoteSendTitle')}</h2>
                                 </div>
 
                                 <form onSubmit={handleSubmitQuote} className="space-y-4 md:space-y-5">
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">Giá dịch vụ dự kiến (VNĐ)</label>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">{t('provider.requestDetail.quote.priceLabel')}</label>
                                         <div className="relative">
                                             <input
                                                 type="number"
                                                 value={price}
                                                 onChange={(e) => setPrice(e.target.value)}
-                                                placeholder="Ví dụ: 300000"
+                                                placeholder={t('provider.requestDetail.quote.pricePlaceholder')}
                                                 min="10000"
                                                 required
                                                 className="w-full pl-4 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#f97316] outline-none transition-colors text-sm font-semibold"
@@ -1117,28 +1103,28 @@ export default function ProviderRequestDetailPage() {
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">Thời gian đến dự kiến</label>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">{t('provider.requestDetail.quote.etaLabel')}</label>
                                         <div className="relative">
                                             <input
                                                 type="number"
                                                 value={estimatedArrivalMinutes}
                                                 onChange={(e) => setEstimatedArrivalMinutes(e.target.value)}
-                                                placeholder="Ví dụ: 15"
+                                                placeholder={t('provider.requestDetail.quote.etaPlaceholder')}
                                                 min="1"
                                                 max="300"
                                                 required
                                                 className="w-full pl-4 pr-14 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#f97316] outline-none transition-colors text-sm font-semibold"
                                             />
-                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-semibold">Phút</span>
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-semibold">{t('provider.requestDetail.minutesLabel')}</span>
                                         </div>
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">Ghi chú cho khách hàng</label>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">{t('provider.requestDetail.quote.messageLabel')}</label>
                                         <textarea
                                             value={message}
                                             onChange={(e) => setMessage(e.target.value)}
-                                            placeholder="Mô tả sơ bộ phương án cứu hộ..."
+                                            placeholder={t('provider.requestDetail.quote.messagePlaceholder')}
                                             rows={3}
                                             className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#f97316] outline-none transition-colors text-sm resize-none"
                                         />
@@ -1154,7 +1140,7 @@ export default function ProviderRequestDetailPage() {
                                                 boxShadow: '0 4px 14px rgba(249,115,22,0.3)'
                                             }}
                                         >
-                                            {isSubmitting ? 'Đang gửi...' : 'GỬI BÁO GIÁ'}
+                                            {isSubmitting ? t('provider.requestDetail.quote.submitting') : t('provider.requestDetail.quote.submitBtn')}
                                             {!isSubmitting && (
                                                 <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
@@ -1168,17 +1154,16 @@ export default function ProviderRequestDetailPage() {
                                             disabled={isSubmitting}
                                             className="w-full mt-3 py-3 rounded-xl font-semibold text-gray-500 hover:text-gray-800 transition-colors text-sm"
                                         >
-                                            Quay lại
+                                            {t('provider.requestDetail.goBack')}
                                         </button>
-                                    </div>
-
-                                    <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 flex gap-3">
-                                        <svg width="16" height="16" fill="none" stroke="#f97316" viewBox="0 0 24 24" className="flex-shrink-0 mt-0.5">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <p className="text-[10px] text-gray-600 leading-relaxed">
-                                            Bằng việc gửi báo giá, bạn cam kết có mặt đúng thời hạn và mức giá đã đề xuất. Phí hệ thống (10%) sẽ được trừ sau khi hoàn tất giao dịch.
-                                        </p>
+                                        <div className="flex items-start gap-2 bg-orange-50/60 rounded-lg p-3 mt-3">
+                                            <svg width="16" height="16" fill="none" stroke="#f97316" viewBox="0 0 24 24" className="flex-shrink-0 mt-0.5">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <p className="text-[10px] text-gray-600 leading-relaxed">
+                                                {t('provider.requestDetail.quote.feeNote')}
+                                            </p>
+                                        </div>
                                     </div>
                                 </form>
                             </div>
@@ -1190,22 +1175,22 @@ export default function ProviderRequestDetailPage() {
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                         </svg>
                                     </div>
-                                    <h2 className="text-xl font-bold text-[#1a1a2e] mb-2">Đã gửi báo giá!</h2>
-                                    <p className="text-sm text-gray-500">Hệ thống đang chờ khách hàng xem xét và lựa chọn.</p>
+                                    <h2 className="text-xl font-bold text-[#1a1a2e] mb-2">{t('provider.requestDetail.quoteSent.title')}</h2>
+                                    <p className="text-sm text-gray-500">{t('provider.requestDetail.quoteSent.waitTip')}</p>
                                 </div>
 
                                 <div className="py-6 space-y-4">
                                     <div>
-                                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Mức giá đề xuất</p>
+                                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">{t('provider.requestDetail.quoteSent.price')}</p>
                                         <p className="text-xl font-black text-green-600">{myQuoteDetails.price.toLocaleString()}đ</p>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Thời gian đến</p>
-                                        <p className="text-base font-bold text-[#1a1a2e]">{myQuoteDetails.estimatedArrivalMinutes} phút</p>
+                                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">{t('provider.requestDetail.quoteSent.eta')}</p>
+                                        <p className="text-base font-bold text-[#1a1a2e]">{myQuoteDetails.estimatedArrivalMinutes} {t('provider.requestDetail.quoteSent.minutes')}</p>
                                     </div>
                                     {myQuoteDetails.message && (
                                         <div>
-                                            <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Lời nhắn của bạn</p>
+                                            <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">{t('provider.requestDetail.quoteSent.message')}</p>
                                             <p className="text-sm font-medium italic text-gray-700">"{myQuoteDetails.message}"</p>
                                         </div>
                                     )}
@@ -1213,7 +1198,7 @@ export default function ProviderRequestDetailPage() {
 
                                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
                                     <p className="text-xs font-semibold text-blue-800 text-center animate-pulse">
-                                        Vui lòng giữ màn hình này và không rời đi...
+                                        {t('provider.requestDetail.keepScreen')}
                                     </p>
                                 </div>
                             </div>
@@ -1225,13 +1210,13 @@ export default function ProviderRequestDetailPage() {
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                     </div>
-                                    <h2 className="text-lg font-bold text-[#1a1a2e] mb-2">Yêu cầu đã kết thúc!</h2>
-                                    <p className="text-sm text-gray-500 mb-6">Yêu cầu này đã được tài xế khác nhận hoặc đã quá hạn gửi báo giá.</p>
+                                    <h2 className="text-lg font-bold text-[#1a1a2e] mb-2">{t('provider.requestDetail.requestEnded.title')}</h2>
+                                    <p className="text-sm text-gray-500 mb-6">{t('provider.requestDetail.requestEnded.desc')}</p>
                                     <button
                                         onClick={handleCancel}
                                         className="w-full py-3.5 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
                                     >
-                                        Quay về màn hình chính
+                                        {t('provider.requestDetail.backHome')}
                                     </button>
                                 </div>
                             </div>
@@ -1319,23 +1304,23 @@ export default function ProviderRequestDetailPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                             </svg>
                         </div>
-                        <h3 className="text-base font-bold text-center mb-1 text-gray-900">Từ chối yêu cầu?</h3>
+                        <h3 className="text-base font-bold text-center mb-1 text-gray-900">{t('provider.requestDetail.declineConfirm.title')}</h3>
                         <p className="text-sm text-center text-gray-500 mb-6">
-                            Yêu cầu này sẽ bị xóa khỏi <strong>Cảnh báo đến</strong> của bạn và bạn sẽ không thể xem lại.
+                            {t('provider.requestDetail.declineConfirm.desc')}
                         </p>
                         <div className="grid grid-cols-2 gap-3">
                             <button
                                 onClick={() => setShowDeclineConfirm(false)}
                                 className="py-3 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
                             >
-                                Hủy bỏ
+                                {t('provider.requestDetail.declineConfirm.cancel')}
                             </button>
                             <button
                                 onClick={confirmDeclineAction}
                                 className="py-3 rounded-xl text-sm font-bold text-white transition-colors"
                                 style={{ background: '#dc2626' }}
                             >
-                                Từ chối
+                                {t('provider.requestDetail.declineConfirm.confirm')}
                             </button>
                         </div>
                     </div>
