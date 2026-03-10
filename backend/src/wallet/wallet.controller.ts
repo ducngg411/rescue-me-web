@@ -15,6 +15,8 @@ import {
     HttpStatus,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { WalletService } from './wallet.service';
 import { IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -143,5 +145,17 @@ export class WalletController {
     @UseGuards(JwtAuthGuard)
     async getTopupStatus(@Request() req, @Param('txId') txId: string) {
         return this.walletService.getTopupStatus(txId, req.user.id);
+    }
+
+    /**
+     * POST /wallet/admin/release-pending
+     * Admin-only: manually trigger autoReleaseHolding() without waiting for the cron.
+     */
+    @Post('admin/release-pending')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles('ADMIN')
+    async adminReleasePending() {
+        await this.walletService.autoReleaseHolding();
+        return { success: true, message: 'Auto-release triggered' };
     }
 }

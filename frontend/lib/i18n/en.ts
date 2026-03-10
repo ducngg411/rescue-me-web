@@ -875,6 +875,7 @@ const en = {
             back: 'Back',
             refLabels: {
                 JOB: 'Job income',
+                JOB_PAYMENT: 'QR transfer income',
                 WITHDRAW: 'Withdrawal',
                 COMMISSION: 'Platform commission',
                 TOPUP: 'Wallet top-up',
@@ -924,9 +925,7 @@ const en = {
             loading: 'Loading details...',
             goBack: 'Back',
             notFoundError: 'Transaction not found',
-            refLabels2: {
-                JOB_PAYMENT: 'Bank transfer payment',
-            },
+
             statusLabels: {
                 PENDING: 'Processing',
                 COMPLETED: 'Completed',

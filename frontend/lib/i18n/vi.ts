@@ -874,6 +874,7 @@ const vi = {
             back: 'Quay lại',
             refLabels: {
                 JOB: 'Thu nhập công việc',
+                JOB_PAYMENT: 'Thu nhập chuyển khoản QR',
                 WITHDRAW: 'Rút tiền',
                 COMMISSION: 'Hoa hồng nền tảng',
                 TOPUP: 'Nạp tiền ví',
@@ -923,9 +924,7 @@ const vi = {
             loading: 'Đang tải chi tiết...',
             goBack: 'Quay lại',
             notFoundError: 'Không tìm thấy giao dịch',
-            refLabels2: {
-                JOB_PAYMENT: 'Thanh toán chuyển khoản',
-            },
+
             statusLabels: {
                 PENDING: 'Đang xử lý',
                 COMPLETED: 'Hoàn thành',

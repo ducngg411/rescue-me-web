@@ -89,29 +89,37 @@ export class WalletService {
     }
 
     /**
-     * Weekly earnings stats: sum of CREDIT (JOB / JOB_PAYMENT) transactions
-     * in the last 7 days that are COMPLETED or PENDING (not FAILED).
+     * Today's earnings stats based on completed rescue requests.
+     * Uses rescueRequest as source of truth (same as getHistoryStats) so that
+     * both CASH and QR jobs are counted consistently regardless of payment flow.
      */
     async getWeeklyStats(providerId: string) {
-        const wallet = await this.prisma.providerWallet.findUnique({ where: { providerId } });
-        if (!wallet) return { todayEarnings: 0, todayJobCount: 0 };
-
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
 
-        const txs = await this.prisma.walletTransaction.findMany({
+        const todayRequests = await this.prisma.rescueRequest.findMany({
             where: {
-                walletId: wallet.id,
-                type: 'CREDIT',
-                referenceType: { in: ['JOB', 'JOB_PAYMENT'] },
-                status: { not: 'FAILED' },
+                assignedProviderId: providerId,
+                status: { in: ['COMPLETED', 'PAID'] as any },
                 createdAt: { gte: startOfDay },
             },
-            select: { amount: true },
+            include: {
+                payment: { select: { totalAmount: true } },
+                quotes: { where: { status: 'ACCEPTED' }, select: { price: true } },
+            },
         });
 
-        const todayEarnings = txs.reduce((sum, t) => sum + t.amount, 0);
-        return { todayEarnings, todayJobCount: txs.length };
+        const getRevenue = (req: any): number => {
+            if (req.payment?.totalAmount != null) return req.payment.totalAmount;
+            if (req.quotes?.length > 0) return req.quotes[0].price;
+            return 0;
+        };
+
+        const todayRevenue = todayRequests.reduce((s, req) => s + getRevenue(req), 0);
+        // Apply platform commission rate to get provider's net earnings
+        const commissionRate = parseFloat(process.env.COMMISSION_RATE ?? '0.1');
+        const todayEarnings = Math.round(todayRevenue * (1 - commissionRate));
+        return { todayEarnings, todayJobCount: todayRequests.length };
     }
 
     // ── Credit ─────────────────────────────────────────────────────────────────
@@ -1065,7 +1073,7 @@ export class WalletService {
         return { success: true };
     }
 
-    // ── Auto-release Holding Balance (─────────────────────────────────────────
+    // ── Auto-release Holding Balance ──────────────────────────────────────────
 
     /** Every hour: release PENDING credits past holdReleaseAt to available. */
     @Cron(CronExpression.EVERY_HOUR)
@@ -1081,13 +1089,79 @@ export class WalletService {
         });
         if (pending.length === 0) return;
         this.logger.log(`⏰ [AutoRelease] Releasing ${pending.length} holding transactions`);
+
+        const affectedWalletIds = new Set<string>();
+
         for (const t of pending) {
             try {
-                await this.settlePendingTransaction(t.id);
-                this.logger.log(` [AutoRelease] txId=${t.id} amount=${t.amount}`);
+                await this.prisma.$transaction(async (tx) => {
+                    // Re-read inside DB transaction to guard against concurrent runs
+                    const walletTx = await tx.walletTransaction.findUnique({
+                        where: { id: t.id },
+                    });
+                    if (!walletTx) throw new Error(`Transaction ${t.id} not found`);
+
+                    // Skip if already settled by a concurrent run or manual action
+                    if (walletTx.status !== WalletTransactionStatus.PENDING) {
+                        this.logger.warn(`⚠️ [AutoRelease] txId=${t.id} already settled (status=${walletTx.status}), skipping`);
+                        return;
+                    }
+
+                    // Mark transaction COMPLETED
+                    await tx.walletTransaction.update({
+                        where: { id: t.id },
+                        data: { status: WalletTransactionStatus.COMPLETED },
+                    });
+
+                    // Move balance: pending → available
+                    // NOTE: We intentionally skip the pendingBalance >= amount guard here.
+                    // If pendingBalance is corrupted (e.g. negative from a prior double-release),
+                    // the guard would block recovery. We reconcile pendingBalance in bulk below.
+                    await tx.providerWallet.update({
+                        where: { id: walletTx.walletId },
+                        data: {
+                            pendingBalance: { decrement: walletTx.amount },
+                            availableBalance: { increment: walletTx.amount },
+                        },
+                    });
+                });
+
+                affectedWalletIds.add(t.walletId);
+                this.logger.log(`✅ [AutoRelease] txId=${t.id} amount=${t.amount}`);
             } catch (e: any) {
                 this.logger.error(`❌ [AutoRelease] txId=${t.id}: ${e.message}`);
             }
         }
+
+        // Reconcile pendingBalance for every wallet that had settlements.
+        // This corrects any corruption (e.g. negative balance from a prior double-release)
+        // by setting pendingBalance = SUM of remaining PENDING CREDIT transactions.
+        for (const walletId of affectedWalletIds) {
+            try {
+                await this.reconcilePendingBalance(walletId);
+            } catch (e: any) {
+                this.logger.error(`❌ [AutoRelease] Reconcile wallet=${walletId}: ${e.message}`);
+            }
+        }
+    }
+
+    /** Recalculate and correct pendingBalance from the actual PENDING CREDIT transactions. */
+    private async reconcilePendingBalance(walletId: string): Promise<void> {
+        await this.prisma.$transaction(async (tx) => {
+            const result = await tx.walletTransaction.aggregate({
+                where: {
+                    walletId,
+                    type: WalletTransactionType.CREDIT,
+                    status: WalletTransactionStatus.PENDING,
+                },
+                _sum: { amount: true },
+            });
+            const correctPending = result._sum.amount ?? 0;
+            await tx.providerWallet.update({
+                where: { id: walletId },
+                data: { pendingBalance: correctPending },
+            });
+            this.logger.log(`🔧 [AutoRelease] Reconciled wallet=${walletId} pendingBalance=${correctPending}`);
+        });
     }
 }

@@ -62,9 +62,7 @@ const MIN_TOPUP = 1; // TODO: restore to 100_000 after SePay testing
 const TOPUP_QUICK_AMOUNTS = [100_000, 200_000, 500_000, 1_000_000, 2_000_000];
 
 function formatVnd(amount: number) {
-    if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M ₫`;
-    if (amount >= 1_000) return `${(amount / 1_000).toFixed(0)}K ₫`;
-    return `${amount} ₫`;
+    return new Intl.NumberFormat('vi-VN').format(amount) + ' ₫';
 }
 
 function formatVndFull(amount: number) {
