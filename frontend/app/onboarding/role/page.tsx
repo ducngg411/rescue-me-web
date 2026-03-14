@@ -2,9 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserCircle2, Truck, CheckCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { selectRole } from '@/lib/auth';
+
+const C = {
+    orange: '#f97316',
+    orangeDark: '#ea6c0a',
+    orangeLight: '#fff7ed',
+    navy: '#1a1a2e',
+    gray: '#6b7280',
+    border: '#e2e8f0',
+    bg: '#f4f6f9',
+    red: '#ef4444',
+};
 
 export default function RoleSelectionPage() {
     const router = useRouter();
@@ -14,13 +25,10 @@ export default function RoleSelectionPage() {
     const [error, setError] = useState('');
 
     useEffect(() => {
-        // Redirect if not authenticated
         if (!loading && !user) {
             router.push('/auth/login');
             return;
         }
-
-        // Redirect if profile already completed
         if (user && user.profileCompleted) {
             router.push('/');
             return;
@@ -32,22 +40,17 @@ export default function RoleSelectionPage() {
             setError('Vui lòng chọn vai trò của bạn');
             return;
         }
-
         setIsSubmitting(true);
         setError('');
-
         try {
             await selectRole(selectedRole);
             await refreshUser();
-
-            // Redirect based on role
             if (selectedRole === 'USER') {
                 router.push('/onboarding/user-profile');
             } else {
                 router.push('/provider/onboarding');
             }
         } catch (err: any) {
-            console.error('Role selection error:', err);
             setError(err.response?.data?.message || 'Có lỗi xảy ra. Vui lòng thử lại.');
             setIsSubmitting(false);
         }
@@ -55,120 +58,232 @@ export default function RoleSelectionPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
                 <div className="text-center">
-                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto" />
-                    <p className="mt-4 text-sm text-gray-600">Đang tải...</p>
+                    <div className="w-10 h-10 rounded-full border-[3px] border-t-transparent animate-spin mx-auto mb-3"
+                        style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
+                    <p className="text-sm" style={{ color: C.gray }}>Đang tải...</p>
                 </div>
             </div>
         );
     }
 
-    if (!user || user.profileCompleted) {
-        return null;
-    }
+    if (!user || user.profileCompleted) return null;
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-            <div className="max-w-4xl w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div className="p-8 md:p-12">
-                    {/* Header */}
-                    <div className="text-center mb-10">
-                        <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-full mb-4">
-                            <UserCircle2 className="w-8 h-8 text-blue-600" />
+        <div className="min-h-screen flex" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+            {/* Left decorative panel */}
+            <div
+                className="hidden lg:flex flex-col justify-between p-12 w-[420px] flex-shrink-0"
+                style={{ background: `linear-gradient(155deg, ${C.navy} 0%, #2d2d4e 100%)` }}
+            >
+                {/* Logo */}
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: C.orange }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" />
+                        </svg>
+                    </div>
+                    <span className="text-white font-bold text-lg tracking-tight">RescueMe</span>
+                </div>
+
+                {/* Illustration area */}
+                <div className="space-y-6">
+                    {/* User card preview */}
+                    <div className="bg-white/10 backdrop-blur rounded-2xl p-5 border border-white/10">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.orange }}>
+                                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p className="text-white text-sm font-semibold">Người Dùng</p>
+                                <p className="text-white/60 text-xs">Yêu cầu cứu hộ</p>
+                            </div>
                         </div>
-                        <h1 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-3">
-                            Chọn Vai Trò Của Bạn
-                        </h1>
-                        <p className="text-sm text-gray-600">
-                            Vui lòng chọn vai trò phù hợp để tiếp tục
-                        </p>
+                        <p className="text-white/70 text-xs leading-relaxed">Gọi cứu hộ trong vài giây khi xe gặp sự cố trên đường.</p>
                     </div>
 
-                    {/* Error Message */}
+                    {/* Provider card preview */}
+                    <div className="bg-white/10 backdrop-blur rounded-2xl p-5 border border-white/10">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: '#16a34a' }}>
+                                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p className="text-white text-sm font-semibold">Nhà Cung Cấp</p>
+                                <p className="text-white/60 text-xs">Cung cấp dịch vụ</p>
+                            </div>
+                        </div>
+                        <p className="text-white/70 text-xs leading-relaxed">Nhận yêu cầu, cung cấp báo giá và hoàn thành công việc cứu hộ.</p>
+                    </div>
+                </div>
+
+                {/* Footer text */}
+                <p className="text-white/40 text-xs">© 2024 RescueMe. All rights reserved.</p>
+            </div>
+
+            {/* Right form panel */}
+            <div className="flex-1 flex items-center justify-center p-6">
+                <div className="w-full max-w-md">
+                    {/* Mobile logo */}
+                    <div className="flex items-center gap-2 mb-8 lg:hidden">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" />
+                            </svg>
+                        </div>
+                        <span className="font-bold text-base" style={{ color: C.navy }}>RescueMe</span>
+                    </div>
+
+                    {/* Heading */}
+                    <div className="mb-8">
+                        <h1 className="text-2xl font-bold mb-2" style={{ color: C.navy }}>Chào mừng! 👋</h1>
+                        <p className="text-sm" style={{ color: C.gray }}>Bạn muốn sử dụng RescueMe với tư cách nào?</p>
+                    </div>
+
+                    {/* Error */}
                     {error && (
-                        <div className="mb-6 border-l-4 border-red-500 bg-red-50 rounded-r-lg p-4">
-                            <p className="text-sm text-red-800">{error}</p>
+                        <div className="mb-5 flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm"
+                            style={{ background: '#fef2f2', color: C.red, border: `1px solid #fecaca` }}>
+                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="flex-shrink-0">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {error}
                         </div>
                     )}
 
-                    {/* Role Options */}
-                    <div className="grid md:grid-cols-2 gap-6 mb-8">
-                        {/* USER Option */}
+                    {/* Role Cards */}
+                    <div className="space-y-3 mb-8">
+                        {/* USER card */}
                         <button
                             onClick={() => setSelectedRole('USER')}
                             disabled={isSubmitting}
-                            className={`relative p-6 rounded-lg border-2 transition-all duration-200 text-left ${selectedRole === 'USER'
-                                ? 'border-blue-600 bg-blue-50'
-                                : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
-                                } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            className="w-full relative text-left p-5 rounded-2xl border-2 transition-all duration-200 group"
+                            style={{
+                                borderColor: selectedRole === 'USER' ? C.orange : C.border,
+                                background: selectedRole === 'USER' ? C.orangeLight : '#ffffff',
+                            }}
                         >
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+                                    style={{ background: selectedRole === 'USER' ? C.orange : C.bg }}>
+                                    <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke={selectedRole === 'USER' ? 'white' : C.gray} strokeWidth={1.8}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    </svg>
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-bold mb-0.5" style={{ color: C.navy }}>Người Dùng</p>
+                                    <p className="text-xs" style={{ color: C.gray }}>Tôi cần sử dụng dịch vụ cứu hộ khi gặp sự cố</p>
+                                </div>
+                                {/* Selection indicator */}
+                                <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                                    style={{
+                                        borderColor: selectedRole === 'USER' ? C.orange : C.border,
+                                        background: selectedRole === 'USER' ? C.orange : 'transparent',
+                                    }}>
+                                    {selectedRole === 'USER' && (
+                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                            <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Features */}
                             {selectedRole === 'USER' && (
-                                <div className="absolute top-4 right-4">
-                                    <CheckCircle className="w-6 h-6 text-blue-600" />
+                                <div className="mt-4 pt-4 border-t border-orange-200 grid grid-cols-2 gap-2">
+                                    {['Gọi cứu hộ tức thì', 'Theo dõi realtime', 'Thanh toán an toàn', 'Đánh giá dịch vụ'].map(f => (
+                                        <div key={f} className="flex items-center gap-1.5">
+                                            <svg width="12" height="12" fill={C.orange} viewBox="0 0 24 24">
+                                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+                                            </svg>
+                                            <span className="text-[11px]" style={{ color: C.orange }}>{f}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
-                            <div className="flex items-center mb-3">
-                                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                                    <UserCircle2 className="w-6 h-6 text-blue-600" />
-                                </div>
-                                <h3 className="text-lg font-semibold text-gray-900">Người Dùng</h3>
-                            </div>
-                            <p className="text-sm text-gray-700 leading-relaxed">
-                                Tôi cần sử dụng dịch vụ cứu hộ khi gặp sự cố trên đường
-                            </p>
                         </button>
 
-                        {/* PROVIDER Option */}
+                        {/* PROVIDER card */}
                         <button
                             onClick={() => setSelectedRole('PROVIDER')}
                             disabled={isSubmitting}
-                            className={`relative p-6 rounded-lg border-2 transition-all duration-200 text-left ${selectedRole === 'PROVIDER'
-                                ? 'border-green-600 bg-green-50'
-                                : 'border-gray-200 hover:border-green-300 hover:bg-gray-50'
-                                } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            className="w-full relative text-left p-5 rounded-2xl border-2 transition-all duration-200 group"
+                            style={{
+                                borderColor: selectedRole === 'PROVIDER' ? C.orange : C.border,
+                                background: selectedRole === 'PROVIDER' ? C.orangeLight : '#ffffff',
+                            }}
                         >
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+                                    style={{ background: selectedRole === 'PROVIDER' ? C.orange : C.bg }}>
+                                    <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke={selectedRole === 'PROVIDER' ? 'white' : C.gray} strokeWidth={1.8}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                    </svg>
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-bold mb-0.5" style={{ color: C.navy }}>Nhà Cung Cấp Dịch Vụ</p>
+                                    <p className="text-xs" style={{ color: C.gray }}>Tôi cung cấp dịch vụ cứu hộ và muốn kiếm thu nhập</p>
+                                </div>
+                                <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                                    style={{
+                                        borderColor: selectedRole === 'PROVIDER' ? C.orange : C.border,
+                                        background: selectedRole === 'PROVIDER' ? C.orange : 'transparent',
+                                    }}>
+                                    {selectedRole === 'PROVIDER' && (
+                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                            <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Features */}
                             {selectedRole === 'PROVIDER' && (
-                                <div className="absolute top-4 right-4">
-                                    <CheckCircle className="w-6 h-6 text-green-600" />
+                                <div className="mt-4 pt-4 border-t border-orange-200 grid grid-cols-2 gap-2">
+                                    {['Nhận lệnh gần bạn', 'Báo giá linh hoạt', 'Ví điện tử tích hợp', 'Xếp hạng uy tín'].map(f => (
+                                        <div key={f} className="flex items-center gap-1.5">
+                                            <svg width="12" height="12" fill={C.orange} viewBox="0 0 24 24">
+                                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+                                            </svg>
+                                            <span className="text-[11px]" style={{ color: C.orange }}>{f}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
-                            <div className="flex items-center mb-3">
-                                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                                    <Truck className="w-6 h-6 text-green-600" />
-                                </div>
-                                <h3 className="text-lg font-semibold text-gray-900">Nhà Cung Cấp</h3>
-                            </div>
-                            <p className="text-sm text-gray-700 leading-relaxed">
-                                Tôi cung cấp dịch vụ cứu hộ và muốn kết nối với khách hàng
-                            </p>
                         </button>
                     </div>
 
-                    {/* Continue Button */}
+                    {/* CTA Button */}
                     <button
                         onClick={handleContinue}
                         disabled={!selectedRole || isSubmitting}
-                        className={`w-full py-3 px-6 rounded-lg font-medium text-white transition-all duration-200 flex items-center justify-center gap-2 ${!selectedRole || isSubmitting
-                            ? 'bg-gray-300 cursor-not-allowed'
-                            : 'bg-blue-600 hover:bg-blue-700 border-2 border-blue-600 hover:border-blue-700'
-                            }`}
+                        className="w-full py-3.5 rounded-2xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all"
+                        style={{
+                            background: !selectedRole || isSubmitting
+                                ? C.border
+                                : `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`,
+                            cursor: !selectedRole || isSubmitting ? 'not-allowed' : 'pointer',
+                        }}
                     >
                         {isSubmitting ? (
                             <>
-                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                                 <span>Đang xử lý...</span>
                             </>
                         ) : (
                             <>
                                 <span>Tiếp Tục</span>
-                                <ArrowRight className="w-5 h-5" />
+                                <ArrowRight className="w-4 h-4" />
                             </>
                         )}
                     </button>
 
-                    {/* Info */}
-                    <p className="text-center text-sm text-gray-600 mt-6">
+                    <p className="text-center text-xs mt-5" style={{ color: C.gray }}>
                         Bạn có thể cập nhật thông tin chi tiết ở bước tiếp theo
                     </p>
                 </div>

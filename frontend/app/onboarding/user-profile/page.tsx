@@ -2,15 +2,17 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Phone, Mail, MapPin, Car, Bike, Palette, Loader2, CheckCircle, Save } from 'lucide-react';
+import { Car, Bike, MapPin, CheckCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { updateUserProfile, UpdateUserProfileData } from '@/lib/auth';
 import { searchPlaces, getPlaceDetails, PlaceSearchResult } from '@/lib/vietmap';
 import { normalizeVietnamPlate, isValidVietnamPlate, formatVietnamPlate } from '@/lib/validators';
 
-const VEHICLE_COLORS = [
-    'Trắng', 'Đen', 'Xám', 'Bạc', 'Đỏ', 'Xanh dương', 'Xanh lá', 'Vàng', 'Cam', 'Nâu'
-];
+const C = { orange: '#f97316', orangeDark: '#ea6c0a', orangeLight: '#fff7ed', navy: '#1a1a2e', gray: '#6b7280', border: '#e2e8f0', bg: '#f4f6f9', green: '#16a34a', red: '#ef4444' };
+const VEHICLE_COLORS = ['Trắng', 'Đen', 'Xám', 'Bạc', 'Đỏ', 'Xanh dương', 'Xanh lá', 'Vàng', 'Cam', 'Nâu'];
+
+const inputCls = (err?: string) =>
+    `w-full px-3 py-2.5 text-sm rounded-xl border transition-all focus:outline-none focus:ring-2 ${err ? 'border-red-400 bg-red-50 focus:ring-red-100' : 'border-gray-200 bg-white focus:ring-orange-100'}`;
 
 export default function UserProfilePage() {
     const router = useRouter();
@@ -19,497 +21,277 @@ export default function UserProfilePage() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showCustomColor, setShowCustomColor] = useState(false);
     const addressInputRef = useRef<HTMLInputElement>(null);
+    const suggestionsRef = useRef<HTMLDivElement>(null);
 
-    // VietMap Autocomplete states
     const [addressQuery, setAddressQuery] = useState('');
     const [addressSuggestions, setAddressSuggestions] = useState<PlaceSearchResult[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
-    const [isAddressSelected, setIsAddressSelected] = useState(false); // Flag to prevent re-search after selection
-    const suggestionsRef = useRef<HTMLDivElement>(null);
+    const [isAddressSelected, setIsAddressSelected] = useState(false);
 
     const [formData, setFormData] = useState<UpdateUserProfileData>({
-        fullName: '',
-        phoneNumber: '',
-        contactEmail: '',
-        defaultAddress: undefined,
-        vehicleType: 'CAR',
-        licensePlate: '',
-        vehicleColor: VEHICLE_COLORS[0],
+        fullName: '', phoneNumber: '', contactEmail: '',
+        defaultAddress: undefined, vehicleType: 'CAR', licensePlate: '', vehicleColor: VEHICLE_COLORS[0],
     });
 
     useEffect(() => {
-        if (!loading && !user) {
-            router.push('/auth/login');
-            return;
-        }
-
-        if (user && user.profileCompleted) {
-            router.push('/user');
-            return;
-        }
-
-        if (user && user.role !== 'USER') {
-            router.push('/provider/onboarding');
-            return;
-        }
+        if (!loading && !user) { router.push('/auth/login'); return; }
+        if (user?.profileCompleted) { router.push('/user'); return; }
+        if (user?.role !== 'USER') { router.push('/provider/onboarding'); return; }
     }, [user, loading, router]);
 
-    // VietMap Autocomplete: Search places when user types
     useEffect(() => {
-        // Skip search if user has already selected an address
-        if (isAddressSelected) {
-            return;
-        }
-
-        const searchTimeout = setTimeout(async () => {
-            if (addressQuery.trim().length < 2) {
-                setAddressSuggestions([]);
-                return;
-            }
-
+        if (isAddressSelected) return;
+        const t = setTimeout(async () => {
+            if (addressQuery.trim().length < 2) { setAddressSuggestions([]); return; }
             setIsSearching(true);
-            try {
-                const results = await searchPlaces(addressQuery);
-                setAddressSuggestions(results);
-                setShowSuggestions(true);
-            } catch (error) {
-                console.error('Error searching places:', error);
-            } finally {
-                setIsSearching(false);
-            }
-        }, 300); // Debounce 300ms
-
-        return () => clearTimeout(searchTimeout);
+            try { const r = await searchPlaces(addressQuery); setAddressSuggestions(r); setShowSuggestions(true); }
+            catch { } finally { setIsSearching(false); }
+        }, 300);
+        return () => clearTimeout(t);
     }, [addressQuery, isAddressSelected]);
 
-    // Close suggestions when clicking outside
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (
-                suggestionsRef.current &&
-                !suggestionsRef.current.contains(event.target as Node) &&
-                addressInputRef.current &&
-                !addressInputRef.current.contains(event.target as Node)
-            ) {
+        const h = (e: MouseEvent) => {
+            if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node) &&
+                addressInputRef.current && !addressInputRef.current.contains(e.target as Node))
                 setShowSuggestions(false);
-            }
         };
-
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        document.addEventListener('mousedown', h);
+        return () => document.removeEventListener('mousedown', h);
     }, []);
 
-    // Handle address selection from suggestions
-    const handleSelectAddress = async (suggestion: PlaceSearchResult) => {
-        setIsAddressSelected(true); // Mark as selected to prevent re-search
-        setAddressQuery(suggestion.displayName);
-        setShowSuggestions(false);
-        setAddressSuggestions([]); // Clear suggestions to prevent re-opening
-
-        // Fetch exact coordinates using Place API
-        if (suggestion.refId) {
-            try {
-                const details = await getPlaceDetails(suggestion.refId);
-                if (details) {
-                    setFormData(prev => ({
-                        ...prev,
-                        defaultAddress: {
-                            addressText: details.display,
-                            lat: details.lat,
-                            lng: details.lng,
-                        }
-                    }));
-                }
-            } catch (error) {
-                console.error('Error getting place details:', error);
-            }
-        }
+    const handleSelectAddress = async (s: PlaceSearchResult) => {
+        setIsAddressSelected(true); setAddressQuery(s.displayName); setShowSuggestions(false); setAddressSuggestions([]);
+        if (s.refId) { try { const d = await getPlaceDetails(s.refId); if (d) setFormData(p => ({ ...p, defaultAddress: { addressText: d.display, lat: d.lat, lng: d.lng } })); } catch { } }
     };
 
-    const validateForm = (): boolean => {
-        const newErrors: Record<string, string> = {};
-
-        if (!formData.fullName.trim()) {
-            newErrors.fullName = 'Họ tên không được để trống';
-        }
-
-        if (!formData.phoneNumber.trim()) {
-            newErrors.phoneNumber = 'Số điện thoại không được để trống';
-        } else if (!/^0[39][0-9]{8}$/.test(formData.phoneNumber)) {
-            newErrors.phoneNumber = 'Số điện thoại không hợp lệ (phải là số VN: 0[39]xxxxxxxx)';
-        }
-
-        if (formData.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactEmail)) {
-            newErrors.contactEmail = 'Email không hợp lệ';
-        }
-
-        if (!formData.licensePlate.trim()) {
-            newErrors.licensePlate = 'Biển số xe không được để trống';
-        } else if (!isValidVietnamPlate(formData.licensePlate)) {
-            newErrors.licensePlate = 'Biển số xe không hợp lệ (VD: 51A-12345, 51AB-12345)';
-        }
-
-        if (!formData.vehicleColor.trim()) {
-            newErrors.vehicleColor = 'Màu xe không được để trống';
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+    const validate = () => {
+        const e: Record<string, string> = {};
+        if (!formData.fullName.trim()) e.fullName = 'Họ tên không được để trống';
+        if (!formData.phoneNumber.trim()) e.phoneNumber = 'SĐT không được để trống';
+        else if (!/^0[39][0-9]{8}$/.test(formData.phoneNumber)) e.phoneNumber = 'SĐT không hợp lệ (VD: 0912345678)';
+        if (formData.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactEmail)) e.contactEmail = 'Email không hợp lệ';
+        if (!formData.licensePlate.trim()) e.licensePlate = 'Biển số không được để trống';
+        else if (!isValidVietnamPlate(formData.licensePlate)) e.licensePlate = 'Biển số không hợp lệ (VD: 51A-12345)';
+        if (!formData.vehicleColor.trim()) e.vehicleColor = 'Màu xe không được để trống';
+        setErrors(e); return Object.keys(e).length === 0;
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!validateForm()) {
-            return;
-        }
-
-        setIsSubmitting(true);
-        setErrors({});
-
+    const handleSubmit = async (ev: React.FormEvent) => {
+        ev.preventDefault(); if (!validate()) return;
+        setIsSubmitting(true); setErrors({});
         try {
-            // Normalize license plate before sending to backend
-            const submissionData = {
-                ...formData,
-                licensePlate: normalizeVietnamPlate(formData.licensePlate),
-            };
-
-            await updateUserProfile(submissionData);
-            await refreshUser();
-            router.push('/user');
+            await updateUserProfile({ ...formData, licensePlate: normalizeVietnamPlate(formData.licensePlate) });
+            await refreshUser(); router.push('/user');
         } catch (err: any) {
-            console.error('Profile update error:', err);
-
-            // Map backend validation errors
-            if (err.response?.data?.message) {
-                const backendErrors = err.response.data.message;
-                if (Array.isArray(backendErrors)) {
-                    const errorMap: Record<string, string> = {};
-                    backendErrors.forEach((msg: string) => {
-                        if (msg.includes('Họ tên')) errorMap.fullName = msg;
-                        else if (msg.includes('điện thoại')) errorMap.phoneNumber = msg;
-                        else if (msg.includes('Email')) errorMap.contactEmail = msg;
-                        else if (msg.includes('Biển số')) errorMap.licensePlate = msg;
-                        else if (msg.includes('Màu xe')) errorMap.vehicleColor = msg;
-                        else if (msg.includes('phương tiện')) errorMap.vehicleType = msg;
-                    });
-                    setErrors(errorMap);
-                } else {
-                    setErrors({ general: backendErrors });
-                }
-            } else {
-                setErrors({ general: 'Có lỗi xảy ra. Vui lòng thử lại.' });
-            }
-        } finally {
-            setIsSubmitting(false);
-        }
+            const msg = err.response?.data?.message;
+            if (Array.isArray(msg)) {
+                const map: Record<string, string> = {};
+                msg.forEach((m: string) => {
+                    if (m.includes('Họ tên')) map.fullName = m;
+                    else if (m.includes('điện thoại')) map.phoneNumber = m;
+                    else if (m.includes('Email')) map.contactEmail = m;
+                    else if (m.includes('Biển số')) map.licensePlate = m;
+                    else map.general = m;
+                });
+                setErrors(map);
+            } else setErrors({ general: msg || 'Có lỗi xảy ra. Vui lòng thử lại.' });
+        } finally { setIsSubmitting(false); }
     };
 
-    if (loading || !user) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center">
-                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto" />
-                    <p className="mt-4 text-sm text-gray-600">Đang tải...</p>
-                </div>
-            </div>
-        );
-    }
+    if (loading || !user) return (
+        <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
+            <div className="w-10 h-10 rounded-full border-[3px] border-t-transparent animate-spin" style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
+        </div>
+    );
+
+    const plateOk = formData.licensePlate && isValidVietnamPlate(formData.licensePlate);
+
+    // Dynamic step completion
+    const part1Done = !!(formData.fullName.trim() && /^0[39][0-9]{8}$/.test(formData.phoneNumber));
+    const part2Done = !!(plateOk && formData.vehicleColor.trim());
 
     return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full">
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-50 rounded-full mb-3">
-                        <User className="w-7 h-7 text-blue-600" />
+        <div className="min-h-screen flex" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+            {/* Left panel */}
+            <div className="hidden lg:flex flex-col justify-between p-10 flex-shrink-0" style={{ width: '340px', background: `linear-gradient(155deg, ${C.navy} 0%, #2d2d4e 100%)` }}>
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: C.orange }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
                     </div>
-                    <h1 className="text-2xl font-semibold text-gray-900">Hoàn thiện hồ sơ</h1>
-                    <p className="mt-1 text-sm text-gray-600">Cung cấp thông tin phương tiện của bạn</p>
+                    <span className="text-white font-bold text-base">RescueMe</span>
                 </div>
-
-                {/* Form Card */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    {errors.general && (
-                        <div className="mb-4 border-l-4 border-red-500 bg-red-50 rounded-r-lg p-3">
-                            <p className="text-sm text-red-800">{errors.general}</p>
-                        </div>
-                    )}
-
-                    <form onSubmit={handleSubmit} className="space-y-5">
-                        {/* Full Name */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-900 mb-1.5">
-                                Họ và tên <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                value={formData.fullName}
-                                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                                className={`w-full px-3 py-2 border rounded-md text-sm text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.fullName ? 'border-red-500' : 'border-gray-300'}`}
-                                placeholder="Nguyễn Văn A"
-                            />
-                            {errors.fullName && <p className="mt-1 text-xs text-red-600">{errors.fullName}</p>}
-                        </div>
-
-                        {/* Phone Number */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-900 mb-1.5">
-                                Số điện thoại <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="tel"
-                                value={formData.phoneNumber}
-                                onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                                className={`w-full px-3 py-2 border rounded-md text-sm text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.phoneNumber ? 'border-red-500' : 'border-gray-300'}`}
-                                placeholder="0912345678"
-                            />
-                            {errors.phoneNumber && <p className="mt-1 text-xs text-red-600">{errors.phoneNumber}</p>}
-                        </div>
-
-                        {/* Contact Email */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-900 mb-1.5">
-                                Email liên hệ
-                            </label>
-                            <input
-                                type="email"
-                                value={formData.contactEmail}
-                                onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                                className={`w-full px-3 py-2 border rounded-md text-sm text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.contactEmail ? 'border-red-500' : 'border-gray-300'}`}
-                                placeholder="email@example.com"
-                            />
-                            {errors.contactEmail && <p className="mt-1 text-xs text-red-600">{errors.contactEmail}</p>}
-                        </div>
-
-                        {/* Default Address with VietMap Autocomplete */}
-                        <div className="relative">
-                            <label className="block text-sm font-medium text-gray-900 mb-1.5">
-                                Địa chỉ thường dùng
-                            </label>
-                            <input
-                                ref={addressInputRef}
-                                type="text"
-                                value={addressQuery}
-                                onChange={(e) => {
-                                    const newValue = e.target.value;
-                                    setAddressQuery(newValue);
-
-                                    // Reset selection flag when user starts typing again
-                                    if (isAddressSelected) {
-                                        setIsAddressSelected(false);
-                                        setFormData(prev => ({ ...prev, defaultAddress: undefined }));
-                                    }
-
-                                    if (newValue.trim().length >= 2) {
-                                        setShowSuggestions(true);
-                                    }
-                                }}
-                                onFocus={() => {
-                                    // Only show suggestions if there are results and user hasn't selected yet
-                                    if (addressSuggestions.length > 0 && !isAddressSelected) {
-                                        setShowSuggestions(true);
-                                    }
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="Nhập địa chỉ..."
-                                autoComplete="off"
-                            />
-
-                            {/* Autocomplete Suggestions Dropdown */}
-                            {showSuggestions && (addressSuggestions.length > 0 || isSearching) && (
-                                <div
-                                    ref={suggestionsRef}
-                                    className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto"
-                                >
-                                    {isSearching ? (
-                                        <div className="px-4 py-3 text-sm text-gray-600 flex items-center">
-                                            <Loader2 className="w-4 h-4 mr-2 text-blue-600 animate-spin" />
-                                            Đang tìm kiếm...
-                                        </div>
-                                    ) : (
-                                        addressSuggestions.map((suggestion, index) => (
-                                            <button
-                                                key={index}
-                                                type="button"
-                                                onClick={() => handleSelectAddress(suggestion)}
-                                                className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
-                                            >
-                                                <div className="flex items-start">
-                                                    <MapPin className="w-4 h-4 mt-0.5 mr-2 text-gray-400 flex-shrink-0" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-medium text-gray-900 truncate">{suggestion.displayName}</p>
-                                                        {suggestion.address && suggestion.address !== suggestion.displayName && (
-                                                            <p className="text-xs text-gray-500 truncate mt-0.5">{suggestion.address}</p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        ))
-                                    )}
+                <div className="space-y-5">
+                    <div>
+                        <h2 className="text-white text-xl font-bold mb-2">Hồ sơ người dùng</h2>
+                        <p className="text-white/60 text-sm leading-relaxed">Thông tin xe giúp nhà cứu hộ phục vụ đúng nhu cầu và nhanh hơn.</p>
+                    </div>
+                    <div className="space-y-3">
+                        {[
+                            { n: 1, label: 'Chọn vai trò', done: true },
+                            { n: 2, label: 'Thông tin cá nhân', done: part1Done },
+                            { n: 3, label: 'Thông tin phương tiện', done: part2Done },
+                        ].map((s, i) => (
+                            <div key={s.n} className="flex items-center gap-3">
+                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all duration-300"
+                                    style={{ background: s.done ? C.green : 'rgba(255,255,255,0.15)', color: 'white' }}>
+                                    {s.done ? '✓' : s.n}
                                 </div>
-                            )}
+                                <span className="text-sm transition-colors duration-300" style={{ color: s.done ? 'white' : 'rgba(255,255,255,0.45)' }}>{s.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="bg-white/10 rounded-2xl p-4 border border-white/10">
+                        <p className="text-white/80 text-xs leading-relaxed">💡 <strong className="text-white">Mẹo:</strong> Thông tin biển số xe giúp nhà cứu hộ xác nhận xe của bạn nhanh hơn khi đến nơi.</p>
+                    </div>
+                </div>
+                <p className="text-white/30 text-xs">© 2024 RescueMe. All rights reserved.</p>
+            </div>
 
-                            {/* Display selected address with coordinates */}
-                            {formData.defaultAddress && (
-                                <div className="mt-2 flex items-start gap-1.5">
-                                    <MapPin className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
-                                    <p className="text-xs text-gray-600">
-                                        {formData.defaultAddress.addressText}
-                                        {formData.defaultAddress.lat && formData.defaultAddress.lng && (
-                                            <span className="ml-2 text-gray-400">
-                                                ({formData.defaultAddress.lat.toFixed(6)}, {formData.defaultAddress.lng.toFixed(6)})
-                                            </span>
-                                        )}
-                                    </p>
-                                </div>
-                            )}
+            {/* Right form */}
+            <div className="flex-1 overflow-y-auto">
+                <div className="min-h-full flex items-start justify-center py-10 px-6">
+                    <div className="w-full max-w-lg">
+                        {/* Mobile logo */}
+                        <div className="flex items-center gap-2 mb-6 lg:hidden">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
+                            </div>
+                            <span className="font-bold" style={{ color: C.navy }}>RescueMe</span>
                         </div>
 
-                        {/* Vehicle Type */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Loại phương tiện <span className="text-red-500">*</span>
-                            </label>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setFormData({ ...formData, vehicleType: 'CAR' })}
-                                    className={`p-3 border rounded-lg transition-all ${formData.vehicleType === 'CAR'
-                                        ? 'border-blue-600 bg-blue-50 text-blue-700'
-                                        : 'border-gray-300 hover:border-gray-400'
-                                        }`}
-                                >
-                                    <Car className="w-6 h-6 mx-auto mb-1" />
-                                    <p className="text-sm font-medium">Ô tô</p>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setFormData({ ...formData, vehicleType: 'MOTORCYCLE' })}
-                                    className={`p-3 border rounded-lg transition-all ${formData.vehicleType === 'MOTORCYCLE'
-                                        ? 'border-blue-600 bg-blue-50 text-blue-700'
-                                        : 'border-gray-300 hover:border-gray-400'
-                                        }`}
-                                >
-                                    <Bike className="w-6 h-6 mx-auto mb-1" />
-                                    <p className="text-sm font-medium">Xe máy</p>
-                                </button>
-                            </div>
+                        <div className="mb-6">
+                            <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>Hoàn thiện hồ sơ</h1>
+                            <p className="text-sm" style={{ color: C.gray }}>Nhập thông tin cá nhân và phương tiện của bạn</p>
                         </div>
 
-                        {/* License Plate & Color */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-900 mb-1.5">
-                                    Biển số xe <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.licensePlate}
-                                    onChange={(e) => {
-                                        // Allow user to type freely with dashes, only uppercase
-                                        const value = e.target.value.toUpperCase();
-                                        setFormData({ ...formData, licensePlate: value });
-
-                                        // Clear error when user is typing
-                                        if (errors.licensePlate) {
-                                            setErrors(prev => {
-                                                const { licensePlate, ...rest } = prev;
-                                                return rest;
-                                            });
-                                        }
-                                    }}
-                                    onBlur={() => {
-                                        // Auto-format and validate on blur
-                                        const value = formData.licensePlate;
-                                        if (value && isValidVietnamPlate(value)) {
-                                            const formatted = formatVietnamPlate(value);
-                                            setFormData({ ...formData, licensePlate: formatted });
-                                        } else if (value && !isValidVietnamPlate(value)) {
-                                            setErrors(prev => ({
-                                                ...prev,
-                                                licensePlate: 'Biển số xe không hợp lệ (VD: 29A-12345, 51AB-12345)'
-                                            }));
-                                        }
-                                    }}
-                                    className={`w-full px-3 py-2 border rounded-md text-sm font-mono text-gray-900 placeholder:text-gray-400 bg-white uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.licensePlate ? 'border-red-500 bg-red-50' :
-                                        formData.licensePlate && isValidVietnamPlate(formData.licensePlate) ? 'border-green-500 bg-green-50' :
-                                            'border-gray-300'
-                                        }`}
-                                    placeholder="29A-12345"
-                                />
-                                {errors.licensePlate && <p className="mt-1 text-xs text-red-600">{errors.licensePlate}</p>}
-                                {!errors.licensePlate && formData.licensePlate && isValidVietnamPlate(formData.licensePlate) && (
-                                    <div className="mt-1 flex items-center gap-1 text-xs text-green-600">
-                                        <CheckCircle className="w-3 h-3" />
-                                        <span>Biển số hợp lệ (định dạng: 29A-12345)</span>
-                                    </div>
-                                )}
-                                {!errors.licensePlate && formData.licensePlate && !isValidVietnamPlate(formData.licensePlate) && (
-                                    <p className="mt-1 text-xs text-gray-500">Nhập đúng định dạng: 29A-12345 hoặc 51AB-12345</p>
-                                )}
+                        {errors.general && (
+                            <div className="mb-5 flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm" style={{ background: '#fef2f2', color: C.red, border: '1px solid #fecaca' }}>
+                                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                {errors.general}
                             </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-900 mb-1.5">
-                                    Màu xe <span className="text-red-500">*</span>
-                                </label>
-                                <select
-                                    value={showCustomColor ? 'custom' : formData.vehicleColor}
-                                    onChange={(e) => {
-                                        if (e.target.value === 'custom') {
-                                            setShowCustomColor(true);
-                                            setFormData({ ...formData, vehicleColor: '' });
-                                        } else {
-                                            setShowCustomColor(false);
-                                            setFormData({ ...formData, vehicleColor: e.target.value });
-                                        }
-                                    }}
-                                    className={`w-full px-3 py-2 border rounded-md text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.vehicleColor ? 'border-red-500' : 'border-gray-300'}`}
-                                >
-                                    {VEHICLE_COLORS.map(color => (
-                                        <option key={color} value={color}>{color}</option>
-                                    ))}
-                                    <option value="custom">Khác...</option>
-                                </select>
-                                {errors.vehicleColor && <p className="mt-1 text-xs text-red-600">{errors.vehicleColor}</p>}
-                            </div>
-                        </div>
-
-                        {/* Custom Color Input */}
-                        {showCustomColor && (
-                            <input
-                                type="text"
-                                value={formData.vehicleColor}
-                                onChange={(e) => setFormData({ ...formData, vehicleColor: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 placeholder:text-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="Nhập màu xe..."
-                            />
                         )}
 
-                        {/* Submit Button */}
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className={`w-full mt-6 py-2.5 rounded-md text-white text-sm font-medium transition-all ${isSubmitting
-                                ? 'bg-gray-400 cursor-not-allowed'
-                                : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
-                                }`}
-                        >
-                            {isSubmitting ? (
-                                <span className="flex items-center justify-center">
-                                    <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                    </svg>
-                                    Đang lưu...
-                                </span>
-                            ) : (
-                                'Hoàn thành'
-                            )}
-                        </button>
-                    </form>
+                        <form onSubmit={handleSubmit}>
+                            {/* Personal info card */}
+                            <div className="bg-white rounded-2xl border p-5 mb-4" style={{ borderColor: C.border }}>
+                                <div className="flex items-center gap-2 mb-4 pb-3 border-b" style={{ borderColor: C.border }}>
+                                    <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.orangeLight }}>
+                                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2.2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                    </div>
+                                    <h2 className="text-sm font-bold" style={{ color: C.navy }}>Thông tin cá nhân</h2>
+                                </div>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Họ và tên <span style={{ color: C.red }}>*</span></label>
+                                        <input type="text" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} placeholder="Nguyễn Văn A" className={inputCls(errors.fullName)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                        {errors.fullName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.fullName}</p>}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Số điện thoại <span style={{ color: C.red }}>*</span></label>
+                                            <input type="tel" value={formData.phoneNumber} onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder="0912345678" className={inputCls(errors.phoneNumber)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                            {errors.phoneNumber && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.phoneNumber}</p>}
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Email liên hệ</label>
+                                            <input type="email" value={formData.contactEmail} onChange={e => setFormData({ ...formData, contactEmail: e.target.value })} placeholder="email@example.com" className={inputCls(errors.contactEmail)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                            {errors.contactEmail && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.contactEmail}</p>}
+                                        </div>
+                                    </div>
+                                    {/* Address */}
+                                    <div className="relative">
+                                        <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Địa chỉ thường dùng</label>
+                                        <div className="relative">
+                                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: C.gray }} />
+                                            <input ref={addressInputRef} type="text" value={addressQuery}
+                                                onChange={e => { const v = e.target.value; setAddressQuery(v); if (isAddressSelected) { setIsAddressSelected(false); setFormData(p => ({ ...p, defaultAddress: undefined })); } if (v.trim().length >= 2) setShowSuggestions(true); }}
+                                                onFocus={() => { if (addressSuggestions.length > 0 && !isAddressSelected) setShowSuggestions(true); }}
+                                                placeholder="Nhập địa chỉ..." autoComplete="off"
+                                                className={inputCls()} style={{ paddingLeft: '2.25rem', color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                        </div>
+                                        {showSuggestions && (addressSuggestions.length > 0 || isSearching) && (
+                                            <div ref={suggestionsRef} className="absolute z-10 w-full mt-1 bg-white rounded-xl border shadow-lg max-h-52 overflow-y-auto" style={{ borderColor: C.border }}>
+                                                {isSearching ? (
+                                                    <div className="px-4 py-3 text-sm flex items-center gap-2" style={{ color: C.gray }}>
+                                                        <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
+                                                        Đang tìm kiếm...
+                                                    </div>
+                                                ) : addressSuggestions.map((s, i) => (
+                                                    <button key={i} type="button" onClick={() => handleSelectAddress(s)} className="w-full px-4 py-2.5 text-left border-b last:border-b-0 hover:bg-orange-50 transition-colors" style={{ borderColor: C.border }}>
+                                                        <div className="flex items-start gap-2">
+                                                            <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: C.orange }} />
+                                                            <div><p className="text-xs font-medium" style={{ color: C.navy }}>{s.displayName}</p>{s.address && s.address !== s.displayName && <p className="text-[11px] mt-0.5" style={{ color: C.gray }}>{s.address}</p>}</div>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {formData.defaultAddress && (
+                                            <div className="mt-1.5 flex items-center gap-1.5">
+                                                <CheckCircle className="w-3.5 h-3.5" style={{ color: C.green }} />
+                                                <p className="text-xs" style={{ color: C.green }}>Đã chọn địa chỉ</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Vehicle card */}
+                            <div className="bg-white rounded-2xl border p-5 mb-6" style={{ borderColor: C.border }}>
+                                <div className="flex items-center gap-2 mb-4 pb-3 border-b" style={{ borderColor: C.border }}>
+                                    <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.orangeLight }}>
+                                        <Car className="w-3.5 h-3.5" style={{ color: C.orange }} />
+                                    </div>
+                                    <h2 className="text-sm font-bold" style={{ color: C.navy }}>Thông tin phương tiện</h2>
+                                </div>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Loại phương tiện <span style={{ color: C.red }}>*</span></label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {[{ value: 'CAR', label: 'Ô tô', icon: <Car className="w-5 h-5" /> }, { value: 'MOTORCYCLE', label: 'Xe máy', icon: <Bike className="w-5 h-5" /> }].map(v => (
+                                                <button key={v.value} type="button" onClick={() => setFormData({ ...formData, vehicleType: v.value as any })}
+                                                    className="flex items-center gap-3 p-3 rounded-xl border-2 transition-all"
+                                                    style={{ borderColor: formData.vehicleType === v.value ? C.orange : C.border, background: formData.vehicleType === v.value ? C.orangeLight : '#ffffff', color: formData.vehicleType === v.value ? C.orange : C.gray }}>
+                                                    {v.icon}<span className="text-sm font-semibold">{v.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Biển số xe <span style={{ color: C.red }}>*</span></label>
+                                            <input type="text" value={formData.licensePlate}
+                                                onChange={e => { const v = e.target.value.toUpperCase(); setFormData({ ...formData, licensePlate: v }); if (errors.licensePlate) setErrors(p => { const { licensePlate, ...r } = p; return r; }); }}
+                                                onBlur={() => { if (formData.licensePlate && isValidVietnamPlate(formData.licensePlate)) setFormData(p => ({ ...p, licensePlate: formatVietnamPlate(p.licensePlate) })); }}
+                                                placeholder="51A-12345" className={inputCls(errors.licensePlate)} style={{ fontFamily: 'monospace', textTransform: 'uppercase', color: C.navy }} />
+                                            {errors.licensePlate ? <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.licensePlate}</p>
+                                                : plateOk ? <div className="mt-1 flex items-center gap-1"><CheckCircle className="w-3 h-3" style={{ color: C.green }} /><p className="text-xs" style={{ color: C.green }}>Hợp lệ</p></div> : null}
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Màu xe <span style={{ color: C.red }}>*</span></label>
+                                            <select value={showCustomColor ? 'custom' : formData.vehicleColor}
+                                                onChange={e => { if (e.target.value === 'custom') { setShowCustomColor(true); setFormData({ ...formData, vehicleColor: '' }); } else { setShowCustomColor(false); setFormData({ ...formData, vehicleColor: e.target.value }); } }}
+                                                className="w-full px-3 py-2.5 text-sm rounded-xl border focus:outline-none focus:ring-2 focus:ring-orange-100" style={{ borderColor: C.border, color: C.navy, background: 'white', fontFamily: 'Poppins, sans-serif' }}>
+                                                {VEHICLE_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+                                                <option value="custom">Khác...</option>
+                                            </select>
+                                            {errors.vehicleColor && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.vehicleColor}</p>}
+                                        </div>
+                                    </div>
+                                    {showCustomColor && (
+                                        <input type="text" value={formData.vehicleColor} onChange={e => setFormData({ ...formData, vehicleColor: e.target.value })} placeholder="Nhập màu xe..." className={inputCls()} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                    )}
+                                </div>
+                            </div>
+
+                            <button type="submit" disabled={isSubmitting} className="w-full py-3.5 rounded-2xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all"
+                                style={{ background: isSubmitting ? C.border : `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
+                                {isSubmitting ? <><div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /><span>Đang lưu...</span></> : <><span>Hoàn thành</span><ArrowRight className="w-4 h-4" /></>}
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>

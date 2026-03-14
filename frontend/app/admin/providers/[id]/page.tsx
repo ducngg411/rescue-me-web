@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
+import AdminLayout from '@/components/AdminLayout';
 
 interface ProviderDetail {
     id: string;
@@ -216,29 +217,33 @@ export default function ProviderDetailPage({ params }: { params: Promise<{ id: s
 
     if (!isReady || loading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                    <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto" />
-                    <p className="mt-4 text-sm text-gray-600">Đang tải...</p>
+            <AdminLayout activeTab="/admin/providers">
+                <div className="min-h-screen flex items-center justify-center" style={{ background: '#f4f6f9' }}>
+                    <div className="text-center">
+                        <div className="w-10 h-10 rounded-full border-[3px] border-t-transparent animate-spin mx-auto mb-3" style={{ borderColor: '#f97316', borderTopColor: 'transparent' }} />
+                        <p className="mt-4 text-sm text-gray-600">Đang tải...</p>
+                    </div>
                 </div>
-            </div>
+            </AdminLayout>
         );
     }
 
     if (error && !provider) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center">
-                    <AlertTriangle className="w-12 h-12 text-red-600 mx-auto mb-3" />
-                    <p className="text-gray-900">{error}</p>
-                    <button
-                        onClick={() => router.back()}
-                        className="mt-4 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700"
-                    >
-                        Quay lại
-                    </button>
+            <AdminLayout activeTab="/admin/providers">
+                <div className="min-h-screen flex items-center justify-center" style={{ background: '#f4f6f9' }}>
+                    <div className="text-center">
+                        <AlertTriangle className="w-12 h-12 text-red-600 mx-auto mb-3" />
+                        <p className="text-gray-900">{error}</p>
+                        <button
+                            onClick={() => router.back()}
+                            className="mt-4 px-4 py-2 text-sm font-medium hover:underline" style={{ color: '#f97316' }}
+                        >
+                            Quay lại
+                        </button>
+                    </div>
                 </div>
-            </div>
+            </AdminLayout>
         );
     }
 
@@ -251,7 +256,8 @@ export default function ProviderDetailPage({ params }: { params: Promise<{ id: s
     const optionalDocs = ['DRIVER_LICENSE', 'BUSINESS_REGISTRATION'];
 
     return (
-        <div className="min-h-screen bg-gray-50 py-8">
+        <AdminLayout activeTab="/admin/providers">
+        <div className="min-h-screen py-8" style={{ background: '#f4f6f9' }}>
             <div className="max-w-5xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-6">
@@ -696,5 +702,6 @@ export default function ProviderDetailPage({ params }: { params: Promise<{ id: s
                 </div>
             )}
         </div>
+        </AdminLayout>
     );
 }

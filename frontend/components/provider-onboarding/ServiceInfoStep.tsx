@@ -1,31 +1,42 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Building2, Briefcase, Car, Bike, MapPin, Ruler } from 'lucide-react';
+import { CheckCircle, Plus, Trash2, MapPin } from 'lucide-react';
 import { searchPlaces, getPlaceDetails, PlaceSearchResult } from '@/lib/vietmap';
 import { normalizeVietnamPlate, isValidVietnamPlate, formatVietnamPlate } from '@/lib/validators';
 
+const C = { orange: '#f97316', orangeDark: '#ea6c0a', orangeLight: '#fff7ed', navy: '#1a1a2e', gray: '#6b7280', border: '#e2e8f0', bg: '#f4f6f9', green: '#16a34a', red: '#ef4444' };
+
 const SERVICE_TYPES = [
-    { value: 'TOWING', label: 'Kéo xe' },
-    { value: 'BATTERY_JUMP', label: 'Cứu hộ bình điện' },
-    { value: 'TIRE_CHANGE', label: 'Thay lốp xe' },
-    { value: 'FUEL_DELIVERY', label: 'Tiếp nhiên liệu' },
-    { value: 'LOCKOUT', label: 'Mở khóa xe' },
-    { value: 'BREAKDOWN_REPAIR', label: 'Sửa chữa tại chỗ' },
+    { value: 'TOWING', label: 'Kéo xe', icon: '' },
+    { value: 'BATTERY_JUMP', label: 'Cứu bình', icon: '🔋' },
+    { value: 'TIRE_CHANGE', label: 'Thay lốp', icon: '🛞' },
+    { value: 'FUEL_DELIVERY', label: 'Tiếp nhiên liệu', icon: '⛽' },
+    { value: 'LOCKOUT', label: 'Mở khóa xe', icon: '🔑' },
+    { value: 'BREAKDOWN_REPAIR', label: 'Sửa tại chỗ', icon: '🔧' },
 ];
 
-const VEHICLE_TYPES = [
-    { value: 'CAR', label: 'Ô tô' },
-    { value: 'MOTORCYCLE', label: 'Xe máy' },
-];
+const inputCls = (err?: boolean) =>
+    `w-full px-3 py-2.5 text-sm rounded-xl border transition-all focus:outline-none focus:ring-2 bg-white font-[Poppins] ${err ? 'border-red-400 bg-red-50 focus:ring-red-100' : 'border-gray-200 focus:ring-orange-100'}`;
+
+const SectionCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="bg-white rounded-2xl border p-5 mb-4" style={{ borderColor: C.border }}>
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b" style={{ borderColor: C.border }}>
+            <div className="w-1 h-4 rounded-full" style={{ background: C.orange }} />
+            <h2 className="text-sm font-bold" style={{ color: C.navy }}>{title}</h2>
+        </div>
+        {children}
+    </div>
+);
 
 interface ServiceInfoStepProps {
     initialData: any;
     onComplete: (data: any) => void;
     onBack: () => void;
+    isShell?: boolean;
 }
 
-export default function ServiceInfoStep({ initialData, onComplete, onBack }: ServiceInfoStepProps) {
+export default function ServiceInfoStep({ initialData, onComplete, onBack, isShell }: ServiceInfoStepProps) {
     const [formData, setFormData] = useState({
         providerType: initialData?.providerType || 'INDIVIDUAL',
         fullName: initialData?.fullName || '',
@@ -40,493 +51,276 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack }: Ser
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [addressQuery, setAddressQuery] = useState('');
+    const [addressQuery, setAddressQuery] = useState(
+        initialData?.providerType === 'INDIVIDUAL'
+            ? initialData?.permanentAddress?.addressText || ''
+            : initialData?.businessAddress?.addressText || ''
+    );
     const [addressSuggestions, setAddressSuggestions] = useState<PlaceSearchResult[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
-    const [addressSelected, setAddressSelected] = useState(false);
+    const [addressSelected, setAddressSelected] = useState(!!initialData?.permanentAddress?.addressText || !!initialData?.businessAddress?.addressText);
+    const suggestionsRef = useRef<HTMLDivElement>(null);
+    const addressInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        // Don't search if address was just selected from dropdown
-        if (addressSelected) {
-            return;
-        }
-
-        const searchTimeout = setTimeout(async () => {
-            if (addressQuery.trim().length < 2) {
-                setAddressSuggestions([]);
-                setShowSuggestions(false);
-                return;
-            }
-
+        if (addressSelected) return;
+        const t = setTimeout(async () => {
+            if (addressQuery.trim().length < 2) { setAddressSuggestions([]); return; }
             try {
-                const results = await searchPlaces(addressQuery);
-                setAddressSuggestions(results);
-                setShowSuggestions(results.length > 0);
-            } catch (error) {
-                console.error('Error searching places:', error);
-                setAddressSuggestions([]);
+                const r = await searchPlaces(addressQuery);
+                setAddressSuggestions(r);
+                setShowSuggestions(r.length > 0);
+            } catch { setAddressSuggestions([]); }
+        }, 300);
+        return () => clearTimeout(t);
+    }, [addressQuery, addressSelected]);
+
+    useEffect(() => {
+        const h = (e: MouseEvent) => {
+            if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node) &&
+                addressInputRef.current && !addressInputRef.current.contains(e.target as Node)) {
                 setShowSuggestions(false);
             }
-        }, 300);
-
-        return () => clearTimeout(searchTimeout);
-    }, [addressQuery, addressSelected]);
+        };
+        document.addEventListener('mousedown', h);
+        return () => document.removeEventListener('mousedown', h);
+    }, []);
 
     const handleSelectAddress = async (place: PlaceSearchResult) => {
         try {
             const details = place.refId ? await getPlaceDetails(place.refId) : null;
-            const address = {
-                addressText: place.displayName || details?.name || '',
-                lat: details?.lat || place.lat || 0,
-                lng: details?.lng || place.lng || 0,
-            };
-
-            if (formData.providerType === 'INDIVIDUAL') {
-                setFormData({ ...formData, permanentAddress: address });
-            } else {
-                setFormData({ ...formData, businessAddress: address });
-            }
-
+            const address = { addressText: place.displayName || details?.name || '', lat: details?.lat || 0, lng: details?.lng || 0 };
+            if (formData.providerType === 'INDIVIDUAL') setFormData(p => ({ ...p, permanentAddress: address }));
+            else setFormData(p => ({ ...p, businessAddress: address }));
             setAddressQuery(address.addressText);
             setShowSuggestions(false);
-            setAddressSelected(true); // Mark as selected to prevent re-search
-        } catch (error) {
-            console.error('Error getting place details:', error);
-        }
+            setAddressSelected(true);
+        } catch { }
     };
 
     const validate = () => {
-        const newErrors: Record<string, string> = {};
-
-        if (!formData.fullName.trim()) newErrors.fullName = 'Họ tên là bắt buộc';
-        if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Số điện thoại là bắt buộc';
-        if (formData.serviceTypes.length === 0) newErrors.serviceTypes = 'Chọn ít nhất 1 loại dịch vụ';
-        if (formData.supportedVehicleTypes.length === 0) newErrors.supportedVehicleTypes = 'Chọn ít nhất 1 loại phương tiện';
-        if (!formData.serviceRadiusKm || formData.serviceRadiusKm < 5 || formData.serviceRadiusKm > 50) {
-            newErrors.serviceRadiusKm = 'Bán kính từ 5-50km';
-        }
-
+        const e: Record<string, string> = {};
+        if (!formData.fullName.trim()) e.fullName = 'Họ tên là bắt buộc';
+        if (!formData.phoneNumber.trim()) e.phoneNumber = 'Số điện thoại là bắt buộc';
+        if (formData.serviceTypes.length === 0) e.serviceTypes = 'Chọn ít nhất 1 dịch vụ';
+        if (formData.supportedVehicleTypes.length === 0) e.supportedVehicleTypes = 'Chọn ít nhất 1 loại phương tiện';
+        if (!formData.serviceRadiusKm || formData.serviceRadiusKm < 5 || formData.serviceRadiusKm > 50) e.serviceRadiusKm = 'Bán kính từ 5–50km';
         if (formData.providerType === 'BUSINESS') {
-            if (!formData.businessName.trim()) newErrors.businessName = 'Tên doanh nghiệp là bắt buộc';
-            if (!formData.businessAddress.addressText) newErrors.businessAddress = 'Địa chỉ doanh nghiệp là bắt buộc';
+            if (!formData.businessName.trim()) e.businessName = 'Tên doanh nghiệp là bắt buộc';
+            if (!formData.businessAddress.addressText) e.businessAddress = 'Địa chỉ là bắt buộc';
         } else {
-            if (!formData.permanentAddress.addressText) newErrors.permanentAddress = 'Địa chỉ thường trú là bắt buộc';
+            if (!formData.permanentAddress.addressText) e.permanentAddress = 'Địa chỉ là bắt buộc';
         }
-
-        // Validate rescue vehicles
         if (!formData.rescueVehicles || formData.rescueVehicles.length === 0) {
-            newErrors.rescueVehicles = 'Phải có ít nhất một phương tiện cứu hộ';
+            e.rescueVehicles = 'Phải có ít nhất một phương tiện cứu hộ';
         } else {
-            formData.rescueVehicles.forEach((vehicle: any, index: number) => {
-                if (!vehicle.plateNumber.trim()) {
-                    newErrors[`rescueVehicle_${index}_plateNumber`] = 'Biển số xe không được để trống';
-                } else if (!isValidVietnamPlate(vehicle.plateNumber)) {
-                    newErrors[`rescueVehicle_${index}_plateNumber`] = 'Biển số không hợp lệ';
-                }
+            formData.rescueVehicles.forEach((v: any, i: number) => {
+                if (!v.plateNumber.trim()) e[`rv_${i}`] = 'Biển số không được để trống';
+                else if (!isValidVietnamPlate(v.plateNumber)) e[`rv_${i}`] = 'Biển số không hợp lệ';
             });
         }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        setErrors(e);
+        return Object.keys(e).length === 0;
     };
 
-    const handleSubmit = () => {
-        if (validate()) {
-            onComplete(formData);
-        }
-    };
+    const handleSubmit = () => { if (validate()) onComplete(formData); };
+
+    const currentAddr = formData.providerType === 'INDIVIDUAL' ? formData.permanentAddress : formData.businessAddress;
 
     return (
-        <div className="space-y-8">
-            {/* Header */}
-            <div>
-                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Thông tin dịch vụ</h2>
-                <p className="text-gray-600">Cung cấp thông tin về dịch vụ cứu hộ của bạn</p>
-            </div>
-
-            {/* Provider Type Section */}
-            <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b-2 border-blue-600">
-                    <User className="w-5 h-5 text-blue-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">Thông tin cơ bản</h3>
-                </div>
-
-                <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-900">
-                        Loại nhà cung cấp
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                        {[
-                            { value: 'INDIVIDUAL', label: 'Cá nhân' },
-                            { value: 'BUSINESS', label: 'Doanh nghiệp' },
-                        ].map((type) => (
-                            <label
-                                key={type.value}
-                                className={`flex items-center justify-center p-4 border-2 rounded-lg cursor-pointer transition-all ${formData.providerType === type.value
-                                    ? 'border-blue-600 bg-blue-50'
-                                    : 'border-gray-300 hover:border-blue-400 bg-white'
-                                    }`}
-                            >
-                                <input
-                                    type="radio"
-                                    value={type.value}
-                                    checked={formData.providerType === type.value}
-                                    onChange={(e) => setFormData({ ...formData, providerType: e.target.value as any })}
-                                    className="hidden"
-                                />
-                                <span className={`font-medium ${formData.providerType === type.value ? 'text-blue-700' : 'text-gray-600'
-                                    }`}>{type.label}</span>
-                            </label>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            {/* Full Name */}
-            <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-900">
-                    Họ và tên <span className="text-red-500">*</span>
-                </label>
-                <input
-                    type="text"
-                    value={formData.fullName}
-                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    className={`appearance-none relative block w-full px-3 py-2 border placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm ${errors.fullName ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                        }`}
-                    placeholder="Nhập họ và tên đầy đủ"
-                />
-                {errors.fullName && (
-                    <p className="text-sm text-red-600">{errors.fullName}</p>
-                )}
-            </div>
-
-            {/* Phone */}
-            <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-900">
-                    Số điện thoại <span className="text-red-500">*</span>
-                </label>
-                <input
-                    type="tel"
-                    value={formData.phoneNumber}
-                    onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                    className={`appearance-none relative block w-full px-3 py-2 border placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm ${errors.phoneNumber ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                        }`}
-                    placeholder="0123456789"
-                />
-                {errors.phoneNumber && (
-                    <p className="text-sm text-red-600">{errors.phoneNumber}</p>
-                )}
-            </div>
-
-            {/* Business Name (if BUSINESS) */}
-            {formData.providerType === 'BUSINESS' && (
-                <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-900">
-                        Tên doanh nghiệp <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                        type="text"
-                        value={formData.businessName}
-                        onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                        className={`appearance-none relative block w-full px-3 py-2 border placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm ${errors.businessName ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                            }`}
-                        placeholder="Nhập tên doanh nghiệp"
-                    />
-                    {errors.businessName && (
-                        <p className="text-sm text-red-600">{errors.businessName}</p>
-                    )}
-                </div>
-            )}
-
-            {/* Service Configuration Section */}
-            <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b-2 border-blue-600">
-                    <Briefcase className="w-5 h-5 text-blue-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">Cấu hình dịch vụ</h3>
-                </div>
-
-                {/* Service Types */}
-                <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-900">
-                        Loại dịch vụ <span className="text-red-500">*</span>
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                        {SERVICE_TYPES.map((service) => (
-                            <label
-                                key={service.value}
-                                className={`flex items-center gap-3 p-3 border-2 rounded-lg cursor-pointer transition-all ${formData.serviceTypes.includes(service.value)
-                                    ? 'border-blue-600 bg-blue-50'
-                                    : 'border-gray-300 hover:border-blue-400 bg-white'
-                                    }`}
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={formData.serviceTypes.includes(service.value)}
-                                    onChange={(e) => {
-                                        if (e.target.checked) {
-                                            setFormData({ ...formData, serviceTypes: [...formData.serviceTypes, service.value] });
-                                        } else {
-                                            setFormData({ ...formData, serviceTypes: formData.serviceTypes.filter((t: string) => t !== service.value) });
-                                        }
-                                    }}
-                                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                                />
-                                <span className={`text-sm font-medium ${formData.serviceTypes.includes(service.value) ? 'text-blue-700' : 'text-gray-600'
-                                    }`}>{service.label}</span>
-                            </label>
-                        ))}
-                    </div>
-                    {errors.serviceTypes && (
-                        <p className="text-sm text-red-600">{errors.serviceTypes}</p>
-                    )}
-                </div>
-
-                {/* Vehicle Types */}
-                <div className="space-y-3">
-                    <label className="block text-sm font-medium text-gray-900">
-                        Loại phương tiện hỗ trợ <span className="text-red-500">*</span>
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                        {VEHICLE_TYPES.map((vehicle) => (
-                            <label
-                                key={vehicle.value}
-                                className={`flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${formData.supportedVehicleTypes.includes(vehicle.value)
-                                    ? 'border-blue-600 bg-blue-50'
-                                    : 'border-gray-300 hover:border-blue-400 bg-white'
-                                    }`}
-                            >
-                                <input
-                                    type="checkbox"
-                                    checked={formData.supportedVehicleTypes.includes(vehicle.value)}
-                                    onChange={(e) => {
-                                        if (e.target.checked) {
-                                            setFormData({ ...formData, supportedVehicleTypes: [...formData.supportedVehicleTypes, vehicle.value] });
-                                        } else {
-                                            setFormData({ ...formData, supportedVehicleTypes: formData.supportedVehicleTypes.filter((t: string) => t !== vehicle.value) });
-                                        }
-                                    }}
-                                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                                />
-                                <span className={`font-medium ${formData.supportedVehicleTypes.includes(vehicle.value) ? 'text-blue-700' : 'text-gray-600'
-                                    }`}>
-                                    {vehicle.label}
-                                </span>
-                            </label>
-                        ))}
-                    </div>
-                    {errors.supportedVehicleTypes && (
-                        <p className="text-sm text-red-600">{errors.supportedVehicleTypes}</p>
-                    )}
-                </div>
-
-                {/* Service Radius */}
-                <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                        <Ruler className="w-4 h-4 text-gray-600" />
-                        Bán kính phục vụ (km) <span className="text-red-500">*</span>
-                    </label>
-                    <div className="flex items-center gap-4">
-                        <input
-                            type="range"
-                            min="5"
-                            max="50"
-                            value={formData.serviceRadiusKm}
-                            onChange={(e) => setFormData({ ...formData, serviceRadiusKm: parseInt(e.target.value) || 0 })}
-                            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                        />
-                        <div className="flex items-center gap-2 min-w-[100px]">
-                            <input
-                                type="number"
-                                min="5"
-                                max="50"
-                                value={formData.serviceRadiusKm}
-                                onChange={(e) => setFormData({ ...formData, serviceRadiusKm: parseInt(e.target.value) || 0 })}
-                                className="appearance-none relative block w-20 px-3 py-2 border border-gray-300 text-gray-900 rounded-md text-center font-semibold focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                            />
-                            <span className="text-gray-600">km</span>
-                        </div>
-                    </div>
-                    {errors.serviceRadiusKm && (
-                        <p className="text-sm text-red-600">{errors.serviceRadiusKm}</p>
-                    )}
-                    <p className="text-xs text-gray-500">Khoảng cách tối đa bạn sẵn sàng di chuyển để cung cấp dịch vụ</p>
-                </div>
-            </div>
-
-            {/* Location Section */}
-            <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b-2 border-blue-600">
-                    <MapPin className="w-5 h-5 text-blue-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">Vị trí hoạt động</h3>
-                </div>
-
-                {/* Base Location */}
-                <div className="space-y-2 relative">
-                    <label className="block text-sm font-medium text-gray-900">
-                        Địa chỉ {formData.providerType === 'BUSINESS' ? 'doanh nghiệp' : 'thường trú'} <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            value={addressQuery || (formData.providerType === 'INDIVIDUAL' ? formData.permanentAddress.addressText : formData.businessAddress.addressText)}
-                            onChange={(e) => {
-                                setAddressQuery(e.target.value);
-                                setAddressSelected(false); // Reset flag when user types manually
-                            }}
-                            onFocus={() => {
-                                if (!addressSelected && addressQuery.trim().length >= 2) {
-                                    setShowSuggestions(true);
-                                }
-                            }}
-                            onBlur={() => {
-                                // Delay hiding to allow click on suggestion
-                                setTimeout(() => setShowSuggestions(false), 200);
-                            }}
-                            className={`appearance-none relative block w-full px-3 py-2 border placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm ${errors.permanentAddress || errors.businessAddress ? 'border-red-500 bg-red-50' : 'border-gray-300'
-                                }`}
-                            placeholder="Tìm kiếm địa chỉ..."
-                        />
-                    </div>
-                    {showSuggestions && addressSuggestions.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                            {addressSuggestions.map((place, index) => (
-                                <div
-                                    key={place.refId || index}
-                                    onClick={() => handleSelectAddress(place)}
-                                    className="px-4 py-3 hover:bg-blue-50 cursor-pointer transition-colors border-b last:border-b-0"
-                                >
-                                    <span className="text-sm text-gray-900">{place.displayName}</span>
-                                </div>
+        <div>
+            {/* Basic info card */}
+            <SectionCard title="Thông tin cơ bản">
+                <div className="space-y-4">
+                    {/* Provider type */}
+                    <div>
+                        <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Loại nhà cung cấp <span style={{ color: C.red }}>*</span></label>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[{ value: 'INDIVIDUAL', label: 'Cá nhân', desc: 'Tự kinh doanh' }, { value: 'BUSINESS', label: 'Doanh nghiệp', desc: 'Công ty / Hộ KD' }].map(t => (
+                                <button key={t.value} type="button"
+                                    onClick={() => { setFormData(p => ({ ...p, providerType: t.value as any })); setAddressQuery(''); setAddressSelected(false); }}
+                                    className="p-3 rounded-xl border-2 text-left transition-all"
+                                    style={{ borderColor: formData.providerType === t.value ? C.orange : C.border, background: formData.providerType === t.value ? C.orangeLight : '#fff' }}>
+                                    <p className="text-xs font-bold mb-0.5" style={{ color: formData.providerType === t.value ? C.orange : C.navy }}>{t.label}</p>
+                                    <p className="text-[11px]" style={{ color: C.gray }}>{t.desc}</p>
+                                </button>
                             ))}
                         </div>
-                    )}
-                    {(errors.permanentAddress || errors.businessAddress) && (
-                        <p className="text-sm text-red-600">{errors.permanentAddress || errors.businessAddress}</p>
-                    )}
-                </div>
-
-                {/* Rescue Vehicles Section */}
-                <div className="space-y-3">
-                    <div className="flex items-center gap-2 pb-2 border-b-2 border-blue-600">
-                        <Car className="w-5 h-5 text-blue-600" />
-                        <h3 className="text-lg font-semibold text-gray-900">Phương tiện cứu hộ</h3>
                     </div>
-                    <p className="text-sm text-gray-600">Bạn sử dụng phương tiện nào để đi cứu hộ? (Có thể thêm nhiều xe)</p>
 
-                    <div className="space-y-3">
-                        {formData.rescueVehicles.map((vehicle: any, index: number) => (
-                            <div key={index} className="flex gap-2 items-start p-3 border border-gray-200 rounded-md bg-gray-50">
-                                <div className="flex-1 space-y-2">
-                                    <select
-                                        value={vehicle.type}
-                                        onChange={(e) => {
-                                            const newVehicles = [...formData.rescueVehicles];
-                                            newVehicles[index].type = e.target.value;
-                                            setFormData({ ...formData, rescueVehicles: newVehicles });
-                                        }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 bg-white"
-                                    >
-                                        <option value="CAR">Ô tô</option>
-                                        <option value="MOTORCYCLE">Xe máy</option>
-                                    </select>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Họ và tên <span style={{ color: C.red }}>*</span></label>
+                            <input type="text" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} placeholder="Nguyễn Văn A" className={inputCls(!!errors.fullName)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                            {errors.fullName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.fullName}</p>}
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Số điện thoại <span style={{ color: C.red }}>*</span></label>
+                            <input type="tel" value={formData.phoneNumber} onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder="0912345678" className={inputCls(!!errors.phoneNumber)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                            {errors.phoneNumber && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.phoneNumber}</p>}
+                        </div>
+                    </div>
 
-                                    <input
-                                        type="text"
-                                        value={vehicle.plateNumber}
-                                        onChange={(e) => {
-                                            const value = e.target.value.toUpperCase();
-                                            const newVehicles = [...formData.rescueVehicles];
-                                            newVehicles[index].plateNumber = value;
-                                            setFormData({ ...formData, rescueVehicles: newVehicles });
+                    {formData.providerType === 'BUSINESS' && (
+                        <div>
+                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Tên doanh nghiệp <span style={{ color: C.red }}>*</span></label>
+                            <input type="text" value={formData.businessName} onChange={e => setFormData({ ...formData, businessName: e.target.value })} placeholder="Cứu hộ ABC" className={inputCls(!!errors.businessName)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                            {errors.businessName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.businessName}</p>}
+                        </div>
+                    )}
 
-                                            // Clear error
-                                            const errorKey = `rescueVehicle_${index}_plateNumber`;
-                                            if (errors[errorKey]) {
-                                                const { [errorKey]: _, ...rest } = errors;
-                                                setErrors(rest);
-                                            }
-                                        }}
-                                        onBlur={(e) => {
-                                            // Auto-format on blur if valid
-                                            const value = e.target.value;
-                                            if (value && isValidVietnamPlate(value)) {
-                                                const formatted = formatVietnamPlate(value);
-                                                const newVehicles = [...formData.rescueVehicles];
-                                                newVehicles[index].plateNumber = formatted;
-                                                setFormData({ ...formData, rescueVehicles: newVehicles });
-                                            }
-                                        }}
-                                        className={`w-full px-3 py-2 border rounded-md text-sm font-mono text-gray-900 uppercase ${errors[`rescueVehicle_${index}_plateNumber`] ? 'border-red-500 bg-red-50' :
-                                            vehicle.plateNumber && isValidVietnamPlate(vehicle.plateNumber) ? 'border-green-500 bg-green-50' :
-                                                'border-gray-300 bg-white'
-                                            }`}
-                                        placeholder="VD: 29A-12345"
-                                    />
+                    {/* Address */}
+                    <div className="relative">
+                        <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>
+                            {formData.providerType === 'INDIVIDUAL' ? 'Địa chỉ thường trú' : 'Địa chỉ doanh nghiệp'} <span style={{ color: C.red }}>*</span>
+                        </label>
+                        <div className="relative">
+                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: C.gray }} />
+                            <input ref={addressInputRef} type="text" value={addressQuery}
+                                onChange={e => { const v = e.target.value; setAddressQuery(v); setAddressSelected(false); if (formData.providerType === 'INDIVIDUAL') setFormData(p => ({ ...p, permanentAddress: { addressText: '', lat: 0, lng: 0 } })); else setFormData(p => ({ ...p, businessAddress: { addressText: '', lat: 0, lng: 0 } })); if (v.trim().length >= 2) setShowSuggestions(true); }}
+                                onFocus={() => { if (addressSuggestions.length > 0 && !addressSelected) setShowSuggestions(true); }}
+                                placeholder="Tìm kiếm địa chỉ..." autoComplete="off"
+                                className={inputCls(!!(errors.permanentAddress || errors.businessAddress))} style={{ paddingLeft: '2.25rem', color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                        </div>
+                        {showSuggestions && addressSuggestions.length > 0 && (
+                            <div ref={suggestionsRef} className="absolute z-10 w-full mt-1 bg-white rounded-xl border shadow-lg max-h-52 overflow-y-auto" style={{ borderColor: C.border }}>
+                                {addressSuggestions.map((s, i) => (
+                                    <button key={i} type="button" onClick={() => handleSelectAddress(s)} className="w-full px-4 py-2.5 text-left border-b last:border-b-0 hover:bg-orange-50 transition-colors" style={{ borderColor: C.border }}>
+                                        <div className="flex items-start gap-2">
+                                            <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: C.orange }} />
+                                            <p className="text-xs" style={{ color: C.navy }}>{s.displayName}</p>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        {(errors.permanentAddress || errors.businessAddress) && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.permanentAddress || errors.businessAddress}</p>}
+                        {currentAddr.addressText && (
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                                <CheckCircle className="w-3.5 h-3.5" style={{ color: C.green }} />
+                                <p className="text-xs" style={{ color: C.green }}>Đã chọn địa chỉ</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </SectionCard>
 
-                                    {errors[`rescueVehicle_${index}_plateNumber`] && (
-                                        <p className="text-xs text-red-600">{errors[`rescueVehicle_${index}_plateNumber`]}</p>
-                                    )}
-                                    {!errors[`rescueVehicle_${index}_plateNumber`] && vehicle.plateNumber && isValidVietnamPlate(vehicle.plateNumber) && (
-                                        <p className="text-xs text-green-600">✓ Biển số hợp lệ (định dạng: 29A-12345)</p>
-                                    )}
-                                    {!errors[`rescueVehicle_${index}_plateNumber`] && vehicle.plateNumber && !isValidVietnamPlate(vehicle.plateNumber) && (
-                                        <p className="text-xs text-gray-500">Nhập đúng định dạng: 29A-12345 hoặc 51AB-12345</p>
+            {/* Services card */}
+            <SectionCard title="Dịch vụ cung cấp">
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-semibold mb-2" style={{ color: C.navy }}>Loại dịch vụ <span style={{ color: C.red }}>*</span></label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {SERVICE_TYPES.map(s => {
+                                const active = formData.serviceTypes.includes(s.value);
+                                return (
+                                    <button key={s.value} type="button" onClick={() => setFormData(p => ({ ...p, serviceTypes: active ? p.serviceTypes.filter((x: string) => x !== s.value) : [...p.serviceTypes, s.value] }))}
+                                        className="p-2.5 rounded-xl border-2 text-center transition-all"
+                                        style={{ borderColor: active ? C.orange : C.border, background: active ? C.orangeLight : '#fff' }}>
+                                        <p className="text-[11px] font-semibold" style={{ color: active ? C.orange : C.navy }}>{s.label}</p>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {errors.serviceTypes && <p className="mt-1.5 text-xs" style={{ color: C.red }}>{errors.serviceTypes}</p>}
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold mb-2" style={{ color: C.navy }}>Loại xe khách hàng <span style={{ color: C.red }}>*</span></label>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[{ value: 'CAR', label: 'Ô tô' }, { value: 'MOTORCYCLE', label: 'Xe máy' }].map(v => {
+                                const active = formData.supportedVehicleTypes.includes(v.value);
+                                return (
+                                    <button key={v.value} type="button" onClick={() => setFormData(p => ({ ...p, supportedVehicleTypes: active ? p.supportedVehicleTypes.filter((x: string) => x !== v.value) : [...p.supportedVehicleTypes, v.value] }))}
+                                        className="flex items-center gap-3 p-3 rounded-xl border-2 transition-all"
+                                        style={{ borderColor: active ? C.orange : C.border, background: active ? C.orangeLight : '#fff' }}>
+                                        <span className="text-sm font-semibold" style={{ color: active ? C.orange : C.navy }}>{v.label}</span>
+                                        {active && <CheckCircle className="w-4 h-4 ml-auto" style={{ color: C.orange }} />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        {errors.supportedVehicleTypes && <p className="mt-1.5 text-xs" style={{ color: C.red }}>{errors.supportedVehicleTypes}</p>}
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold mb-2" style={{ color: C.navy }}>
+                            Bán kính hoạt động: <span style={{ color: C.orange }}>{formData.serviceRadiusKm} km</span>
+                        </label>
+                        <input type="range" min="5" max="50" step="5" value={formData.serviceRadiusKm}
+                            onChange={e => setFormData({ ...formData, serviceRadiusKm: parseInt(e.target.value) })}
+                            className="w-full cursor-pointer accent-orange-500" />
+                        <div className="flex justify-between text-xs mt-1" style={{ color: C.gray }}><span>5 km</span><span>50 km</span></div>
+                        {errors.serviceRadiusKm && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.serviceRadiusKm}</p>}
+                    </div>
+                </div>
+            </SectionCard>
+
+            {/* Rescue vehicles card */}
+            <SectionCard title="Phương tiện cứu hộ của bạn">
+                <div className="space-y-3">
+                    {formData.rescueVehicles.map((vehicle: any, idx: number) => {
+                        const errKey = `rv_${idx}`;
+                        const plateOk = vehicle.plateNumber && isValidVietnamPlate(vehicle.plateNumber);
+                        return (
+                            <div key={idx} className="p-3 rounded-xl border" style={{ borderColor: C.border, background: C.bg }}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className="text-xs font-semibold" style={{ color: C.navy }}>
+                                        Phương tiện {idx + 1}
+                                        {vehicle.isPrimary && <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px]" style={{ background: C.orangeLight, color: C.orange }}>Chính</span>}
+                                    </p>
+                                    {formData.rescueVehicles.length > 1 && (
+                                        <button type="button" onClick={() => {
+                                            const nv = formData.rescueVehicles.filter((_: any, i: number) => i !== idx);
+                                            if (vehicle.isPrimary && nv.length > 0) nv[0].isPrimary = true;
+                                            setFormData({ ...formData, rescueVehicles: nv });
+                                        }} className="p-1 rounded-lg hover:bg-red-50" style={{ color: C.red }}>
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
                                     )}
                                 </div>
-
-                                {formData.rescueVehicles.length > 1 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const newVehicles = formData.rescueVehicles.filter((_: any, i: number) => i !== index);
-                                            if (vehicle.isPrimary && newVehicles.length > 0) {
-                                                newVehicles[0].isPrimary = true;
-                                            }
-                                            setFormData({ ...formData, rescueVehicles: newVehicles });
-                                        }}
-                                        className="mt-2 p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                    </button>
-                                )}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="block text-[11px] font-medium mb-1" style={{ color: C.gray }}>Loại xe</label>
+                                        <select value={vehicle.type}
+                                            onChange={e => { const nv = [...formData.rescueVehicles]; nv[idx].type = e.target.value; setFormData({ ...formData, rescueVehicles: nv }); }}
+                                            className="w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-2 focus:ring-orange-100 bg-white" style={{ borderColor: C.border, color: C.navy, fontFamily: 'Poppins, sans-serif' }}>
+                                            <option value="CAR">Ô tô</option>
+                                            <option value="MOTORCYCLE">Xe máy</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-medium mb-1" style={{ color: C.gray }}>Biển số</label>
+                                        <input type="text" value={vehicle.plateNumber}
+                                            onChange={e => { const v = e.target.value.toUpperCase(); const nv = [...formData.rescueVehicles]; nv[idx].plateNumber = v; setFormData({ ...formData, rescueVehicles: nv }); if (errors[errKey]) setErrors(p => { const { [errKey]: _, ...r } = p; return r; }); }}
+                                            onBlur={() => { if (vehicle.plateNumber && isValidVietnamPlate(vehicle.plateNumber)) { const nv = [...formData.rescueVehicles]; nv[idx].plateNumber = formatVietnamPlate(vehicle.plateNumber); setFormData({ ...formData, rescueVehicles: nv }); } }}
+                                            placeholder="29A-12345" className={inputCls(!!errors[errKey])} style={{ fontFamily: 'monospace', textTransform: 'uppercase', color: C.navy, fontSize: '12px' }} />
+                                    </div>
+                                </div>
+                                {errors[errKey] ? <p className="mt-1 text-xs" style={{ color: C.red }}>{errors[errKey]}</p>
+                                    : plateOk ? <div className="mt-1 flex items-center gap-1"><CheckCircle className="w-3 h-3" style={{ color: C.green }} /><p className="text-xs" style={{ color: C.green }}>Hợp lệ</p></div> : null}
                             </div>
-                        ))}
-
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setFormData({
-                                    ...formData,
-                                    rescueVehicles: [
-                                        ...formData.rescueVehicles,
-                                        { type: 'CAR', plateNumber: '', isPrimary: false }
-                                    ]
-                                });
-                            }}
-                            className="w-full py-2 px-3 border-2 border-dashed border-gray-300 rounded-md text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
-                        >
-                            + Thêm phương tiện
-                        </button>
-                    </div>
-                    {errors.rescueVehicles && <p className="text-sm text-red-600">{errors.rescueVehicles}</p>}
+                        );
+                    })}
+                    <button type="button"
+                        onClick={() => setFormData({ ...formData, rescueVehicles: [...formData.rescueVehicles, { type: 'CAR', plateNumber: '', isPrimary: false }] })}
+                        className="w-full py-2.5 rounded-xl border-2 border-dashed text-xs font-semibold flex items-center justify-center gap-2 transition-colors hover:border-orange-300 hover:text-orange-500 bg-white"
+                        style={{ borderColor: C.border, color: C.gray }}>
+                        <Plus className="w-3.5 h-3.5" /> Thêm phương tiện
+                    </button>
+                    {errors.rescueVehicles && <p className="text-xs" style={{ color: C.red }}>{errors.rescueVehicles}</p>}
                 </div>
-            </div>
+            </SectionCard>
 
             {/* Actions */}
-            <div className="flex justify-between items-center pt-6 border-t">
-                <button
-                    onClick={onBack}
-                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-                >
+            <div className="flex justify-between items-center pt-2">
+                <button onClick={onBack} className="px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50"
+                    style={{ borderColor: C.border, color: C.gray }}>
                     Quay lại
                 </button>
-                <button
-                    onClick={handleSubmit}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm"
-                >
-                    Tiếp tục
+                <button onClick={handleSubmit} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2 transition-all"
+                    style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)` }}>
+                    Tiếp tục →
                 </button>
             </div>
         </div>

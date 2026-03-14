@@ -1,9 +1,21 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Building2, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import FileUpload from '@/components/FileUpload';
 import { UploadPurpose, DocumentType, getUserUploads } from '@/lib/upload';
+
+const C = { orange: '#f97316', orangeDark: '#ea6c0a', orangeLight: '#fff7ed', navy: '#1a1a2e', gray: '#6b7280', border: '#e2e8f0', bg: '#f4f6f9' };
+
+const SectionCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="bg-white rounded-2xl border p-5 mb-4" style={{ borderColor: C.border }}>
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b" style={{ borderColor: C.border }}>
+            <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.orange }} />
+            <h2 className="text-sm font-bold" style={{ color: C.navy }}>{title}</h2>
+        </div>
+        {children}
+    </div>
+);
 
 interface OptionalDocsStepProps {
     initialData: any;
@@ -11,159 +23,68 @@ interface OptionalDocsStepProps {
     onComplete: (data: any) => void;
     onBack: () => void;
     onSkip: () => void;
+    isShell?: boolean;
 }
 
-export default function OptionalDocsStep({ initialData, serviceInfo, onComplete, onBack, onSkip }: OptionalDocsStepProps) {
-    const [uploads, setUploads] = useState({
-        driverLicense: initialData?.driverLicense || null,
-        businessLicense: initialData?.businessLicense || null,
-    });
-
+export default function OptionalDocsStep({ initialData, serviceInfo, onComplete, onBack, onSkip, isShell }: OptionalDocsStepProps) {
+    const [uploads, setUploads] = useState({ driverLicense: initialData?.driverLicense || null, businessLicense: initialData?.businessLicense || null });
     const [loading, setLoading] = useState(true);
+    const isBusiness = serviceInfo?.providerType === 'BUSINESS';
 
-    const isBusinessProvider = serviceInfo?.providerType === 'BUSINESS';
+    useEffect(() => { loadUploads(); }, []);
 
-    // Load existing uploads from server
-    useEffect(() => {
-        loadExistingUploads();
-    }, []);
-
-    const loadExistingUploads = async () => {
+    const loadUploads = async () => {
         try {
-            const existingUploads = await getUserUploads(UploadPurpose.PROVIDER_VERIFICATION);
-
-            const uploadMap: any = {};
-            existingUploads.forEach((upload: any) => {
-                if (upload.docType) {
-                    const docTypeMap: Record<string, string> = {
-                        'DRIVER_LICENSE': 'driverLicense',
-                        'BUSINESS_REGISTRATION': 'businessLicense',
-                    };
-
-                    const stateKey = docTypeMap[upload.docType];
-                    if (stateKey) {
-                        uploadMap[stateKey] = {
-                            id: upload.id,
-                            publicUrl: upload.publicUrl,
-                        };
-                    }
-                }
+            const existing = await getUserUploads(UploadPurpose.PROVIDER_VERIFICATION);
+            const map: any = {};
+            existing.forEach((u: any) => {
+                if (u.docType === 'DRIVER_LICENSE') map.driverLicense = { id: u.id, publicUrl: u.publicUrl };
+                if (u.docType === 'BUSINESS_REGISTRATION') map.businessLicense = { id: u.id, publicUrl: u.publicUrl };
             });
-
-            setUploads({
-                driverLicense: uploadMap.driverLicense || null,
-                businessLicense: uploadMap.businessLicense || null,
-            });
-        } catch (error) {
-            console.error('Failed to load existing uploads:', error);
-        } finally {
-            setLoading(false);
-        }
+            setUploads({ driverLicense: map.driverLicense || null, businessLicense: map.businessLicense || null });
+        } catch { } finally { setLoading(false); }
     };
 
-    const handleSubmit = () => {
-        onComplete(uploads);
-    };
-
-    const handleSkipClick = () => {
-        onSkip();
-    };
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Đang tải...</p>
-                </div>
-            </div>
-        );
-    }
+    if (loading) return (
+        <div className="flex items-center justify-center py-16">
+            <div className="w-9 h-9 rounded-full border-[3px] border-t-transparent animate-spin" style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
+        </div>
+    );
 
     return (
-        <div className="space-y-8">
-            {/* Header */}
-            <div>
-                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Tài liệu bổ sung</h2>
-                <p className="text-gray-600">
-                    Tải lên các tài liệu bổ sung để tăng độ tin cậy. Bạn có thể bỏ qua bước này và upload sau.
+        <div>
+            {/* Info banner */}
+            <div className="flex items-start gap-3 p-4 rounded-2xl mb-4" style={{ background: C.orangeLight, border: `1px solid #fed7aa` }}>
+                <Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: C.orange }} />
+                <p className="text-xs leading-relaxed" style={{ color: '#92400e' }}>
+                    Các tài liệu này <strong>không bắt buộc</strong> ngay lúc này. Bạn có thể tải lên sau khi tài khoản được duyệt, nhưng chúng giúp tăng độ tin cậy với khách hàng.
                 </p>
             </div>
 
-            {/* Optional Documents Section */}
-            <div className="space-y-6">
-                <div className="flex items-center gap-2 pb-2 border-b-2 border-blue-600">
-                    <FileText className="w-5 h-5 text-blue-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">Giấy tờ tùy chọn</h3>
-                </div>
-
-                {/* Driver License */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                        Bằng lái xe
-                    </label>
-                    <p className="text-sm text-gray-500 mb-2">Giúp tăng độ tin cậy với khách hàng</p>
-                    <FileUpload
-                        purpose={UploadPurpose.PROVIDER_VERIFICATION}
-                        docType={DocumentType.DRIVER_LICENSE}
-                        existingUpload={uploads.driverLicense}
-                        onSuccess={(upload: any) => setUploads({ ...uploads, driverLicense: upload })}
-                    />
-                </div>
-
-                {/* Business License (if business provider) */}
-                {isBusinessProvider && (
+            <SectionCard title="Giấy tờ bổ sung">
+                <div className="space-y-5">
                     <div>
-                        <label className="block text-sm font-medium text-gray-900 mb-2">
-                            Giấy đăng ký kinh doanh
-                        </label>
-                        <p className="text-sm text-gray-500 mb-2">
-                            Bắt buộc nếu muốn hiển thị "Doanh nghiệp đã xác minh"
-                        </p>
-                        <FileUpload
-                            purpose={UploadPurpose.PROVIDER_VERIFICATION}
-                            docType={DocumentType.BUSINESS_REGISTRATION}
-                            existingUpload={uploads.businessLicense}
-                            onSuccess={(upload: any) => setUploads({ ...uploads, businessLicense: upload })}
-                        />
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Bằng lái xe</label>
+                        <p className="text-[11px] mb-2" style={{ color: C.gray }}>Tạo lòng tin với khách hàng và tăng tỉ lệ nhận việc</p>
+                        <FileUpload purpose={UploadPurpose.PROVIDER_VERIFICATION} docType={DocumentType.DRIVER_LICENSE} existingUpload={uploads.driverLicense} onSuccess={(u: any) => setUploads({ ...uploads, driverLicense: u })} />
                     </div>
-                )}
-            </div>
-
-            {/* Info Box */}
-            <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                    <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                        <p className="text-sm font-semibold text-blue-900 mb-1">Lưu ý</p>
-                        <p className="text-sm text-blue-800">
-                            Bạn có thể upload các giấy tờ này sau khi tài khoản được duyệt.
-                            Đây không phải điều kiện bắt buộc để gửi hồ sơ.
-                        </p>
-                    </div>
+                    {isBusiness && (
+                        <div>
+                            <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Giấy đăng ký kinh doanh</label>
+                            <p className="text-[11px] mb-2" style={{ color: C.gray }}>Bắt buộc để hiển thị badge "Doanh nghiệp đã xác minh"</p>
+                            <FileUpload purpose={UploadPurpose.PROVIDER_VERIFICATION} docType={DocumentType.BUSINESS_REGISTRATION} existingUpload={uploads.businessLicense} onSuccess={(u: any) => setUploads({ ...uploads, businessLicense: u })} />
+                        </div>
+                    )}
                 </div>
-            </div>
+            </SectionCard>
 
             {/* Actions */}
-            <div className="flex justify-between items-center pt-6 border-t">
-                <button
-                    onClick={onBack}
-                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-                >
-                    Quay lại
-                </button>
-                <div className="flex gap-3">
-                    <button
-                        onClick={handleSkipClick}
-                        className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-                    >
-                        Bỏ qua
-                    </button>
-                    <button
-                        onClick={handleSubmit}
-                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm"
-                    >
-                        Tiếp tục
+            <div className="flex justify-between items-center pt-2">
+                <button onClick={onBack} className="px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50" style={{ borderColor: C.border, color: C.gray }}>Quay lại</button>
+                <div className="flex gap-2">
+                    <button onClick={onSkip} className="px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50" style={{ borderColor: C.border, color: C.gray }}>Bỏ qua</button>
+                    <button onClick={() => onComplete(uploads)} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-all" style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)` }}>
+                        Tiếp tục →
                     </button>
                 </div>
             </div>

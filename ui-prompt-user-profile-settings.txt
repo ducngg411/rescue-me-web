@@ -176,7 +176,7 @@ avatar: string | null     // URL ảnh avatar
 
 **Card 3 — Thông tin phương tiện** (icon: Car/Bike, iconBg: #f0fdf4):
 - Vehicle Type selector:
-  [🚗 Ô tô] [🏍️ Xe máy]
+  [ Ô tô] [ Xe máy]
   Hai nút pill; active = bg C.orange + text white; inactive = bg #f1f5f9 + text C.gray
 - Input: Biển số xe (auto toUpperCase, validator isValidVietnamPlate từ @/lib/validators)
 - Color picker: Grid 5 cột, mỗi ô button 40x40px rounded-xl

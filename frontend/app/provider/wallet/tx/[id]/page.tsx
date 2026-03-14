@@ -211,7 +211,7 @@ export default function TxDetailPage() {
                         <div className="px-5 py-4 space-y-3">
                             <Row label={t('provider.txDetail.job.id')} value={`#${job.id.slice(0, 10).toUpperCase()}`} mono />
                             {job.incidentType && <Row label={t('provider.txDetail.labels.incidentType')} value={t(`provider.txDetail.incidentLabels.${job.incidentType}` as any) || job.incidentType} />}
-                            {job.vehicleType && <Row label={t('provider.txDetail.job.vehicleTypeLabel')} value={job.vehicleType === 'CAR' ? ` ${t('provider.txDetail.job.vehicleCar')}` : `🏍️ ${t('provider.txDetail.job.vehicleMotorcycle')}`} />}
+                            {job.vehicleType && <Row label={t('provider.txDetail.job.vehicleTypeLabel')} value={job.vehicleType === 'CAR' ? ` ${t('provider.txDetail.job.vehicleCar')}` : ` ${t('provider.txDetail.job.vehicleMotorcycle')}`} />}
                             {job.createdAt && <Row label={t('provider.txDetail.job.createdAt')} value={fmtDate(job.createdAt)} />}
                             {job.completedAt && <Row label={t('provider.txDetail.job.completedAt')} value={fmtDate(job.completedAt)} />}
                             {job.description && (

@@ -1,18 +1,34 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { IdCard, Camera, Car, Bike } from 'lucide-react';
+import { IdCard, Car } from 'lucide-react';
 import FileUpload from '@/components/FileUpload';
 import { UploadPurpose, DocumentType, getUserUploads } from '@/lib/upload';
 
+const C = { orange: '#f97316', orangeDark: '#ea6c0a', orangeLight: '#fff7ed', navy: '#1a1a2e', gray: '#6b7280', border: '#e2e8f0', bg: '#f4f6f9', green: '#16a34a', red: '#ef4444' };
+
+const SectionCard = ({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) => (
+    <div className="bg-white rounded-2xl border p-5 mb-4" style={{ borderColor: C.border }}>
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b" style={{ borderColor: C.border }}>
+            <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.orange }} />
+            <div>
+                <h2 className="text-sm font-bold" style={{ color: C.navy }}>{title}</h2>
+                {desc && <p className="text-[11px]" style={{ color: C.gray }}>{desc}</p>}
+            </div>
+        </div>
+        {children}
+    </div>
+);
+
 interface RequiredDocsStepProps {
     initialData: any;
-    serviceInfo: any; // From Step 1
+    serviceInfo: any;
     onComplete: (data: any) => void;
     onBack: () => void;
+    isShell?: boolean;
 }
 
-export default function RequiredDocsStep({ initialData, serviceInfo, onComplete, onBack }: RequiredDocsStepProps) {
+export default function RequiredDocsStep({ initialData, serviceInfo, onComplete, onBack, isShell }: RequiredDocsStepProps) {
     const [uploads, setUploads] = useState({
         citizenIdFront: initialData?.citizenIdFront || null,
         citizenIdBack: initialData?.citizenIdBack || null,
@@ -20,230 +36,108 @@ export default function RequiredDocsStep({ initialData, serviceInfo, onComplete,
         carPhoto: initialData?.carPhoto || null,
         motorbikePhoto: initialData?.motorbikePhoto || null,
     });
-
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
 
-    const needsCarPhoto = serviceInfo?.rescueVehicles?.some((v: any) => v.type === 'CAR') || false;
-    const needsMotorbikePhoto = serviceInfo?.rescueVehicles?.some((v: any) => v.type === 'MOTORCYCLE') || false;
+    const needsCar = serviceInfo?.rescueVehicles?.some((v: any) => v.type === 'CAR') || false;
+    const needsMoto = serviceInfo?.rescueVehicles?.some((v: any) => v.type === 'MOTORCYCLE') || false;
 
-    // Always load existing uploads from server on mount (server is source of truth)
-    useEffect(() => {
-        loadExistingUploads();
-    }, []);
+    useEffect(() => { loadUploads(); }, []);
 
-    const loadExistingUploads = async () => {
+    const loadUploads = async () => {
         try {
-            const existingUploads = await getUserUploads(UploadPurpose.PROVIDER_VERIFICATION);
-
-            // Map uploads to state by docType
-            const uploadMap: any = {};
-            existingUploads.forEach((upload: any) => {
-                if (upload.docType) {
-                    // Map Prisma enum to our state keys
-                    const docTypeMap: Record<string, string> = {
-                        'CITIZEN_ID_FRONT': 'citizenIdFront',
-                        'CITIZEN_ID_BACK': 'citizenIdBack',
-                        'SELFIE': 'selfie',
-                        'CAR_PHOTO': 'carPhoto',
-                        'MOTORBIKE_PHOTO': 'motorbikePhoto',
-                    };
-
-                    const stateKey = docTypeMap[upload.docType];
-                    if (stateKey) {
-                        uploadMap[stateKey] = {
-                            id: upload.id,
-                            publicUrl: upload.publicUrl,
-                        };
-                    }
-                }
+            const existing = await getUserUploads(UploadPurpose.PROVIDER_VERIFICATION);
+            const map: any = {};
+            const docTypeMap: Record<string, string> = {
+                'CITIZEN_ID_FRONT': 'citizenIdFront', 'CITIZEN_ID_BACK': 'citizenIdBack',
+                'SELFIE': 'selfie', 'CAR_PHOTO': 'carPhoto', 'MOTORBIKE_PHOTO': 'motorbikePhoto',
+            };
+            existing.forEach((u: any) => {
+                const k = docTypeMap[u.docType];
+                if (k) map[k] = { id: u.id, publicUrl: u.publicUrl };
             });
-
-            // Update state with server data
-            setUploads({
-                citizenIdFront: uploadMap.citizenIdFront || null,
-                citizenIdBack: uploadMap.citizenIdBack || null,
-                selfie: uploadMap.selfie || null,
-                carPhoto: uploadMap.carPhoto || null,
-                motorbikePhoto: uploadMap.motorbikePhoto || null,
-            });
-        } catch (error) {
-            console.error('Failed to load existing uploads:', error);
-        } finally {
-            setLoading(false);
-        }
+            setUploads({ citizenIdFront: map.citizenIdFront || null, citizenIdBack: map.citizenIdBack || null, selfie: map.selfie || null, carPhoto: map.carPhoto || null, motorbikePhoto: map.motorbikePhoto || null });
+        } catch { } finally { setLoading(false); }
     };
 
     const validate = () => {
-        const newErrors: Record<string, string> = {};
-
-        if (!uploads.citizenIdFront) newErrors.citizenIdFront = 'CCCD mặt trước là bắt buộc';
-        if (!uploads.citizenIdBack) newErrors.citizenIdBack = 'CCCD mặt sau là bắt buộc';
-        if (!uploads.selfie) newErrors.selfie = 'Ảnh selfie là bắt buộc';
-        if (needsCarPhoto && !uploads.carPhoto) newErrors.carPhoto = 'Ảnh ô tô là bắt buộc';
-        if (needsMotorbikePhoto && !uploads.motorbikePhoto) newErrors.motorbikePhoto = 'Ảnh xe máy là bắt buộc';
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        const e: Record<string, string> = {};
+        if (!uploads.citizenIdFront) e.citizenIdFront = 'Bắt buộc';
+        if (!uploads.citizenIdBack) e.citizenIdBack = 'Bắt buộc';
+        if (!uploads.selfie) e.selfie = 'Bắt buộc';
+        if (needsCar && !uploads.carPhoto) e.carPhoto = 'Bắt buộc';
+        if (needsMoto && !uploads.motorbikePhoto) e.motorbikePhoto = 'Bắt buộc';
+        setErrors(e);
+        return Object.keys(e).length === 0;
     };
 
-    const handleSubmit = () => {
-        if (validate()) {
-            onComplete(uploads);
-        }
-    };
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Đang tải...</p>
-                </div>
-            </div>
-        );
-    }
+    if (loading) return (
+        <div className="flex items-center justify-center py-16">
+            <div className="w-9 h-9 rounded-full border-[3px] border-t-transparent animate-spin" style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
+        </div>
+    );
 
     return (
-        <div className="space-y-8">
-            {/* Header */}
-            <div>
-                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Tài liệu bắt buộc</h2>
-                <p className="text-gray-600">
-                    Vui lòng tải lên các tài liệu sau để xác minh tài khoản. Chỉ chấp nhận file ảnh (JPEG, PNG, WebP) dưới 5MB.
-                </p>
-            </div>
-
-            {/* Personal Verification Section */}
-            <div className="space-y-6">
-                <div className="flex items-center gap-2 pb-2 border-b-2 border-blue-600">
-                    <IdCard className="w-5 h-5 text-blue-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">Xác minh cá nhân</h3>
-                </div>
-
-                {/* CCCD Front */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                        CCCD/CMND mặt trước <span className="text-red-500">*</span>
-                    </label>
-                    <FileUpload
-                        purpose={UploadPurpose.PROVIDER_VERIFICATION}
-                        docType={DocumentType.CITIZEN_ID_FRONT}
-                        existingUpload={uploads.citizenIdFront}
-                        onSuccess={(upload: any) => setUploads({ ...uploads, citizenIdFront: upload })}
-                    />
-                    {errors.citizenIdFront && <p className="mt-1 text-sm text-red-500">{errors.citizenIdFront}</p>}
-                </div>
-
-                {/* CCCD Back */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                        CCCD/CMND mặt sau <span className="text-red-500">*</span>
-                    </label>
-                    <FileUpload
-                        purpose={UploadPurpose.PROVIDER_VERIFICATION}
-                        docType={DocumentType.CITIZEN_ID_BACK}
-                        existingUpload={uploads.citizenIdBack}
-                        onSuccess={(upload: any) => setUploads({ ...uploads, citizenIdBack: upload })}
-                    />
-                    {errors.citizenIdBack && <p className="mt-1 text-sm text-red-500">{errors.citizenIdBack}</p>}
-                </div>
-
-                {/* Selfie */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">
-                        Ảnh selfie cầm CCCD <span className="text-red-500">*</span>
-                    </label>
-                    <p className="text-sm text-gray-500 mb-2">Chụp rõ mặt bạn và CCCD/CMND trong cùng một khung hình</p>
-                    <FileUpload
-                        purpose={UploadPurpose.PROVIDER_VERIFICATION}
-                        docType={DocumentType.SELFIE}
-                        existingUpload={uploads.selfie}
-                        onSuccess={(upload: any) => setUploads({ ...uploads, selfie: upload })}
-                    />
-                    {errors.selfie && <p className="mt-1 text-sm text-red-500">{errors.selfie}</p>}
-                </div>
-            </div>
-
-            {/* Vehicle Verification Section */}
-            {(needsCarPhoto || needsMotorbikePhoto) && (
-                <div className="space-y-6">
-                    <div className="flex items-center gap-2 pb-2 border-b-2 border-blue-600">
-                        <Car className="w-5 h-5 text-blue-600" />
-                        <h3 className="text-lg font-semibold text-gray-900">Xác minh phương tiện</h3>
+        <div>
+            {/* Identity */}
+            <SectionCard
+                title="Xác minh danh tính"
+                desc="CCCD/CMND mặt trước, mặt sau và ảnh selfie">
+                <div className="space-y-5 pt-1">
+                    <div>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>CCCD/CMND mặt trước <span style={{ color: C.red }}>*</span></label>
+                        <FileUpload purpose={UploadPurpose.PROVIDER_VERIFICATION} docType={DocumentType.CITIZEN_ID_FRONT} existingUpload={uploads.citizenIdFront} onSuccess={(u: any) => setUploads({ ...uploads, citizenIdFront: u })} />
+                        {errors.citizenIdFront && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.citizenIdFront}</p>}
                     </div>
-
-                    {/* Car Photo */}
-                    {needsCarPhoto && (
-                        <div>
-                            <label className="block text-sm font-medium text-gray-900 mb-2">
-                                Ảnh ô tô cứu hộ <span className="text-red-500">*</span>
-                            </label>
-                            <p className="text-sm text-gray-500 mb-2">
-                                Chụp ảnh xe với biển số rõ ràng - Các biển số đã đăng ký:
-                            </p>
-                            <ul className="text-sm text-gray-700 mb-2 ml-4 list-disc">
-                                {serviceInfo?.rescueVehicles
-                                    ?.filter((v: any) => v.type === 'CAR')
-                                    .map((v: any, idx: number) => (
-                                        <li key={idx} className="font-mono font-semibold">
-                                            {v.plateNumber} {v.isPrimary && <span className="text-blue-600">(Chính)</span>}
-                                        </li>
-                                    ))}
-                            </ul>
-                            <FileUpload
-                                purpose={UploadPurpose.PROVIDER_VERIFICATION}
-                                docType={DocumentType.CAR_PHOTO}
-                                existingUpload={uploads.carPhoto}
-                                onSuccess={(upload: any) => setUploads({ ...uploads, carPhoto: upload })}
-                            />
-                            {errors.carPhoto && <p className="mt-1 text-sm text-red-500">{errors.carPhoto}</p>}
-                        </div>
-                    )}
-
-                    {/* Motorbike Photo */}
-                    {needsMotorbikePhoto && (
-                        <div>
-                            <label className="block text-sm font-medium text-gray-900 mb-2">
-                                Ảnh xe máy cứu hộ <span className="text-red-500">*</span>
-                            </label>
-                            <p className="text-sm text-gray-500 mb-2">
-                                Chụp ảnh xe với biển số rõ ràng - Các biển số đã đăng ký:
-                            </p>
-                            <ul className="text-sm text-gray-700 mb-2 ml-4 list-disc">
-                                {serviceInfo?.rescueVehicles
-                                    ?.filter((v: any) => v.type === 'MOTORCYCLE')
-                                    .map((v: any, idx: number) => (
-                                        <li key={idx} className="font-mono font-semibold">
-                                            {v.plateNumber} {v.isPrimary && <span className="text-blue-600">(Chính)</span>}
-                                        </li>
-                                    ))}
-                            </ul>
-                            <FileUpload
-                                purpose={UploadPurpose.PROVIDER_VERIFICATION}
-                                docType={DocumentType.MOTORBIKE_PHOTO}
-                                existingUpload={uploads.motorbikePhoto}
-                                onSuccess={(upload: any) => setUploads({ ...uploads, motorbikePhoto: upload })}
-                            />
-                            {errors.motorbikePhoto && <p className="mt-1 text-sm text-red-500">{errors.motorbikePhoto}</p>}
-                        </div>
-                    )}
+                    <div>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>CCCD/CMND mặt sau <span style={{ color: C.red }}>*</span></label>
+                        <FileUpload purpose={UploadPurpose.PROVIDER_VERIFICATION} docType={DocumentType.CITIZEN_ID_BACK} existingUpload={uploads.citizenIdBack} onSuccess={(u: any) => setUploads({ ...uploads, citizenIdBack: u })} />
+                        {errors.citizenIdBack && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.citizenIdBack}</p>}
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Ảnh selfie cầm CCCD <span style={{ color: C.red }}>*</span></label>
+                        <p className="text-[11px] mb-2" style={{ color: C.gray }}>Chụp rõ mặt bạn và CCCD trong cùng một khung hình</p>
+                        <FileUpload purpose={UploadPurpose.PROVIDER_VERIFICATION} docType={DocumentType.SELFIE} existingUpload={uploads.selfie} onSuccess={(u: any) => setUploads({ ...uploads, selfie: u })} />
+                        {errors.selfie && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.selfie}</p>}
+                    </div>
                 </div>
+            </SectionCard>
+
+            {/* Vehicle photos */}
+            {(needsCar || needsMoto) && (
+                <SectionCard
+                    title="Ảnh phương tiện cứu hộ"
+                    desc="Chụp rõ xe và biển số đăng ký">
+                    <div className="space-y-5 pt-1">
+                        {needsCar && (
+                            <div>
+                                <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Ảnh ô tô cứu hộ <span style={{ color: C.red }}>*</span></label>
+                                <p className="text-[11px] mb-1" style={{ color: C.gray }}>
+                                    Biển số ô tô đã đăng ký: {serviceInfo?.rescueVehicles?.filter((v: any) => v.type === 'CAR').map((v: any) => v.plateNumber).join(', ')}
+                                </p>
+                                <FileUpload purpose={UploadPurpose.PROVIDER_VERIFICATION} docType={DocumentType.CAR_PHOTO} existingUpload={uploads.carPhoto} onSuccess={(u: any) => setUploads({ ...uploads, carPhoto: u })} />
+                                {errors.carPhoto && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.carPhoto}</p>}
+                            </div>
+                        )}
+                        {needsMoto && (
+                            <div>
+                                <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Ảnh xe máy cứu hộ <span style={{ color: C.red }}>*</span></label>
+                                <p className="text-[11px] mb-1" style={{ color: C.gray }}>
+                                    Biển số xe máy đã đăng ký: {serviceInfo?.rescueVehicles?.filter((v: any) => v.type === 'MOTORCYCLE').map((v: any) => v.plateNumber).join(', ')}
+                                </p>
+                                <FileUpload purpose={UploadPurpose.PROVIDER_VERIFICATION} docType={DocumentType.MOTORBIKE_PHOTO} existingUpload={uploads.motorbikePhoto} onSuccess={(u: any) => setUploads({ ...uploads, motorbikePhoto: u })} />
+                                {errors.motorbikePhoto && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.motorbikePhoto}</p>}
+                            </div>
+                        )}
+                    </div>
+                </SectionCard>
             )}
 
             {/* Actions */}
-            <div className="flex justify-between items-center pt-6 border-t">
-                <button
-                    onClick={onBack}
-                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-                >
-                    Quay lại
-                </button>
-                <button
-                    onClick={handleSubmit}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm"
-                >
-                    Tiếp tục
+            <div className="flex justify-between items-center pt-2">
+                <button onClick={onBack} className="px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50" style={{ borderColor: C.border, color: C.gray }}>Quay lại</button>
+                <button onClick={() => { if (validate()) onComplete(uploads); }} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-all" style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)` }}>
+                    Tiếp tục →
                 </button>
             </div>
         </div>

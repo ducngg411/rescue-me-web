@@ -65,16 +65,17 @@ export default function ProviderVerificationUpload() {
                 {documents.map((doc) => (
                     <div
                         key={doc.type}
-                        className={`bg-white rounded-lg shadow-sm border-2 p-6 transition-all ${doc.uploaded
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-200 hover:border-blue-300'
+                        className={`bg-white rounded-2xl border-2 p-5 transition-all ${
+                            doc.uploaded
+                                ? 'border-green-400 bg-green-50'
+                                : 'border-gray-200 hover:border-orange-300'
                             }`}
                     >
                         {/* Document Header */}
                         <div className="flex items-start justify-between mb-4">
                             <div className="flex-1">
-                                <h3 className="font-semibold text-lg text-gray-900 flex items-center gap-2">
-                                    {doc.uploaded ? '' : '📄'} {doc.label}
+                                <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2">
+                                    {doc.label}
                                 </h3>
                                 <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
                             </div>
@@ -87,28 +88,18 @@ export default function ProviderVerificationUpload() {
 
                         {/* Document Upload/Preview */}
                         {!doc.uploaded ? (
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg">
-                                <FileUpload
+                            <FileUpload
                                     purpose={UploadPurpose.PROVIDER_VERIFICATION}
                                     docType={doc.type}
+                                label=""
                                     onSuccess={(result) => {
-                                        if (result.publicUrl) {
-                                            handleUploadSuccess(doc.type, result.publicUrl);
-                                        }
+                                        if (result.publicUrl) handleUploadSuccess(doc.type, result.publicUrl);
                                     }}
-                                    onError={(error) => {
-                                        console.error('Upload error:', error);
-                                        alert(`Upload failed: ${error}`);
-                                    }}
+                                    onError={(error) => console.error('Upload error:', error)}
                                 />
-                            </div>
                         ) : (
                             <div className="space-y-3">
-                                <img
-                                    src={doc.publicUrl}
-                                    alt={doc.label}
-                                    className="w-full h-48 object-cover rounded-lg border-2 border-green-200"
-                                />
+                                <img src={doc.publicUrl} alt={doc.label} className="w-full h-36 object-cover rounded-xl border border-green-200" />
                                 <button
                                     onClick={() => {
                                         setDocuments((prev) =>
@@ -119,9 +110,8 @@ export default function ProviderVerificationUpload() {
                                             )
                                         );
                                     }}
-                                    className="w-full py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg font-medium transition-colors"
-                                >
-                                    🔄 Tải lên lại
+                                    className="w-full py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg font-medium transition-colors"
+                                >↺ Tải lên lại
                                 </button>
                             </div>
                         )}
@@ -142,7 +132,7 @@ export default function ProviderVerificationUpload() {
                                 </p>
                             </div>
                         </div>
-                        <button className="px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-lg shadow-md hover:shadow-lg transition-all">
+                        <button className="px-6 py-3 rounded-xl font-semibold text-sm text-white transition-all" style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea6c0a 100%)' }}>
                             Gửi yêu cầu xác minh →
                         </button>
                     </div>

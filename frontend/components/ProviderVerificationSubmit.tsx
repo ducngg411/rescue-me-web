@@ -186,7 +186,7 @@ export default function ProviderVerificationSubmit() {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <div className="w-9 h-9 rounded-full border-[3px] border-t-transparent animate-spin mx-auto mb-4" style={{ borderColor: '#f97316', borderTopColor: 'transparent' }}></div>
                     <p className="text-gray-600">Đang tải...</p>
                 </div>
             </div>
@@ -259,18 +259,19 @@ export default function ProviderVerificationSubmit() {
                 {documents.map((doc) => (
                     <div
                         key={doc.type}
-                        className={`bg-white rounded-lg shadow-sm border-2 p-6 transition-all ${doc.uploaded
-                            ? 'border-green-500 bg-green-50'
-                            : doc.required
-                                ? 'border-gray-200 hover:border-blue-300'
-                                : 'border-gray-100'
+                        className={`bg-white rounded-2xl border-2 p-5 transition-all ${
+                            doc.uploaded
+                                ? 'border-green-400 bg-green-50'
+                                : doc.required
+                                    ? 'border-gray-200 hover:border-orange-300'
+                                    : 'border-gray-100'
                             }`}
                     >
                         {/* Document Header */}
                         <div className="flex items-start justify-between mb-4">
                             <div className="flex-1">
-                                <h3 className="font-semibold text-lg text-gray-900 flex items-center gap-2">
-                                    {doc.uploaded ? '' : '📄'} {doc.label}
+                                <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2">
+                                    {doc.label}
                                     {doc.required && !doc.uploaded && <span className="text-red-500">*</span>}
                                 </h3>
                                 <p className="text-sm text-gray-600 mt-1">{doc.description}</p>
@@ -284,28 +285,18 @@ export default function ProviderVerificationSubmit() {
 
                         {/* Document Upload/Preview */}
                         {!doc.uploaded ? (
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg">
-                                <FileUpload
-                                    purpose={UploadPurpose.PROVIDER_VERIFICATION}
-                                    docType={doc.type}
-                                    onSuccess={(result) => {
-                                        if (result.publicUrl) {
-                                            handleUploadSuccess(doc.type, result.publicUrl);
-                                        }
-                                    }}
-                                    onError={(error) => {
-                                        console.error('Upload error:', error);
-                                        alert(`Upload failed: ${error}`);
-                                    }}
-                                />
-                            </div>
+                            <FileUpload
+                                purpose={UploadPurpose.PROVIDER_VERIFICATION}
+                                docType={doc.type}
+                                label=""
+                                onSuccess={(result) => {
+                                    if (result.publicUrl) handleUploadSuccess(doc.type, result.publicUrl);
+                                }}
+                                onError={(error) => console.error('Upload error:', error)}
+                            />
                         ) : (
                             <div className="space-y-3">
-                                <img
-                                    src={doc.publicUrl}
-                                    alt={doc.label}
-                                    className="w-full h-48 object-cover rounded-lg border-2 border-green-200"
-                                />
+                                <img src={doc.publicUrl} alt={doc.label} className="w-full h-36 object-cover rounded-xl border border-green-200" />
                                 <button
                                     onClick={() => {
                                         setDocuments((prev) =>
@@ -316,9 +307,8 @@ export default function ProviderVerificationSubmit() {
                                             )
                                         );
                                     }}
-                                    className="w-full py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg font-medium transition-colors"
-                                >
-                                    🔄 Tải lên lại
+                                    className="w-full py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                                >↺ Tải lên lại
                                 </button>
                             </div>
                         )}
@@ -352,10 +342,12 @@ export default function ProviderVerificationSubmit() {
                     <button
                         onClick={handleSubmit}
                         disabled={!allRequiredUploaded || submitting}
-                        className={`px-8 py-4 rounded-lg font-semibold text-lg transition-all shadow-md hover:shadow-lg ${allRequiredUploaded && !submitting
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        className={`px-6 py-3 rounded-xl font-semibold text-sm transition-all ${
+                            allRequiredUploaded && !submitting
+                                ? 'text-white'
+                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                             }`}
+                        style={allRequiredUploaded && !submitting ? { background: 'linear-gradient(135deg, #f97316 0%, #ea6c0a 100%)' } : {}}
                     >
                         {submitting ? (
                             <span className="flex items-center gap-2">
