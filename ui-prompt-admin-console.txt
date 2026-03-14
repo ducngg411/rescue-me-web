@@ -1,0 +1,687 @@
+Bạn là một senior product designer kiêm senior frontend engineer. Nhiệm vụ của bạn là thiết kế bộ giao diện Admin hoàn chỉnh cho RescueMe, một nền tảng cứu hộ xe khẩn cấp. Mục tiêu là tạo ra một admin console production-ready, bám rất sát design language đang có ở frontend hiện tại, không làm app trông như một hệ thống khác.
+
+Yêu cầu quan trọng nhất: giao diện Admin phải đồng bộ với các UI hiện có của RescueMe, đặc biệt là các màn auth, user, provider, wallet, request flow. Không dùng phong cách dashboard SaaS generic màu tím, không dark mode mặc định, không typography xa lạ, không tông enterprise lạnh tách biệt khỏi sản phẩm hiện tại.
+
+==================================================
+I. DESIGN LANGUAGE BAT BUOC
+==================================================
+
+1. Typography
+- Font family chính: Poppins, sans-serif
+- Font phụ: Roboto cho text hỗ trợ hoặc dữ liệu phụ nếu cần
+- Tổng thể ưu tiên cảm giác hiện đại, rõ ràng, ấm, tin cậy, không quá corporate khô cứng
+
+2. Color palette phải bám hệ hiện tại
+
+const C = {
+  orange: '#f97316',
+  orangeDark: '#ea6c0a',
+  orangeLight: '#fff7ed',
+  navy: '#1a1a2e',
+  gray: '#6b7280',
+  border: '#e2e8f0',
+  bg: '#f4f6f9',
+  bgSoft: '#f8fafc',
+  green: '#16a34a',
+  greenLight: '#f0fdf4',
+  red: '#ef4444',
+  redLight: '#fef2f2',
+  yellow: '#ca8a04',
+  yellowLight: '#fefce8',
+  blue: '#2563eb',
+  blueLight: '#eff6ff',
+};
+
+3. Visual character
+- Nền chính sáng, dùng bg xám rất nhạt giống user/provider screens
+- Card trắng, bo góc 16px-24px, shadow nhẹ
+- Accent cam là brand color chính cho active state, CTA chính, highlight trạng thái đang xử lý
+- Icon dùng Lucide hoặc line icon đơn giản, stroke gọn, không dùng icon 3D
+- Border mảnh, sạch, thiên về slate thay vì đen
+- Không lạm dụng gradient, chỉ dùng cho primary CTA, hero card, KPI highlight quan trọng
+
+4. Layout principle
+- Desktop-first cho admin vì nghiệp vụ nhiều bảng, bộ lọc, thao tác hàng loạt
+- Mobile vẫn phải usable: table chuyển thành stacked cards, filter chuyển thành drawer/bottom sheet
+- Spacing rộng, không dồn đặc. Ưu tiên cảm giác vận hành có kiểm soát, không rối mắt
+
+5. Component pattern cần tái sử dụng
+- Page shell: sidebar trái + topbar + vùng content scroll riêng
+- Sidebar: nền trắng, border phải mảnh, active item dùng C.orangeLight + text C.orange
+- Topbar: sticky nhẹ, chứa title, search, filter nhanh, trạng thái hệ thống, avatar admin
+- Card: rounded-2xl bg-white border nhẹ shadow-sm
+- Table: header nền rất nhạt, row hover subtle, action column rõ ràng, sticky toolbar khi bulk select
+- Filter chips: rounded-full, active màu cam nhạt/cam đậm, inactive màu xám nhạt
+- Primary button: gradient cam từ C.orange sang C.orangeDark, text trắng, rounded-xl
+- Secondary button: nền trắng hoặc bgSoft, border C.border, text C.navy/C.gray
+- Danger button: nền red hoặc redLight tùy mức độ
+- Status badge: pill nhỏ, icon + label, màu theo trạng thái
+- Drawer/modal: bo góc lớn, header rõ, footer sticky với CTA
+
+==================================================
+II. THONG TIN HE THONG CAN BAM SAT
+==================================================
+
+Day la domain hien co cua he thong. Thiet ke phai dua tren cac entity va status nay:
+
+1. Roles
+- USER
+- PROVIDER
+- ADMIN
+
+2. Provider verification status
+- DRAFT
+- PENDING
+- APPROVED
+- REJECTED
+- SUSPENDED
+
+3. Rescue request status
+- CREATED
+- MATCHING
+- SEARCHING
+- MATCHED
+- ASSIGNED
+- ACCEPTED
+- IN_PROGRESS
+- ARRIVED
+- WORKING
+- PAYMENT_PENDING
+- PAID
+- COMPLETED
+- CANCELLED
+- REJECTED
+- EXPIRED
+
+4. Payment status
+- PENDING
+- USER_CONFIRMED
+- PROVIDER_CONFIRMED
+- COMPLETED
+- DISPUTED
+
+5. Payment method
+- CASH
+- QR
+
+6. Wallet transaction
+- type: CREDIT, DEBIT
+- status: PENDING, COMPLETED, FAILED
+- referenceType: JOB, WITHDRAW, COMMISSION, REFUND, ADJUSTMENT, TOPUP, JOB_PAYMENT
+
+7. Provider wallet
+- availableBalance
+- pendingBalance
+- topupCode
+
+8. Provider approval flow hien co
+- Admin co the approve provider
+- Admin co the reject provider voi rejectReasonCode va rejectReasonDetail
+- Admin co the suspend provider
+- Admin co the unsuspend provider
+
+9. Payment/dispute flow hien co
+- Provider tao payment request cho job
+- User confirm da tra tien
+- Provider confirm da nhan tien
+- User co the dispute payment voi reason
+
+10. Wallet flow hien co
+- Provider topup vi
+- Provider withdraw
+- Admin co endpoint manual release pending wallet hold
+
+Luu y:
+- Hien tai backend da co provider approval pages va mot phan admin flow, nhung admin console tong the chua du man. Ban can thiet ke theo huong co the mo rong, nhung van phai hop logic voi domain hien tai.
+- Neu mot action chua co endpoint ro rang, van co the thiet ke UI san san cho giai doan tiep theo, nhung phai ghi ro trang thai action la planned/admin action/secondary flow, tranh ve ra cac tinh nang vo ly.
+
+==================================================
+III. MUC TIEU UX CHO ADMIN
+==================================================
+
+Admin RescueMe khong chi la dashboard xem so lieu. Day la operational console de:
+- duyet ho so provider nhanh va chinh xac
+- quan ly user va provider theo tinh trang hoat dong
+- giam sat don cuu ho, quote, thanh toan, tranh chap
+- xu ly dispute, refund, payout, rut tien
+- theo doi suc khoe he thong va doanh thu
+
+Cam giac giao dien can dat duoc:
+- nhanh, giai quyet cong viec duoc ngay
+- du lieu ro rang, uu tien cac case can xu ly gap
+- giu brand RescueMe thong nhat voi app user/provider
+- it ma manh, khong chat chang bang widget vo nghia
+
+==================================================
+IV. THONG TIN KIEN TRUC GIAO DIEN ADMIN
+==================================================
+
+Hay thiet ke mot Admin Shell thong nhat cho toan bo admin:
+
+1. Desktop shell
+- Sidebar trai rong khoang 240-260px
+- Logo RescueMe o tren cung, block thuong hieu dung accent cam
+- Nhom menu chinh:
+  1. Overview
+  2. Provider Approval
+  3. Users
+  4. Providers
+  5. Rescue Orders
+  6. Payments & Disputes
+  7. Wallet & Withdrawals
+  8. Analytics
+  9. Audit / System Actions
+- Day sidebar co profile admin + quick actions
+
+2. Mobile shell
+- Khong co bottom nav 8-9 muc nhu app user/provider vi qua dai
+- Dung topbar + menu sheet/sidebar collapse
+- Muc quan trong nhat co sticky segmented tabs o tung trang
+- Table chuyen thanh list card co summary + CTA
+
+3. Topbar chung
+- Title trang
+- Search global theo user/provider/request/payment ID
+- Quick filters theo urgency
+- Notification/alert bell
+- Admin avatar + role badge
+
+4. Urgency system
+- Card va list can co visual priority ro rang:
+  - PENDING approval: yellow/orange nhat
+  - DISPUTED payment: redLight/red
+  - Withdraw pending: blueLight/blue hoac yellow tuy muc do
+  - Negative wallet / provider suspended / failed payment: red
+  - Healthy/completed: green
+
+==================================================
+V. CAC TRANG BAT BUOC PHAI THIET KE
+==================================================
+
+Ban phai thiet ke it nhat 8 man hinh/nhom man hinh sau. Day la pham vi uu tien dung voi he thong hien tai.
+
+1. Admin Overview Dashboard
+
+Muc tieu:
+- cho admin biet hom nay can xu ly gi truoc
+- tong hop KPI van hanh va doanh thu
+- co action nhanh vao cac queue quan trong
+
+Sections bat buoc:
+- Hero summary row:
+  - Provider cho duyet
+  - Dispute dang mo
+  - Don dang PAYMENT_PENDING
+  - Rut tien cho duyet
+  - Doanh thu hom nay
+- Operations health:
+  - So don dang IN_PROGRESS, ARRIVED, WORKING
+  - So don EXPIRED/CANCELLED
+  - Ty le match/accept
+- Finance snapshot:
+  - Tong GMV
+  - Commission thu duoc
+  - Pending payout
+  - Pending wallet release
+- Priority queues:
+  - 5 provider ho so moi nhat can duyet
+  - 5 dispute moi nhat
+  - 5 withdrawal requests moi nhat
+- Activity feed:
+  - approval/reject/suspend
+  - payment disputed
+  - payout processed
+  - manual adjustment
+
+Yeu cau UI:
+- Khong lam dashboard qua nhieu chart vo nghia
+- KPI card phai click duoc de drill down
+- Chart neu co thi dung 1-2 chart don gian, sach, mau theo brand
+
+2. Provider Approval Queue
+
+Muc tieu:
+- xu ly nhanh tat ca provider o trang thai PENDING
+- giam so click de duyet/tu choi
+
+Can co 2 cap giao dien:
+
+2.1 Approval list page
+- Search theo ten, SDT, email, business, bien so
+- Filter theo verificationStatus
+- Sort theo submittedAt moi nhat, muc do day du ho so, providerType
+- Tabs/segmented: Pending, Approved, Rejected, Suspended, All
+- Table/card columns:
+  - Provider identity
+  - Loai provider: individual/business
+  - Service types
+  - Vehicle types / rescue vehicles / plate
+  - Submitted at
+  - Status
+  - Risk flags / missing docs
+  - Quick actions
+- Quick actions tai row:
+  - View detail
+  - Approve nhanh
+  - Reject nhanh
+  - Suspend/Unsuspend neu phu hop
+
+2.2 Provider approval detail page
+- Header: avatar, ten, providerType, status badge, submittedAt
+- Action bar sticky:
+  - Approve
+  - Reject
+  - Suspend
+  - Unsuspend
+- Section Thong tin co ban
+- Section Dich vu dang ky
+- Section Dia chi va pham vi phuc vu
+- Section Phuong tien cuu ho
+- Section Tai lieu upload:
+  - CCCD front/back
+  - selfie
+  - bang lai
+  - giay phep kinh doanh
+  - anh xe
+- Section Timeline xu ly ho so
+- Reject modal:
+  - ly do reject code
+  - chi tiet bat buoc
+  - preview thong diep gui provider
+
+Yeu cau UI:
+- man detail phai uu tien doc tai lieu va doi chieu nhanh
+- hinh anh phai co che do xem full-screen/lightbox
+- co side checklist cho admin biet ho so da du dieu kien hay chua
+
+3. User Management
+
+Muc tieu:
+- xem va quan ly tat ca user role USER
+- phat hien user bat thuong, user tranh chap nhieu, user hoat dong nhieu
+
+List page bat buoc:
+- Search global
+- Filter theo:
+  - profileCompleted
+  - co don dang mo
+  - co dispute gan day
+  - tan suat goi cuu ho
+  - khu vuc
+- Columns/cards:
+  - user identity
+  - contact
+  - so don tong cong
+  - tong chi tieu
+  - don gan nhat
+  - dispute count
+  - status/risk note
+- Bulk actions neu hop ly: export, tag, note admin
+
+User detail page/drawer:
+- thong tin profile
+- lich su rescue requests
+- lich su thanh toan
+- dispute history
+- default vehicle info
+- internal admin notes
+- action khu vuc nguy co/abuse flag neu can
+
+4. Provider Management
+
+Khac voi approval queue: day la trang van hanh provider da dang ky.
+
+Muc tieu:
+- quan ly provider sau khi da duyet
+- theo doi hieu suat, wallet, online status, suspension
+
+List page:
+- Tabs: Active, Offline, Suspended, High Performing, Negative Wallet, All
+- Filters:
+  - providerType
+  - serviceType
+  - supportedVehicleType
+  - online/offline
+  - verificationStatus
+  - wallet balance state
+- Columns/cards:
+  - provider info
+  - rating/review summary
+  - completed jobs
+  - cancel/dispute rate
+  - availableBalance / pendingBalance
+  - online status
+  - verificationStatus
+  - last active
+
+Provider detail:
+- thong tin profile va giay to
+- performance summary
+- wallet snapshot
+- recent jobs
+- recent reviews
+- recent incidents/disputes
+- admin action rail:
+  - suspend
+  - unsuspend
+  - manual wallet adjustment
+  - force review docs
+
+5. Rescue Orders Operations Center
+
+Muc tieu:
+- admin co bo dieu khien de xem toan bo order flow
+- phat hien don bi tre, bi huy, bi expired, dang tranh chap
+
+List page:
+- Segmented by RequestStatus
+- Search theo requestId, user, provider, phone
+- Filters theo incidentType, vehicleType, paymentMethod, khu vuc, time range
+- Row/card fields:
+  - request id
+  - user
+  - provider assigned
+  - incident type
+  - current status
+  - quote accepted amount
+  - payment status
+  - createdAt / updatedAt
+  - urgency timer / SLA age
+
+Detail page:
+- order timeline tu created den completed/disputed/cancelled
+- map/location block
+- quotes submitted
+- accepted quote info
+- payment block
+- uploaded images/media
+- review block
+- admin notes va interventions
+
+Can co cac preset queue:
+- Orders stuck in IN_PROGRESS qua lau
+- ARRIVED nhung user chua confirm
+- PAYMENT_PENDING qua han
+- EXPIRED nhieu theo khu vuc
+
+6. Payments & Disputes Console
+
+Day la mot trong nhung trang quan trong nhat.
+
+Muc tieu:
+- admin xu ly tranh chap thanh toan va ra quyet dinh nhat quan
+- theo doi toan bo payment status cua job
+
+Main list:
+- Tabs:
+  - All Payments
+  - Pending
+  - User Confirmed
+  - Provider Confirmed
+  - Completed
+  - Disputed
+- Filters:
+  - paymentMethod CASH/QR
+  - amount range
+  - dispute age
+  - provider/user
+  - only needs action
+- Columns/cards:
+  - payment id / request id
+  - user + provider
+  - totalAmount
+  - fee breakdown
+  - payment method
+  - payment status
+  - dispute reason neu co
+  - timestamps user/provider confirm
+
+Dispute detail / resolution workspace:
+- Summary strip mau do nhat voi label DISPUTED
+- full fee breakdown:
+  - baseFee
+  - distanceFee
+  - overtimeFee
+  - otherFee
+  - surchargeNote
+  - note
+- payment evidence:
+  - QR screenshot
+  - photoUrls
+  - chat/proof attachments placeholder neu chua co
+- dispute reason + submittedAt
+- side-by-side statements:
+  - user statement
+  - provider statement
+- resolution panel:
+  - mark resolved in favor of user
+  - mark resolved in favor of provider
+  - partial refund
+  - internal note
+  - escalate
+
+Neu thiet ke refund flow, phai co:
+- refund amount
+- refund reason category
+- source destination of money
+- audit trail ai da xu ly
+
+7. Wallet & Withdrawals Console
+
+Muc tieu:
+- admin xu ly hang doi rut tien, theo doi so du provider, topup, holding release, adjustment
+
+Can tach 3 khu:
+
+7.1 Withdrawal queue
+- Cards/table cho cac withdrawal request status PENDING
+- thong tin:
+  - provider
+  - amount
+  - requestedAt
+  - availableBalance truoc rut
+  - topup/earning pattern gan day
+  - risk flag
+- actions:
+  - approve payout
+  - reject payout
+  - request review
+
+7.2 Wallet ledger
+- Table transaction history voi filters:
+  - CREDIT/DEBIT
+  - PENDING/COMPLETED/FAILED
+  - JOB/WITHDRAW/COMMISSION/REFUND/ADJUSTMENT/TOPUP/JOB_PAYMENT
+- Co row detail drawer hien:
+  - amount
+  - referenceType
+  - referenceId
+  - description
+  - createdAt
+  - holdReleaseAt
+
+7.3 Manual operations
+- Trigger manual release pending hold
+- Manual wallet adjustment modal
+- View providers co availableBalance am
+- Flag providers bi block vi no commission
+
+8. Analytics / Revenue Dashboard
+
+Muc tieu:
+- dashboard doanh thu va hieu suat thuc su huu ich, khong decorative
+
+Sections:
+- GMV theo ngay/tuan/thang
+- Platform commission
+- so job completed
+- average response time
+- approval conversion: draft -> pending -> approved
+- quote conversion: request -> quote -> accepted -> completed
+- dispute rate
+- top khu vuc co nhieu don
+- top service types
+- top providers theo revenue / completion
+
+Chart guideline:
+- dung line chart, bar chart, stacked status chart sach se
+- mau dung theo brand: orange, navy, blue, green, red
+- co filter time range va compare previous period
+
+9. Audit / System Actions
+
+Muc tieu:
+- de admin theo doi nhung thao tac nhay cam
+
+Sections:
+- admin activity log
+- provider status changes
+- dispute resolutions
+- wallet manual adjustments
+- payout decisions
+- manual release pending action
+
+UI pattern:
+- timeline hoac table co icon action
+- filter theo admin, action type, entity type, date range
+- chi tiet drawer hien before/after state neu co
+
+==================================================
+VI. THIET KE CHI TIET CAC THANH PHAN QUAN TRONG
+==================================================
+
+1. Status badges
+- PENDING: bg yellowLight, text yellow
+- APPROVED/COMPLETED: bg greenLight, text green
+- REJECTED/FAILED/DISPUTED: bg redLight, text red
+- SUSPENDED: bg orangeLight, text orangeDark
+- IN_PROGRESS/WORKING: bg blueLight, text blue
+
+2. KPI cards
+- cao khoang 110-140px
+- co icon trong rounded-xl background nhat mau
+- metric chinh lon, subtitle nho, delta indicator
+- click vao card di den queue tuong ung
+
+3. Table to card responsive behavior
+- desktop: table full
+- tablet/mobile: moi row thanh card
+- CTA chinh dat o footer card, khong nhung nut sat nhau
+
+4. Filters
+- co 3 tang:
+  - search nhanh ngay tren topbar
+  - segmented tabs/status chips
+  - advanced filter drawer
+
+5. Empty states
+- phai than thien va dung brand RescueMe
+- icon line art + title + 1 dong mo ta + CTA quay lai tat ca / lam moi
+
+6. Loading state
+- skeleton card/table, khong chi spinner đơn doc
+
+7. Confirmation UX
+- action nguy hiem phai co confirm modal
+- reject/suspend/refund/withdraw approve phai co textarea note bat buoc neu can
+
+8. Auditability
+- moi action nhay cam can co khu vuc note ly do va event timeline
+
+==================================================
+VII. TINH NHAT QUAN VOI FRONTEND HIEN TAI
+==================================================
+
+Ban phai giu cac dac diem sau de dong bo voi UI hien co:
+- dung Poppins
+- dung brand orange #f97316 lam accent chinh
+- background xam trang nhat, card trang
+- rounded corners rat ro nhung khong bong bay qua muc
+- active nav dung orangeLight + orange
+- button primary dung gradient cam
+- card thong tin co icon block bo goc nho o ben trai tieu de
+- text hierarchy giong provider/user pages: title dam, subtitle nho mau xam
+- tone visual: operational but still human, warm, brand-led
+
+Khong duoc:
+- dung gradient tim/hong/purple lam chu dao
+- dung dashboard style qua enterprise xanh den
+- dung typography Inter-only neu no lam lech he thong
+- nhồi nhét qua nhieu chart nho vo nghia
+- bien admin thanh mot product khac biet hoan toan so voi user/provider app
+
+==================================================
+VIII. DELIVERABLE MA TOI MUON TU AI
+==================================================
+
+Hay tra loi theo dung cau truc sau:
+
+1. Design direction tong the cho Admin RescueMe
+- giai thich ngan gon visual concept
+- ly do no dong bo voi UI hien tai
+
+2. Information architecture
+- sitemap admin shell
+- route de xuat cho tung trang
+
+3. Chi tiet tung man hinh
+- voi moi man hinh, mo ta:
+  - muc tieu
+  - layout
+  - sections
+  - table/card fields
+  - actions
+  - empty/loading/error states
+  - responsive behavior
+
+4. Shared component system
+- liet ke component nao can tai su dung trong admin
+
+5. Design token va UI rules
+- neu can, dua ra class/pattern Tailwind de implement nhanh
+
+6. Neu ban viet code
+- uu tien Next.js App Router + React + Tailwind
+- code phai co the implement tung trang theo admin shell thong nhat
+- tuyet doi giu cung ngon ngu thiet ke voi frontend hien tai
+
+==================================================
+IX. HUONG DAN SANG TAO NHUNG PHAI DUNG PHAM VI
+==================================================
+
+Ban duoc phep de xuat them man hinh neu thuc su huu ich, nhung phai lien quan truc tiep den he thong hien co. Vi du:
+- fraud/risk review queue
+- failed payment review
+- provider negative wallet monitoring
+- pending release queue
+
+Nhung khong duoc mo rong vo toi va. Moi de xuat them phai co ly do van hanh ro rang.
+
+==================================================
+X. TONG KET YEU CAU NGAN GON
+==================================================
+
+Hay thiet ke mot admin console cho RescueMe gom:
+- approval don dang ky provider
+- quan ly user
+- quan ly provider
+- dashboard tong quan va dashboard doanh thu
+- operations center cho rescue orders
+- xu ly payment dispute, refund, tranh chap don hang
+- duyet rut tien va quan ly wallet/ledger
+- audit log va cac thao tac nhay cam
+
+Tat ca phai dong bo voi RescueMe frontend hien tai ve font, mau, rounded card, accent cam, layout sang, brand tone va pattern component.
+
+Neu can chon uu tien, uu tien 1 la:
+- Overview Dashboard
+- Provider Approval Queue + Detail
+- Payments & Disputes
+- Wallet & Withdrawals
+
+Sau do moi mo rong sang:
+- Users
+- Providers
+- Rescue Orders
+- Analytics
+- Audit Log

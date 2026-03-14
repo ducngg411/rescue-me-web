@@ -687,6 +687,23 @@ const vi = {
             },
             toastArrivalConfirmed: 'Khách hàng xác nhận!',
             toastArrivalDenied: 'Khách chưa thấy bạn đến nơi!',
+            turnInstruction: {
+                straight: 'Đi thẳng',
+                turnRight: 'Rẽ phải',
+                turnLeft: 'Rẽ trái',
+                sharpRight: 'Rẽ phải gắt',
+                sharpLeft: 'Rẽ trái gắt',
+                slightRight: 'Hơi rẽ phải',
+                slightLeft: 'Hơi rẽ trái',
+                uTurn: 'Quay đầu xe',
+                roundabout: 'Vào vòng xuyến',
+                arrive: 'Bạn đã đến nơi!',
+                in: 'Sau',
+                meters: 'm',
+            },
+            rerouteToast: 'Đang tính lại tuyến đường...',
+            navigationMode: 'Chế độ dẫn đường',
+            offRoute: 'Lệch đường',
             payment: {
                 qr: {
                     title: 'Khách hàng đã thanh toán!',

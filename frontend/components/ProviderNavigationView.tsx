@@ -13,6 +13,59 @@ const ChatModal = lazy(() => import('@/components/ChatModal'));
 
 const VIETMAP_API_KEY = process.env.NEXT_PUBLIC_VIETMAP_API_KEY;
 
+// ── Turn sign → icon/label mapping ───────────────────────────────────────────
+interface NavInstruction {
+    sign: number;      // 0=straight,2=right,-2=left,3=sharp-right,-3=sharp-left,1=slight-right,-1=slight-left,4=arrive,5=roundabout,6=roundabout,-98=u-turn
+    text: string;      // human-readable description from API
+    distance: number;  // metres to this maneuver
+    interval: [number, number]; // index range in route coords array
+}
+
+// Distance between two [lng,lat] coords in metres (Haversine)
+function haversineM(a: [number, number], b: [number, number]): number {
+    const R = 6371000;
+    const dLat = (b[1] - a[1]) * Math.PI / 180;
+    const dLon = (b[0] - a[0]) * Math.PI / 180;
+    const lat1 = a[1] * Math.PI / 180;
+    const lat2 = b[1] * Math.PI / 180;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+// Point-to-segment distance in metres
+function pointToSegmentM(p: [number, number], a: [number, number], b: [number, number]): number {
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    if (dx === 0 && dy === 0) return haversineM(p, a);
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)));
+    return haversineM(p, [a[0] + t * dx, a[1] + t * dy]);
+}
+
+// Minimum distance from point to entire polyline
+function distToRoute(p: [number, number], coords: [number, number][]): number {
+    let min = Infinity;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const d = pointToSegmentM(p, coords[i], coords[i + 1]);
+        if (d < min) min = d;
+    }
+    return min;
+}
+
+// Bearing between two [lng,lat] points (degrees)
+function bearingDeg(from: [number, number], to: [number, number]): number {
+    const dLon = (to[0] - from[0]) * Math.PI / 180;
+    const lat1 = from[1] * Math.PI / 180;
+    const lat2 = to[1] * Math.PI / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+}
+
+// Format metres → human-readable
+function fmtDist(m: number): string {
+    if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
+    return `${Math.round(m / 10) * 10} m`;
+}
+
 const C = {
     orange: '#f97316',
     orangeDark: '#ea6c0a',
@@ -47,6 +100,22 @@ function decodePolyline(encoded: string): [number, number][] {
         coords.push([lng / 1e5, lat / 1e5]);
     }
     return coords;
+}
+
+// ── Smooth interpolation: fill N sub-points between each coord pair ────────────
+function smoothCoords(coords: [number, number][], steps = 10): [number, number][] {
+    if (coords.length < 2) return coords;
+    const result: [number, number][] = [];
+    for (let i = 0; i < coords.length - 1; i++) {
+        const a = coords[i], b = coords[i + 1];
+        result.push(a);
+        for (let j = 1; j < steps; j++) {
+            const t = j / steps;
+            result.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        }
+    }
+    result.push(coords[coords.length - 1]);
+    return result;
 }
 
 // ── Global VietMap script loader (reuse from VietMap.tsx pattern) ─────────────
@@ -119,6 +188,7 @@ export default function ProviderNavigationView({
 }: ProviderNavigationViewProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<any>(null);
+    const providerMarkerRef = useRef<any>(null);
     const [isMapReady, setIsMapReady] = useState(false);
     const [providerLocation, setProviderLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
@@ -137,6 +207,22 @@ export default function ProviderNavigationView({
     const routeDrawn = useRef(false);
     const pollRef = useRef<NodeJS.Timeout | null>(null);
     const countdownRef = useRef<NodeJS.Timeout | null>(null);
+    // ── Turn-by-Turn state ────────────────────────────────────────────────────
+    const [instructions, setInstructions] = useState<NavInstruction[]>([]);
+    const [currentStepIdx, setCurrentStepIdx] = useState(0);
+    // Refs mirror state so GPS callback always reads latest without re-subscribing
+    const instructionsRef = useRef<NavInstruction[]>([]);
+    const currentStepIdxRef = useRef(0);
+    const routeCoordsRef = useRef<[number, number][]>([]);
+    const smoothRouteRef = useRef<[number, number][]>([]); // 10x interpolated for simulation
+    const lastRerouteRef = useRef<number>(0);
+    const watchIdRef = useRef<number | null>(null);
+    const isNavigatingRef = useRef(false);
+    // ── Route Simulation state ────────────────────────────────────────────
+    const [isSimulating, setIsSimulating] = useState(false);
+    const simIndexRef = useRef(0);
+    const simRafRef = useRef<number | null>(null);
+    const simMsPerStepRef = useRef(40); // ms between each smooth-point advance (lower = faster)
 
     // Get provider identity directly from auth — avoids relying on props being undefined
     const { user: authUser } = useAuth();
@@ -190,7 +276,106 @@ export default function ProviderNavigationView({
     useEffect(() => () => {
         if (pollRef.current) clearInterval(pollRef.current);
         if (countdownRef.current) clearInterval(countdownRef.current);
+        if (simRafRef.current) cancelAnimationFrame(simRafRef.current);
     }, []);
+
+    // ── Simulation helpers ──────────────────────────────────────────────────
+    const stopSimulation = useCallback(() => {
+        if (simRafRef.current) cancelAnimationFrame(simRafRef.current);
+        simRafRef.current = null;
+        setIsSimulating(false);
+    }, []);
+
+    const startSimulation = useCallback(() => {
+        const smooth = smoothRouteRef.current;
+        if (!smooth.length || !map.current || !providerMarkerRef.current) return;
+        simIndexRef.current = 0;
+        setIsSimulating(true);
+        currentStepIdxRef.current = 0;
+        setCurrentStepIdx(0);
+
+        // Growing array: push to it instead of slice() every frame (avoids GC pressure)
+        const progressArr: [number, number][] = [];
+        let stepsSinceProgressUpdate = 0;
+        const PROGRESS_UPDATE_EVERY = 8; // update progress line every N steps
+
+        try {
+            const src = map.current.getSource('sim-progress') as any;
+            if (src) src.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } });
+        } catch { /* */ }
+
+        let lastTime = performance.now();
+        let accumulator = 0;
+
+        const animate = (now: number) => {
+            const idx = simIndexRef.current;
+            if (idx >= smooth.length - 1) {
+                setIsSimulating(false);
+                simRafRef.current = null;
+                return;
+            }
+
+            // Time-based advance
+            accumulator += now - lastTime;
+            lastTime = now;
+            const msPerStep = simMsPerStepRef.current;
+            let stepsThisFrame = 0;
+
+            while (accumulator >= msPerStep && simIndexRef.current < smooth.length - 1) {
+                simIndexRef.current++;
+                progressArr.push(smooth[simIndexRef.current]);
+                accumulator -= msPerStep;
+                stepsThisFrame++;
+            }
+
+            if (stepsThisFrame > 0) {
+                const cur = smooth[simIndexRef.current];
+                const nextPt = smooth[Math.min(simIndexRef.current + 1, smooth.length - 1)];
+                const brng = bearingDeg(cur, nextPt);
+
+                // Move marker + rotate
+                providerMarkerRef.current!.setLngLat(cur);
+                try { (providerMarkerRef.current as any).setRotation(brng); } catch { /* */ }
+
+                // Camera: longer duration + no essential = animations blend smoothly
+                map.current!.easeTo({
+                    center: cur,
+                    zoom: 17,
+                    bearing: brng,
+                    pitch: 25,
+                    duration: msPerStep * 3,
+                });
+
+                // Throttle progress line update to avoid GPU thrash
+                stepsSinceProgressUpdate += stepsThisFrame;
+                if (stepsSinceProgressUpdate >= PROGRESS_UPDATE_EVERY) {
+                    stepsSinceProgressUpdate = 0;
+                    try {
+                        const src = map.current!.getSource('sim-progress') as any;
+                        if (src) src.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: progressArr } });
+                    } catch { /* */ }
+                }
+
+                // Advance HUD step
+                const instList = instructionsRef.current;
+                const curStepIdx = currentStepIdxRef.current;
+                if (curStepIdx < instList.length - 1) {
+                    const origIdx = Math.floor(simIndexRef.current / 10);
+                    const nextEndIdx = instList[curStepIdx + 1]?.interval[0] ?? Infinity;
+                    if (origIdx >= nextEndIdx) {
+                        const nxt = curStepIdx + 1;
+                        currentStepIdxRef.current = nxt;
+                        setCurrentStepIdx(nxt);
+                    }
+                }
+            }
+
+            simRafRef.current = requestAnimationFrame(animate);
+        };
+
+        simRafRef.current = requestAnimationFrame(animate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stopSimulation]);
 
     // 5-second auto-countdown when customer confirms arrival
     useEffect(() => {
@@ -209,21 +394,90 @@ export default function ProviderNavigationView({
         return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
     }, [arrivalState]);
 
-    // ── 1. Get provider's current GPS ───────────────────────────────────────
+    // ── 1. GPS watchPosition — continuous tracking ────────────────────────────
     useEffect(() => {
         if (!('geolocation' in navigator)) {
             setLocationError('Trình duyệt không hỗ trợ định vị');
-            setProviderLocation({ lat: 21.028511, lng: 105.804817 }); // HN default
+            setProviderLocation({ lat: 21.028511, lng: 105.804817 });
             return;
         }
-        navigator.geolocation.getCurrentPosition(
-            pos => setProviderLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-            err => {
-                setLocationError('Không lấy được vị trí GPS');
-                setProviderLocation({ lat: 21.028511, lng: 105.804817 });
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        const onSuccess = (pos: GeolocationPosition) => {
+            const { latitude: lat, longitude: lng } = pos.coords;
+            setProviderLocation({ lat, lng });
+
+            // Update provider marker on map
+            if (providerMarkerRef.current) {
+                providerMarkerRef.current.setLngLat([lng, lat]);
+            }
+
+            // Follow user on map (navigation mode)
+            if (map.current && isNavigatingRef.current) {
+                const coords = routeCoordsRef.current;
+
+                // Determine bearing from last two GPS positions
+                let bearing = 0;
+                if (coords.length >= 2) {
+                    // Use nearby route point for smooth bearing
+                    bearing = bearingDeg([lng, lat], [pickupLocation.lng, pickupLocation.lat]);
+                }
+
+                map.current.easeTo({
+                    center: [lng, lat],
+                    zoom: 17,
+                    bearing,
+                    pitch: 25,
+                    duration: 800,
+                    essential: true,
+                });
+
+                // ── Step detection (read from refs — no stale closures) ──
+                if (coords.length > 0) {
+                    const curIdx = currentStepIdxRef.current;
+                    const instList = instructionsRef.current;
+                    let bestStep = curIdx;
+                    let bestDist = Infinity;
+                    for (let i = curIdx; i < instList.length; i++) {
+                        const endIdx = instList[i].interval[1];
+                        if (endIdx < coords.length) {
+                            const d = haversineM([lng, lat], coords[endIdx]);
+                            if (d < bestDist) { bestDist = d; bestStep = i; }
+                        }
+                    }
+                    // Advance step when within 30m of maneuver
+                    if (bestDist < 30 && bestStep + 1 < instList.length) {
+                        const next = bestStep + 1;
+                        currentStepIdxRef.current = next;
+                        setCurrentStepIdx(next);
+                    }
+
+                    // ── Re-route when off-route >50m ──
+                    const now = Date.now();
+                    const dToRoute = distToRoute([lng, lat], coords);
+                    if (dToRoute > 50 && now - lastRerouteRef.current > 8000) {
+                        lastRerouteRef.current = now;
+                        toast.loading(t('provider.navigation.rerouteToast'), { id: 'reroute', duration: 3000 });
+                        routeDrawn.current = false;
+                        instructionsRef.current = [];
+                        currentStepIdxRef.current = 0;
+                        setInstructions([]);
+                        setCurrentStepIdx(0);
+                        drawRoute(lat, lng);
+                    }
+                }
+            }
+        };
+        const onError = () => {
+            setLocationError('Không lấy được vị trí GPS');
+            setProviderLocation({ lat: 21.028511, lng: 105.804817 });
+        };
+        watchIdRef.current = navigator.geolocation.watchPosition(onSuccess, onError,
+            { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
         );
+        return () => {
+            if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+        };
+    // Only runs once — GPS callback reads latest values via refs, never stale
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // ── 2. Load VietMap and initialize ──────────────────────────────────────
@@ -257,11 +511,59 @@ export default function ProviderNavigationView({
             const durationMin = Math.ceil(path.time / 60000);
             setRouteInfo({ distance: parseFloat(distKm), duration: durationMin });
 
+            // Store route coords for navigation logic
+            routeCoordsRef.current = coords;
+            // Pre-smooth for simulation (10x interpolation → buttery movement)
+            smoothRouteRef.current = smoothCoords(coords, 10);
+
+            // Parse turn instructions
+            if (path.instructions?.length) {
+                const raw: NavInstruction[] = path.instructions.map((ins: any) => ({
+                    sign: ins.sign ?? 0,
+                    text: ins.text ?? '',
+                    distance: ins.distance ?? 0,
+                    interval: ins.interval ?? [0, 0],
+                }));
+
+                // ── Post-process: fix sign=0 that is actually a real turn ────
+                // VietMap API sometimes returns sign=0 even for noticeable turns.
+                // We recalculate the turn direction from actual coordinate bearings.
+                const parsed = raw.map((ins) => {
+                    if (ins.sign !== 0) return ins;
+                    const idx = ins.interval[0];
+                    if (idx < 2 || idx + 2 >= coords.length) return ins;
+                    if (ins.distance < 15) return ins; // skip micro-steps
+
+                    // Use coords on EITHER SIDE of the junction, never the junction itself.
+                    // coords[idx] is the exact intersection — it's noisy and spans both segments.
+                    const prevA = coords[Math.max(0, idx - 3)];
+                    const prevB = coords[idx - 1];              // just before junction
+                    const nextA = coords[idx + 1];              // just after junction (new segment)
+                    const nextB = coords[Math.min(coords.length - 1, idx + 3)];
+
+                    const inBear  = bearingDeg(prevA, prevB);
+                    const outBear = bearingDeg(nextA, nextB);
+                    const angle   = ((outBear - inBear) + 540) % 360 - 180;
+
+                    if (angle >  55) return { ...ins, sign: 3,  text: ins.text || 'Rẽ phải gắt' };
+                    if (angle >  35) return { ...ins, sign: 2,  text: ins.text || 'Rẽ phải' };
+                    if (angle < -55) return { ...ins, sign: -3, text: ins.text || 'Rẽ trái gắt' };
+                    if (angle < -35) return { ...ins, sign: -2, text: ins.text || 'Rẽ trái' };
+                    return ins;
+                });
+
+                instructionsRef.current = parsed;
+                currentStepIdxRef.current = 0;
+                setInstructions(parsed);
+                setCurrentStepIdx(0);
+            }
+
             // Wait for map to be loaded
             const addRouteToMap = () => {
                 try {
                     // Remove existing route layer/source if any
                     if (map.current.getLayer('route-line')) map.current.removeLayer('route-line');
+                    if (map.current.getLayer('route-casing')) map.current.removeLayer('route-casing');
                     if (map.current.getSource('route')) map.current.removeSource('route');
 
                     map.current.addSource('route', {
@@ -288,13 +590,46 @@ export default function ProviderNavigationView({
                         paint: { 'line-color': C.orange, 'line-width': 5, 'line-opacity': 0.95 },
                     });
 
-                    // FitBounds — leave bottom space for the bottom sheet (140px)
+                    // FitBounds overview first (so provider sees full route)
                     const lngs = coords.map(c => c[0]);
                     const lats = coords.map(c => c[1]);
                     map.current.fitBounds(
                         [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-                        { padding: { top: 90, bottom: 180, left: 40, right: 40 }, duration: 1200 }
+                        { padding: { top: 90, bottom: 180, left: 40, right: 40 }, duration: 1200, pitch: 0 }
                     );
+
+                    // Activate navigation mode
+                    isNavigatingRef.current = true;
+
+                    // Add progress source+layer (red line showing traveled path)
+                    try {
+                        if (!map.current.getSource('sim-progress')) {
+                            map.current.addSource('sim-progress', {
+                                type: 'geojson',
+                                data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } },
+                            });
+                            map.current.addLayer({
+                                id: 'sim-progress-line',
+                                type: 'line',
+                                source: 'sim-progress',
+                                layout: { 'line-join': 'round', 'line-cap': 'round' },
+                                paint: { 'line-color': '#dc2626', 'line-width': 5, 'line-opacity': 0.9 },
+                            });
+                        }
+                    } catch { /* ignore */ }
+
+                    // After fitBounds animation, snap camera to provider position
+                    setTimeout(() => {
+                        if (map.current) {
+                            map.current.easeTo({
+                                center: [pLng, pLat],
+                                zoom: 17,
+                                bearing: 0,
+                                pitch: 25,
+                                duration: 800,
+                            });
+                        }
+                    }, 1400);
                 } catch (e) {
                     console.warn('Error drawing route:', e);
                 }
@@ -333,18 +668,20 @@ export default function ProviderNavigationView({
 
         map.current.addControl(new vgl.NavigationControl(), 'top-right');
 
-        // ── Provider marker (orange dot with ring) ──
+        // ── Provider marker — blue outer + white inner dot ──
         const providerEl = document.createElement('div');
-        providerEl.style.cssText = `
-            width:20px;height:20px;border-radius:50%;
-            background:${C.orange};border:3px solid white;
-            box-shadow:0 2px 8px rgba(249,115,22,0.6);
-            position:relative;
-        `;
-        new vgl.Marker(providerEl)
+        providerEl.style.cssText = [
+            'width:20px', 'height:20px', 'border-radius:50%',
+            'background: radial-gradient(circle, white 35%, #2563eb 36%)',
+            'border:2.5px solid #2563eb',
+            'box-shadow:0 2px 8px rgba(37,99,235,0.45)',
+            'cursor:pointer',
+        ].join(';');
+        const provMarker = new vgl.Marker(providerEl)
             .setLngLat([providerLocation.lng, providerLocation.lat])
             .setPopup(new vgl.Popup({ offset: 25 }).setText(t('provider.navigation.providerMarker')))
             .addTo(map.current);
+        providerMarkerRef.current = provMarker;
 
         // ── User/pickup marker (red pin) ──
         const userEl = document.createElement('div');
@@ -506,6 +843,156 @@ export default function ProviderNavigationView({
                             </div>
                         </div>
                     )}
+
+                    {/* ── Turn-by-Turn HUD ── */}
+                    {instructions.length > 0 && arrivalState === 'idle' && (() => {
+                        const curStep = instructions[currentStepIdx];
+                        if (!curStep) return null;
+
+                        // ── Look-ahead logic ──────────────────────────────────
+                        // When on a "continue/straight" step (sign=0), scan ahead
+                        // for the next real maneuver so we show "Turn right in Xm"
+                        // rather than "Continue" the whole time.
+                        let hudStepIdx = currentStepIdx;
+                        let distToManeuver = 0;
+
+                        if (curStep.sign === 0) {
+                            // Sum distance of current straight step(s) until a real turn
+                            distToManeuver += curStep.distance;
+                            for (let i = currentStepIdx + 1; i < instructions.length; i++) {
+                                if (instructions[i].sign !== 0) {
+                                    hudStepIdx = i;
+                                    break;
+                                }
+                                distToManeuver += instructions[i].distance;
+                            }
+                            // Guard: if look-ahead only found "arrive" and we're still far,
+                            // don't show "Đến đích" prematurely — show straight instead.
+                            const foundSign = instructions[hudStepIdx]?.sign;
+                            const isFoundArrive = foundSign === 4 || foundSign === -7;
+                            if (isFoundArrive && distToManeuver > 100) {
+                                hudStepIdx = currentStepIdx;
+                                // keep distToManeuver as total remaining (shows distance to destination)
+                            }
+                        } else {
+                            hudStepIdx = currentStepIdx;
+                            distToManeuver = curStep.distance;
+                        }
+
+                        const step = instructions[hudStepIdx] ?? curStep;
+                        const sign = step.sign;
+
+                        // Arrow SVG based on sign
+                        const ArrowIcon = () => {
+                            const s = { width: 34, height: 34, viewBox: '0 0 32 32', fill: 'none', stroke: 'white', strokeWidth: 2.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+                            // Arrive
+                            if (sign === 4 || sign === -7) return <svg {...s}><path d="M16 3C11 3 7 7 7 12c0 7 9 17 9 17s9-10 9-17c0-5-4-9-9-9z"/><circle cx="16" cy="12" r="3" fill="white" stroke="none"/></svg>;
+                            // U-Turn
+                            if (sign === -98) return <svg {...s}><path d="M20 26V13a6 6 0 00-12 0"/><polyline points="12 20 8 24 12 28"/></svg>;
+                            // Roundabout
+                            if (sign === 5 || sign === 6) return <svg {...s}><circle cx="16" cy="16" r="6"/><path d="M22 10l3-3"/><polyline points="24 10 25 7 22 7"/></svg>;
+                            // Sharp right
+                            if (sign === 3) return <svg {...s}><path d="M8 27V11h14"/><polyline points="17 5 22 11 17 17"/></svg>;
+                            // Turn right
+                            if (sign === 2) return <svg {...s}><path d="M8 27V15a8 8 0 018-8h1"/><polyline points="14 5 20 7 14 9"/></svg>;
+                            // Slight right
+                            if (sign === 1) return <svg {...s}><path d="M10 27V13a6 6 0 016-6"/><polyline points="13 5 18 7 13 9"/></svg>;
+                            // Sharp left
+                            if (sign === -3) return <svg {...s}><path d="M24 27V11H10"/><polyline points="15 5 10 11 15 17"/></svg>;
+                            // Turn left
+                            if (sign === -2) return <svg {...s}><path d="M24 27V15a8 8 0 00-8-8h-1"/><polyline points="18 5 12 7 18 9"/></svg>;
+                            // Slight left
+                            if (sign === -1) return <svg {...s}><path d="M22 27V13a6 6 0 00-6-6"/><polyline points="19 5 14 7 19 9"/></svg>;
+                            // Default: straight up
+                            return <svg {...s}><line x1="16" y1="28" x2="16" y2="6"/><polyline points="9 13 16 6 23 13"/></svg>;
+                        };
+
+                        const hudBg = (sign === 2 || sign === 3 || sign === 1)
+                            ? '#1d4ed8'  // blue for right
+                            : (sign === -2 || sign === -3 || sign === -1)
+                                ? '#7c3aed'  // purple for left
+                                : (sign === 4 || sign === -7)
+                                    ? '#15803d'  // green for arrive
+                                    : '#1a1a2e'; // navy for straight
+
+                        return (
+                            <div
+                                className="absolute left-3 right-3 flex items-center gap-3 px-4 py-3 rounded-2xl"
+                                style={{
+                                    top: '8px',
+                                    background: hudBg,
+                                    boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+                                    zIndex: 20,
+                                    backdropFilter: 'blur(8px)',
+                                }}
+                            >
+                                {/* Direction icon */}
+                                <div
+                                    className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                                    style={{ background: 'rgba(255,255,255,0.18)' }}
+                                >
+                                    <ArrowIcon />
+                                </div>
+
+                                {/* Text */}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-white opacity-75 mb-0.5">
+                                        {fmtDist(distToManeuver)}
+                                    </p>
+                                    <p className="text-sm font-bold text-white leading-tight truncate">
+                                        {step.text || (sign === 0 ? t('provider.navigation.turnInstruction.straight') : '—')}
+                                    </p>
+                                </div>
+
+                                {/* Next step preview — show the step AFTER the upcoming turn */}
+                                {hudStepIdx + 1 < instructions.length && (() => {
+                                    const next = instructions[hudStepIdx + 1];
+                                    const ns = next.sign;
+                                    const nextLabel = ns === 2 || ns === 3 ? '→'
+                                        : ns === -2 || ns === -3 ? '←'
+                                        : ns === 1 ? '↗' : ns === -1 ? '↖'
+                                        : ns === -98 ? '↩' : ns === 4 || ns === -7 ? '📌' : '↑';
+                                    return (
+                                        <div className="flex-shrink-0 text-center">
+                                            <p className="text-[9px] text-white opacity-60 mb-0.5">Tiếp</p>
+                                            <span className="text-lg font-bold text-white opacity-80">{nextLabel}</span>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        );
+                    })()}
+
+                    {/* ── Compass / re-centre button ── */}
+                    {isMapReady && (
+                        <button
+                            onClick={() => {
+                                if (!map.current || !providerLocation) return;
+                                map.current.easeTo({
+                                    center: [providerLocation.lng, providerLocation.lat],
+                                    zoom: 16,
+                                    bearing: 0,
+                                    pitch: 0,
+                                    duration: 600,
+                                });
+                            }}
+                            className="absolute flex items-center justify-center rounded-xl"
+                            style={{
+                                bottom: '200px',
+                                right: '12px',
+                                width: '40px',
+                                height: '40px',
+                                background: 'white',
+                                boxShadow: '0 2px 12px rgba(0,0,0,0.20)',
+                                zIndex: 20,
+                            }}
+                            title="Về vị trí của bạn"
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17l-6.18 3.98L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                            </svg>
+                        </button>
+                    )}
                 </div>
 
 
@@ -535,6 +1022,62 @@ export default function ProviderNavigationView({
                                     <p className="text-base font-bold" style={{ color: C.navy }}>{displayEta}</p>
                                 </div>
                             </div>
+
+                            {/* ── Simulation row (only when route is loaded) ── */}
+                            {!!routeInfo && (
+                                <div className="flex items-center gap-2 mb-3">
+                                    <button
+                                        onClick={isSimulating ? stopSimulation : startSimulation}
+                                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold flex-shrink-0 transition-all active:scale-95"
+                                        style={{
+                                            background: isSimulating
+                                                ? 'linear-gradient(135deg,#dc2626,#b91c1c)'
+                                                : `linear-gradient(135deg,${C.orange},${C.orangeDark})`,
+                                            color: 'white',
+                                            boxShadow: isSimulating ? '0 2px 8px rgba(220,38,38,0.35)' : `0 2px 8px ${C.orange}40`,
+                                        }}
+                                    >
+                                        {isSimulating ? (
+                                            <>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                                                    <rect x="6" y="4" width="4" height="16" rx="1" />
+                                                    <rect x="14" y="4" width="4" height="16" rx="1" />
+                                                </svg>
+                                                Dừng giả lập
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                                                    <path d="M8 5v14l11-7z" />
+                                                </svg>
+                                                Giả lập chạy
+                                            </>
+                                        )}
+                                    </button>
+                                    {/* Speed slider */}
+                                    <div className="flex items-center gap-1.5 flex-1">
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill={C.gray}>
+                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+                                        </svg>
+                                        {/* Speed slider: left=slow (200ms), right=fast (5ms) */}
+                                        <input
+                                            type="range" min={5} max={200} defaultValue={40}
+                                            onChange={e => {
+                                                // Invert: slider value high = slow, so map 5→fast 200→slow
+                                                // We want right-side = fast, so: msPerStep = max+min - value
+                                                simMsPerStepRef.current = 205 - Number(e.target.value);
+                                            }}
+                                            className="flex-1 h-1 rounded-full accent-orange-500"
+                                            style={{ cursor: 'pointer' }}
+                                        />
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill={C.orange}>
+                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+                                        </svg>
+                                    </div>
+                                    <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: C.gray }}>Tốc độ</span>
+                                </div>
+                            )}
+
                             <button
                                 onClick={() => setShowConfirm(true)}
                                 className="w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
