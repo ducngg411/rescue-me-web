@@ -95,7 +95,7 @@ const en = {
             subtitle: 'Choose the role that fits you.',
             user: 'User',
             userDesc: 'I need roadside assistance when required.',
-            provider: 'Provider',
+            provider: 'Rescuer',
             providerDesc: 'I want to provide rescue services.',
             selectRole: 'Select role',
             continue: 'Continue',
@@ -167,7 +167,7 @@ const en = {
         },
         requestDetail: {
             title: 'Request Details',
-            provider: 'Provider',
+            provider: 'Rescuer',
             location: 'Location',
             incidentType: 'Incident Type',
             createdAt: 'Created At',
@@ -200,11 +200,11 @@ const en = {
             enableOnlineToReceive: 'Go online to receive requests',
             accept: 'ACCEPT',
             decline: 'SKIP',
-            providerRole: 'Provider',
+            providerRole: 'Rescuer',
             notVerified: 'Not Verified',
             verificationRequired: 'You need to complete verification before receiving requests.',
             completeVerification: 'Complete Verification',
-            providerOnly: 'This page is for service providers only.',
+            providerOnly: 'This page is for rescuers only.',
             pendingRequests: 'Pending Requests',
             weeklyEarnings: 'Weekly Earnings',
             todayEarnings: "Today's Earnings",
@@ -306,7 +306,7 @@ const en = {
                 errorDefault: 'Unable to process withdrawal. Please try again.',
             },
             notVerified: 'Not Verified',
-            notVerifiedDesc: 'Only approved providers can use the wallet.',
+            notVerifiedDesc: 'Only approved rescuers can use the wallet.',
             approved: 'approved',
             completeVerification: 'Complete Verification',
             backToDashboard: '← Back to Dashboard',
@@ -337,7 +337,7 @@ const en = {
             empty: 'No requests yet.',
         },
         verification: {
-            title: 'Provider Verification',
+            title: 'Rescuer Verification',
             subtitle: 'Please provide the required documents to get verified.',
             submit: 'Submit Verification',
             pending: 'Under Review',
@@ -349,7 +349,7 @@ const en = {
             profileCard: {
                 publicProfile: 'Public Profile',
                 noName: 'No name set',
-                providerId: 'Provider ID',
+                providerId: 'Rescuer ID',
             },
             personalInfo: {
                 title: 'Personal Information',
@@ -365,7 +365,7 @@ const en = {
             workArea: {
                 title: 'Service Area',
                 radiusLabel: 'Request pickup radius',
-                radiusHint: 'Provider receives rescue requests within a {value}km radius from your current location. Larger radius = more orders, but longer travel.',
+                radiusHint: 'Rescuer receives rescue requests within a {value}km radius from your current location. Larger radius = more orders, but longer travel.',
             },
             serviceOptions: {
                 title: 'Service Options',
@@ -517,7 +517,7 @@ const en = {
             alreadySentQuote: 'You have already sent a quote for this request.',
             quoteSuccess: 'Quote submitted! Waiting for customer response.',
             quoteRejected: 'Your quote was rejected',
-            otherProviderChosen: 'Customer chose another provider',
+            otherProviderChosen: 'Customer chose another rescuer',
             loadError: 'Failed to load request details',
             quoteWindowExpired: 'This request has expired – quote window closed.',
             declineSuccess: 'Request declined',
@@ -547,7 +547,7 @@ const en = {
             },
             requestEnded: {
                 title: 'Request Ended',
-                desc: 'This request has been completed or assigned to another provider.',
+                desc: 'This request has been completed or assigned to another rescuer.',
             },
             accepted: {
                 headerSubtitle: 'Quote Accepted',
@@ -621,7 +621,7 @@ const en = {
             notFound: 'Request not found',
             currentStatus: 'Current Status',
             statusBadge: {
-                searching: 'Searching Provider',
+                searching: 'Searching Rescuer',
                 waitingCustomer: 'Waiting for Customer',
                 selected: 'Selected',
                 highPriority: 'High Priority',
@@ -864,7 +864,7 @@ const en = {
             },
             timeline: {
                 created: 'Request created',
-                assigned: 'Provider accepted',
+                assigned: 'Rescuer accepted',
                 payment: 'Payment',
                 completed: 'Completed',
                 notDone: 'Pending',
@@ -1005,7 +1005,7 @@ const en = {
     },
     components: {
         assignedProvider: {
-            title: 'Your Provider',
+            title: 'Your Rescuer',
             enRoute: 'On the way to you',
             eta: 'ETA',
             call: 'Call',
@@ -1025,14 +1025,14 @@ const en = {
         },
         paymentRequest: {
             title: 'Payment Request',
-            providerRequests: 'Provider is requesting payment',
+            providerRequests: 'Rescuer is requesting payment',
             accept: 'Accept',
             dispute: 'Dispute',
         },
         quoteSelection: {
             title: 'Select a Quote',
-            subtitle: 'Choose a provider that suits you',
-            providers: 'providers',
+            subtitle: 'Choose a rescuer that suits you',
+            providers: 'rescuers',
             select: 'Select',
             selected: 'Selected',
             noQuotes: 'No quotes yet.',
@@ -1040,24 +1040,24 @@ const en = {
             rating: 'rating',
         },
         matchingStatus: {
-            title: 'Finding a provider',
+            title: 'Finding a rescuer',
             subtitle: 'Please wait a moment...',
             cancel: 'Cancel Request',
             waiting: 'Waiting for response',
         },
         workingView: {
             title: 'Service in Progress',
-            providerWorking: 'Provider is working',
+            providerWorking: 'Rescuer is working',
             done: 'Done',
         },
         arrivalConfirmation: {
-            title: 'Provider Has Arrived',
+            title: 'Rescuer Has Arrived',
             subtitle: 'Please confirm when the service is complete.',
             confirm: 'Confirm Completion',
         },
         expiredRetry: {
             title: 'Request Expired',
-            subtitle: 'No suitable provider was found.',
+            subtitle: 'No suitable rescuer was found.',
             retry: 'Try Again',
             cancel: 'Cancel',
         },

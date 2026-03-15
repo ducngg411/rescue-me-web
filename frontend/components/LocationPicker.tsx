@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { searchPlaces, getPlaceDetails, PlaceSearchResult, PlaceDetails } from '@/lib/vietmap';
 import { MagnifyingGlassIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import toast from 'react-hot-toast';
 
 interface LocationData {
     addressText: string;
@@ -121,7 +122,7 @@ export default function LocationPicker({
                         POSITION_UNAVAILABLE: error.code === 2,
                         TIMEOUT: error.code === 3
                     });
-                    alert('Không thể lấy vị trí hiện tại. Vui lòng cho phép truy cập vị trí.');
+                    toast.error('Không thể lấy vị trí hiện tại. Vui lòng cho phép truy cập vị trí.');
                 },
                 {
                     enableHighAccuracy: true,  // Sử dụng GPS chính xác nhất
@@ -130,7 +131,7 @@ export default function LocationPicker({
                 }
             );
         } else {
-            alert('Trình duyệt của bạn không hỗ trợ định vị.');
+            toast.error('Trình duyệt của bạn không hỗ trợ định vị.');
         }
     };
 

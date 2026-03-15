@@ -44,9 +44,10 @@ interface ReviewSubmitStepProps {
     onBack: () => void;
     isShell?: boolean;
     isSubmitting?: boolean;
+    isEditMode?: boolean;
 }
 
-export default function ReviewSubmitStep({ serviceInfo, requiredDocs, optionalDocs, onBack, isShell, isSubmitting: parentSubmitting }: ReviewSubmitStepProps) {
+export default function ReviewSubmitStep({ serviceInfo, requiredDocs, optionalDocs, onBack, isShell, isSubmitting: parentSubmitting, isEditMode }: ReviewSubmitStepProps) {
     const router = useRouter();
     const { refreshUser } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,7 +66,11 @@ export default function ReviewSubmitStep({ serviceInfo, requiredDocs, optionalDo
             ].filter(Boolean);
             await api.post('/me/provider/submit-verification', { uploadIds });
             await refreshUser();
-            router.push('/provider/dashboard?verification=submitted');
+            // Toast is handled by dashboard/page.tsx when it detects ?verification=submitted
+            const dest = isEditMode
+                ? '/provider/dashboard?verification=submitted&edit=true'
+                : '/provider/dashboard?verification=submitted';
+            router.push(dest);
         } catch (err: any) {
             setError(err.response?.data?.message || 'Có lỗi xảy ra khi gửi hồ sơ');
         } finally {

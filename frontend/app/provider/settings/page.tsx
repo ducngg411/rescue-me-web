@@ -6,7 +6,7 @@ import api from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import ProviderLayout from '@/components/ProviderLayout';
 import {
-    User, Phone, MapPin, Zap, Radio, Save, RefreshCw,
+    User, Phone, MapPin, Zap, Radio, Save, RefreshCw, Clock,
     CheckCircle2, AlertCircle, ChevronRight, Shield, Wrench, Lock,
     Eye, EyeOff, Camera, XCircle, ArrowLeft,
 } from 'lucide-react';
@@ -334,6 +334,8 @@ export default function ProviderSettingsPage() {
     );
 
     const initials = (fullName || 'P').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    // Block profile edits while application is under review
+    const isPendingLock = verificationStatus === 'PENDING';
 
     return (
         <ProviderLayout activeTab="/provider/settings">
@@ -432,14 +434,25 @@ export default function ProviderSettingsPage() {
                         </div>
                     </div>
 
+                    {/* ── PENDING lock banner ── */}
+                    {isPendingLock && (
+                        <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: '#fffbeb', border: '1.5px solid #fde68a' }}>
+                            <Clock className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#d97706' }} />
+                            <div>
+                                <p className="text-sm font-bold mb-0.5" style={{ color: '#92400e' }}>Hồ sơ đang được xét duyệt</p>
+                                <p className="text-xs" style={{ color: '#b45309' }}>Thông tin cá nhân bị khóa trong lúc admin xét duyệt. Bạn vẫn có thể đổi mật khẩu.</p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* ── 2-col grid ── */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                         {/* Personal info */}
                         <Card icon={<User className="w-4 h-4" style={{ color: '#2563eb' }} />} iconBg="#eff6ff" title={t('provider.settings.personalInfo.title')}>
-                            <Input label={t('provider.settings.personalInfo.fullNameLabel')} value={fullName} onChange={setFullName} placeholder="Nguyễn Văn A" />
+                            <Input label={t('provider.settings.personalInfo.fullNameLabel')} value={fullName} onChange={isPendingLock ? undefined : setFullName} placeholder="Nguyễn Văn A" disabled={isPendingLock} />
                             <div>
-                                <Input label={t('provider.settings.personalInfo.displayNameLabel')} value={serviceName} onChange={setServiceName} placeholder="VD: Cứu hộ Minh Tân" />
+                                <Input label={t('provider.settings.personalInfo.displayNameLabel')} value={serviceName} onChange={isPendingLock ? undefined : setServiceName} placeholder="VD: Cứu hộ Minh Tân" disabled={isPendingLock} />
                                 <p className="text-[10px] mt-1.5 italic" style={{ color: '#94a3b8' }}>
                                     {t('provider.settings.personalInfo.displayNameHint')}
                                 </p>
@@ -448,7 +461,7 @@ export default function ProviderSettingsPage() {
 
                         {/* Contact */}
                         <Card icon={<Phone className="w-4 h-4" style={{ color: C.green }} />} iconBg={C.greenLight} title={t('provider.settings.contact.title')}>
-                            <Input label={t('provider.settings.contact.phoneLabel')} value={phoneNumber} onChange={setPhoneNumber} placeholder="0912345678" type="tel" />
+                            <Input label={t('provider.settings.contact.phoneLabel')} value={phoneNumber} onChange={isPendingLock ? undefined : setPhoneNumber} placeholder="0912345678" type="tel" disabled={isPendingLock} />
                             <Input label={t('provider.settings.contact.emailLabel')} value={email} disabled />
                         </Card>
                     </div>
@@ -458,7 +471,9 @@ export default function ProviderSettingsPage() {
 
                         {/* Radius */}
                         <Card icon={<MapPin className="w-4 h-4" style={{ color: C.orange }} />} iconBg={C.orangeLight} title={t('provider.settings.workArea.title')}>
-                            <RadiusSlider value={serviceRadiusKm} onChange={setServiceRadiusKm} />
+                            {isPendingLock
+                                ? <p className="text-xs py-4 text-center" style={{ color: C.gray }}>Khóa trong lúc xét duyệt</p>
+                                : <RadiusSlider value={serviceRadiusKm} onChange={setServiceRadiusKm} />}
                         </Card>
 
                         {/* Service options */}
@@ -466,8 +481,8 @@ export default function ProviderSettingsPage() {
                             <Toggle
                                 label={t('provider.settings.serviceOptions.emergencyLabel')}
                                 description={t('provider.settings.serviceOptions.emergencyDesc')}
-                                value={emergencyAvailable}
-                                onChange={setEmergencyAvailable}
+                                value={isPendingLock ? false : emergencyAvailable}
+                                onChange={isPendingLock ? () => {} : setEmergencyAvailable}
                             />
                         </Card>
                     </div>
@@ -560,6 +575,14 @@ export default function ProviderSettingsPage() {
                                 ? <><RefreshCw className="w-4 h-4 animate-spin" /> {t('provider.settings.saving')}</>
                                 : <><Save className="w-4 h-4" /> {t('provider.settings.saveAll')}</>}
                         </button>
+                        {isPendingLock && (
+                            <div className="absolute inset-0 rounded-2xl flex items-center justify-center"
+                                style={{ background: '#fde68a', cursor: 'not-allowed' }}
+                                title="Không thể lưu trong lúc hồ sơ đang xét duyệt">
+                                <Clock className="w-4 h-4 mr-2" style={{ color: '#92400e' }} />
+                                <span className="text-sm font-bold" style={{ color: '#92400e' }}>Đang xét duyệt...</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

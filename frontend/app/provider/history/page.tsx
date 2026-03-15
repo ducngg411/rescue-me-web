@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import api from '@/lib/api';
 import ProviderLayout from '@/components/ProviderLayout';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import PendingVerificationScreen from '@/components/PendingVerificationScreen';
 import {
     Search, ChevronRight, ChevronLeft, Calendar,
     TrendingUp, TrendingDown, CheckCircle2, XCircle,
@@ -476,6 +477,9 @@ export default function ProviderHistoryPage() {
             </div>
         );
     }
+
+    // Block PENDING providers — no history yet
+    if (user.verificationStatus === 'PENDING') return <PendingVerificationScreen />;
 
     const todayProfit = stats?.todayProfit ?? 0;
     const profitChange = stats?.profitChangePercent ?? 0;

@@ -4,6 +4,7 @@ import React, { useRef, useState } from 'react';
 import { Upload, X, Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { useUpload, UseUploadOptions } from '@/lib/hooks/useUpload';
 import { validateFile, formatFileSize } from '@/lib/upload';
+import toast from 'react-hot-toast';
 
 interface FileUploadProps extends UseUploadOptions {
     label?: string;
@@ -39,7 +40,7 @@ export default function FileUpload({
         // Validate file
         const validation = validateFile(file);
         if (!validation.valid) {
-            alert(validation.error);
+            toast.error(validation.error);
             return;
         }
 

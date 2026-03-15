@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowRight, ArrowLeft } from 'lucide-react';
 import { useAuthGuard } from '@/lib/guards';
 import api from '@/lib/api';
+import toast from 'react-hot-toast';
 
 import {
     ServiceInfoStep,
@@ -52,7 +53,8 @@ export default function ProviderOnboardingPage() {
         try {
             const res = await api.get('/me/provider/profile');
             setProfile(res.data);
-            if (res.data.verificationStatus !== 'DRAFT' && res.data.verificationStatus !== 'REJECTED') {
+            // Only fully approved providers can't re-enter onboarding
+            if (res.data.verificationStatus === 'APPROVED') {
                 router.push('/provider/dashboard');
             }
         } catch (err) {
@@ -70,7 +72,7 @@ export default function ProviderOnboardingPage() {
                 setCurrentStep(2);
             } catch (err) {
                 console.error('Failed to save service info:', err);
-                alert('Không thể lưu thông tin. Vui lòng thử lại.');
+                toast.error('Không thể lưu thông tin. Vui lòng thử lại.');
             }
         } else if (currentStep === 2) {
             setRequiredDocs(stepData);
@@ -78,30 +80,11 @@ export default function ProviderOnboardingPage() {
         } else if (currentStep === 3) {
             setOptionalDocs(stepData);
             setCurrentStep(4);
-        } else if (currentStep === 4) {
-            await submitVerification();
         }
+        // Step 4 (ReviewSubmitStep) handles its own submit + redirect — no action needed here
     };
 
     const handleSkipOptional = () => { setOptionalDocs({}); setCurrentStep(4); };
-
-    const submitVerification = async () => {
-        setIsSubmitting(true);
-        try {
-            const uploadIds = [
-                requiredDocs?.citizenIdFront?.id, requiredDocs?.citizenIdBack?.id,
-                requiredDocs?.selfie?.id, requiredDocs?.carPhoto?.id, requiredDocs?.motorbikePhoto?.id,
-                optionalDocs?.driverLicense?.id, optionalDocs?.businessLicense?.id,
-            ].filter(Boolean);
-            const res = await api.post('/me/provider/submit-verification', { uploadIds });
-            if (res.data.success) router.push('/provider/dashboard?verification=submitted');
-            else alert(res.data.message || 'Failed to submit verification');
-        } catch (err: any) {
-            alert(err.response?.data?.message || 'Failed to submit verification');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
 
     if (!isReady || loading) {
         return (
@@ -111,11 +94,13 @@ export default function ProviderOnboardingPage() {
         );
     }
 
+    const isEditMode = profile?.verificationStatus === 'PENDING';
+
     return (
         <div className="h-screen flex overflow-hidden" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
 
             {/* ─── Left navy panel ─── */}
-            <div className="hidden lg:flex flex-col gap-8 p-10 flex-shrink-0 h-screen overflow-y-auto" style={{ width: '300px', background: `linear-gradient(155deg, ${C.navy} 0%, #2d2d4e 100%)` }}>
+            <div className="hidden lg:flex flex-col gap-8 p-12 flex-shrink-0 h-screen overflow-y-auto" style={{ width: '420px', background: `linear-gradient(155deg, ${C.navy} 0%, #2d2d4e 100%)` }}>
                 {/* Logo */}
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: C.orange }}>
@@ -127,8 +112,14 @@ export default function ProviderOnboardingPage() {
                 {/* Steps */}
                 <div className="space-y-5">
                     <div>
-                        <h2 className="text-white text-xl font-bold mb-1">Hồ sơ nhà cung cấp</h2>
-                        <p className="text-white/50 text-xs leading-relaxed">Hoàn thành các bước để được xét duyệt trong 24–48h</p>
+                        <h2 className="text-white text-xl font-bold mb-1">
+                            {isEditMode ? 'Cập nhật hồ sơ' : 'Hồ sơ nhà cung cấp'}
+                        </h2>
+                        <p className="text-white/50 text-xs leading-relaxed">
+                            {isEditMode
+                                ? 'Chỉnh sửa thông tin và gửi lại để admin xét duyệt'
+                                : 'Hoàn thành các bước để được xét duyệt trong 24–48h'}
+                        </p>
                     </div>
                     <div className="space-y-3">
                         {/* Step 0: Role selection always done */}
@@ -167,7 +158,7 @@ export default function ProviderOnboardingPage() {
                     </div>
                 </div>
 
-                <p className="text-white/25 text-xs">© 2024 RescueMe. All rights reserved.</p>
+                <p className="text-white/25 text-xs">© 2026 RescueMe. All rights reserved.</p>
             </div>
 
             {/* ─── Right form panel ─── */}
@@ -181,6 +172,20 @@ export default function ProviderOnboardingPage() {
                         </div>
                         <span className="font-bold" style={{ color: C.navy }}>RescueMe</span>
                     </div>
+
+                    {/* Edit mode banner */}
+                    {isEditMode && (
+                        <div
+                            className="rounded-2xl px-4 py-3 mb-4 flex items-start gap-3"
+                            style={{ background: '#fff7ed', border: '1.5px solid #fed7aa' }}
+                        >
+                            <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ background: C.orange }} />
+                            <p className="text-xs leading-relaxed" style={{ color: '#9a3412' }}>
+                                <strong>Đang chỉnh sửa hồ sơ đã nộp.</strong>{' '}
+                                Sau khi hoàn tất, bấm <em>Gửi hồ sơ</em> để cập nhật và yêu cầu xét duyệt lại.
+                            </p>
+                        </div>
+                    )}
 
                     {/* Step header */}
                     <div className="mb-6">
@@ -207,7 +212,7 @@ export default function ProviderOnboardingPage() {
                             <ServiceInfoStep
                                 initialData={serviceInfo || profile}
                                 onComplete={handleStepComplete}
-                                onBack={() => router.push('/provider/dashboard')}
+                                onBack={() => router.push(isEditMode ? '/provider/dashboard' : '/onboarding/role')}
                                 isShell
                             />
                         )}
@@ -238,6 +243,7 @@ export default function ProviderOnboardingPage() {
                                 onBack={() => setCurrentStep(3)}
                                 isShell
                                 isSubmitting={isSubmitting}
+                                isEditMode={isEditMode}
                             />
                         )}
                     </div>

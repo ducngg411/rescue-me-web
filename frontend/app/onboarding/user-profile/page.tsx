@@ -113,9 +113,9 @@ export default function UserProfilePage() {
     const part2Done = !!(plateOk && formData.vehicleColor.trim());
 
     return (
-        <div className="min-h-screen flex" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+        <div className="h-screen flex overflow-hidden" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
             {/* Left panel */}
-            <div className="hidden lg:flex flex-col justify-between p-10 flex-shrink-0" style={{ width: '340px', background: `linear-gradient(155deg, ${C.navy} 0%, #2d2d4e 100%)` }}>
+            <div className="hidden lg:flex flex-col justify-between p-12 flex-shrink-0 h-screen overflow-y-auto" style={{ width: '420px', background: `linear-gradient(155deg, ${C.navy} 0%, #2d2d4e 100%)` }}>
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: C.orange }}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
@@ -146,12 +146,12 @@ export default function UserProfilePage() {
                         <p className="text-white/80 text-xs leading-relaxed">💡 <strong className="text-white">Mẹo:</strong> Thông tin biển số xe giúp nhà cứu hộ xác nhận xe của bạn nhanh hơn khi đến nơi.</p>
                     </div>
                 </div>
-                <p className="text-white/30 text-xs">© 2024 RescueMe. All rights reserved.</p>
+                <p className="text-white/30 text-xs">© 2026 RescueMe. All rights reserved.</p>
             </div>
 
             {/* Right form */}
-            <div className="flex-1 overflow-y-auto">
-                <div className="min-h-full flex items-start justify-center py-10 px-6">
+            <div className="flex-1 overflow-y-auto h-screen">
+                <div className="min-h-full flex flex-col py-10 px-6 max-w-2xl mx-auto">
                     <div className="w-full max-w-lg">
                         {/* Mobile logo */}
                         <div className="flex items-center gap-2 mb-6 lg:hidden">
@@ -285,6 +285,15 @@ export default function UserProfilePage() {
                                     )}
                                 </div>
                             </div>
+
+                            <button
+                                type="button"
+                                onClick={() => router.push('/onboarding/role')}
+                                className="w-full py-3 rounded-2xl font-medium text-sm mb-3 flex items-center justify-center gap-2 border transition-all"
+                                style={{ color: C.gray, borderColor: C.border, background: 'white' }}
+                            >
+                                ← Quay lại chọn vai trò
+                            </button>
 
                             <button type="submit" disabled={isSubmitting} className="w-full py-3.5 rounded-2xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all"
                                 style={{ background: isSubmitting ? C.border : `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>

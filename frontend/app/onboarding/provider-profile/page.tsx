@@ -200,7 +200,7 @@ export default function ProviderProfilePage() {
                         ))}
                     </div>
                 </div>
-                <p className="text-white/30 text-xs">© 2024 RescueMe. All rights reserved.</p>
+                <p className="text-white/30 text-xs">© 2026 RescueMe. All rights reserved.</p>
             </div>
 
             {/* Right form */}

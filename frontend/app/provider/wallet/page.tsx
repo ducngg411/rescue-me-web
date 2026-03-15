@@ -13,6 +13,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useRouter } from 'next/navigation';
 import ProviderLayout from '@/components/ProviderLayout';
+import PendingVerificationScreen from '@/components/PendingVerificationScreen';
 
 // ─── Same color tokens as provider dashboard ─────────────────────────────────
 const C = {
@@ -876,6 +877,8 @@ export default function ProviderWalletPage() {
     const displayName = (user as any)?.fullName?.split(' ').slice(-1)[0] || user?.email?.split('@')[0] || 'Provider';
 
     // ── Guard: APPROVED only ──────────────────────────────────────────────────
+    if (isReady && user && user.verificationStatus === 'PENDING') return <PendingVerificationScreen />;
+
     if (isReady && user && user.verificationStatus !== 'APPROVED') {
         return (
             <div className="min-h-screen flex items-center justify-center p-4" style={{ background: C.bg }}>
@@ -885,7 +888,7 @@ export default function ProviderWalletPage() {
                     </div>
                     <h2 className="text-lg font-bold mb-2" style={{ color: C.navy }}>{t('provider.wallet.notVerified')}</h2>
                     <p className="text-sm mb-5" style={{ color: C.gray }}>{t('provider.wallet.notVerifiedDesc')}</p>
-                    <button onClick={() => router.push('/provider/verification')} className="w-full py-2.5 rounded-xl text-white text-sm font-semibold mb-2" style={{ background: C.orange }}>{t('provider.wallet.completeVerification')}</button>
+                    <button onClick={() => router.push('/provider/onboarding')} className="w-full py-2.5 rounded-xl text-white text-sm font-semibold mb-2" style={{ background: C.orange }}>{t('provider.wallet.completeVerification')}</button>
                     <button onClick={() => router.push('/provider/active')} className="w-full py-2.5 rounded-xl text-sm font-medium border" style={{ color: C.gray, borderColor: '#e2e8f0' }}>{t('provider.wallet.backToDashboard')}</button>
                 </div>
             </div>

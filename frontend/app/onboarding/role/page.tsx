@@ -123,7 +123,7 @@ export default function RoleSelectionPage() {
                 </div>
 
                 {/* Footer text */}
-                <p className="text-white/40 text-xs">© 2024 RescueMe. All rights reserved.</p>
+                <p className="text-white/40 text-xs">© 2026 RescueMe. All rights reserved.</p>
             </div>
 
             {/* Right form panel */}

@@ -95,7 +95,7 @@ const vi = {
             subtitle: 'Chọn vai trò phù hợp với bạn.',
             user: 'Người dùng',
             userDesc: 'Tôi cần hỗ trợ cứu hộ khi cần thiết.',
-            provider: 'Nhà cung cấp',
+            provider: 'Cứu hộ viên',
             providerDesc: 'Tôi muốn cung cấp dịch vụ cứu hộ.',
             selectRole: 'Chọn vai trò',
             continue: 'Tiếp tục',
@@ -156,7 +156,7 @@ const vi = {
                 created: 'Đã tạo',
                 matching: 'Đang tìm',
                 matched: 'Đã ghép đôi',
-                assigned: 'Có provider',
+                assigned: 'Có cứu hộ viên',
                 accepted: 'Đã chấp nhận',
                 inProgress: 'Đang thực hiện',
                 completed: 'Hoàn thành',
@@ -167,7 +167,7 @@ const vi = {
         },
         requestDetail: {
             title: 'Chi tiết yêu cầu',
-            provider: 'Nhà cung cấp',
+            provider: 'Cứu hộ viên',
             location: 'Vị trí',
             incidentType: 'Loại sự cố',
             createdAt: 'Thời gian tạo',
@@ -200,11 +200,11 @@ const vi = {
             enableOnlineToReceive: 'Bật trực tuyến để nhận yêu cầu',
             accept: 'CHẤP NHẬN',
             decline: 'BỎ QUA',
-            providerRole: 'Nhà cung cấp',
+            providerRole: 'Cứu hộ viên',
             notVerified: 'Chưa được xác minh',
             verificationRequired: 'Bạn cần hoàn thành xác minh trước khi có thể nhận yêu cầu.',
             completeVerification: 'Hoàn thiện xác minh',
-            providerOnly: 'Trang này chỉ dành cho nhà cung cấp dịch vụ.',
+            providerOnly: 'Trang này chỉ dành cho cứu hộ viên.',
             pendingRequests: 'Yêu cầu đang chờ',
             weeklyEarnings: 'Thu nhập tuần',
             todayEarnings: 'Thu nhập hôm nay',
@@ -306,7 +306,7 @@ const vi = {
                 errorDefault: 'Không thể thực hiện rút tiền. Vui lòng thử lại.',
             },
             notVerified: 'Chưa được xác minh',
-            notVerifiedDesc: 'Chỉ nhà cung cấp đã được phê duyệt mới có thể sử dụng ví.',
+            notVerifiedDesc: 'Chỉ cứu hộ viên đã được phê duyệt mới có thể sử dụng ví.',
             approved: 'phê duyệt',
             completeVerification: 'Hoàn thiện xác minh',
             backToDashboard: '← Quay lại Dashboard',
@@ -337,7 +337,7 @@ const vi = {
             empty: 'Chưa có yêu cầu nào.',
         },
         verification: {
-            title: 'Xác minh nhà cung cấp',
+            title: 'Xác minh cứu hộ viên',
             subtitle: 'Vui lòng cung cấp các giấy tờ cần thiết để được xác minh.',
             submit: 'Gửi xác minh',
             pending: 'Đang xem xét',
@@ -349,7 +349,7 @@ const vi = {
             profileCard: {
                 publicProfile: 'Hồ sơ công khai',
                 noName: 'Chưa đặt tên',
-                providerId: 'Provider ID',
+                providerId: 'Mã cứu hộ viên',
             },
             personalInfo: {
                 title: 'Thông tin cá nhân',
@@ -365,7 +365,7 @@ const vi = {
             workArea: {
                 title: 'Khu vực hoạt động',
                 radiusLabel: 'Khoảng cách nhận đơn',
-                radiusHint: 'Provider nhận yêu cầu cứu hộ trong bán kính {value}km từ vị trí hiện tại. Bán kính lớn hơn = nhiều đơn hơn, nhưng di chuyển xa hơn.',
+                radiusHint: 'Cứu hộ viên nhận yêu cầu cứu hộ trong bán kính {value}km từ vị trí hiện tại. Bán kính lớn hơn = nhiều đơn hơn, nhưng di chuyển xa hơn.',
             },
             serviceOptions: {
                 title: 'Tuỳ chọn dịch vụ',
@@ -517,7 +517,7 @@ const vi = {
             alreadySentQuote: 'Bạn đã gửi báo giá cho yêu cầu này rồi.',
             quoteSuccess: 'Đã gửi báo giá! Đang chờ khách hàng phản hồi.',
             quoteRejected: 'Báo giá của bạn bị từ chối',
-            otherProviderChosen: 'Khách hàng đã chọn provider khác',
+            otherProviderChosen: 'Khách hàng đã chọn cứu hộ viên khác',
             loadError: 'Không thể tải thông tin yêu cầu',
             quoteWindowExpired: 'Yêu cầu này đã hết hạn – cửa sổ báo giá đã đóng.',
             declineSuccess: 'Đã từ chối yêu cầu',
@@ -547,7 +547,7 @@ const vi = {
             },
             requestEnded: {
                 title: 'Yêu cầu đã kết thúc',
-                desc: 'Yêu cầu này đã được hoàn thành hoặc được giao cho provider khác.',
+                desc: 'Yêu cầu này đã được hoàn thành hoặc được giao cho cứu hộ viên khác.',
             },
             accepted: {
                 headerSubtitle: 'Báo giá được chấp nhận',
@@ -620,7 +620,7 @@ const vi = {
             notFound: 'Không tìm thấy request',
             currentStatus: 'Trạng thái hiện tại',
             statusBadge: {
-                searching: 'Đang tìm provider',
+                searching: 'Đang tìm cứu hộ viên',
                 waitingCustomer: 'Đang chờ KH',
                 selected: 'Đã được chọn',
                 highPriority: 'Ư u tiên cao',
@@ -880,7 +880,7 @@ const vi = {
             },
             timeline: {
                 created: 'Tạo yêu cầu',
-                assigned: 'Provider nhận',
+                assigned: 'Cứu hộ viên nhận',
                 payment: 'Thanh toán',
                 completed: 'Hoàn thành',
                 notDone: 'Chưa thực hiện',
@@ -1021,7 +1021,7 @@ const vi = {
     },
     components: {
         assignedProvider: {
-            title: 'Nhà cung cấp của bạn',
+            title: 'Cứu hộ viên của bạn',
             enRoute: 'Đang di chuyển đến bạn',
             eta: 'ETA',
             call: 'Gọi điện',
@@ -1041,14 +1041,14 @@ const vi = {
         },
         paymentRequest: {
             title: 'Yêu cầu thanh toán',
-            providerRequests: 'Nhà cung cấp yêu cầu thanh toán',
+            providerRequests: 'Cứu hộ viên yêu cầu thanh toán',
             accept: 'Chấp nhận',
             dispute: 'Tranh chấp',
         },
         quoteSelection: {
             title: 'Chọn báo giá',
-            subtitle: 'Chọn nhà cung cấp phù hợp với bạn',
-            providers: 'nhà cung cấp',
+            subtitle: 'Chọn cứu hộ viên phù hợp với bạn',
+            providers: 'cứu hộ viên',
             select: 'Chọn',
             selected: 'Đã chọn',
             noQuotes: 'Chưa có báo giá nào.',
@@ -1056,24 +1056,24 @@ const vi = {
             rating: 'đánh giá',
         },
         matchingStatus: {
-            title: 'Đang tìm kiếm nhà cung cấp',
+            title: 'Đang tìm kiếm cứu hộ viên',
             subtitle: 'Vui lòng chờ trong giây lát...',
             cancel: 'Hủy yêu cầu',
             waiting: 'Đang chờ phản hồi',
         },
         workingView: {
             title: 'Đang thực hiện dịch vụ',
-            providerWorking: 'Nhà cung cấp đang làm việc',
+            providerWorking: 'Cứu hộ viên đang làm việc',
             done: 'Hoàn thành',
         },
         arrivalConfirmation: {
-            title: 'Nhà cung cấp đã đến',
+            title: 'Cứu hộ viên đã đến',
             subtitle: 'Vui lòng xác nhận khi dịch vụ hoàn tất.',
             confirm: 'Xác nhận hoàn tất',
         },
         expiredRetry: {
             title: 'Yêu cầu đã hết hạn',
-            subtitle: 'Không tìm được nhà cung cấp phù hợp.',
+            subtitle: 'Không tìm được cứu hộ viên phù hợp.',
             retry: 'Thử lại',
             cancel: 'Hủy',
         },

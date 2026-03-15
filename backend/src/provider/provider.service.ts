@@ -2,12 +2,13 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException,
 import { PrismaService } from '../prisma/prisma.service';
 import { VietMapService } from '../vietmap/vietmap.service';
 import { UpdateProviderProfileDto } from '../auth/dto/auth.dto';
-import { UserRole, VerificationStatus, ProviderType, DocumentType } from '@prisma/client';
+import { Prisma, UserRole, VerificationStatus, ProviderType, DocumentType } from '@prisma/client';
 import { SubmitVerificationResponseDto } from './dto/submit-verification.dto';
 
 @Injectable()
 export class ProviderService {
     private readonly logger = new Logger(ProviderService.name);
+    private static readonly MIN_PROVIDER_DEPOSIT_VND = 100_000;
 
     constructor(
         private prisma: PrismaService,
@@ -232,6 +233,20 @@ export class ProviderService {
             throw new ForbiddenException('Provider must be verified (APPROVED) to go online');
         }
 
+        // Chỉ cho phép online khi đã nạp đủ ký quỹ tối thiểu
+        if (isOnline) {
+            const wallet = await this.prisma.providerWallet.findUnique({
+                where: { providerId: userId },
+                select: { availableBalance: true },
+            });
+            const availableBalance = wallet?.availableBalance ?? 0;
+            if (availableBalance < ProviderService.MIN_PROVIDER_DEPOSIT_VND) {
+                throw new ForbiddenException(
+                    `Số dư ví tối thiểu ${ProviderService.MIN_PROVIDER_DEPOSIT_VND.toLocaleString('vi-VN')} VND để bật hoạt động`,
+                );
+            }
+        }
+
         // Clear currentLocation when going offline
         const updateData: any = { isOnline };
         if (!isOnline) {
@@ -328,13 +343,25 @@ export class ProviderService {
             return []; // Chưa verified, không trả request
         }
 
-        // Block provider if wallet balance is negative (outstanding commission debt)
+        // Block provider if wallet is below minimum deposit requirement
         const wallet = await this.prisma.providerWallet.findUnique({
             where: { providerId: userId },
             select: { availableBalance: true },
         });
-        if (wallet && wallet.availableBalance < 0) {
-            console.warn(`[Provider ${userId}] Blocked from receiving jobs — negative wallet balance (${wallet.availableBalance} VND)`);
+        const availableBalance = wallet?.availableBalance ?? 0;
+        if (availableBalance < ProviderService.MIN_PROVIDER_DEPOSIT_VND) {
+            // Force offline to keep provider state consistent with deposit policy
+            await this.prisma.user.update({
+                where: { id: userId },
+                data: {
+                    isOnline: false,
+                    currentLocation: Prisma.JsonNull,
+                    lastLocationUpdate: null,
+                },
+            });
+            console.warn(
+                `[Provider ${userId}] Blocked from receiving jobs — insufficient deposit (${availableBalance} VND, required >= ${ProviderService.MIN_PROVIDER_DEPOSIT_VND} VND)`,
+            );
             return [];
         }
 
@@ -547,6 +574,18 @@ export class ProviderService {
 
         if (user.verificationStatus !== VerificationStatus.APPROVED) {
             throw new ForbiddenException('Provider must be verified to accept requests');
+        }
+
+        // Safety gate: do not allow request acceptance if deposit is below minimum
+        const wallet = await this.prisma.providerWallet.findUnique({
+            where: { providerId },
+            select: { availableBalance: true },
+        });
+        const availableBalance = wallet?.availableBalance ?? 0;
+        if (availableBalance < ProviderService.MIN_PROVIDER_DEPOSIT_VND) {
+            throw new ForbiddenException(
+                `Provider must maintain minimum deposit ${ProviderService.MIN_PROVIDER_DEPOSIT_VND.toLocaleString('vi-VN')} VND to accept requests`,
+            );
         }
 
         const request = await this.prisma.rescueRequest.findUnique({

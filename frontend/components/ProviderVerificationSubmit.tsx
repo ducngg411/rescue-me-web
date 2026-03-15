@@ -5,6 +5,7 @@ import FileUpload from '@/components/FileUpload';
 import { UploadPurpose, DocumentType, getUserUploads } from '@/lib/upload';
 import api from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 
 interface VerificationDocument {
     type: DocumentType;
@@ -160,7 +161,7 @@ export default function ProviderVerificationSubmit() {
             const response = await api.post<SubmitResponse>('/me/provider/submit-verification');
 
             if (response.data.success) {
-                alert(response.data.message || 'Hồ sơ đã được gửi thành công! Vui lòng đợi xác minh.');
+                toast.success(response.data.message || 'Hồ sơ đã được gửi thành công! Vui lòng đợi xác minh.');
                 router.push('/provider/dashboard');
             } else {
                 // Show validation errors
@@ -259,8 +260,7 @@ export default function ProviderVerificationSubmit() {
                 {documents.map((doc) => (
                     <div
                         key={doc.type}
-                        className={`bg-white rounded-2xl border-2 p-5 transition-all ${
-                            doc.uploaded
+                        className={`bg-white rounded-2xl border-2 p-5 transition-all ${doc.uploaded
                                 ? 'border-green-400 bg-green-50'
                                 : doc.required
                                     ? 'border-gray-200 hover:border-orange-300'
@@ -342,8 +342,7 @@ export default function ProviderVerificationSubmit() {
                     <button
                         onClick={handleSubmit}
                         disabled={!allRequiredUploaded || submitting}
-                        className={`px-6 py-3 rounded-xl font-semibold text-sm transition-all ${
-                            allRequiredUploaded && !submitting
+                        className={`px-6 py-3 rounded-xl font-semibold text-sm transition-all ${allRequiredUploaded && !submitting
                                 ? 'text-white'
                                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                             }`}

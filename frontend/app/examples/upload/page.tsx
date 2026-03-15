@@ -5,6 +5,7 @@ import ProviderVerificationUpload from '@/components/ProviderVerificationUpload'
 import FileUpload from '@/components/FileUpload';
 import { UploadPurpose } from '@/lib/upload';
 import { useAuthGuard } from '@/lib/guards';
+import toast from 'react-hot-toast';
 
 export default function UploadExamplePage() {
     const { isReady } = useAuthGuard({ requireAuth: true });
@@ -43,11 +44,11 @@ export default function UploadExamplePage() {
                             label="Upload Request Photo"
                             onSuccess={(result) => {
                                 console.log('Upload success:', result);
-                                alert(`Upload successful! URL: ${result.publicUrl}`);
+                                toast.success(`Upload successful! URL: ${result.publicUrl}`);
                             }}
                             onError={(error) => {
                                 console.error('Upload error:', error);
-                                alert(`Upload failed: ${error}`);
+                                toast.error(`Upload failed: ${error}`);
                             }}
                         />
                     </div>
@@ -63,11 +64,11 @@ export default function UploadExamplePage() {
                             label="Upload Review Photo"
                             onSuccess={(result) => {
                                 console.log('Upload success:', result);
-                                alert(`Upload successful! URL: ${result.publicUrl}`);
+                                toast.success(`Upload successful! URL: ${result.publicUrl}`);
                             }}
                             onError={(error) => {
                                 console.error('Upload error:', error);
-                                alert(`Upload failed: ${error}`);
+                                toast.error(`Upload failed: ${error}`);
                             }}
                         />
                     </div>

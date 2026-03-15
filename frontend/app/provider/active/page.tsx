@@ -12,6 +12,8 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
+import PendingVerificationScreen from '@/components/PendingVerificationScreen';
+import DepositGateScreen from '@/components/DepositGateScreen';
 import {
     Wallet, Settings, BookOpen, TrendingUp,
     Star, CheckCircle2,
@@ -248,6 +250,17 @@ export default function ProviderActivePage() {
     const { requests } = usePendingRequests({ enabled: isOnline, pollInterval: 5000 });
     const { location } = useProviderLocation({ enabled: isOnline, updateInterval: 30000 });
 
+    // Wallet balance — required to go online
+    const MIN_DEPOSIT = 100_000;
+    const [walletBalance, setWalletBalance] = useState<number | null>(null);
+    useEffect(() => {
+        if (user?.verificationStatus === 'APPROVED') {
+            api.get('/wallet/me')
+                .then(r => setWalletBalance(r.data.availableBalance ?? 0))
+                .catch(() => setWalletBalance(0));
+        }
+    }, [user?.verificationStatus]);
+
     const [selectedRequest, setSelectedRequest] = useState<any>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [confirmDeclineReq, setConfirmDeclineReq] = useState<any>(null); // request pending decline confirmation
@@ -374,6 +387,8 @@ export default function ProviderActivePage() {
         </div>
     );
 
+    if (user.verificationStatus === 'PENDING') return <PendingVerificationScreen />;
+
     if (user.verificationStatus !== 'APPROVED') return (
         <div className="min-h-screen flex items-center justify-center p-4" style={{ background: C.bg }}>
             <div className="bg-white rounded-xl p-8 max-w-sm text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.08)' }}>
@@ -382,17 +397,36 @@ export default function ProviderActivePage() {
                 </div>
                 <h2 className="text-lg font-bold mb-2" style={{ color: C.navy }}>{t('provider.dashboard.notVerified')}</h2>
                 <p className="text-sm mb-5" style={{ color: C.gray }}>{t('provider.dashboard.verificationRequired')}</p>
-                <button onClick={() => router.push('/provider/verification')} className="w-full py-2.5 rounded-xl text-white text-sm font-semibold" style={{ background: C.orange }}>{t('provider.dashboard.completeVerification')}</button>
+                <button onClick={() => router.push('/provider/onboarding')} className="w-full py-2.5 rounded-xl text-white text-sm font-semibold" style={{ background: C.orange }}>{t('provider.dashboard.completeVerification')}</button>
             </div>
         </div>
     );
 
+    // Deposit gate: APPROVED but insufficient balance (wait until balance loaded)
+    if (walletBalance !== null && walletBalance < MIN_DEPOSIT) {
+        return <DepositGateScreen currentBalance={walletBalance} />;
+    }
+
     // ── Handlers ──────────────────────────────────────────────────────────────
     const handleToggle = async () => {
         if (statusLoading) return;
+
+        if (!isOnline) {
+            if (walletBalance === null) {
+                toast.error('Đang kiểm tra số dư ví, vui lòng thử lại sau vài giây.');
+                return;
+            }
+            if (walletBalance < MIN_DEPOSIT) {
+                toast.error(`Bạn cần tối thiểu ${formatVnd(MIN_DEPOSIT)} trong ví ký quỹ để bật hoạt động.`);
+                return;
+            }
+        }
+
         const result = await toggleOnlineStatus(!isOnline);
         if (result.success) toast.success(result.message); else toast.error(result.message);
     };
+
+    const canToggleOnline = isOnline || (walletBalance !== null && walletBalance >= MIN_DEPOSIT);
 
     const handleViewDetails = (req: any) => {
         // Dismiss the modal for this request before navigating so that
@@ -478,8 +512,8 @@ export default function ProviderActivePage() {
                         </span>
                         <button
                             onClick={handleToggle}
-                            disabled={statusLoading}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isOnline ? 'bg-green-500' : 'bg-gray-300'} ${statusLoading ? 'opacity-50' : ''}`}
+                            disabled={statusLoading || !canToggleOnline}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isOnline ? 'bg-green-500' : 'bg-gray-300'} ${statusLoading || !canToggleOnline ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${isOnline ? 'translate-x-4' : 'translate-x-0.5'}`} />
                         </button>
@@ -590,10 +624,10 @@ export default function ProviderActivePage() {
                                 {/* Toggle switch — the only control, clearly paired with label */}
                                 <button
                                     onClick={handleToggle}
-                                    disabled={statusLoading}
+                                    disabled={statusLoading || !canToggleOnline}
                                     aria-label="Toggle online status"
                                     className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none ${isOnline ? 'bg-green-500' : 'bg-gray-300'
-                                        } ${statusLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                        } ${statusLoading || !canToggleOnline ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                                 >
                                     <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-md transition-transform ${isOnline ? 'translate-x-5' : 'translate-x-0.5'
                                         }`} />
