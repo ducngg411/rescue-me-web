@@ -37,7 +37,7 @@ export interface DebitOptions {
 // Service
 // ─────────────────────────────────────────────────────────────────────────────
 
-const MIN_TOPUP = 1; // TODO: restore to 100_000 after SePay testing
+const MIN_TOPUP = 100_000; // TODO: restore to 100_000 after SePay testing
 
 @Injectable()
 export class WalletService {

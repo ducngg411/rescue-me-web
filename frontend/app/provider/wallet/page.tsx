@@ -58,7 +58,7 @@ interface TransactionsResponse {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const MIN_WITHDRAWAL = 50_000;
-const MIN_TOPUP = 1; // TODO: restore to 100_000 after SePay testing
+const MIN_TOPUP = 100_000; // TODO: restore to 100_000 after SePay testing
 
 const TOPUP_QUICK_AMOUNTS = [100_000, 200_000, 500_000, 1_000_000, 2_000_000];
 

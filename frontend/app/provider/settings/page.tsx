@@ -409,7 +409,7 @@ export default function ProviderSettingsPage() {
                                     {providerId && (
                                         <span className="text-[10px] font-bold px-2.5 py-1 rounded-full"
                                             style={{ background: 'rgba(255,255,255,0.1)', color: '#94a3b8' }}>
-                                            Provider ID: #{providerId}
+                                            {t('provider.settings.profileCard.providerId')}: #{providerId}
                                         </span>
                                     )}
                                     <span className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full"
@@ -439,8 +439,8 @@ export default function ProviderSettingsPage() {
                         <div className="rounded-2xl p-4 flex items-start gap-3" style={{ background: '#fffbeb', border: '1.5px solid #fde68a' }}>
                             <Clock className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#d97706' }} />
                             <div>
-                                <p className="text-sm font-bold mb-0.5" style={{ color: '#92400e' }}>Hồ sơ đang được xét duyệt</p>
-                                <p className="text-xs" style={{ color: '#b45309' }}>Thông tin cá nhân bị khóa trong lúc admin xét duyệt. Bạn vẫn có thể đổi mật khẩu.</p>
+                                <p className="text-sm font-bold mb-0.5" style={{ color: '#92400e' }}>{t('provider.settings.pendingLock.title')}</p>
+                                <p className="text-xs" style={{ color: '#b45309' }}>{t('provider.settings.pendingLock.desc')}</p>
                             </div>
                         </div>
                     )}
@@ -450,9 +450,9 @@ export default function ProviderSettingsPage() {
 
                         {/* Personal info */}
                         <Card icon={<User className="w-4 h-4" style={{ color: '#2563eb' }} />} iconBg="#eff6ff" title={t('provider.settings.personalInfo.title')}>
-                            <Input label={t('provider.settings.personalInfo.fullNameLabel')} value={fullName} onChange={isPendingLock ? undefined : setFullName} placeholder="Nguyễn Văn A" disabled={isPendingLock} />
+                            <Input label={t('provider.settings.personalInfo.fullNameLabel')} value={fullName} onChange={isPendingLock ? undefined : setFullName} placeholder={t('provider.settings.personalInfo.fullNamePlaceholder')} disabled={isPendingLock} />
                             <div>
-                                <Input label={t('provider.settings.personalInfo.displayNameLabel')} value={serviceName} onChange={isPendingLock ? undefined : setServiceName} placeholder="VD: Cứu hộ Minh Tân" disabled={isPendingLock} />
+                                <Input label={t('provider.settings.personalInfo.displayNameLabel')} value={serviceName} onChange={isPendingLock ? undefined : setServiceName} placeholder={t('provider.settings.personalInfo.displayNamePlaceholder')} disabled={isPendingLock} />
                                 <p className="text-[10px] mt-1.5 italic" style={{ color: '#94a3b8' }}>
                                     {t('provider.settings.personalInfo.displayNameHint')}
                                 </p>
@@ -472,7 +472,7 @@ export default function ProviderSettingsPage() {
                         {/* Radius */}
                         <Card icon={<MapPin className="w-4 h-4" style={{ color: C.orange }} />} iconBg={C.orangeLight} title={t('provider.settings.workArea.title')}>
                             {isPendingLock
-                                ? <p className="text-xs py-4 text-center" style={{ color: C.gray }}>Khóa trong lúc xét duyệt</p>
+                                ? <p className="text-xs py-4 text-center" style={{ color: C.gray }}>{t('provider.settings.workArea.lockedWhilePending')}</p>
                                 : <RadiusSlider value={serviceRadiusKm} onChange={setServiceRadiusKm} />}
                         </Card>
 
@@ -482,7 +482,7 @@ export default function ProviderSettingsPage() {
                                 label={t('provider.settings.serviceOptions.emergencyLabel')}
                                 description={t('provider.settings.serviceOptions.emergencyDesc')}
                                 value={isPendingLock ? false : emergencyAvailable}
-                                onChange={isPendingLock ? () => {} : setEmergencyAvailable}
+                                onChange={isPendingLock ? () => { } : setEmergencyAvailable}
                             />
                         </Card>
                     </div>
@@ -578,9 +578,9 @@ export default function ProviderSettingsPage() {
                         {isPendingLock && (
                             <div className="absolute inset-0 rounded-2xl flex items-center justify-center"
                                 style={{ background: '#fde68a', cursor: 'not-allowed' }}
-                                title="Không thể lưu trong lúc hồ sơ đang xét duyệt">
+                                title={t('provider.settings.pendingLock.cannotSaveTitle')}>
                                 <Clock className="w-4 h-4 mr-2" style={{ color: '#92400e' }} />
-                                <span className="text-sm font-bold" style={{ color: '#92400e' }}>Đang xét duyệt...</span>
+                                <span className="text-sm font-bold" style={{ color: '#92400e' }}>{t('provider.settings.pendingLock.overlay')}</span>
                             </div>
                         )}
                     </div>

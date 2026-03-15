@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Info } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import FileUpload from '@/components/FileUpload';
 import { UploadPurpose, DocumentType, getUserUploads } from '@/lib/upload';
 
@@ -27,6 +28,7 @@ interface OptionalDocsStepProps {
 }
 
 export default function OptionalDocsStep({ initialData, serviceInfo, onComplete, onBack, onSkip, isShell }: OptionalDocsStepProps) {
+    const { t } = useLanguage();
     const [uploads, setUploads] = useState({ driverLicense: initialData?.driverLicense || null, businessLicense: initialData?.businessLicense || null });
     const [loading, setLoading] = useState(true);
     const isBusiness = serviceInfo?.providerType === 'BUSINESS';
@@ -57,21 +59,21 @@ export default function OptionalDocsStep({ initialData, serviceInfo, onComplete,
             <div className="flex items-start gap-3 p-4 rounded-2xl mb-4" style={{ background: C.orangeLight, border: `1px solid #fed7aa` }}>
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: C.orange }} />
                 <p className="text-xs leading-relaxed" style={{ color: '#92400e' }}>
-                    Các tài liệu này <strong>không bắt buộc</strong> ngay lúc này. Bạn có thể tải lên sau khi tài khoản được duyệt, nhưng chúng giúp tăng độ tin cậy với khách hàng.
+                    {t('provider.onboarding.optionalDocs.infoPrefix')} <strong>{t('provider.onboarding.optionalDocs.infoEmphasis')}</strong> {t('provider.onboarding.optionalDocs.infoSuffix')}
                 </p>
             </div>
 
-            <SectionCard title="Giấy tờ bổ sung">
+            <SectionCard title={t('provider.onboarding.optionalDocs.title')}>
                 <div className="space-y-5">
                     <div>
-                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Bằng lái xe</label>
-                        <p className="text-[11px] mb-2" style={{ color: C.gray }}>Tạo lòng tin với khách hàng và tăng tỉ lệ nhận việc</p>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>{t('provider.onboarding.optionalDocs.driverLicenseLabel')}</label>
+                        <p className="text-[11px] mb-2" style={{ color: C.gray }}>{t('provider.onboarding.optionalDocs.driverLicenseHint')}</p>
                         <FileUpload purpose={UploadPurpose.PROVIDER_VERIFICATION} docType={DocumentType.DRIVER_LICENSE} existingUpload={uploads.driverLicense} onSuccess={(u: any) => setUploads({ ...uploads, driverLicense: u })} />
                     </div>
                     {isBusiness && (
                         <div>
-                            <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Giấy đăng ký kinh doanh</label>
-                            <p className="text-[11px] mb-2" style={{ color: C.gray }}>Bắt buộc để hiển thị badge "Doanh nghiệp đã xác minh"</p>
+                            <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>{t('provider.onboarding.optionalDocs.businessLicenseLabel')}</label>
+                            <p className="text-[11px] mb-2" style={{ color: C.gray }}>{t('provider.onboarding.optionalDocs.businessLicenseHint')}</p>
                             <FileUpload purpose={UploadPurpose.PROVIDER_VERIFICATION} docType={DocumentType.BUSINESS_REGISTRATION} existingUpload={uploads.businessLicense} onSuccess={(u: any) => setUploads({ ...uploads, businessLicense: u })} />
                         </div>
                     )}
@@ -80,11 +82,11 @@ export default function OptionalDocsStep({ initialData, serviceInfo, onComplete,
 
             {/* Actions */}
             <div className="flex justify-between items-center pt-2">
-                <button onClick={onBack} className="px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50" style={{ borderColor: C.border, color: C.gray }}>Quay lại</button>
+                <button onClick={onBack} className="px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50" style={{ borderColor: C.border, color: C.gray }}>{t('provider.onboarding.common.back')}</button>
                 <div className="flex gap-2">
-                    <button onClick={onSkip} className="px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50" style={{ borderColor: C.border, color: C.gray }}>Bỏ qua</button>
+                    <button onClick={onSkip} className="px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50" style={{ borderColor: C.border, color: C.gray }}>{t('provider.onboarding.common.skip')}</button>
                     <button onClick={() => onComplete(uploads)} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold transition-all" style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)` }}>
-                        Tiếp tục →
+                        {t('provider.onboarding.common.continue')} →
                     </button>
                 </div>
             </div>

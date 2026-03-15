@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import toast from 'react-hot-toast';
+import { resolveAuthErrorMessage } from '@/lib/i18n/authErrorMessages';
 
 interface RegisterFormData {
     email: string;
@@ -63,7 +64,7 @@ export default function RegisterPage() {
             toast.success(t('auth.register.registerSuccess'));
             router.push('/onboarding/role');
         } catch (err: any) {
-            toast.error(err.response?.data?.message || t('auth.register.registerFailed'));
+            toast.error(resolveAuthErrorMessage(err.response?.data?.message, t, 'auth.register.registerFailed'));
         } finally {
             setLoading(false);
         }
@@ -81,7 +82,7 @@ export default function RegisterPage() {
                 router.push('/');
             }
         } catch (err: any) {
-            toast.error(err.response?.data?.message || t('auth.login.googleLoginFailed'));
+            toast.error(resolveAuthErrorMessage(err.response?.data?.message, t, 'auth.login.googleLoginFailed'));
         } finally {
             setLoading(false);
         }

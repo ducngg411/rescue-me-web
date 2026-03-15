@@ -31,7 +31,7 @@ class WithdrawDto {
 class TopupInitDto {
     @Type(() => Number)
     @IsNumber()
-    @Min(1) // TODO: restore @Min(100_000) after SePay testing
+    @Min(100_000) // TODO: restore @Min(100_000) after SePay testing
     amount: number;
 }
 

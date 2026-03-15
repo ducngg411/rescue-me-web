@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import toast from 'react-hot-toast';
+import { resolveAuthErrorMessage } from '@/lib/i18n/authErrorMessages';
 
 interface LoginFormData {
     email: string;
@@ -44,7 +45,7 @@ export default function LoginPage() {
                 router.push('/user');
             }
         } catch (err: any) {
-            toast.error(err.response?.data?.message || t('auth.login.loginFailed'));
+            toast.error(resolveAuthErrorMessage(err.response?.data?.message, t, 'auth.login.loginFailed'));
         } finally {
             setLoading(false);
         }
@@ -66,7 +67,7 @@ export default function LoginPage() {
                 router.push('/user');
             }
         } catch (err: any) {
-            toast.error(err.response?.data?.message || t('auth.login.googleLoginFailed'));
+            toast.error(resolveAuthErrorMessage(err.response?.data?.message, t, 'auth.login.googleLoginFailed'));
         } finally {
             setLoading(false);
         }

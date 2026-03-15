@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { selectRole } from '@/lib/auth';
 
 const C = {
@@ -20,6 +21,7 @@ const C = {
 export default function RoleSelectionPage() {
     const router = useRouter();
     const { user, loading, refreshUser } = useAuth();
+    const { t } = useLanguage();
     const [selectedRole, setSelectedRole] = useState<'USER' | 'PROVIDER' | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
@@ -37,7 +39,7 @@ export default function RoleSelectionPage() {
 
     const handleContinue = async () => {
         if (!selectedRole) {
-            setError('Vui lòng chọn vai trò của bạn');
+            setError(t('onboarding.role.selectRoleError'));
             return;
         }
         setIsSubmitting(true);
@@ -51,7 +53,7 @@ export default function RoleSelectionPage() {
                 router.push('/provider/onboarding');
             }
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Có lỗi xảy ra. Vui lòng thử lại.');
+            setError(err.response?.data?.message || t('onboarding.role.genericError'));
             setIsSubmitting(false);
         }
     };
@@ -62,7 +64,7 @@ export default function RoleSelectionPage() {
                 <div className="text-center">
                     <div className="w-10 h-10 rounded-full border-[3px] border-t-transparent animate-spin mx-auto mb-3"
                         style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
-                    <p className="text-sm" style={{ color: C.gray }}>Đang tải...</p>
+                    <p className="text-sm" style={{ color: C.gray }}>{t('common.loading')}</p>
                 </div>
             </div>
         );
@@ -98,11 +100,11 @@ export default function RoleSelectionPage() {
                                 </svg>
                             </div>
                             <div>
-                                <p className="text-white text-sm font-semibold">Người Dùng</p>
-                                <p className="text-white/60 text-xs">Yêu cầu cứu hộ</p>
+                                <p className="text-white text-sm font-semibold">{t('onboarding.role.userCardTitle')}</p>
+                                <p className="text-white/60 text-xs">{t('onboarding.role.userCardSubtitle')}</p>
                             </div>
                         </div>
-                        <p className="text-white/70 text-xs leading-relaxed">Gọi cứu hộ trong vài giây khi xe gặp sự cố trên đường.</p>
+                        <p className="text-white/70 text-xs leading-relaxed">{t('onboarding.role.userPreviewDesc')}</p>
                     </div>
 
                     {/* Provider card preview */}
@@ -114,16 +116,16 @@ export default function RoleSelectionPage() {
                                 </svg>
                             </div>
                             <div>
-                                <p className="text-white text-sm font-semibold">Nhà Cung Cấp</p>
-                                <p className="text-white/60 text-xs">Cung cấp dịch vụ</p>
+                                <p className="text-white text-sm font-semibold">{t('onboarding.role.providerCardTitle')}</p>
+                                <p className="text-white/60 text-xs">{t('onboarding.role.providerCardSubtitle')}</p>
                             </div>
                         </div>
-                        <p className="text-white/70 text-xs leading-relaxed">Nhận yêu cầu, cung cấp báo giá và hoàn thành công việc cứu hộ.</p>
+                        <p className="text-white/70 text-xs leading-relaxed">{t('onboarding.role.providerPreviewDesc')}</p>
                     </div>
                 </div>
 
                 {/* Footer text */}
-                <p className="text-white/40 text-xs">© 2026 RescueMe. All rights reserved.</p>
+                <p className="text-white/40 text-xs">{t('onboarding.role.footerRights')}</p>
             </div>
 
             {/* Right form panel */}
@@ -141,8 +143,8 @@ export default function RoleSelectionPage() {
 
                     {/* Heading */}
                     <div className="mb-8">
-                        <h1 className="text-2xl font-bold mb-2" style={{ color: C.navy }}>Chào mừng! 👋</h1>
-                        <p className="text-sm" style={{ color: C.gray }}>Bạn muốn sử dụng RescueMe với tư cách nào?</p>
+                        <h1 className="text-2xl font-bold mb-2" style={{ color: C.navy }}>{t('onboarding.role.welcomeTitle')}</h1>
+                        <p className="text-sm" style={{ color: C.gray }}>{t('onboarding.role.title')}</p>
                     </div>
 
                     {/* Error */}
@@ -176,8 +178,8 @@ export default function RoleSelectionPage() {
                                     </svg>
                                 </div>
                                 <div className="flex-1">
-                                    <p className="text-sm font-bold mb-0.5" style={{ color: C.navy }}>Người Dùng</p>
-                                    <p className="text-xs" style={{ color: C.gray }}>Tôi cần sử dụng dịch vụ cứu hộ khi gặp sự cố</p>
+                                    <p className="text-sm font-bold mb-0.5" style={{ color: C.navy }}>{t('onboarding.role.userCardTitle')}</p>
+                                    <p className="text-xs" style={{ color: C.gray }}>{t('onboarding.role.userCardDesc')}</p>
                                 </div>
                                 {/* Selection indicator */}
                                 <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
@@ -196,7 +198,12 @@ export default function RoleSelectionPage() {
                             {/* Features */}
                             {selectedRole === 'USER' && (
                                 <div className="mt-4 pt-4 border-t border-orange-200 grid grid-cols-2 gap-2">
-                                    {['Gọi cứu hộ tức thì', 'Theo dõi realtime', 'Thanh toán an toàn', 'Đánh giá dịch vụ'].map(f => (
+                                    {[
+                                        t('onboarding.role.userFeatures.instantRescue'),
+                                        t('onboarding.role.userFeatures.realtimeTracking'),
+                                        t('onboarding.role.userFeatures.securePayment'),
+                                        t('onboarding.role.userFeatures.serviceReview'),
+                                    ].map(f => (
                                         <div key={f} className="flex items-center gap-1.5">
                                             <svg width="12" height="12" fill={C.orange} viewBox="0 0 24 24">
                                                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
@@ -226,8 +233,8 @@ export default function RoleSelectionPage() {
                                     </svg>
                                 </div>
                                 <div className="flex-1">
-                                    <p className="text-sm font-bold mb-0.5" style={{ color: C.navy }}>Nhà Cung Cấp Dịch Vụ</p>
-                                    <p className="text-xs" style={{ color: C.gray }}>Tôi cung cấp dịch vụ cứu hộ và muốn kiếm thu nhập</p>
+                                    <p className="text-sm font-bold mb-0.5" style={{ color: C.navy }}>{t('onboarding.role.providerCardTitle')}</p>
+                                    <p className="text-xs" style={{ color: C.gray }}>{t('onboarding.role.providerCardDesc')}</p>
                                 </div>
                                 <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
                                     style={{
@@ -245,7 +252,12 @@ export default function RoleSelectionPage() {
                             {/* Features */}
                             {selectedRole === 'PROVIDER' && (
                                 <div className="mt-4 pt-4 border-t border-orange-200 grid grid-cols-2 gap-2">
-                                    {['Nhận lệnh gần bạn', 'Báo giá linh hoạt', 'Ví điện tử tích hợp', 'Xếp hạng uy tín'].map(f => (
+                                    {[
+                                        t('onboarding.role.providerFeatures.nearbyRequests'),
+                                        t('onboarding.role.providerFeatures.flexiblePricing'),
+                                        t('onboarding.role.providerFeatures.integratedWallet'),
+                                        t('onboarding.role.providerFeatures.reputationRating'),
+                                    ].map(f => (
                                         <div key={f} className="flex items-center gap-1.5">
                                             <svg width="12" height="12" fill={C.orange} viewBox="0 0 24 24">
                                                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
@@ -273,18 +285,18 @@ export default function RoleSelectionPage() {
                         {isSubmitting ? (
                             <>
                                 <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                                <span>Đang xử lý...</span>
+                                <span>{t('onboarding.role.submitting')}</span>
                             </>
                         ) : (
                             <>
-                                <span>Tiếp Tục</span>
+                                <span>{t('onboarding.role.continue')}</span>
                                 <ArrowRight className="w-4 h-4" />
                             </>
                         )}
                     </button>
 
                     <p className="text-center text-xs mt-5" style={{ color: C.gray }}>
-                        Bạn có thể cập nhật thông tin chi tiết ở bước tiếp theo
+                        {t('onboarding.role.helper')}
                     </p>
                 </div>
             </div>

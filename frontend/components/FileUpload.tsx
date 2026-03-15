@@ -2,6 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { Upload, X, Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useUpload, UseUploadOptions } from '@/lib/hooks/useUpload';
 import { validateFile, formatFileSize } from '@/lib/upload';
 import toast from 'react-hot-toast';
@@ -24,6 +25,7 @@ export default function FileUpload({
     existingUpload = null,
     ...uploadOptions
 }: FileUploadProps) {
+    const { t } = useLanguage();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -75,7 +77,7 @@ export default function FileUpload({
     return (
         <div className={`space-y-4 ${className}`}>
             {/* Label */}
-            {label && <label className="block text-sm font-semibold text-gray-700">{label}</label>}
+            {label && <label className="block text-sm font-semibold text-gray-700">{label === 'Upload File' ? t('components.fileUpload.defaultLabel') : label}</label>}
 
             {/* Hidden File Input - Always rendered */}
             <input
@@ -92,7 +94,7 @@ export default function FileUpload({
                 <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 space-y-3">
                     <div className="flex items-center gap-2">
                         <CheckCircle className="w-5 h-5 text-green-600" />
-                        <p className="text-sm font-semibold text-green-800">Đã tải lên trước đó</p>
+                        <p className="text-sm font-semibold text-green-800">{t('components.fileUpload.previouslyUploaded')}</p>
                     </div>
                     <img
                         src={existingUpload.publicUrl}
@@ -105,7 +107,7 @@ export default function FileUpload({
                         className="w-full py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                     >
                         <RefreshCw className="w-4 h-4" />
-                        Tải lên file khác
+                        {t('components.fileUpload.uploadAnother')}
                     </button>
                 </div>
             )}
@@ -122,14 +124,14 @@ export default function FileUpload({
                         </div>
                         <div>
                             <p className="text-sm font-medium text-gray-700 group-hover:text-orange-500">
-                                Nhấn để chọn file
+                                {t('components.fileUpload.clickToChoose')}
                             </p>
                             <p className="text-xs text-gray-400 mt-0.5">
-                                hoặc kéo thả file vào đây
+                                {t('components.fileUpload.orDragDrop')}
                             </p>
                         </div>
                         <p className="text-xs text-gray-400">
-                            Hỗ trợ: JPG, PNG, WEBP (tối đa 5MB)
+                            {t('components.fileUpload.supported')}
                         </p>
                     </div>
                 </div>
@@ -147,12 +149,12 @@ export default function FileUpload({
                         <div className="flex gap-2 flex-shrink-0">
                             <button type="button" onClick={handleReset} disabled={uploading}
                                 className="px-3 py-1.5 border rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors flex items-center gap-1.5" style={{ borderColor: '#e2e8f0' }}>
-                                <X className="w-3.5 h-3.5" /> Hủy
+                                <X className="w-3.5 h-3.5" /> {t('common.cancel')}
                             </button>
                             <button type="button" onClick={handleUpload} disabled={uploading}
                                 className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50 transition-all flex items-center gap-1.5"
                                 style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea6c0a 100%)' }}>
-                                {uploading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Đang tải...</> : <><Upload className="w-3.5 h-3.5" />Tải lên</>}
+                                {uploading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />{t('components.fileUpload.uploading')}</> : <><Upload className="w-3.5 h-3.5" />{t('components.fileUpload.upload')}</>}
                             </button>
                         </div>
                     </div>
@@ -163,7 +165,7 @@ export default function FileUpload({
             {uploading && (
                 <div className="bg-white rounded-xl border p-3 space-y-2" style={{ borderColor: '#e2e8f0' }}>
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-700">Đang tải lên...</span>
+                        <span className="text-xs font-medium text-gray-700">{t('components.fileUpload.uploading')}</span>
                         <span className="text-xs font-bold" style={{ color: '#f97316' }}>{Math.round(progress)}%</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
@@ -187,14 +189,14 @@ export default function FileUpload({
                 <div className="bg-green-50 border border-green-200 rounded-xl p-3 space-y-2">
                     <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-green-600" />
-                        <p className="text-xs font-semibold text-green-800">Tải lên thành công!</p>
+                        <p className="text-xs font-semibold text-green-800">{t('components.fileUpload.uploadSuccess')}</p>
                     </div>
                     {result.publicUrl && (
                         <img src={result.publicUrl} alt="Uploaded" className="w-full h-36 object-cover rounded-lg border border-green-200" />
                     )}
                     <button type="button" onClick={handleReset}
                         className="w-full py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg font-medium transition-colors flex items-center justify-center gap-1.5">
-                        <RefreshCw className="w-3 h-3" /> Tải lên file khác
+                        <RefreshCw className="w-3 h-3" /> {t('components.fileUpload.uploadAnother')}
                     </button>
                 </div>
             )}

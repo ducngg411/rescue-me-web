@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, ArrowLeft } from 'lucide-react';
 import { useAuthGuard } from '@/lib/guards';
+import { useLanguage } from '@/contexts/LanguageContext';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 
@@ -16,23 +16,10 @@ import {
 
 const C = { orange: '#f97316', orangeDark: '#ea6c0a', navy: '#1a1a2e', gray: '#6b7280', border: '#e2e8f0', bg: '#f4f6f9', green: '#16a34a' };
 
-const STEPS = [
-    { n: 1, label: 'Thông tin dịch vụ' },
-    { n: 2, label: 'Tài liệu bắt buộc' },
-    { n: 3, label: 'Tài liệu tùy chọn' },
-    { n: 4, label: 'Xem lại & Gửi' },
-];
-
-const STEP_DESC = [
-    'Thông tin về dịch vụ, phương tiện và vùng hoạt động của bạn',
-    'CCCD, ảnh selfie và ảnh phương tiện để xác minh danh tính',
-    'Bằng lái xe, giấy phép kinh doanh — tăng độ tin cậy (tùy chọn)',
-    'Kiểm tra lại tất cả trước khi gửi cho admin xét duyệt',
-];
-
 export default function ProviderOnboardingPage() {
     const router = useRouter();
     const { isReady } = useAuthGuard({ requireAuth: true });
+    const { t } = useLanguage();
     const [currentStep, setCurrentStep] = useState(1);
     const [profile, setProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -41,9 +28,6 @@ export default function ProviderOnboardingPage() {
     const [serviceInfo, setServiceInfo] = useState<any>(null);
     const [requiredDocs, setRequiredDocs] = useState<any>(null);
     const [optionalDocs, setOptionalDocs] = useState<any>(null);
-
-    // Refs for step submit triggers
-    const [stepTrigger, setStepTrigger] = useState(0);
 
     useEffect(() => {
         if (isReady) loadProfile();
@@ -72,7 +56,7 @@ export default function ProviderOnboardingPage() {
                 setCurrentStep(2);
             } catch (err) {
                 console.error('Failed to save service info:', err);
-                toast.error('Không thể lưu thông tin. Vui lòng thử lại.');
+                toast.error(t('provider.onboarding.page.saveServiceInfoFailed'));
             }
         } else if (currentStep === 2) {
             setRequiredDocs(stepData);
@@ -95,6 +79,19 @@ export default function ProviderOnboardingPage() {
     }
 
     const isEditMode = profile?.verificationStatus === 'PENDING';
+    const steps = [
+        { n: 1, label: t('provider.onboarding.page.steps.serviceInfo') },
+        { n: 2, label: t('provider.onboarding.page.steps.requiredDocs') },
+        { n: 3, label: t('provider.onboarding.page.steps.optionalDocs') },
+        { n: 4, label: t('provider.onboarding.page.steps.reviewSubmit') },
+    ];
+
+    const stepDesc = [
+        t('provider.onboarding.page.stepDesc.serviceInfo'),
+        t('provider.onboarding.page.stepDesc.requiredDocs'),
+        t('provider.onboarding.page.stepDesc.optionalDocs'),
+        t('provider.onboarding.page.stepDesc.reviewSubmit'),
+    ];
 
     return (
         <div className="h-screen flex overflow-hidden" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
@@ -113,12 +110,12 @@ export default function ProviderOnboardingPage() {
                 <div className="space-y-5">
                     <div>
                         <h2 className="text-white text-xl font-bold mb-1">
-                            {isEditMode ? 'Cập nhật hồ sơ' : 'Hồ sơ nhà cung cấp'}
+                            {isEditMode ? t('provider.onboarding.page.sidebar.editTitle') : t('provider.onboarding.page.sidebar.title')}
                         </h2>
                         <p className="text-white/50 text-xs leading-relaxed">
                             {isEditMode
-                                ? 'Chỉnh sửa thông tin và gửi lại để admin xét duyệt'
-                                : 'Hoàn thành các bước để được xét duyệt trong 24–48h'}
+                                ? t('provider.onboarding.page.sidebar.editSubtitle')
+                                : t('provider.onboarding.page.sidebar.subtitle')}
                         </p>
                     </div>
                     <div className="space-y-3">
@@ -126,9 +123,9 @@ export default function ProviderOnboardingPage() {
                         <div className="flex items-center gap-3">
                             <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all duration-300"
                                 style={{ background: C.green, color: 'white' }}>✓</div>
-                            <span className="text-sm" style={{ color: 'rgba(255,255,255,0.65)' }}>Chọn vai trò</span>
+                            <span className="text-sm" style={{ color: 'rgba(255,255,255,0.65)' }}>{t('provider.onboarding.page.sidebar.roleSelected')}</span>
                         </div>
-                        {STEPS.map(step => {
+                        {steps.map(step => {
                             const done = currentStep > step.n;
                             const active = currentStep === step.n;
                             return (
@@ -148,17 +145,21 @@ export default function ProviderOnboardingPage() {
 
                     {/* Tip card */}
                     <div className="bg-white/10 rounded-2xl p-4 border border-white/10 space-y-1.5">
-                        <p className="text-white text-xs font-semibold">Sau khi hoàn thành:</p>
-                        {['Hồ sơ chuyển sang trạng thái Chờ duyệt', 'Admin xem xét trong 24–48h', 'Bạn nhận thông báo kết quả qua email'].map(t => (
-                            <div key={t} className="flex items-start gap-2">
+                        <p className="text-white text-xs font-semibold">{t('provider.onboarding.page.sidebar.afterSubmitTitle')}</p>
+                        {[
+                            t('provider.onboarding.page.sidebar.afterSubmitItems.pendingStatus'),
+                            t('provider.onboarding.page.sidebar.afterSubmitItems.adminReview'),
+                            t('provider.onboarding.page.sidebar.afterSubmitItems.emailNotice'),
+                        ].map(item => (
+                            <div key={item} className="flex items-start gap-2">
                                 <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ background: C.orange }} />
-                                <p className="text-white/65 text-xs leading-relaxed">{t}</p>
+                                <p className="text-white/65 text-xs leading-relaxed">{item}</p>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                <p className="text-white/25 text-xs">© 2026 RescueMe. All rights reserved.</p>
+                <p className="text-white/25 text-xs">{t('onboarding.role.footerRights')}</p>
             </div>
 
             {/* ─── Right form panel ─── */}
@@ -181,8 +182,8 @@ export default function ProviderOnboardingPage() {
                         >
                             <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ background: C.orange }} />
                             <p className="text-xs leading-relaxed" style={{ color: '#9a3412' }}>
-                                <strong>Đang chỉnh sửa hồ sơ đã nộp.</strong>{' '}
-                                Sau khi hoàn tất, bấm <em>Gửi hồ sơ</em> để cập nhật và yêu cầu xét duyệt lại.
+                                <strong>{t('provider.onboarding.page.editBanner.title')}</strong>{' '}
+                                {t('provider.onboarding.page.editBanner.descPrefix')} <em>{t('provider.onboarding.page.editBanner.submitText')}</em> {t('provider.onboarding.page.editBanner.descSuffix')}
                             </p>
                         </div>
                     )}
@@ -191,16 +192,16 @@ export default function ProviderOnboardingPage() {
                     <div className="mb-6">
                         <div className="flex items-center gap-2 mb-1">
                             <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fff7ed', color: C.orange }}>
-                                Bước {currentStep} / {STEPS.length}
+                                {t('provider.onboarding.page.stepCounter')} {currentStep} / {steps.length}
                             </span>
                         </div>
-                        <h1 className="text-2xl font-bold" style={{ color: C.navy }}>{STEPS[currentStep - 1].label}</h1>
-                        <p className="text-sm mt-0.5" style={{ color: C.gray }}>{STEP_DESC[currentStep - 1]}</p>
+                        <h1 className="text-2xl font-bold" style={{ color: C.navy }}>{steps[currentStep - 1].label}</h1>
+                        <p className="text-sm mt-0.5" style={{ color: C.gray }}>{stepDesc[currentStep - 1]}</p>
                     </div>
 
                     {/* Progress bar */}
                     <div className="flex gap-1.5 mb-8">
-                        {STEPS.map(s => (
+                        {steps.map(s => (
                             <div key={s.n} className="flex-1 h-2 rounded-full transition-all duration-500"
                                 style={{ background: s.n <= currentStep ? C.orange : '#e5e7eb' }} />
                         ))}
