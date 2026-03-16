@@ -4,9 +4,10 @@ import { RescueRequestController } from './rescue-request.controller';
 import { RescueRequestService } from './rescue-request.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { WalletModule } from '../wallet/wallet.module';
+import { UserWalletModule } from '../user-wallet/user-wallet.module';
 
 @Module({
-    imports: [PrismaModule, ScheduleModule.forRoot(), WalletModule],
+    imports: [PrismaModule, ScheduleModule.forRoot(), WalletModule, UserWalletModule],
     controllers: [RescueRequestController],
     providers: [RescueRequestService],
     exports: [RescueRequestService],

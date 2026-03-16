@@ -233,6 +233,7 @@ const vi = {
             home: 'Trang chủ',
             history: 'Lịch sử',
             profile: 'Hồ sơ',
+            wallet: 'Ví',
             settings: 'Cài đặt',
         },
         requests: {
@@ -988,7 +989,7 @@ const vi = {
             timerSubtitle: 'Yêu cầu báo giá nhanh',
             minutesLabel: 'Phút',
             secondsLabel: 'Giây',
-            waitingCustomerLabel: 'CHỞ KHÁCH HÀNG CHỌ N',
+            waitingCustomerLabel: 'CHỜ KHÁCH HÀNG CHỌN',
             customerInfoSection: 'Thông tin khách hàng',
             vehicleInfoSection: 'Thông tin phương tiện',
             noPhone: 'Chưa có SĐT',

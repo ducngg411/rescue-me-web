@@ -12,6 +12,7 @@ import { AdminModule } from './admin/admin.module';
 import { RescueRequestModule } from './rescue-request/rescue-request.module';
 import { VietMapModule } from './vietmap/vietmap.module';
 import { WalletModule } from './wallet/wallet.module';
+import { UserWalletModule } from './user-wallet/user-wallet.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { WalletModule } from './wallet/wallet.module';
     AdminModule,
     RescueRequestModule,
     WalletModule,
+    UserWalletModule,
   ],
   controllers: [AppController],
   providers: [AppService],

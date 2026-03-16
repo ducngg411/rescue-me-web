@@ -35,9 +35,8 @@ export function useProviderLocation({
         isSendingRef.current = true;
         try {
             await api.patch('/me/provider/location', { lat, lng });
-            console.log(`📍 Location updated on server: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
         } catch (err: any) {
-            console.error('Failed to update location on server:', err);
+            // silently ignore — location update is best-effort
         } finally {
             isSendingRef.current = false;
         }
@@ -132,7 +131,6 @@ export function useProviderLocation({
             );
         }, updateInterval);
 
-        console.log('📍 Started GPS tracking');
     }, [updateInterval, updateLocationOnServer]);
 
     const stopTracking = useCallback(() => {
@@ -153,7 +151,6 @@ export function useProviderLocation({
             isTracking: false,
         });
 
-        console.log('📍 Stopped GPS tracking');
     }, []);
 
     useEffect(() => {

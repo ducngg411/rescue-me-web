@@ -131,15 +131,26 @@ function StatusBadge({ status }: { status: RequestStatus }) {
 
 function PaymentBadge({ walletTxStatus, paymentMethod }: { walletTxStatus?: string | null; paymentMethod?: string }) {
     const { t } = useLanguage();
-    if (walletTxStatus === 'COMPLETED') {
+
+    // WALLET: instant settlement, never shows "chờ giải ngân"
+    if (paymentMethod === 'WALLET') {
         return (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
                 style={{ background: C.greenLight, color: C.green }}>
-                {t('provider.history.paymentBadge.disbursed')}
+                💳 Ví điện tử · Đã nhận
             </span>
         );
     }
-    if (walletTxStatus === 'PENDING') {
+    // QR: show disbursement status
+    if (paymentMethod === 'QR') {
+        if (walletTxStatus === 'COMPLETED') {
+            return (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                    style={{ background: C.greenLight, color: C.green }}>
+                    {t('provider.history.paymentBadge.disbursed')}
+                </span>
+            );
+        }
         return (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
                 style={{ background: '#f5f3ff', color: '#7c3aed' }}>

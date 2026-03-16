@@ -77,6 +77,65 @@ const C = {
     green: '#16a34a',
 };
 
+// ── WalletPaymentWaiting: polls until user confirms → shows job-done ──────────
+function WalletPaymentWaiting({ requestId, onCompleted }: { requestId: string; onCompleted: () => void }) {
+    const [totalAmount, setTotalAmount] = useState<number | null>(null);
+
+    useEffect(() => {
+        // Fetch payment amount for display
+        api.get(`/rescue-requests/${requestId}/payment`)
+            .then(res => setTotalAmount(res.data?.totalAmount ?? null))
+            .catch(() => {});
+
+        // Poll every 3 seconds until status = COMPLETED
+        const interval = setInterval(async () => {
+            try {
+                const res = await api.get(`/rescue-requests/${requestId}/provider-view`);
+                if (res.data?.status === 'COMPLETED') {
+                    clearInterval(interval);
+                    onCompleted();
+                }
+            } catch { /* ignore */ }
+        }, 3000);
+        return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [requestId]);
+
+    const fmt = (n: number) => n.toLocaleString('vi-VN') + 'đ';
+
+    return (
+        <div className="flex flex-col items-center w-full max-w-sm">
+            {/* Animated wallet icon */}
+            <div className="relative mb-5">
+                <span className="absolute inset-0 w-20 h-20 rounded-full animate-ping" style={{ background: '#dbeafe', opacity: 0.6 }} />
+                <div className="relative w-20 h-20 rounded-full flex items-center justify-center" style={{ background: '#eff6ff' }}>
+                    <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#2563eb" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                </div>
+            </div>
+            <h2 className="text-base font-bold mb-1 text-center" style={{ color: '#1a1a2e' }}>
+                Chờ user xác nhận thanh toán
+            </h2>
+            {totalAmount !== null && (
+                <p className="text-2xl font-extrabold mb-2" style={{ color: '#2563eb' }}>{fmt(totalAmount)}</p>
+            )}
+            <p className="text-xs text-center mb-5" style={{ color: '#6b7280' }}>
+                Tiền sẽ được chuyển vào ví của bạn ngay khi user xác nhận
+            </p>
+            <div className="w-full rounded-2xl p-3 flex items-start gap-2" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#2563eb" strokeWidth={2} className="flex-shrink-0 mt-0.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-xs" style={{ color: '#1d4ed8' }}>
+                    📱 User sẽ nhận thông báo và xác nhận trên app — hệ thống tự động hoàn tất đơn
+                </p>
+            </div>
+        </div>
+    );
+}
+
+
 // ── Polyline decoder (Google Polyline 5 format) ──────────────────────────────
 function decodePolyline(encoded: string): [number, number][] {
     const coords: [number, number][] = [];
@@ -200,7 +259,7 @@ export default function ProviderNavigationView({
     const [isMarkingArrived, setIsMarkingArrived] = useState(false);
     const [workingCountdown, setWorkingCountdown] = useState(5);
     const [isPaymentPending, setIsPaymentPending] = useState(false);
-    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR'>('CASH');
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR' | 'WALLET'>('CASH');
     const [isConfirmingReceived, setIsConfirmingReceived] = useState(false);
     const [showJobDone, setShowJobDone] = useState(false);
     const [jobEarnings, setJobEarnings] = useState<{ totalAmount: number; commissionRate: number } | null>(null);
@@ -218,6 +277,9 @@ export default function ProviderNavigationView({
     const lastRerouteRef = useRef<number>(0);
     const watchIdRef = useRef<number | null>(null);
     const isNavigatingRef = useRef(false);
+    // Mirror arrivalState + isPaymentPending as refs so GPS callback (runs once) reads latest
+    const arrivalStateRef = useRef<'idle' | 'waiting' | 'confirmed' | 'denied' | 'working'>('idle');
+    const isPaymentPendingRef = useRef(false);
     // ── Route Simulation state ────────────────────────────────────────────
     const [isSimulating, setIsSimulating] = useState(false);
     const simIndexRef = useRef(0);
@@ -394,6 +456,15 @@ export default function ProviderNavigationView({
         return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
     }, [arrivalState]);
 
+    // Disable navigation (re-routing) when provider is working on-site or payment is pending
+    useEffect(() => {
+        arrivalStateRef.current = arrivalState;
+        isPaymentPendingRef.current = isPaymentPending;
+        if (arrivalState === 'working' || isPaymentPending) {
+            isNavigatingRef.current = false;
+        }
+    }, [arrivalState, isPaymentPending]);
+
     // ── 1. GPS watchPosition — continuous tracking ────────────────────────────
     useEffect(() => {
         if (!('geolocation' in navigator)) {
@@ -451,9 +522,13 @@ export default function ProviderNavigationView({
                     }
 
                     // ── Re-route when off-route >50m ──
+                    // Skip re-routing if provider is working on-site or during payment
                     const now = Date.now();
                     const dToRoute = distToRoute([lng, lat], coords);
-                    if (dToRoute > 50 && now - lastRerouteRef.current > 8000) {
+                    if (dToRoute > 50 && now - lastRerouteRef.current > 8000
+                        && isNavigatingRef.current
+                        && arrivalStateRef.current === 'idle'
+                        && !isPaymentPendingRef.current) {
                         lastRerouteRef.current = now;
                         toast.loading(t('provider.navigation.rerouteToast'), { id: 'reroute', duration: 3000 });
                         routeDrawn.current = false;
@@ -1282,9 +1357,19 @@ export default function ProviderNavigationView({
                     request={requestDetails ?? { pickupLocation: { addressText: (pickupLocation as any).addressText } }}
                     customerName={customerName}
                     acceptedQuotePrice={acceptedQuotePrice}
-                    onPaymentSubmitted={(method?: 'CASH' | 'QR') => {
-                        setPaymentMethod(method ?? 'CASH');
-                        setIsPaymentPending(true);
+                    onPaymentSubmitted={async (method?: 'CASH' | 'QR' | 'WALLET') => {
+                        if (method === 'WALLET') {
+                            // PaymentSheet already handled the wallet poll + success screen.
+                            // Request is COMPLETED — skip WalletPaymentWaiting and go straight to job-done.
+                            try {
+                                const payRes = await api.get(`/rescue-requests/${requestId}/payment`);
+                                if (payRes.data) setJobEarnings({ totalAmount: payRes.data.totalAmount, commissionRate: 0.1 });
+                            } catch { /* ignore */ }
+                            setShowJobDone(true);
+                        } else {
+                            setPaymentMethod(method ?? 'CASH');
+                            setIsPaymentPending(true);
+                        }
                     }}
                 />
             )}
@@ -1295,7 +1380,20 @@ export default function ProviderNavigationView({
                     className="fixed inset-0 z-50 flex flex-col items-center justify-center px-5"
                     style={{ background: '#f8fafc' }}
                 >
-                    {paymentMethod === 'QR' ? (
+                    {paymentMethod === 'WALLET' ? (
+                        /* ── WALLET: user confirms on their side → auto-complete ── */
+                        <WalletPaymentWaiting
+                            requestId={requestId}
+                            onCompleted={async () => {
+                                try {
+                                    const payRes = await api.get(`/rescue-requests/${requestId}/payment`);
+                                    if (payRes.data) setJobEarnings({ totalAmount: payRes.data.totalAmount, commissionRate: 0.1 });
+                                } catch { /* ignore */ }
+                                setIsPaymentPending(false);
+                                setShowJobDone(true);
+                            }}
+                        />
+                    ) : paymentMethod === 'QR' ? (
                         /* ── QR: system already processed payment — provider just finalises ── */
                         <>
                             <div className="w-20 h-20 rounded-full flex items-center justify-center mb-5" style={{ background: '#f0fdf4' }}>

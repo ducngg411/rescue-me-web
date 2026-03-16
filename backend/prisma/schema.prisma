@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,171 +7,68 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Enum cho các loại auth provider
-enum AuthProvider {
-  EMAIL
-  GOOGLE
-}
-
-// Enum cho vai trò người dùng
-enum UserRole {
-  USER // Người dùng cần cứu hộ
-  PROVIDER // Nhà cung cấp dịch vụ cứu hộ
-  ADMIN // Quản trị viên
-}
-
-// Enum cho loại phương tiện
-enum VehicleType {
-  CAR
-  MOTORCYCLE
-}
-
-// Enum cho loại dịch vụ cứu hộ
-enum ServiceType {
-  TOWING // Kéo xe
-  BATTERY_JUMP // Cứu hộ bình điện
-  TIRE_CHANGE // Thay lốp xe
-  FUEL_DELIVERY // Tiếp nhiên liệu
-  LOCKOUT // Mở khóa xe
-  BREAKDOWN_REPAIR // Sửa chữa tại chỗ
-}
-
-// Enum cho loại sự cố
-enum IncidentType {
-  BREAKDOWN // Hỏng xe
-  ACCIDENT // Tai nạn
-  FLAT_TIRE // Lốp xe hỏng
-  BATTERY_DEAD // Hết bình điện
-  OUT_OF_FUEL // Hết nhiên liệu
-  LOCKED_OUT // Khóa xe
-  OTHER // Khác
-}
-
-enum RequestStatus {
-  CREATED         // Vừa tạo
-  MATCHING        // Đang tìm kiếm provider (U2)
-  SEARCHING       // Đang tìm provider (legacy - deprecated)
-  MATCHED         // Đã match với provider (legacy)
-  ASSIGNED        // Provider đã nhận (U2)
-  ACCEPTED        // Provider đã chấp nhận
-  IN_PROGRESS     // Provider đang di chuyển đến nơi
-  ARRIVED         // Provider báo đã đến nơi, chờ user xác nhận
-  WORKING         // User đã xác nhận provider đến, đang sửa chữa / làm việc
-  PAYMENT_PENDING // Provider đã gửi yêu cầu thanh toán, chờ user xác nhận
-  PAID            // Cả 2 bên đã xác nhận thanh toán
-  COMPLETED       // Hoàn thành
-  CANCELLED       // Đã hủy
-  REJECTED        // Bị từ chối
-  EXPIRED         // Hết hạn, không có provider nhận (U2)
-}
-
-// Enum cho trạng thái báo giá
-enum QuoteStatus {
-  PENDING // Đang chờ user phản hồi
-  ACCEPTED // User đã chấp nhận
-  REJECTED // User đã từ chối
-  CANCELLED // Provider đã hủy báo giá
-  EXPIRED // Hết hạn (nếu user không phản hồi)
-}
-
-// Enum cho loại nhà cung cấp
-enum ProviderType {
-  INDIVIDUAL // Cá nhân
-  BUSINESS // Doanh nghiệp
-}
-
-// Enum cho trạng thái xác minh Provider
-enum VerificationStatus {
-  DRAFT // Bản nháp
-  PENDING // Chờ xác minh
-  APPROVED // Đã xác minh
-  REJECTED // Bị từ chối
-  SUSPENDED // Bị tạm ngưng
-}
-
-// User Model - Quản lý thông tin người dùng
 model User {
-  id     String  @id @default(cuid())
-  email  String  @unique
-  name   String?
-  avatar String?
-
-  // Authentication fields
-  authProvider   AuthProvider
-  hashedPassword String? // Chỉ có giá trị khi authProvider = EMAIL
-  googleId       String?      @unique // Chỉ có giá trị khi authProvider = GOOGLE
-
-  // Profile & Onboarding
-  profileCompleted Boolean @default(false)
-
-  // User Profile (Role = USER)
-  fullName       String?
-  phoneNumber    String?
-  contactEmail   String?
-  defaultAddress Json? // {addressText, lat, lng}
-  vehicleType    VehicleType?
-  licensePlate   String?
-  vehicleColor   String?
-
-  // Provider Profile (Role = PROVIDER)
-  providerType          ProviderType? // Individual hoặc Business
-  businessName          String? // Chỉ dành cho Business
-  serviceName           String? // Tên dịch vụ hiển thị
+  id                    String             @id @default(cuid())
+  email                 String             @unique
+  name                  String?
+  avatar                String?
+  authProvider          AuthProvider
+  hashedPassword        String?
+  googleId              String?            @unique
+  profileCompleted      Boolean            @default(false)
+  role                  UserRole           @default(USER)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  lastLogin             DateTime?
+  contactEmail          String?
+  defaultAddress        Json?
+  fullName              String?
+  licensePlate          String?
+  phoneNumber           String?
+  vehicleColor          String?
+  vehicleType           VehicleType?
+  businessAddress       Json?
+  businessName          String?
+  isActive              Boolean            @default(false)
+  serviceRadiusKm       Int?
   serviceTypes          ServiceType[]
-  supportedVehicleTypes VehicleType[] // Loại xe KHÁCH HÀNG (xe cần cứu hộ)
-  serviceRadiusKm       Int? // 5-50 km
-  permanentAddress      Json? // {addressText, lat, lng} - Dành cho Individual
-  businessAddress       Json? // {addressText, lat, lng} - Dành cho Business
-  address               String? // Địa chỉ văn bản đầy đủ
-  rescueVehicles        Json? // Array of {type: 'CAR'|'MOTORCYCLE', plateNumber: string, isPrimary: boolean} - Xe của PROVIDER (xe dùng để đi cứu hộ)
-
-  // Pricing & Service
-  pricePerKm         Int? // Giá mỗi km (VND)
-  baseFee            Int? // Phí cơ bản (VND)
-  emergencyAvailable Boolean   @default(false) // Có phục vụ khẩn cấp
-  isOnline           Boolean   @default(false) // Trạng thái online
-  currentLocation    Json? // {lat, lng, timestamp} - Vị trí hiện tại (GPS) khi Provider online
-  lastLocationUpdate DateTime? // Thời gian cập nhật vị trí gần nhất
-
-  // Verification
-  verificationStatus VerificationStatus @default(DRAFT)
-  submittedAt        DateTime? // Thời gian gửi hồ sơ xác minh
-  approvedAt         DateTime? // Thời gian được duyệt
-  rejectedAt         DateTime? // Thời gian bị từ chối
-  rejectReasonCode   String? // Mã lý do từ chối
-  rejectReasonDetail String? // Chi tiết lý do từ chối
-  suspendedAt        DateTime? // Thời gian bị tạm ngưng
-  suspensionReason   String? // Lý do tạm ngưng
-  isActive           Boolean            @default(false)
-
-  // Role & Permissions
-  role UserRole @default(USER)
-
-  // Timestamps
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  lastLogin DateTime?
-
-  // Rating stats (for providers)
-  averageRating Float? // Average star rating received (1.0 – 5.0)
-  reviewCount   Int    @default(0) // Total reviews received
-
-  // Relations
-  sessions         Session[]
-  uploads          Upload[]
-  rescueRequests   RescueRequest[] @relation("UserRequests")
-  assignedRequests RescueRequest[] @relation("AssignedRequests")
-  quotes           Quote[]         @relation("ProviderQuotes")
-  providerWallet   ProviderWallet? @relation("ProviderWallet")
-  reviewsGiven     Review[]        @relation("UserReviews")    // Reviews submitted by this user
-  reviewsReceived  Review[]        @relation("ProviderReviews") // Reviews received as provider
+  supportedVehicleTypes VehicleType[]
+  verificationStatus    VerificationStatus @default(DRAFT)
+  permanentAddress      Json?
+  providerType          ProviderType?
+  submittedAt           DateTime?
+  rejectReasonCode      String?
+  rejectReasonDetail    String?
+  rejectedAt            DateTime?
+  address               String?
+  approvedAt            DateTime?
+  baseFee               Int?
+  emergencyAvailable    Boolean            @default(false)
+  isOnline              Boolean            @default(false)
+  pricePerKm            Int?
+  serviceName           String?
+  suspendedAt           DateTime?
+  suspensionReason      String?
+  rescueVehicles        Json?
+  currentLocation       Json?
+  lastLocationUpdate    DateTime?
+  averageRating         Float?
+  reviewCount           Int                @default(0)
+  providerWallet        ProviderWallet?    @relation("ProviderWallet")
+  quotes                Quote[]            @relation("ProviderQuotes")
+  assignedRequests      RescueRequest[]    @relation("AssignedRequests")
+  rescueRequests        RescueRequest[]    @relation("UserRequests")
+  reviewsReceived       Review[]           @relation("ProviderReviews")
+  reviewsGiven          Review[]           @relation("UserReviews")
+  sessions              Session[]
+  uploads               Upload[]
+  userWallet            UserWallet?        @relation("UserWallet")
 
   @@index([email])
   @@index([googleId])
   @@map("users")
 }
 
-// Session Model - Quản lý phiên đăng nhập
 model Session {
   id           String   @id @default(cuid())
   userId       String
@@ -183,76 +77,32 @@ model Session {
   expiresAt    DateTime
   userAgent    String?
   ipAddress    String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([token])
   @@map("sessions")
 }
 
-// Enum cho mục đích upload
-enum UploadPurpose {
-  PROVIDER_VERIFICATION // Xác minh provider
-  REQUEST_PHOTO // Ảnh yêu cầu cứu hộ
-  REVIEW_PHOTO // Ảnh đánh giá
-  BEFORE_AFTER // Ảnh trước/sau
-  REQUEST_VIDEO // Video yêu cầu cứu hộ (Cloudinary)
-}
-
-// Enum cho loại tài liệu xác minh
-enum DocumentType {
-  CITIZEN_ID_FRONT // CMND/CCCD mặt trước
-  CITIZEN_ID_BACK // CMND/CCCD mặt sau
-  SELFIE // Ảnh selfie
-  CAR_PHOTO // Ảnh xe ô tô
-  MOTORBIKE_PHOTO // Ảnh xe máy
-  DRIVER_LICENSE // Giấy phép lái xe
-  BUSINESS_REGISTRATION // Giấy đăng ký kinh doanh
-}
-
-// Enum cho loại storage
-enum StorageType {
-  R2 // Cloudflare R2
-  CLOUDINARY // Cloudinary
-}
-
-// Upload Model - Quản lý file uploads
 model Upload {
-  id     String @id @default(cuid())
-  userId String
-
-  // Upload metadata
-  purpose     UploadPurpose
-  docType     DocumentType? // Chỉ dùng cho PROVIDER_VERIFICATION
-  storageType StorageType   @default(R2)
-
-  // File information
-  objectKey   String @unique // providers/{providerId}/verification/{docType}/{timestamp}_{rand}.jpg OR cloudinary public_id
-  fileName    String
-  fileSize    Int // bytes
-  contentType String // image/jpeg, image/png, image/webp, video/mp4
-
-  // URLs
-  publicUrl String
-
-  // Cloudinary specific (for videos)
-  cloudinaryPublicId     String? // Public ID trong Cloudinary để xóa
-  cloudinaryResourceType String? // image, video, raw
-
-  // Status
-  confirmed Boolean @default(false)
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                     String        @id @default(cuid())
+  userId                 String
+  purpose                UploadPurpose
+  docType                DocumentType?
+  objectKey              String        @unique
+  fileName               String
+  fileSize               Int
+  contentType            String
+  publicUrl              String
+  confirmed              Boolean       @default(false)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  cloudinaryPublicId     String?
+  cloudinaryResourceType String?
+  storageType            StorageType   @default(R2)
+  user                   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([purpose])
@@ -260,67 +110,42 @@ model Upload {
   @@map("uploads")
 }
 
-// RescueRequest Model - Quản lý yêu cầu cứu hộ
 model RescueRequest {
-  id     String @id @default(cuid())
-  userId String
-
-  // Request details
-  incidentType IncidentType
-  vehicleType  VehicleType
-  description  String?
-
-  // Location details
-  pickupLocation  Json // {addressText: string, lat: number, lng: number}
-  dropoffLocation Json? // {addressText: string, lat: number, lng: number} - Optional
-
-  // Contact info
-  contactPhone String @default("")
-
-  // Media
-  videoUrls String[] @default([]) // Cloudinary video URLs
-
-  // Status
-  status RequestStatus @default(CREATED)
-
-  // Provider assignment
-  assignedProviderId String?
-  assignedProvider   User?   @relation("AssignedRequests", fields: [assignedProviderId], references: [id])
-
-  // Matching tracking
-  matchingStartedAt DateTime? // When status changed to MATCHING
-  assignedAt        DateTime? // When provider accepted
-  expiresAt         DateTime? // MATCHING expiration time (used for search phase transitions)
-  matchAttempts     Int       @default(1) // Number of matching attempts
-  searchPhase       Int       @default(1) // Search phase: 1 = normal radius, 2 = expanded radius
-  matchedDistance   Float? // Distance in km from provider to customer (from VietMap API)
-  matchedEta        Int? // ETA in minutes when provider accepted (from VietMap API)
-
-  // Quote tracking (Two-Timer System)
-  quoteCount           Int       @default(0) // Current number of valid PENDING quotes
-  maxQuotes            Int       @default(3) // Maximum quotes allowed (default 3)
-  quoteWindowDuration  Int       @default(90) // Quote window duration in seconds (default 90s)
-  quoteWindowExpiresAt DateTime? // When quote window closes (providers can't submit after this)
-  quoteWindowClosedAt  DateTime? // When quote window was actually closed (either by time or maxQuotes)
-
-  // Provider viewing tracking
-  viewingProviders String[]  @default([]) // Array of provider IDs currently viewing this request
-  viewingUpdatedAt DateTime? // Last time viewingProviders was updated
-
-  // Provider decline tracking
-  declinedProviders String[] @default([]) // Array of provider IDs who declined this request (to prevent spam)
-
-  // Timestamps
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  completedAt DateTime? // When status changed to COMPLETED
-
-  // Relations
-  user    User           @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
-  media   RequestMedia[]
-  quotes  Quote[]
-  payment Payment?
-  review  Review?
+  id                   String         @id @default(cuid())
+  userId               String
+  incidentType         IncidentType
+  vehicleType          VehicleType
+  description          String?
+  pickupLocation       Json
+  dropoffLocation      Json?
+  status               RequestStatus  @default(CREATED)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  contactPhone         String         @default("")
+  videoUrls            String[]       @default([])
+  searchPhase          Int            @default(1)
+  assignedProviderId   String?
+  matchingStartedAt    DateTime?
+  assignedAt           DateTime?
+  expiresAt            DateTime?
+  matchAttempts        Int            @default(1)
+  matchedDistance      Float?
+  matchedEta           Int?
+  declinedProviders    String[]       @default([])
+  maxQuotes            Int            @default(3)
+  quoteCount           Int            @default(0)
+  quoteWindowClosedAt  DateTime?
+  quoteWindowDuration  Int            @default(90)
+  quoteWindowExpiresAt DateTime?
+  viewingProviders     String[]       @default([])
+  viewingUpdatedAt     DateTime?
+  completedAt          DateTime?
+  payment              Payment?
+  quotes               Quote[]
+  media                RequestMedia[]
+  assignedProvider     User?          @relation("AssignedRequests", fields: [assignedProviderId], references: [id])
+  user                 User           @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
+  review               Review?
 
   @@index([userId])
   @@index([status])
@@ -329,128 +154,72 @@ model RescueRequest {
   @@map("rescue_requests")
 }
 
-// RequestMedia Model - Quản lý media của rescue request
 model RequestMedia {
-  id        String @id @default(cuid())
-  requestId String
-
-  // Media type
-  mediaType String @default("IMAGE") // IMAGE or VIDEO
-
-  // File information (for R2 images)
-  objectKey   String? @unique // Null for Cloudinary videos
-  fileName    String
-  fileSize    Int
-  contentType String
-  publicUrl   String
-
-  // Cloudinary specific (for videos)
-  cloudinaryPublicId String? // For video deletion
-
-  // Timestamps
-  createdAt DateTime @default(now())
-
-  // Relations
-  request RescueRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  id                 String        @id @default(cuid())
+  requestId          String
+  objectKey          String?       @unique
+  fileName           String
+  fileSize           Int
+  contentType        String
+  publicUrl          String
+  createdAt          DateTime      @default(now())
+  cloudinaryPublicId String?
+  mediaType          String        @default("IMAGE")
+  request            RescueRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@index([requestId])
   @@map("request_media")
 }
 
-// Quote Model - Quản lý báo giá từ provider
 model Quote {
-  id              String @id @default(cuid())
-  rescueRequestId String
-  providerId      String
+  id                      String        @id @default(cuid())
+  rescueRequestId         String
+  providerId              String
+  price                   Int
+  estimatedArrivalMinutes Int
+  message                 String?
+  status                  QuoteStatus   @default(PENDING)
+  rejectionReason         String?
+  userRespondedAt         DateTime?
+  providerLocation        Json?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  expiresAt               DateTime?
+  provider                User          @relation("ProviderQuotes", fields: [providerId], references: [id])
+  rescueRequest           RescueRequest @relation(fields: [rescueRequestId], references: [id], onDelete: Cascade)
 
-  // Quote details
-  price                   Int // Giá báo giá (VND)
-  estimatedArrivalMinutes Int // Thời gian dự kiến đến (phút)
-  message                 String? // Lời nhắn từ provider
-
-  // Status
-  status QuoteStatus @default(PENDING)
-
-  // User response
-  rejectionReason String? // Lý do từ chối (nếu user reject)
-  userRespondedAt DateTime? // Thời điểm user phản hồi
-
-  // Provider location at time of quote
-  providerLocation Json? // {lat, lng} - Vị trí provider khi gửi báo giá
-
-  // Timestamps
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  expiresAt DateTime? // Individual quote TTL: expires 2 minutes from creation (quotes sent early expire sooner)
-
-  // Relations
-  rescueRequest RescueRequest @relation(fields: [rescueRequestId], references: [id], onDelete: Cascade)
-  provider      User          @relation("ProviderQuotes", fields: [providerId], references: [id])
-
-  @@unique([rescueRequestId, providerId]) // Prevent duplicate quotes from same provider
+  @@unique([rescueRequestId, providerId])
   @@index([rescueRequestId])
   @@index([providerId])
   @@index([status])
-  @@index([rescueRequestId, status]) // Optimized for counting quotes by status
-  @@index([status, expiresAt]) // Optimized for expiration queries
+  @@index([rescueRequestId, status])
+  @@index([status, expiresAt])
   @@index([createdAt])
   @@map("quotes")
 }
 
-// Enum for payment method
-enum PaymentMethod {
-  CASH // Tiền mặt
-  QR   // Chuyển khoản QR
-}
-
-// Enum for payment status
-enum PaymentStatus {
-  PENDING           // Provider đã gửi, chờ user
-  USER_CONFIRMED    // User xác nhận đã trả tiền
-  PROVIDER_CONFIRMED // Provider xác nhận đã nhận tiền
-  COMPLETED         // Cả 2 đã xác nhận
-  DISPUTED          // Có tranh chấp
-}
-
-// Payment Model
 model Payment {
-  id              String @id @default(cuid())
-  requestId       String @unique
-  providerId      String
-  userId          String
-
-  // Fee breakdown (VND)
-  baseFee      Int  @default(0) // Phí cơ bản
-  distanceFee  Int  @default(0) // Phí km
-  overtimeFee  Int  @default(0) // Phí ngoài giờ
-  otherFee     Int  @default(0) // Phí khác
-  totalAmount  Int              // Tổng tiền (VND)
-
-  // Optional details
-  surchargeNote  String? // Ghi chú phụ phí
-  note           String? // Ghi chú chung
-  photoUrls      String[] @default([]) // Ảnh hiện trường, sửa xong, hoá đơn
-
-  // Payment method
-  paymentMethod PaymentMethod @default(CASH)
-
-  // Confirmation tracking
-  userConfirmedAt     DateTime? // User xác nhận đã thanh toán
-  providerConfirmedAt DateTime? // Provider xác nhận đã nhận tiền
-
-  // Dispute
-  disputeReason String?
-  disputedAt    DateTime?
-
-  // Status
-  status PaymentStatus @default(PENDING)
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  request RescueRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  id                  String        @id @default(cuid())
+  requestId           String        @unique
+  providerId          String
+  userId              String
+  baseFee             Int           @default(0)
+  distanceFee         Int           @default(0)
+  overtimeFee         Int           @default(0)
+  otherFee            Int           @default(0)
+  totalAmount         Int
+  surchargeNote       String?
+  note                String?
+  photoUrls           String[]      @default([])
+  paymentMethod       PaymentMethod @default(CASH)
+  userConfirmedAt     DateTime?
+  providerConfirmedAt DateTime?
+  disputeReason       String?
+  disputedAt          DateTime?
+  status              PaymentStatus @default(PENDING)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  request             RescueRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@index([requestId])
   @@index([providerId])
@@ -458,85 +227,34 @@ model Payment {
   @@map("payments")
 }
 
-// ─── Provider Wallet ──────────────────────────────────────────────────────────
-
-// Enum cho loại giao dịch ví
-enum WalletTransactionType {
-  CREDIT // Tiền vào ví (thu nhập từ job, hoàn tiền...)
-  DEBIT  // Tiền ra khỏi ví (rút tiền, phí hoa hồng...)
-}
-
-// Enum cho trạng thái giao dịch ví
-enum WalletTransactionStatus {
-  PENDING   // Đang chờ xử lý
-  COMPLETED // Hoàn thành
-  FAILED    // Thất bại
-}
-
-// Enum cho loại tham chiếu giao dịch
-enum WalletReferenceType {
-  JOB         // Thu nhập từ công việc cứu hộ
-  WITHDRAW    // Rút tiền ra tài khoản ngân hàng
-  COMMISSION  // Phí hoa hồng nền tảng
-  REFUND      // Hoàn tiền
-  ADJUSTMENT  // Điều chỉnh thủ công (admin)
-  TOPUP       // Nạp tiền qua chuyển khoản ngân hàng (SePay)
-  JOB_PAYMENT // Thanh toán job qua chuyển khoản QR (SePay)
-}
-
-// ProviderWallet Model - Ví của provider
 model ProviderWallet {
-  id         String @id @default(cuid())
-  providerId String @unique // 1 provider chỉ có 1 ví
-
-  // Balance (VND)
-  availableBalance Int @default(0) // Số dư có thể rút được
-  pendingBalance   Int @default(0) // Số dư đang chờ xử lý (chưa về tài khoản)
-
-  // Mã chuyển khoản duy nhất của provider (ví dụ: RM-ABC1234)
-  // Provider dùng mã này làm nội dung chuyển khoản để hệ thống định danh
-  topupCode String? @unique
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  provider         User                @relation("ProviderWallet", fields: [providerId], references: [id], onDelete: Cascade)
-  transactions     WalletTransaction[]
+  id                String              @id @default(cuid())
+  providerId        String              @unique
+  availableBalance  Int                 @default(0)
+  pendingBalance    Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  topupCode         String?             @unique
+  provider          User                @relation("ProviderWallet", fields: [providerId], references: [id], onDelete: Cascade)
   topupTransactions TopupTransaction[]
+  transactions      WalletTransaction[]
 
   @@index([providerId])
   @@map("provider_wallets")
 }
 
-// WalletTransaction Model - Lịch sử giao dịch ví
 model WalletTransaction {
-  id       String @id @default(cuid())
-  walletId String
-
-  // Transaction details
-  type   WalletTransactionType
-  amount Int // Số tiền giao dịch (VND, luôn dương)
-
-  // Status
-  status WalletTransactionStatus @default(PENDING)
-
-  // Reference
+  id            String                  @id @default(cuid())
+  walletId      String
+  type          WalletTransactionType
+  amount        Int
+  status        WalletTransactionStatus @default(PENDING)
   referenceType WalletReferenceType
-  referenceId   String // ID của đối tượng tham chiếu (jobId, withdrawId...)
-
-  // Optional note
-  description String? // Mô tả giao dịch
-
-  // Auto-release: when PENDING CREDIT should move to available (for job payment holding)
+  referenceId   String
+  description   String?
+  createdAt     DateTime                @default(now())
   holdReleaseAt DateTime?
-
-  // Timestamps
-  createdAt DateTime @default(now())
-
-  // Relations
-  wallet ProviderWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  wallet        ProviderWallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
   @@index([walletId, status])
@@ -546,27 +264,18 @@ model WalletTransaction {
   @@map("wallet_transactions")
 }
 
-// TopupTransaction Model - Lịch sử nạp tiền qua SePay
 model TopupTransaction {
-  id           String   @id @default(cuid())
-  walletId     String
-  amount       Int      // Số tiền nạp (VND)
-  status       String   @default("PENDING") // PENDING | COMPLETED | FAILED
-
-  // Mã chuyển khoản của provider (bản sao tại thời điểm tạo)
-  transferCode String
-
-  // SePay webhook data (dùng để dedup)
-  sepayId            Int?    @unique  // ID giao dịch duy nhất từ SePay
-  sepayReferenceCode String?          // referenceCode từ SePay
-
-  // Timestamps
-  createdAt   DateTime  @default(now())
-  expireAt    DateTime?  // null = no expiry; set to createdAt + 5min on creation
-  completedAt DateTime?
-
-  // Relations
-  wallet ProviderWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  id                 String         @id @default(cuid())
+  walletId           String
+  amount             Int
+  status             String         @default("PENDING")
+  transferCode       String
+  sepayId            Int?           @unique
+  sepayReferenceCode String?
+  createdAt          DateTime       @default(now())
+  completedAt        DateTime?
+  expireAt           DateTime?
+  wallet             ProviderWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
   @@index([walletId, status])
@@ -574,7 +283,6 @@ model TopupTransaction {
   @@map("topup_transactions")
 }
 
-// JobPaymentTransaction - QR payment record per rescue job (customer to platform)
 model JobPaymentTransaction {
   id           String    @id @default(cuid())
   requestId    String    @unique
@@ -592,27 +300,215 @@ model JobPaymentTransaction {
   @@map("job_payment_transactions")
 }
 
-
 model Review {
-  id              String @id @default(cuid())
-  rescueRequestId String @unique // 1 yêu cầu → 1 đánh giá
-  userId          String           // Người đánh giá (user)
-  providerId      String           // Người được đánh giá (provider)
-
-  // Rating details
-  rating  Int              // Số sao: 1 – 5
-  comment String?          // Nhận xét tự do (tuỳ chọn)
-  tags    String[] @default([]) // Quick tags: ["Sạch sẽ", "Chuyên nghiệp", ...]
-
-  // Timestamps
-  createdAt DateTime @default(now())
-
-  // Relations
-  request  RescueRequest @relation(fields: [rescueRequestId], references: [id], onDelete: Cascade)
-  user     User          @relation("UserReviews", fields: [userId], references: [id])
-  provider User          @relation("ProviderReviews", fields: [providerId], references: [id])
+  id              String        @id @default(cuid())
+  rescueRequestId String        @unique
+  userId          String
+  providerId      String
+  rating          Int
+  comment         String?
+  tags            String[]      @default([])
+  createdAt       DateTime      @default(now())
+  provider        User          @relation("ProviderReviews", fields: [providerId], references: [id])
+  request         RescueRequest @relation(fields: [rescueRequestId], references: [id], onDelete: Cascade)
+  user            User          @relation("UserReviews", fields: [userId], references: [id])
 
   @@index([providerId])
   @@index([userId])
   @@map("reviews")
+}
+
+model UserWallet {
+  id               String                  @id @default(cuid())
+  userId           String                  @unique
+  availableBalance Int                     @default(0)
+  pendingBalance   Int                     @default(0)
+  topupCode        String?                 @unique
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  topupTxs         UserTopupTransaction[]
+  transactions     UserWalletTransaction[]
+  user             User                    @relation("UserWallet", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_wallets")
+}
+
+model UserWalletTransaction {
+  id            String                  @id @default(cuid())
+  walletId      String
+  type          WalletTransactionType
+  amount        Int
+  status        WalletTransactionStatus @default(PENDING)
+  referenceType UserWalletReferenceType
+  referenceId   String
+  description   String?
+  holdReleaseAt DateTime?
+  createdAt     DateTime                @default(now())
+  wallet        UserWallet              @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([walletId, status])
+  @@index([referenceType, referenceId])
+  @@index([createdAt])
+  @@map("user_wallet_transactions")
+}
+
+model UserTopupTransaction {
+  id                 String     @id @default(cuid())
+  walletId           String
+  amount             Int
+  status             String     @default("PENDING")
+  transferCode       String
+  sepayId            Int?       @unique
+  sepayReferenceCode String?
+  createdAt          DateTime   @default(now())
+  expireAt           DateTime?
+  completedAt        DateTime?
+  wallet             UserWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([walletId, status])
+  @@index([transferCode])
+  @@map("user_topup_transactions")
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+}
+
+enum UserRole {
+  USER
+  PROVIDER
+  ADMIN
+}
+
+enum VehicleType {
+  CAR
+  MOTORCYCLE
+}
+
+enum ServiceType {
+  TOWING
+  BATTERY_JUMP
+  TIRE_CHANGE
+  FUEL_DELIVERY
+  LOCKOUT
+  BREAKDOWN_REPAIR
+}
+
+enum IncidentType {
+  BREAKDOWN
+  ACCIDENT
+  FLAT_TIRE
+  BATTERY_DEAD
+  OUT_OF_FUEL
+  LOCKED_OUT
+  OTHER
+}
+
+enum RequestStatus {
+  CREATED
+  SEARCHING
+  MATCHED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  REJECTED
+  ASSIGNED
+  MATCHING
+  EXPIRED
+  ARRIVED
+  WORKING
+  PAYMENT_PENDING
+  PAID
+}
+
+enum QuoteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+enum ProviderType {
+  INDIVIDUAL
+  BUSINESS
+}
+
+enum VerificationStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum UploadPurpose {
+  PROVIDER_VERIFICATION
+  REQUEST_PHOTO
+  REVIEW_PHOTO
+  BEFORE_AFTER
+  REQUEST_VIDEO
+}
+
+enum DocumentType {
+  CITIZEN_ID_FRONT
+  CITIZEN_ID_BACK
+  SELFIE
+  MOTORBIKE_PHOTO
+  CAR_PHOTO
+  DRIVER_LICENSE
+  BUSINESS_REGISTRATION
+}
+
+enum StorageType {
+  R2
+  CLOUDINARY
+}
+
+enum PaymentMethod {
+  CASH
+  QR
+  WALLET
+}
+
+enum PaymentStatus {
+  PENDING
+  USER_CONFIRMED
+  PROVIDER_CONFIRMED
+  COMPLETED
+  DISPUTED
+}
+
+enum WalletTransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum WalletTransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum WalletReferenceType {
+  JOB
+  WITHDRAW
+  COMMISSION
+  REFUND
+  ADJUSTMENT
+  TOPUP
+  JOB_PAYMENT
+}
+
+enum UserWalletReferenceType {
+  TOPUP
+  JOB_PAYMENT
+  REFUND
+  WITHDRAW
+  ADJUSTMENT
 }

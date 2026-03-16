@@ -822,10 +822,12 @@ export class WalletService {
 
         // 4. Find matching transfer code in content
         //    Job payment codes: RMJ + 7 chars (10 total)
-        //    Topup codes:       RM  + 7 chars (9 total)
+        //    Provider topup codes: RM  + 7 chars (9 total)
+        //    User topup codes:     RU  + 7 chars (9 total)
         const jobMatch = String(content || '').match(/RMJ[A-Z0-9]{7}/i);
         const topupMatch = !jobMatch && String(content || '').match(/RM[A-Z0-9]{7}/i);
-        const match = jobMatch || topupMatch;
+        const userMatch = !jobMatch && !topupMatch && String(content || '').match(/RU[A-Z0-9]{7}/i);
+        const match = jobMatch || topupMatch || userMatch;
         if (!match) {
             this.logger.warn(`SEPAY_WEBHOOK no transfer code in content: "${content}"`);
             return { success: true, message: 'No matching transfer code' };
@@ -835,6 +837,10 @@ export class WalletService {
         // 5. Route by prefix
         if (jobMatch) {
             return this.processJobPaymentWebhook(transferCode, Number(sepayId), Number(transferAmount));
+        }
+        // 5b. Route user wallet topup (RU prefix) — handle inline to avoid circular dep
+        if (userMatch) {
+            return this.processUserTopupWebhook(transferCode, Number(sepayId), sepayReferenceCode, Number(transferAmount));
         }
         // 5. Find the wallet by topupCode
         const wallet = await this.prisma.providerWallet.findUnique({
@@ -924,6 +930,66 @@ export class WalletService {
             `code=${transferCode} sepayId=${sepayId}`,
         );
 
+        return { success: true };
+    }
+
+    /**
+     * Handle user wallet top-up webhook (RU-prefix transfer codes).
+     * Called inline from processSePayWebhook when a user topup code is detected.
+     */
+    private async processUserTopupWebhook(
+        transferCode: string,
+        sepayId: number,
+        sepayReferenceCode: string | undefined,
+        transferAmount: number,
+    ) {
+        // Find pending user topup by transferCode
+        const now = new Date();
+        const pendingTx = await this.prisma.userTopupTransaction.findFirst({
+            where: {
+                transferCode,
+                status: 'PENDING',
+                OR: [{ expireAt: null }, { expireAt: { gt: now } }],
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        if (!pendingTx) {
+            this.logger.warn(`USER_TOPUP_WEBHOOK no pending tx for code=${transferCode}`);
+            return { success: false, message: 'No pending user topup found for this code' };
+        }
+
+        if (transferAmount < pendingTx.amount) {
+            this.logger.warn(`USER_TOPUP_WEBHOOK amount mismatch code=${transferCode} expected=${pendingTx.amount} got=${transferAmount}`);
+            return { success: false, message: 'Amount mismatch' };
+        }
+
+        // Atomic: mark topup COMPLETED + credit UserWallet
+        await this.prisma.$transaction(async (tx) => {
+            await tx.userTopupTransaction.update({
+                where: { id: pendingTx.id },
+                data: { status: 'COMPLETED', completedAt: now, sepayId, sepayReferenceCode },
+            });
+
+            await tx.userWallet.update({
+                where: { id: pendingTx.walletId },
+                data: { availableBalance: { increment: pendingTx.amount } },
+            });
+
+            await tx.userWalletTransaction.create({
+                data: {
+                    walletId: pendingTx.walletId,
+                    type: WalletTransactionType.CREDIT,
+                    amount: pendingTx.amount,
+                    status: WalletTransactionStatus.COMPLETED,
+                    referenceType: 'TOPUP',
+                    referenceId: pendingTx.id,
+                    description: `Nạp tiền · ${transferCode}`,
+                },
+            });
+        });
+
+        this.logger.log(`USER_TOPUP_COMPLETED walletId=${pendingTx.walletId} amount=${pendingTx.amount} code=${transferCode} sepayId=${sepayId}`);
         return { success: true };
     }
 

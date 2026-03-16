@@ -30,7 +30,7 @@ interface Payment {
     surchargeNote?: string | null;
     note?: string | null;
     photoUrls: string[];
-    paymentMethod: 'CASH' | 'QR';
+    paymentMethod: 'CASH' | 'QR' | 'WALLET';
     status: string;
     userConfirmedAt?: string | null;
 }
@@ -48,6 +48,19 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
     const [disputeReason, setDisputeReason] = useState('');
     const [isDisputing, setIsDisputing] = useState(false);
     const [done, setDone] = useState(false);
+
+    // Wallet balance (only fetched when paymentMethod === WALLET)
+    const [walletBalance, setWalletBalance] = useState<number | null>(null);
+    const [walletLoading, setWalletLoading] = useState(false);
+
+    useEffect(() => {
+        if (payment.paymentMethod !== 'WALLET') return;
+        setWalletLoading(true);
+        api.get('/user-wallet/me')
+            .then(res => setWalletBalance(res.data.availableBalance ?? 0))
+            .catch(() => setWalletBalance(0))
+            .finally(() => setWalletLoading(false));
+    }, [payment.paymentMethod]);
 
     // QR payment state (for QR payment method)
     const [qrData, setQrData] = useState<{
@@ -117,6 +130,19 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
         }
     };
 
+    const handleWalletConfirm = async () => {
+        setIsConfirming(true);
+        try {
+            await api.patch(`/rescue-requests/${requestId}/payment/wallet-confirm`);
+            toast.success('Thanh toán ví thành công! 🎉');
+            setDone(true);
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || 'Thanh toán thất bại');
+        } finally {
+            setIsConfirming(false);
+        }
+    };
+
     const handleDispute = async () => {
         if (!disputeReason.trim()) { toast.error('Vui lòng nhập lý do'); return; }
         setIsDisputing(true);
@@ -155,8 +181,8 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
 
     return (
         <>
-            {/* Confetti burst when QR payment is confirmed */}
-            {done && payment.paymentMethod === 'QR' && (
+            {/* Confetti burst when QR or WALLET payment is confirmed */}
+            {done && (payment.paymentMethod === 'QR' || payment.paymentMethod === 'WALLET') && (
                 <ReactConfetti
                     width={typeof window !== 'undefined' ? window.innerWidth : 400}
                     height={typeof window !== 'undefined' ? window.innerHeight : 800}
@@ -190,7 +216,11 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                         <p className="text-xs mb-1" style={{ color: C.gray }}>Tổng tiền cần thanh toán</p>
                         <p className="text-3xl font-bold" style={{ color: C.orange }}>{fmt(payment.totalAmount)}</p>
                         <p className="text-xs mt-1" style={{ color: C.gray }}>
-                            Thanh toán bằng <span className="font-semibold">{payment.paymentMethod === 'CASH' ? 'Tiền mặt' : 'Chuyển khoản QR'}</span>
+                            Thanh toán bằng <span className="font-semibold">
+                                {payment.paymentMethod === 'CASH' ? 'Tiền mặt'
+                                    : payment.paymentMethod === 'WALLET' ? 'Ví điện tử RescueMe'
+                                    : 'Chuyển khoản QR'}
+                            </span>
                         </p>
                     </div>
 
@@ -284,11 +314,12 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                             </svg>
                         </div>
                         <p className="text-sm font-bold mb-1" style={{ color: '#15803d' }}>
-                            Xác nhận thanh toán thành công!
+                            Thanh toán thành công! 🎉
                         </p>
                         <p className="text-xs" style={{ color: '#166534' }}>
-                            Cảm ơn bạn đã sử dụng dịch vụ.{' '}
-                            <span className="font-medium">Provider đang xác nhận nhận tiền.</span>
+                            {payment.paymentMethod === 'WALLET'
+                                ? <><span className="font-medium">Tiền đã được trừ tự động từ ví của bạn.</span> Cảm ơn bạn đã sử dụng dịch vụ!</>
+                                : <>Cảm ơn bạn đã sử dụng dịch vụ.{' '}<span className="font-medium">Đơn hàng đang được hoàn tất.</span></>}
                         </p>
                     </div>
 
@@ -306,7 +337,86 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
             {/* ─── Actions (not yet confirmed) ─── */}
             {!alreadyConfirmed && (
                 <div className="mt-2 space-y-2">
-                    {payment.paymentMethod === 'QR' ? (
+                    {payment.paymentMethod === 'WALLET' ? (
+                        /* ── Wallet: show balance + confirm button ── */
+                        <div className="space-y-3">
+                            {/* Wallet balance card */}
+                            <div
+                                className="rounded-2xl p-4"
+                                style={{
+                                    background: 'linear-gradient(135deg, #eff6ff, #dbeafe)',
+                                    border: '1.5px solid #bfdbfe',
+                                }}
+                            >
+                                <div className="flex items-center gap-2 mb-2">
+                                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#2563eb" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                    </svg>
+                                    <p className="text-xs font-bold" style={{ color: '#1d4ed8' }}>Số dư ví của bạn</p>
+                                </div>
+                                {walletLoading ? (
+                                    <p className="text-sm" style={{ color: '#6b7280' }}>Đang tải số dư...</p>
+                                ) : (
+                                    <>
+                                        <p className="text-2xl font-extrabold" style={{ color: '#1d4ed8' }}>
+                                            {walletBalance !== null ? fmt(walletBalance) : '--'}
+                                        </p>
+                                        {walletBalance !== null && walletBalance < payment.totalAmount && (
+                                            <div
+                                                className="mt-2 flex items-center gap-1.5 px-3 py-2 rounded-xl"
+                                                style={{ background: '#fef2f2', border: '1px solid #fca5a5' }}
+                                            >
+                                                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#dc2626" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                                <p className="text-xs font-semibold" style={{ color: '#dc2626' }}>
+                                                    Số dư không đủ — cần thêm {fmt(payment.totalAmount - walletBalance)}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Confirm button */}
+                            <button
+                                onClick={handleWalletConfirm}
+                                disabled={isConfirming || walletLoading || (walletBalance !== null && walletBalance < payment.totalAmount)}
+                                className="w-full py-4 rounded-2xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                                style={{
+                                    background: (isConfirming || walletLoading || (walletBalance !== null && walletBalance < payment.totalAmount))
+                                        ? C.gray
+                                        : 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                                    boxShadow: (isConfirming || walletLoading || (walletBalance !== null && walletBalance < payment.totalAmount))
+                                        ? 'none'
+                                        : '0 4px 16px rgba(37,99,235,0.4)',
+                                }}
+                            >
+                                {isConfirming ? (
+                                    <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                                        <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
+                                    </svg>
+                                ) : (
+                                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                )}
+                                {isConfirming ? 'Đang xử lý...' : `Xác nhận thanh toán · ${fmt(payment.totalAmount)}`}
+                            </button>
+
+                            {/* Insufficient balance: link to top up */}
+                            {walletBalance !== null && walletBalance < payment.totalAmount && (
+                                <a
+                                    href="/user/wallet"
+                                    className="block w-full py-3 rounded-2xl text-sm font-semibold text-center transition-all"
+                                    style={{ background: '#eff6ff', color: '#2563eb', border: '1.5px solid #bfdbfe' }}
+                                >
+                                    + Nạp thêm vào ví
+                                </a>
+                            )}
+                        </div>
+                    ) : payment.paymentMethod === 'QR' ? (
                         /* ── QR: show QR code for customer to scan ── */
                         qrData && qrData.status === 'PENDING' ? (
                             <div className="rounded-2xl overflow-hidden" style={{ border: '1.5px solid #f1f5f9' }}>

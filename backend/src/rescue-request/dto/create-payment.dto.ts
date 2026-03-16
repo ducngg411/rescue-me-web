@@ -1,5 +1,4 @@
-import { IsInt, IsEnum, IsOptional, IsString, IsArray, Min } from 'class-validator';
-import { PaymentMethod } from '@prisma/client';
+import { IsInt, IsIn, IsOptional, IsString, IsArray, Min } from 'class-validator';
 
 export class CreatePaymentDto {
     @IsInt()
@@ -22,9 +21,10 @@ export class CreatePaymentDto {
     @IsOptional()
     otherFee?: number;
 
-    @IsEnum(PaymentMethod)
+    @IsIn(['CASH', 'QR', 'WALLET'])
     @IsOptional()
-    paymentMethod?: PaymentMethod;
+    paymentMethod?: 'CASH' | 'QR' | 'WALLET';
+
 
     @IsString()
     @IsOptional()

@@ -5,6 +5,8 @@ import { CreateRescueRequestDto } from './dto/create-rescue-request.dto';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { QuoteStatus } from './dto/quote-response.dto';
 import { CommissionService } from '../wallet/commission.service';
+import { UserWalletService } from '../user-wallet/user-wallet.service';
+import { UserWalletReferenceType, WalletTransactionStatus, WalletTransactionType, WalletReferenceType } from '@prisma/client';
 
 
 @Injectable()
@@ -12,6 +14,7 @@ export class RescueRequestService {
     constructor(
         private prisma: PrismaService,
         private commissionService: CommissionService,
+        private userWalletService: UserWalletService,
     ) { }
 
     // Auto-expire MATCHING requests every minute
@@ -1181,7 +1184,7 @@ export class RescueRequestService {
         distanceFee?: number;
         overtimeFee?: number;
         otherFee?: number;
-        paymentMethod?: 'CASH' | 'QR';
+        paymentMethod?: 'CASH' | 'QR' | 'WALLET';
         surchargeNote?: string;
         note?: string;
         photoUrls?: string[];
@@ -1594,6 +1597,147 @@ export class RescueRequestService {
             bankAccount,
             bankCode,
         };
+    }
+
+    // ── Wallet Payment (User Wallet → Provider Wallet) ──────────────────────────
+
+    /**
+     * User xác nhận thanh toán bằng ví (PAYMENT_PENDING + WALLET → COMPLETED)
+     * PATCH /rescue-requests/:id/payment/wallet-confirm
+     *
+     * Flow:
+     *  1. Validate request & payment
+     *  2. Kiểm tra số dư user wallet
+     *  3. Debit user wallet
+     *  4. Credit provider wallet (PENDING, giải ngân sau)
+     *  5. Mark payment COMPLETED + request COMPLETED
+     *  6. Deduct platform commission từ provider wallet (fire-and-forget)
+     */
+    async confirmWalletPayment(requestId: string, userId: string) {
+        const request = await this.prisma.rescueRequest.findUnique({ where: { id: requestId } });
+        if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.userId !== userId) throw new ForbiddenException('Not your request');
+        if (request.status !== 'PAYMENT_PENDING') {
+            throw new BadRequestException(`Cannot confirm wallet payment from status: ${request.status}`);
+        }
+
+        const payment = await this.prisma.payment.findUnique({ where: { requestId } });
+        if (!payment) throw new NotFoundException('Payment not found for this request');
+        if ((payment.paymentMethod as string) !== 'WALLET') {
+            throw new BadRequestException('Payment method is not WALLET');
+        }
+        if (payment.status === 'COMPLETED') {
+            return { success: true, message: 'Already completed' };
+        }
+
+        // Ensure user wallet exists and has sufficient balance
+        const userWallet = await this.userWalletService.ensureWallet(userId);
+        if (userWallet.availableBalance < payment.totalAmount) {
+            throw new BadRequestException(
+                `Số dư ví không đủ. Số dư: ${userWallet.availableBalance.toLocaleString('vi-VN')}đ, Cần: ${payment.totalAmount.toLocaleString('vi-VN')}đ`,
+            );
+        }
+
+        const now = new Date();
+
+        // Atomic: debit user wallet + update payment + request in a single transaction
+        await this.prisma.$transaction(async (tx) => {
+            // 1. Debit user wallet
+            const wallet = await tx.userWallet.findUnique({ where: { userId } });
+            if (!wallet) throw new NotFoundException('User wallet not found');
+            if (wallet.availableBalance < payment.totalAmount) {
+                throw new BadRequestException('Insufficient balance');
+            }
+
+            await tx.userWalletTransaction.create({
+                data: {
+                    walletId: wallet.id,
+                    type: WalletTransactionType.DEBIT,
+                    amount: payment.totalAmount,
+                    status: WalletTransactionStatus.COMPLETED,
+                    referenceType: UserWalletReferenceType.JOB_PAYMENT,
+                    referenceId: requestId,
+                    description: `Thanh toán dịch vụ cứu hộ #${requestId.slice(0, 8).toUpperCase()}`,
+                },
+            });
+
+            await tx.userWallet.update({
+                where: { userId },
+                data: { availableBalance: { decrement: payment.totalAmount } },
+            });
+
+            // 2. Update payment status
+            await tx.payment.update({
+                where: { requestId },
+                data: {
+                    status: 'COMPLETED',
+                    userConfirmedAt: now,
+                    providerConfirmedAt: now,
+                },
+            });
+
+            // 3. Update request status to COMPLETED
+            await tx.rescueRequest.update({
+                where: { id: requestId },
+                data: { status: 'COMPLETED', completedAt: now },
+            });
+        });
+
+        // 4. Credit provider wallet IMMEDIATELY (funds already left user's wallet atomically above)
+        setImmediate(async () => {
+            try {
+                // Ensure provider wallet exists
+                const providerWallet = await this.prisma.providerWallet.findUnique({
+                    where: { providerId: payment.providerId },
+                });
+                if (providerWallet) {
+                    // Deduct commission first to compute net amount
+                    const commissionRate = 0.10;
+                    const commissionAmount = Math.round(payment.totalAmount * commissionRate);
+                    const netAmount = payment.totalAmount - commissionAmount;
+
+                    // Credit net amount directly to availableBalance (no hold — wallet payment is instant)
+                    await this.prisma.$transaction(async (tx) => {
+                        await tx.walletTransaction.create({
+                            data: {
+                                walletId: providerWallet.id,
+                                type: WalletTransactionType.CREDIT,
+                                amount: netAmount,
+                                status: WalletTransactionStatus.COMPLETED,
+                                referenceType: WalletReferenceType.JOB_PAYMENT,
+                                referenceId: requestId,
+                                description: `Thu nhập ví điện tử #${requestId.slice(0, 8).toUpperCase()} (sau phí ${commissionRate * 100}%)`,
+                            },
+                        });
+
+                        // Debit commission in a separate transaction for transparency
+                        await tx.walletTransaction.create({
+                            data: {
+                                walletId: providerWallet.id,
+                                type: WalletTransactionType.DEBIT,
+                                amount: commissionAmount,
+                                status: WalletTransactionStatus.COMPLETED,
+                                referenceType: WalletReferenceType.COMMISSION,
+                                referenceId: requestId,
+                                description: `Phí dịch vụ ${commissionRate * 100}% - Job #${requestId.slice(0, 8).toUpperCase()}`,
+                            },
+                        });
+
+                        // Increase availableBalance by net amount only (commission already deducted above)
+                        await tx.providerWallet.update({
+                            where: { id: providerWallet.id },
+                            data: { availableBalance: { increment: netAmount } },
+                        });
+                    });
+                    console.log(`💳 [WalletPayment] Credited provider ${payment.providerId}: +${netAmount} VND net (gross ${payment.totalAmount}, commission ${commissionAmount})`);
+                }
+            } catch (err) {
+                console.error(`❌ [WalletPayment] Post-payment processing failed for job ${requestId}:`, err.message);
+            }
+        });
+
+        console.log(`💳 [WalletPayment] User ${userId} confirmed wallet payment for request ${requestId}: ${payment.totalAmount} VND`);
+        return { success: true, message: 'Wallet payment confirmed', amount: payment.totalAmount };
     }
 
     /**

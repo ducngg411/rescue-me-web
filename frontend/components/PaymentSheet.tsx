@@ -24,7 +24,7 @@ interface PaymentSheetProps {
     requestId: string;
     defaultAmount: number;
     onClose: () => void;
-    onSubmitted: (method?: 'CASH' | 'QR') => void;
+    onSubmitted: (method?: 'CASH' | 'QR' | 'WALLET') => void;
 }
 
 let nextId = 1;
@@ -48,9 +48,12 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
     const [showSurcharge, setShowSurcharge] = useState(false);
 
     const [note, setNote] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR'>('CASH');
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR' | 'WALLET'>('CASH');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [cashSent, setCashSent] = useState(false);  // show cash-pending overlay after CASH submit
+    const [walletSent, setWalletSent] = useState(false); // show wallet-sent overlay after WALLET submit
+    const [walletReceived, setWalletReceived] = useState(false); // wallet payment confirmed by user
+    const walletPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const surchargeTotal = surchargeItems.reduce((s, i) => s + i.amount, 0);
     const totalAmount = baseFee + surchargeTotal;
@@ -90,9 +93,24 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
     const stopAll = () => {
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
         if (cdRef.current) { clearInterval(cdRef.current); cdRef.current = null; }
+        if (walletPollRef.current) { clearInterval(walletPollRef.current); walletPollRef.current = null; }
     };
 
     useEffect(() => () => stopAll(), []);
+
+    // Start polling for wallet payment confirmation by user
+    const startWalletPoll = (reqId: string) => {
+        walletPollRef.current = setInterval(async () => {
+            try {
+                const res = await api.get(`/rescue-requests/${reqId}/payment`);
+                const status = res.data?.status;
+                if (status === 'COMPLETED') {
+                    if (walletPollRef.current) { clearInterval(walletPollRef.current); walletPollRef.current = null; }
+                    setWalletReceived(true);
+                }
+            } catch { /* ignore polling errors */ }
+        }, 3000);
+    };
 
     const startCountdown = (expireAt: string) => {
         const tick = () => {
@@ -155,6 +173,11 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
                 setQrStep('qr');
                 startCountdown(qrRes.data.expireAt);
                 pollStatus(requestId);
+            } else if (paymentMethod === 'WALLET') {
+                // Wallet payment — user will receive a notification to confirm
+                toast.success('Đã gửi yêu cầu thanh toán qua ví!');
+                setWalletSent(true);
+                startWalletPoll(requestId);
             } else {
                 toast.success('Đã gửi yêu cầu thanh toán!');
                 setCashSent(true); // Show cash-pending overlay instead of closing immediately
@@ -403,6 +426,7 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
                                 {([
                                     { value: 'CASH', label: 'Tiền mặt', sub: 'Thanh toán trực tiếp tại nơi sửa chữa' },
                                     { value: 'QR', label: 'Chuyển khoản QR', sub: 'Quét mã QR để chuyển tiền' },
+                                    { value: 'WALLET', label: 'Ví điện tử RescueMe', sub: 'Tự động trừ từ ví user ngay khi xác nhận' },
                                 ] as const).map(opt => (
                                     <button
                                         key={opt.value}
@@ -571,6 +595,67 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
                             >
                                 Đóng
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* ── Wallet Sent Overlay ── */}
+            {walletSent && (
+                <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}>
+                    <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl overflow-hidden" style={{ background: 'white' }}>
+                        <div className="px-5 pt-5 pb-6">
+                            {walletReceived ? (
+                                /* ── User confirmed → payment received ── */
+                                <div className="text-center">
+                                    <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: '#f0fdf4' }}>
+                                        <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <p className="text-base font-bold mb-1" style={{ color: C.navy }}>Bạn vừa được thanh toán!</p>
+                                    <p className="text-3xl font-extrabold mt-2 mb-1" style={{ color: '#16a34a' }}>{fmt(totalAmount)}</p>
+                                    <p className="text-xs mb-4" style={{ color: C.gray }}>Đã vào ví RescueMe của bạn · Đơn hàng hoàn thành</p>
+                                    <button
+                                        onClick={() => { setWalletSent(false); setWalletReceived(false); onSubmitted('WALLET'); }}
+                                        className="w-full py-3.5 rounded-2xl text-sm font-bold text-white transition-all active:scale-[0.98]"
+                                        style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', boxShadow: '0 4px 14px rgba(22,163,74,0.35)' }}
+                                    >
+                                        Tuyệt vời! Đóng
+                                    </button>
+                                </div>
+                            ) : (
+                                /* ── Waiting for user to confirm ── */
+                                <>
+                                    <div className="text-center mb-5">
+                                        <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: '#eff6ff' }}>
+                                            <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#2563eb" strokeWidth={2.5}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                            </svg>
+                                        </div>
+                                        <p className="text-base font-bold" style={{ color: C.navy }}>Yêu cầu thanh toán đã gửi</p>
+                                        <p className="text-2xl font-bold mt-1" style={{ color: '#2563eb' }}>{fmt(totalAmount)}</p>
+                                        <p className="text-xs mt-2" style={{ color: C.gray }}>Ví điện tử RescueMe · Đang chờ user xác nhận...</p>
+                                    </div>
+                                    <div className="rounded-2xl p-3 mb-4" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                                        <div className="flex items-center gap-2">
+                                            <svg className="animate-spin w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="#2563eb" strokeWidth="4" />
+                                                <path className="opacity-75" fill="#2563eb" d="M4 12a8 8 0 018-8v8H4z" />
+                                            </svg>
+                                            <p className="text-xs font-semibold" style={{ color: '#1d4ed8' }}>
+                                                Đang chờ user xác nhận… Sẽ tự động cập nhật khi thanh toán xong
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => { if (walletPollRef.current) { clearInterval(walletPollRef.current); walletPollRef.current = null; } setWalletSent(false); onSubmitted(); }}
+                                        className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
+                                        style={{ background: C.bg, color: C.gray }}
+                                    >
+                                        Đóng (chờ nền)
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

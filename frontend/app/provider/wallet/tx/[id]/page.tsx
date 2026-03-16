@@ -229,7 +229,11 @@ export default function TxDetailPage() {
                     <div className="rounded-2xl overflow-hidden" style={{ background: 'white', boxShadow: '0 1px 12px rgba(0,0,0,0.07)' }}>
                         <SectionHeader icon={<Banknote className="w-4 h-4" style={{ color: C.green }} />} title={t('provider.txDetail.payment.title')} bg={C.greenLight} />
                         <div className="px-5 py-4 space-y-3">
-                            <Row label={t('provider.txDetail.payment.method')} value={job.payment.paymentMethod === 'QR' ? ` ${t('provider.txDetail.payment.transfer')}` : ` ${t('provider.txDetail.payment.cash')}`} />
+                            <Row label={t('provider.txDetail.payment.method')} value={
+                                job.payment.paymentMethod === 'QR' ? `🏦 ${t('provider.txDetail.payment.transfer')}`
+                                : job.payment.paymentMethod === 'WALLET' ? '💳 Ví điện tử RescueMe'
+                                : `💵 ${t('provider.txDetail.payment.cash')}`
+                            } />
                             {job.payment.baseFee > 0 && <Row label={t('provider.txDetail.payment.basePrice')} value={fmt(job.payment.baseFee)} />}
                             {breakdown.map((b, i) => (
                                 <Row key={i} label={b.label || t('provider.txDetail.payment.basePrice')} value={fmt(b.amount)} />

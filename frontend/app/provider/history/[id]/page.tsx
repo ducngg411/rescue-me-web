@@ -466,7 +466,11 @@ export default function HistoryJobDetailPage() {
                             <div className="rounded-xl p-3" style={{ background: C.bg }}>
                                 <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.payment.method')}</p>
                                 <p className="text-sm font-bold" style={{ color: C.navy }}>
-                                    {payment.paymentMethod === 'CASH' ? t('provider.historyDetail.labels.cash') : t('provider.historyDetail.labels.transfer')}
+                                    {payment.paymentMethod === 'CASH'
+                                        ? t('provider.historyDetail.labels.cash')
+                                        : payment.paymentMethod === 'WALLET'
+                                            ? 'Ví điện tử RescueMe'
+                                            : t('provider.historyDetail.labels.transfer')}
                                 </p>
                             </div>
                             <div className="rounded-xl p-3" style={{ background: C.bg }}>

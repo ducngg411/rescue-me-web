@@ -233,6 +233,7 @@ const en = {
             home: 'Home',
             history: 'History',
             profile: 'Profile',
+            wallet: 'Wallet',
             settings: 'Settings',
         },
         requests: {

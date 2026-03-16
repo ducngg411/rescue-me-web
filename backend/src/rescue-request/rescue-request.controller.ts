@@ -245,4 +245,10 @@ export class RescueRequestController {
     async switchPaymentToCash(@Request() req, @Param('id') requestId: string) {
         return this.rescueRequestService.switchPaymentToCash(requestId, req.user.id);
     }
+
+    /** User xác nhận thanh toán bằng ví (WALLET) → tự động trừ tiền + hoàn thành đơn */
+    @Patch(':id/payment/wallet-confirm')
+    async confirmWalletPayment(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.confirmWalletPayment(requestId, req.user.id);
+    }
 }
