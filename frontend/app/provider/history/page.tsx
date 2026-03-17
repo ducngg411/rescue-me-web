@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import api from '@/lib/api';
 import ProviderLayout from '@/components/ProviderLayout';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import AvatarImage from '@/components/AvatarImage';
 import PendingVerificationScreen from '@/components/PendingVerificationScreen';
 import {
     Search, ChevronRight, ChevronLeft, Calendar,
@@ -40,7 +41,7 @@ interface Quote {
         pickupAddress: string | null;
         createdAt: string;
         completedAt?: string | null;
-        user: { id: string; name: string | null; phoneNumber: string | null };
+        user: { id: string; name: string | null; phoneNumber: string | null; avatar?: string | null };
         payment?: { id: string; totalAmount: number; baseFee: number; distanceFee: number; otherFee: number; status: string; paymentMethod?: string; walletTxStatus?: string | null } | null;
     };
 }
@@ -137,7 +138,7 @@ function PaymentBadge({ walletTxStatus, paymentMethod }: { walletTxStatus?: stri
         return (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
                 style={{ background: C.greenLight, color: C.green }}>
-                 Ví điện tử · Đã nhận
+                Ví điện tử · Đã nhận
             </span>
         );
     }
@@ -344,13 +345,13 @@ function MiniBarChart({ data }: { data: DayStat[] }) {
 }
 
 /* ─── Avatar ──── */
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, avatar }: { name: string, avatar?: string | null }) {
     const initials = name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
     const hue = name.charCodeAt(0) * 37 % 360;
     return (
-        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-            style={{ background: `hsl(${hue},60%,50%)` }}>
-            {initials}
+        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 bg-cover bg-center"
+            style={{ background: avatar ? `url(${avatar}) center/cover` : `hsl(${hue},60%,50%)` }}>
+            {!avatar && initials}
         </div>
     );
 }
@@ -537,10 +538,13 @@ export default function ProviderHistoryPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                             </svg>
                         </button>
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                            style={{ background: C.orange }}>
-                            {initials.charAt(0)}
-                        </div>
+                        <AvatarImage
+                            name={user?.name || user?.email || 'Provider'}
+                            avatar={user?.avatar}
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                            fallbackBackground={C.orange}
+                            initialsCount={1}
+                        />
                     </div>
                 </header>
 
@@ -792,7 +796,7 @@ export default function ProviderHistoryPage() {
                                                         <p className="text-[10px] mt-1 font-mono font-bold" style={{ color: '#94a3b8' }}>#{req.id.slice(0, 8).toUpperCase()}</p>
                                                     </div>
                                                     <div className="flex items-center gap-3 min-w-0">
-                                                        <Avatar name={req.user.name ?? 'K'} />
+                                                        <Avatar name={req.user.name ?? 'K'} avatar={req.user.avatar} />
                                                         <div className="min-w-0">
                                                             <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>
                                                                 {req.user.name ?? t('provider.history.customerFallback')}
@@ -836,7 +840,7 @@ export default function ProviderHistoryPage() {
                                                 <div className="md:hidden px-4 py-4">
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="flex items-center gap-3 min-w-0">
-                                                            <Avatar name={req.user.name ?? 'K'} />
+                                                            <Avatar name={req.user.name ?? 'K'} avatar={req.user.avatar} />
                                                             <div className="min-w-0">
                                                                 <p className="font-semibold text-sm truncate" style={{ color: C.navy }}>
                                                                     {req.user.name ?? t('provider.history.customerFallback')}

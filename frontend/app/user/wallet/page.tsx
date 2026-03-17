@@ -11,6 +11,7 @@ import { useUserGuard } from '@/lib/guards';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import AvatarImage from '@/components/AvatarImage';
 import { useRouter } from 'next/navigation';
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
@@ -667,9 +668,13 @@ export default function UserWalletPage() {
                 </div>
                 {/* User chip */}
                 <div className="flex items-center gap-3 px-2 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: C.orange }}>
-                        {displayName.charAt(0).toUpperCase()}
-                    </div>
+                    <AvatarImage
+                        name={displayName}
+                        avatar={user?.avatar}
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                        fallbackBackground={C.orange}
+                        initialsCount={1}
+                    />
                     <div className="min-w-0">
                         <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
                         <p className="text-xs" style={{ color: C.gray }}>{t('user.dashboard.basicPlan')}</p>
@@ -688,18 +693,23 @@ export default function UserWalletPage() {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => router.push('/user')}
-                            className="flex md:hidden items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 transition-colors"
+                            className="flex md:hidden items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-50 transition-colors"
                             style={{ color: C.navy }}
                         >
-                            <ArrowLeft style={{ width: 18, height: 18 }} />
+                            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                            </svg>
                         </button>
-                        <div className="flex md:hidden items-center gap-2">
+                        <div className="md:hidden flex items-center gap-2">
                             <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
                             </div>
-                            <span className="font-bold text-sm" style={{ color: C.navy }}>RescueMe</span>
                         </div>
-                        <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>Ví của tôi</h2>
+                        <div className="flex-1 min-w-0 md:hidden">
+                            <h1 className="font-bold text-base leading-tight" style={{ color: C.navy }}>{t('user.wallet.title')}</h1>
+                            <p className="text-xs" style={{ color: C.gray }}>{t('user.wallet.subtitle')}</p>
+                        </div>
+                        <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>{t('user.wallet.title')}</h2>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -716,9 +726,13 @@ export default function UserWalletPage() {
                         >
                             <RefreshCw style={{ width: 18, height: 18 }} />
                         </button>
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: C.orange }}>
-                            {displayName.charAt(0).toUpperCase()}
-                        </div>
+                        <AvatarImage
+                            name={displayName}
+                            avatar={user?.avatar}
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                            fallbackBackground={C.orange}
+                            initialsCount={1}
+                        />
                     </div>
                 </header>
 

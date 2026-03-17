@@ -6,6 +6,7 @@ import { useUserGuard } from '@/lib/guards';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import api from '@/lib/api';
+import AvatarImage from '@/components/AvatarImage';
 
 interface RescueRequest {
     id: string;
@@ -236,9 +237,13 @@ export default function UserRequestsPage() {
                 </div>
                 {/* User */}
                 <div className="flex items-center gap-3 px-2 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: C.orange }}>
-                        {displayName.charAt(0).toUpperCase()}
-                    </div>
+                    <AvatarImage
+                        name={displayName}
+                        avatar={user?.avatar}
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                        fallbackBackground={C.orange}
+                        initialsCount={1}
+                    />
                     <div className="min-w-0">
                         <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
                         <p className="text-xs" style={{ color: C.gray }}>{t('user.dashboard.basicPlan')}</p>
@@ -283,7 +288,7 @@ export default function UserRequestsPage() {
                         <LanguageSwitcher />
                         <button
                             onClick={() => router.push('/user/create-request')}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white flex-shrink-0 transition-all active:scale-95"
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white flex-shrink-0 transition-all active:scale-95 hidden sm:flex"
                             style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`, boxShadow: `0 2px 8px ${C.orange}40` }}
                         >
                             <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
@@ -291,6 +296,23 @@ export default function UserRequestsPage() {
                             </svg>
                             {t('user.requests.createNew')}
                         </button>
+                        <button
+                            onClick={() => router.push('/user/create-request')}
+                            className="w-9 h-9 rounded-xl flex items-center justify-center text-white flex-shrink-0 transition-all active:scale-95 sm:hidden"
+                            style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`, boxShadow: `0 2px 8px ${C.orange}40` }}
+                            aria-label={t('user.requests.createNew')}
+                        >
+                            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                        </button>
+                        <AvatarImage
+                            name={displayName}
+                            avatar={user?.avatar}
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                            fallbackBackground={C.orange}
+                            initialsCount={1}
+                        />
                     </div>
                 </header>
 

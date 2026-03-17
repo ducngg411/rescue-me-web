@@ -209,6 +209,9 @@ export default function ProviderSettingsPage() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    
+    // --- Avatar Upload State ---
+    const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
     // Profile state
     const [fullName, setFullName] = useState('');
@@ -318,6 +321,46 @@ export default function ProviderSettingsPage() {
         }
     };
 
+    const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploadingAvatar(true);
+        try {
+            const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+            const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', uploadPreset!);
+            formData.append('folder', `avatars/${user?.id}`);
+
+            const res = await fetch(
+                `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+                { method: 'POST', body: formData }
+            );
+            if (!res.ok) throw new Error('Cloudinary upload failed');
+            const data = await res.json();
+
+            await api.patch('/me/avatar', { avatarUrl: data.secure_url });
+            
+            // Re-fetch user to reflect avatar change globally in context
+            // Since useAuth doesn't expose refreshUser directly in some setups, we might just reload or if there is refreshUser we use it.
+            // Let's check what auth operations we have. We will use a safe approach by emitting an event or if refreshUser exists.
+            
+            toast.success(t('provider.settings.toasts.avatarSuccess') || 'Avatar updated successfully!');
+            // To ensure the new avatar is shown immediately, we reload the window. 
+            // Better: If useAuth exports refreshUser, use it. But looking at line 198: const { user, loading: authLoading, logout } = useAuth();
+            window.location.reload();
+        } catch (err) {
+            console.error(err);
+            toast.error(t('provider.settings.toasts.avatarFail') || 'Failed to update avatar');
+        } finally {
+            setIsUploadingAvatar(false);
+            if (fileRef.current) fileRef.current.value = '';
+        }
+    };
+
     const statusMap: Record<string, { label: string; color: string; bg: string }> = {
         APPROVED: { label: t('provider.settings.statusBadge.APPROVED'), color: C.green, bg: C.greenLight },
         PENDING: { label: t('provider.settings.statusBadge.PENDING'), color: '#d97706', bg: '#fefce8' },
@@ -375,8 +418,8 @@ export default function ProviderSettingsPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                             </svg>
                         </button>
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: C.orange }}>
-                            {initials.charAt(0)}
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 bg-cover bg-center" style={{ background: user?.avatar ? `url(${user.avatar}) center/cover` : C.orange }}>
+                            {!user?.avatar && initials.charAt(0)}
                         </div>
                     </div>
                 </header>
@@ -389,16 +432,22 @@ export default function ProviderSettingsPage() {
                         <div className="px-5 py-5 flex items-center gap-4">
                             {/* Avatar with camera */}
                             <div className="relative flex-shrink-0">
-                                <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 flex items-center justify-center text-2xl font-bold text-white"
-                                    style={{ borderColor: 'rgba(255,255,255,0.2)', background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}>
-                                    {initials}
+                                <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 flex items-center justify-center text-2xl font-bold text-white relative"
+                                    style={{ borderColor: 'rgba(255,255,255,0.2)', background: user?.avatar ? `url(${user.avatar}) center/cover` : `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}>
+                                    {!user?.avatar && initials}
+                                    {isUploadingAvatar && (
+                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        </div>
+                                    )}
                                 </div>
-                                <button onClick={() => fileRef.current?.click()}
-                                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-[#1a1a2e]"
-                                    style={{ background: C.orange }}>
+                                <button onClick={() => !isUploadingAvatar && fileRef.current?.click()}
+                                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-[#1a1a2e] disabled:opacity-50"
+                                    style={{ background: C.orange }}
+                                    disabled={isUploadingAvatar}>
                                     <Camera className="w-3 h-3 text-white" />
                                 </button>
-                                <input ref={fileRef} type="file" accept="image/*" className="hidden" />
+                                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarSelect} />
                             </div>
 
                             {/* Info */}

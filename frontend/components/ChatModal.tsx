@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useChat, ChatMessage } from '@/lib/hooks/useChat';
+import AvatarImage from '@/components/AvatarImage';
 
 const C = {
     orange: '#f97316',
@@ -18,7 +19,9 @@ interface ChatModalProps {
     currentUserId: string;
     currentUserRole: 'PROVIDER' | 'CUSTOMER';
     currentUserName: string;
+    myAvatar?: string | null;
     otherPartyName: string;
+    otherPartyAvatar?: string | null;
     onClose: () => void;
 }
 
@@ -26,18 +29,19 @@ function formatTime(date: Date): string {
     return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
-function MessageBubble({ msg, isMe }: { msg: ChatMessage; isMe: boolean }) {
+function MessageBubble({ msg, isMe, myAvatar, otherPartyAvatar }: { msg: ChatMessage; isMe: boolean; myAvatar?: string | null; otherPartyAvatar?: string | null }) {
     return (
         <div
             className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-3`}
         >
             {!isMe && (
-                <div
+                <AvatarImage
+                    name={msg.senderName}
+                    avatar={otherPartyAvatar}
                     className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mr-2 self-end"
-                    style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
-                >
-                    {msg.senderName.charAt(0).toUpperCase()}
-                </div>
+                    fallbackBackground={C.orange}
+                    initialsCount={1}
+                />
             )}
             <div className={`max-w-[72%] ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
                 <div
@@ -72,7 +76,9 @@ export default function ChatModal({
     currentUserId,
     currentUserRole,
     currentUserName,
+    myAvatar,
     otherPartyName,
+    otherPartyAvatar,
     onClose,
 }: ChatModalProps) {
     const [inputText, setInputText] = useState('');
@@ -167,12 +173,13 @@ export default function ChatModal({
                         boxShadow: '0 1px 8px rgba(0,0,0,0.05)',
                     }}
                 >
-                    <div
+                    <AvatarImage
+                        name={otherPartyName}
+                        avatar={otherPartyAvatar}
                         className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                        style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
-                    >
-                        {otherPartyName.charAt(0).toUpperCase()}
-                    </div>
+                        fallbackBackground={C.orange}
+                        initialsCount={1}
+                    />
                     <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold truncate" style={{ color: C.navy }}>
                             {otherPartyName}
@@ -217,6 +224,8 @@ export default function ChatModal({
                                 key={msg.id}
                                 msg={msg}
                                 isMe={msg.senderId === currentUserId}
+                                myAvatar={myAvatar}
+                                otherPartyAvatar={otherPartyAvatar}
                             />
                         ))
                     )}

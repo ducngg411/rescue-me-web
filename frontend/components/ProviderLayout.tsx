@@ -122,8 +122,8 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
                         </button>
                     </div>
                     <div className="flex items-center gap-3 px-2 pt-3">
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: C.orange }}>
-                            {displayName.charAt(0).toUpperCase()}
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 bg-cover bg-center" style={{ background: user?.avatar ? `url(${user.avatar}) center/cover` : C.orange }}>
+                            {!user?.avatar && displayName.charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
                             <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>

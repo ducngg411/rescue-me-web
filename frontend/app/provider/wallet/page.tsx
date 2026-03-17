@@ -11,6 +11,7 @@ import { useProviderGuard } from '@/lib/guards';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import AvatarImage from '@/components/AvatarImage';
 import { useRouter } from 'next/navigation';
 import ProviderLayout from '@/components/ProviderLayout';
 import PendingVerificationScreen from '@/components/PendingVerificationScreen';
@@ -997,9 +998,13 @@ export default function ProviderWalletPage() {
                     >
                         <RefreshCw style={{ width: 18, height: 18 }} />
                     </button>
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: C.orange }}>
-                        {displayName.charAt(0).toUpperCase()}
-                    </div>
+                    <AvatarImage
+                        name={displayName}
+                        avatar={user?.avatar}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                        fallbackBackground={C.orange}
+                        initialsCount={1}
+                    />
                 </div>
             </header>
 
@@ -1011,7 +1016,7 @@ export default function ProviderWalletPage() {
                     {/* Subtle flat aesthetic shapes instead of gradients */}
                     <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full border-[16px] border-white opacity-5 pointer-events-none" />
                     <div className="absolute -bottom-16 -right-8 w-40 h-40 rounded-full border-[16px] border-white opacity-5 pointer-events-none" />
-                    
+
                     <div className="relative z-10">
                         <p className="text-sm opacity-80 mb-1">{t('provider.wallet.totalBalance')}</p>
                         <p className="text-4xl font-bold tabular-nums mb-4">{formatVndFull(total)}</p>

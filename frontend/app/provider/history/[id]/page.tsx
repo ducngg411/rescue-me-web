@@ -10,6 +10,7 @@ import {
     Banknote, Star, FileText, Wrench, Car, Calendar,
     RefreshCw, Image as ImageIcon, Play, User, ExternalLink, Wallet,
 } from 'lucide-react';
+import AvatarImage from '@/components/AvatarImage';
 
 
 const C = {
@@ -293,10 +294,13 @@ export default function HistoryJobDetailPage() {
                 {/* ── Customer info ── */}
                 <SectionCard title={t('provider.historyDetail.sections.customerInfo')} icon={<User size={16} style={{ color: C.blue }} />}>
                     <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
-                            style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}>
-                            {(req.user?.name || 'K').charAt(0).toUpperCase()}
-                        </div>
+                        <AvatarImage
+                            name={req.user?.name || t('provider.historyDetail.customer.fallback')}
+                            avatar={req.user?.avatar}
+                            className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
+                            fallbackBackground={`linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`}
+                            initialsCount={1}
+                        />
                         <div className="flex-1 min-w-0">
                             <p className="font-bold" style={{ color: C.navy }}>{req.user?.name || t('provider.historyDetail.customer.fallback')}</p>
                             <p className="text-xs mt-0.5" style={{ color: C.gray }}>{req.contactPhone}</p>

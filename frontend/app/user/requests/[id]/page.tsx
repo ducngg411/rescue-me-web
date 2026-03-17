@@ -76,6 +76,7 @@ interface Quote {
     provider: {
         id: string;
         name: string | null;
+        avatar?: string | null;
         serviceName: string | null;
         phoneNumber: string | null;
     };
@@ -107,10 +108,10 @@ function LiveQuoteCard({
             <div className="flex items-center gap-3">
                 {/* Avatar */}
                 <div
-                    className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                    style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
+                    className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 bg-cover bg-center"
+                    style={{ background: quote.provider.avatar ? `url(${quote.provider.avatar}) center/cover` : `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
                 >
-                    {initials}
+                    {!quote.provider.avatar && initials}
                 </div>
 
                 {/* Name + price */}

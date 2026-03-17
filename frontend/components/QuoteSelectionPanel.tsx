@@ -170,9 +170,9 @@ export default function QuoteSelectionPanel({
                         <div className="p-4">
                             {/* Provider info */}
                             <div className="flex items-center gap-3 mb-4">
-                                <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
-                                    style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}>
-                                    {initials}
+                                <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0 bg-cover bg-center"
+                                    style={{ background: quote.provider.avatar ? `url(${quote.provider.avatar}) center/cover` : `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}>
+                                    {!quote.provider.avatar && initials}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-bold text-sm" style={{ color: C.navy }}>{providerName}</p>

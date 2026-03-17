@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
 import { useChat } from '@/lib/hooks/useChat';
 import VietMap from '@/components/VietMap';
+import AvatarImage from '@/components/AvatarImage';
 
 const ChatModal = lazy(() => import('@/components/ChatModal'));
 
@@ -40,6 +41,7 @@ interface RescueRequest {
         id: string;
         name: string;
         phoneNumber: string;
+        avatar?: string | null;
         licensePlate?: string | null;
         vehicleColor?: string | null;
     };
@@ -454,7 +456,7 @@ export default function ProviderRequestDetailPage() {
         return (
             <ProviderNavigationView
                 pickupLocation={request!.pickupLocation}
-                user={{ name: request!.user?.name, phoneNumber: request!.contactPhone }}
+                user={{ name: request!.user?.name, phoneNumber: request!.contactPhone, avatar: request!.user?.avatar }}
                 eta={myQuoteDetails?.estimatedArrivalMinutes ?? null}
                 requestId={requestId}
                 customerName={request!.user?.name ?? t('provider.requestDetail.customerFallback')}
@@ -507,9 +509,13 @@ export default function ProviderRequestDetailPage() {
                     <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                         <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.customerInfo')}</p>
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold" style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}>
-                                {(req.user?.name || 'K').charAt(0).toUpperCase()}
-                            </div>
+                            <AvatarImage
+                                name={req.user?.name || t('provider.requestDetail.customerFallback')}
+                                avatar={req.user?.avatar}
+                                className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold"
+                                fallbackBackground={`linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`}
+                                initialsCount={1}
+                            />
                             <div>
                                 <p className="text-sm font-bold" style={{ color: C.navy }}>{req.user?.name || t('provider.requestDetail.customerFallback')}</p>
                                 <p className="text-xs" style={{ color: C.gray }}>{req.contactPhone}</p>
@@ -811,7 +817,9 @@ export default function ProviderRequestDetailPage() {
                             currentUserId={user.id}
                             currentUserRole="PROVIDER"
                             currentUserName={user.name ?? 'Provider'}
+                            myAvatar={user.avatar}
                             otherPartyName={request.user?.name ?? 'Khách hàng'}
+                            otherPartyAvatar={request.user?.avatar}
                             onClose={() => setIsChatOpen(false)}
                         />
                     </Suspense>
@@ -968,9 +976,13 @@ export default function ProviderRequestDetailPage() {
                                     {t('provider.requestDetail.customerInfoSection')}
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-orange-100 flex-shrink-0 flex items-center justify-center text-lg md:text-xl font-bold text-orange-600">
-                                        {request.user.name?.charAt(0).toUpperCase() || 'K'}
-                                    </div>
+                                    <AvatarImage
+                                        name={request.user.name || t('provider.requestDetail.customerFallback')}
+                                        avatar={request.user.avatar}
+                                        className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-orange-100 flex-shrink-0 flex items-center justify-center text-lg md:text-xl font-bold text-orange-600"
+                                        fallbackBackground="#ffedd5"
+                                        initialsCount={1}
+                                    />
                                     <div>
                                         <div className="font-bold text-[#1a1a2e] text-[15px] md:text-base mb-0.5 md:mb-1">{request.user.name}</div>
                                         <div className="flex items-center gap-1.5 text-xs md:text-sm font-medium text-gray-500">

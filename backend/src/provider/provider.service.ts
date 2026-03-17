@@ -401,6 +401,7 @@ export class ProviderService {
                         name: true,
                         phoneNumber: true,
                         fullName: true,
+                        avatar: true,
                     },
                 },
                 media: {

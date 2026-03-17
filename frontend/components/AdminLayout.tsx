@@ -176,10 +176,10 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
                 <div className="px-4 py-4" style={{ borderTop: `1px solid ${C.border}` }}>
                     <div className="flex items-center gap-3 px-2 mb-3">
                         <div
-                            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                            style={{ background: C.orange }}
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 bg-cover bg-center"
+                            style={{ background: user?.avatar ? `url(${user.avatar}) center/cover` : C.orange }}
                         >
-                            {initials}
+                            {!user?.avatar && initials}
                         </div>
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>

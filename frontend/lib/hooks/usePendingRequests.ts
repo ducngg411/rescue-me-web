@@ -6,6 +6,7 @@ export interface PendingRequest {
     user: {
         name: string | null;
         phone: string | null;
+        avatar?: string | null;
     };
     incidentType: string;
     vehicleType: string;

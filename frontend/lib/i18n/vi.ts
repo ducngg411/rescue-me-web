@@ -354,6 +354,10 @@ const vi = {
                 addVehicleSuccess: 'Đã thêm phương tiện mới',
             }
         },
+        wallet: {
+            title: 'Ví của tôi',
+            subtitle: 'Quản lý số dư và thanh toán',
+        },
     },
     provider: {
         dashboard: {
@@ -503,6 +507,7 @@ const vi = {
         },
         wallet: {
             title: 'Ví của tôi',
+            subtitle: 'Quản lý số dư và thanh toán',
             myWallet: 'Ví của tôi',
             balance: 'Số dư',
             withdraw: 'Rút tiền',
@@ -834,6 +839,8 @@ const vi = {
                 pwSuccess: 'Đổi mật khẩu thành công!',
                 pwFail: 'Đổi mật khẩu thất bại',
                 loadFail: 'Không thể tải cài đặt',
+                avatarSuccess: 'Đã cập nhật ảnh đại diện!',
+                avatarFail: 'Cập nhật ảnh đại diện thất bại',
             },
             rejectedCard: {
                 title: 'Hồ sơ bị từ chối',

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useUserGuard } from '@/lib/guards';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import AvatarImage from '@/components/AvatarImage';
 import dynamic from 'next/dynamic';
 
 const VietMap = dynamic(() => import('@/components/VietMap'), {
@@ -201,9 +202,13 @@ export default function UserDashboard() {
                     </nav>
                 </div>
                 <div className="flex items-center gap-3 px-2 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: C.orange }}>
-                        {displayName.charAt(0).toUpperCase()}
-                    </div>
+                    <AvatarImage
+                        name={displayName}
+                        avatar={user?.avatar}
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                        fallbackBackground={C.orange}
+                        initialsCount={1}
+                    />
                     <div className="min-w-0">
                         <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
                         <p className="text-xs" style={{ color: C.gray }}>{t('user.dashboard.basicPlan')}</p>
@@ -238,9 +243,13 @@ export default function UserDashboard() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                             </svg>
                         </button>
-                        <div className="flex md:hidden w-8 h-8 rounded-full items-center justify-center text-white text-xs font-bold" style={{ background: C.orange }}>
-                            {displayName.charAt(0).toUpperCase()}
-                        </div>
+                        <AvatarImage
+                            name={displayName}
+                            avatar={user?.avatar}
+                            className="flex md:hidden w-8 h-8 rounded-full items-center justify-center text-white text-xs font-bold"
+                            fallbackBackground={C.orange}
+                            initialsCount={1}
+                        />
                     </div>
                 </header>
 

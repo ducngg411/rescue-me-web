@@ -231,8 +231,8 @@ export default function TxDetailPage() {
                         <div className="px-5 py-4 space-y-3">
                             <Row label={t('provider.txDetail.payment.method')} value={
                                 job.payment.paymentMethod === 'QR' ? `🏦 ${t('provider.txDetail.payment.transfer')}`
-                                : job.payment.paymentMethod === 'WALLET' ? ' Ví điện tử RescueMe'
-                                : `💵 ${t('provider.txDetail.payment.cash')}`
+                                    : job.payment.paymentMethod === 'WALLET' ? ' Ví điện tử RescueMe'
+                                        : ` ${t('provider.txDetail.payment.cash')}`
                             } />
                             {job.payment.baseFee > 0 && <Row label={t('provider.txDetail.payment.basePrice')} value={fmt(job.payment.baseFee)} />}
                             {breakdown.map((b, i) => (

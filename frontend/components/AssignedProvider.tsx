@@ -19,6 +19,7 @@ const C = {
 interface Provider {
     id: string;
     name: string | null;
+    avatar?: string | null;
     serviceName: string | null;
     serviceTypes: string[];
     phoneNumber: string | null;
@@ -107,10 +108,10 @@ export default function AssignedProvider({
                 {/* Avatar + info */}
                 <div className="flex items-start gap-3 mb-4">
                     <div
-                        className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-                        style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
+                        className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 bg-cover bg-center"
+                        style={{ background: provider?.avatar ? `url(${provider.avatar}) center/cover` : `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
                     >
-                        {initials}
+                        {!provider?.avatar && initials}
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
@@ -233,7 +234,9 @@ export default function AssignedProvider({
                         currentUserId={currentUserId}
                         currentUserRole="CUSTOMER"
                         currentUserName={currentUserName}
+                        myAvatar={currentUser?.avatar}
                         otherPartyName={providerDisplayName}
+                        otherPartyAvatar={provider?.avatar}
                         onClose={() => setIsChatOpen(false)}
                     />
                 </Suspense>

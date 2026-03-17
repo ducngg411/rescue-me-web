@@ -42,6 +42,7 @@ export class AdminService {
                 fullName: true,
                 phoneNumber: true,
                 email: true,
+                avatar: true,
                 providerType: true,
                 businessName: true,
                 serviceTypes: true,

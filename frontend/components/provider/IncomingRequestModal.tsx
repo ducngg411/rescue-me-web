@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { PendingRequest } from '@/lib/hooks/usePendingRequests';
 import { useLanguage } from '@/contexts/LanguageContext';
+import AvatarImage from '@/components/AvatarImage';
 
 interface IncomingRequestModalProps {
     request: PendingRequest;
@@ -90,9 +91,13 @@ export default function IncomingRequestModal({
                 <div className="p-6 space-y-4 overflow-y-auto">
                     {/* Customer Info */}
                     <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0" style={{ background: C.orange }}>
-                            {request.user.name?.charAt(0).toUpperCase() || 'K'}
-                        </div>
+                        <AvatarImage
+                            name={request.user.name || request.user.phone || 'Khach hang'}
+                            avatar={request.user.avatar}
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0"
+                            fallbackBackground={C.orange}
+                            initialsCount={1}
+                        />
                         <div>
                             <div className="text-[10px] font-bold tracking-wider mb-0.5" style={{ color: C.gray }}>{t('components.incomingRequest.customer')}</div>
                             <div className="font-semibold text-sm" style={{ color: C.navy }}>{request.user.name || t('components.incomingRequest.customerFallback')}</div>

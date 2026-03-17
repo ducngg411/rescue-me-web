@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
+import AvatarImage from '@/components/AvatarImage';
 import { Search, ChevronLeft, ChevronRight, Eye, CheckCircle, Filter, Calendar } from 'lucide-react';
 
 const C = {
@@ -31,6 +32,7 @@ interface Provider {
     id: string;
     fullName: string;
     email: string;
+    avatar?: string | null;
     providerType: 'INDIVIDUAL' | 'BUSINESS';
     businessName?: string;
     serviceTypes: string[];
@@ -247,9 +249,13 @@ export default function ProviderApprovalPage() {
                                             {/* Identity */}
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: C.orange }}>
-                                                        {(provider.fullName || provider.businessName || 'P').charAt(0).toUpperCase()}
-                                                    </div>
+                                                    <AvatarImage
+                                                        name={provider.fullName || provider.businessName || 'Provider'}
+                                                        avatar={provider.avatar}
+                                                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                                                        fallbackBackground={C.orange}
+                                                        initialsCount={1}
+                                                    />
                                                     <div>
                                                         <p className="text-sm font-semibold" style={{ color: C.navy }}>
                                                             {provider.businessName || provider.fullName}

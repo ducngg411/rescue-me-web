@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
 import PendingVerificationScreen from '@/components/PendingVerificationScreen';
 import DepositGateScreen from '@/components/DepositGateScreen';
+import AvatarImage from '@/components/AvatarImage';
 import {
     Wallet, Settings, BookOpen, TrendingUp,
     Star, CheckCircle2,
@@ -519,9 +520,13 @@ export default function ProviderActivePage() {
                         </button>
                     </div>
                     <div className="flex items-center gap-3 px-2" style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: C.orange }}>
-                            {displayName.charAt(0).toUpperCase()}
-                        </div>
+                        <AvatarImage
+                            name={displayName}
+                            avatar={user?.avatar}
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                            fallbackBackground={C.orange}
+                            initialsCount={1}
+                        />
                         <div className="min-w-0">
                             <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
                             <p className="text-xs" style={{ color: C.gray }}>{t('provider.dashboard.providerRole')}</p>
@@ -586,9 +591,13 @@ export default function ProviderActivePage() {
                         </div>
 
                         {/* Avatar */}
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: C.orange }}>
-                            {displayName.charAt(0).toUpperCase()}
-                        </div>
+                        <AvatarImage
+                            name={displayName}
+                            avatar={user?.avatar}
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                            fallbackBackground={C.orange}
+                            initialsCount={1}
+                        />
                     </div>
                 </header>
 

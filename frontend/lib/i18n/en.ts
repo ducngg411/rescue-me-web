@@ -354,6 +354,10 @@ const en = {
                 addVehicleSuccess: 'New vehicle added',
             }
         },
+        wallet: {
+            title: 'My Wallet',
+            subtitle: 'Manage balance and payments',
+        },
     },
     provider: {
         dashboard: {
@@ -503,6 +507,7 @@ const en = {
         },
         wallet: {
             title: 'My Wallet',
+            subtitle: 'Manage balance and payments',
             myWallet: 'My Wallet',
             balance: 'Balance',
             withdraw: 'Withdraw',
@@ -834,6 +839,8 @@ const en = {
                 pwSuccess: 'Password changed successfully!',
                 pwFail: 'Failed to change password',
                 loadFail: 'Failed to load settings',
+                avatarSuccess: 'Avatar updated successfully!',
+                avatarFail: 'Failed to update avatar',
             },
             rejectedCard: {
                 title: 'Profile Rejected',

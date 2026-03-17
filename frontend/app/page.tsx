@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import AvatarImage from '@/components/AvatarImage';
 
 export default function HomePage() {
   const { user, loading, logout } = useAuth();
@@ -37,13 +38,13 @@ export default function HomePage() {
           <h1 className="text-2xl font-bold text-gray-900">Rescue Me</h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              {user.avatar && (
-                <img
-                  src={user.avatar}
-                  alt={user.name || 'User'}
-                  className="h-8 w-8 rounded-full"
-                />
-              )}
+              <AvatarImage
+                name={user.name || user.email}
+                avatar={user.avatar}
+                className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                fallbackBackground="#f97316"
+                initialsCount={1}
+              />
               <span className="text-sm font-medium text-gray-700">
                 {user.name || user.email}
               </span>

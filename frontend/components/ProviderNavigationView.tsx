@@ -8,6 +8,7 @@ import { useChat } from '@/lib/hooks/useChat';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import WorkingView from './WorkingView';
+import AvatarImage from './AvatarImage';
 
 const ChatModal = lazy(() => import('@/components/ChatModal'));
 
@@ -85,7 +86,7 @@ function WalletPaymentWaiting({ requestId, onCompleted }: { requestId: string; o
         // Fetch payment amount for display
         api.get(`/rescue-requests/${requestId}/payment`)
             .then(res => setTotalAmount(res.data?.totalAmount ?? null))
-            .catch(() => {});
+            .catch(() => { });
 
         // Poll every 3 seconds until status = COMPLETED
         const interval = setInterval(async () => {
@@ -98,7 +99,7 @@ function WalletPaymentWaiting({ requestId, onCompleted }: { requestId: string; o
             } catch { /* ignore */ }
         }, 3000);
         return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [requestId]);
 
     const fmt = (n: number) => n.toLocaleString('vi-VN') + 'đ';
@@ -209,6 +210,7 @@ interface PickupLocation {
 interface UserInfo {
     name?: string | null;
     phoneNumber?: string | null;
+    avatar?: string | null;
 }
 
 interface ProviderNavigationViewProps {
@@ -436,7 +438,7 @@ export default function ProviderNavigationView({
         };
 
         simRafRef.current = requestAnimationFrame(animate);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [stopSimulation]);
 
     // 5-second auto-countdown when customer confirms arrival
@@ -551,8 +553,8 @@ export default function ProviderNavigationView({
         return () => {
             if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
         };
-    // Only runs once — GPS callback reads latest values via refs, never stale
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // Only runs once — GPS callback reads latest values via refs, never stale
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // ── 2. Load VietMap and initialize ──────────────────────────────────────
@@ -616,12 +618,12 @@ export default function ProviderNavigationView({
                     const nextA = coords[idx + 1];              // just after junction (new segment)
                     const nextB = coords[Math.min(coords.length - 1, idx + 3)];
 
-                    const inBear  = bearingDeg(prevA, prevB);
+                    const inBear = bearingDeg(prevA, prevB);
                     const outBear = bearingDeg(nextA, nextB);
-                    const angle   = ((outBear - inBear) + 540) % 360 - 180;
+                    const angle = ((outBear - inBear) + 540) % 360 - 180;
 
-                    if (angle >  55) return { ...ins, sign: 3,  text: ins.text || 'Rẽ phải gắt' };
-                    if (angle >  35) return { ...ins, sign: 2,  text: ins.text || 'Rẽ phải' };
+                    if (angle > 55) return { ...ins, sign: 3, text: ins.text || 'Rẽ phải gắt' };
+                    if (angle > 35) return { ...ins, sign: 2, text: ins.text || 'Rẽ phải' };
                     if (angle < -55) return { ...ins, sign: -3, text: ins.text || 'Rẽ trái gắt' };
                     if (angle < -35) return { ...ins, sign: -2, text: ins.text || 'Rẽ trái' };
                     return ins;
@@ -826,12 +828,13 @@ export default function ProviderNavigationView({
 
                     {/* Customer info */}
                     <div className="flex items-center gap-3 mb-3">
-                        <div
+                        <AvatarImage
+                            name={displayName}
+                            avatar={user?.avatar}
                             className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
-                            style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
-                        >
-                            {displayName.charAt(0).toUpperCase()}
-                        </div>
+                            fallbackBackground={`linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`}
+                            initialsCount={1}
+                        />
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold" style={{ color: C.navy }}>{displayName}</p>
                             <p className="text-xs truncate" style={{ color: C.gray }}>
@@ -961,25 +964,25 @@ export default function ProviderNavigationView({
                         const ArrowIcon = () => {
                             const s = { width: 34, height: 34, viewBox: '0 0 32 32', fill: 'none', stroke: 'white', strokeWidth: 2.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
                             // Arrive
-                            if (sign === 4 || sign === -7) return <svg {...s}><path d="M16 3C11 3 7 7 7 12c0 7 9 17 9 17s9-10 9-17c0-5-4-9-9-9z"/><circle cx="16" cy="12" r="3" fill="white" stroke="none"/></svg>;
+                            if (sign === 4 || sign === -7) return <svg {...s}><path d="M16 3C11 3 7 7 7 12c0 7 9 17 9 17s9-10 9-17c0-5-4-9-9-9z" /><circle cx="16" cy="12" r="3" fill="white" stroke="none" /></svg>;
                             // U-Turn
-                            if (sign === -98) return <svg {...s}><path d="M20 26V13a6 6 0 00-12 0"/><polyline points="12 20 8 24 12 28"/></svg>;
+                            if (sign === -98) return <svg {...s}><path d="M20 26V13a6 6 0 00-12 0" /><polyline points="12 20 8 24 12 28" /></svg>;
                             // Roundabout
-                            if (sign === 5 || sign === 6) return <svg {...s}><circle cx="16" cy="16" r="6"/><path d="M22 10l3-3"/><polyline points="24 10 25 7 22 7"/></svg>;
+                            if (sign === 5 || sign === 6) return <svg {...s}><circle cx="16" cy="16" r="6" /><path d="M22 10l3-3" /><polyline points="24 10 25 7 22 7" /></svg>;
                             // Sharp right
-                            if (sign === 3) return <svg {...s}><path d="M8 27V11h14"/><polyline points="17 5 22 11 17 17"/></svg>;
+                            if (sign === 3) return <svg {...s}><path d="M8 27V11h14" /><polyline points="17 5 22 11 17 17" /></svg>;
                             // Turn right
-                            if (sign === 2) return <svg {...s}><path d="M8 27V15a8 8 0 018-8h1"/><polyline points="14 5 20 7 14 9"/></svg>;
+                            if (sign === 2) return <svg {...s}><path d="M8 27V15a8 8 0 018-8h1" /><polyline points="14 5 20 7 14 9" /></svg>;
                             // Slight right
-                            if (sign === 1) return <svg {...s}><path d="M10 27V13a6 6 0 016-6"/><polyline points="13 5 18 7 13 9"/></svg>;
+                            if (sign === 1) return <svg {...s}><path d="M10 27V13a6 6 0 016-6" /><polyline points="13 5 18 7 13 9" /></svg>;
                             // Sharp left
-                            if (sign === -3) return <svg {...s}><path d="M24 27V11H10"/><polyline points="15 5 10 11 15 17"/></svg>;
+                            if (sign === -3) return <svg {...s}><path d="M24 27V11H10" /><polyline points="15 5 10 11 15 17" /></svg>;
                             // Turn left
-                            if (sign === -2) return <svg {...s}><path d="M24 27V15a8 8 0 00-8-8h-1"/><polyline points="18 5 12 7 18 9"/></svg>;
+                            if (sign === -2) return <svg {...s}><path d="M24 27V15a8 8 0 00-8-8h-1" /><polyline points="18 5 12 7 18 9" /></svg>;
                             // Slight left
-                            if (sign === -1) return <svg {...s}><path d="M22 27V13a6 6 0 00-6-6"/><polyline points="19 5 14 7 19 9"/></svg>;
+                            if (sign === -1) return <svg {...s}><path d="M22 27V13a6 6 0 00-6-6" /><polyline points="19 5 14 7 19 9" /></svg>;
                             // Default: straight up
-                            return <svg {...s}><line x1="16" y1="28" x2="16" y2="6"/><polyline points="9 13 16 6 23 13"/></svg>;
+                            return <svg {...s}><line x1="16" y1="28" x2="16" y2="6" /><polyline points="9 13 16 6 23 13" /></svg>;
                         };
 
                         const hudBg = (sign === 2 || sign === 3 || sign === 1)
@@ -1025,8 +1028,8 @@ export default function ProviderNavigationView({
                                     const ns = next.sign;
                                     const nextLabel = ns === 2 || ns === 3 ? '→'
                                         : ns === -2 || ns === -3 ? '←'
-                                        : ns === 1 ? '↗' : ns === -1 ? '↖'
-                                        : ns === -98 ? '↩' : ns === 4 || ns === -7 ? '📌' : '↑';
+                                            : ns === 1 ? '↗' : ns === -1 ? '↖'
+                                                : ns === -98 ? '↩' : ns === 4 || ns === -7 ? '📌' : '↑';
                                     return (
                                         <div className="flex-shrink-0 text-center">
                                             <p className="text-[9px] text-white opacity-60 mb-0.5">Tiếp</p>
@@ -1132,7 +1135,7 @@ export default function ProviderNavigationView({
                                     {/* Speed slider */}
                                     <div className="flex items-center gap-1.5 flex-1">
                                         <svg width="11" height="11" viewBox="0 0 24 24" fill={C.gray}>
-                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" />
                                         </svg>
                                         {/* Speed slider: left=slow (200ms), right=fast (5ms) */}
                                         <input
@@ -1146,7 +1149,7 @@ export default function ProviderNavigationView({
                                             style={{ cursor: 'pointer' }}
                                         />
                                         <svg width="11" height="11" viewBox="0 0 24 24" fill={C.orange}>
-                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
                                         </svg>
                                     </div>
                                     <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: C.gray }}>Tốc độ</span>
@@ -1292,7 +1295,9 @@ export default function ProviderNavigationView({
                         currentUserId={providerId}
                         currentUserRole="PROVIDER"
                         currentUserName={providerName ?? 'Provider'}
+                        myAvatar={authUser?.avatar}
                         otherPartyName={customerName ?? user?.name ?? t('provider.navigation.customerMarker')}
+                        otherPartyAvatar={user?.avatar}
                         onClose={() => setIsChatOpen(false)}
                     />
                 </Suspense>
