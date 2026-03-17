@@ -5,14 +5,20 @@ export interface User {
     id: string;
     email: string;
     name: string | null;
+    fullName?: string | null;
     avatar: string | null;
     role: string;
     authProvider: string;
     profileCompleted: boolean;
+    phoneNumber?: string | null;
+    vehicleType?: 'CAR' | 'MOTORCYCLE' | null;
+    licensePlate?: string | null;
+    vehicleColor?: string | null;
     verificationStatus?: string;
-    isOnline?: boolean; // Provider only
-    averageRating?: number | null; // Provider only
-    reviewCount?: number; // Provider only
+    isOnline?: boolean;
+    averageRating?: number | null;
+    reviewCount?: number;
+    rescueVehicles?: any[];
 }
 
 export interface AuthResponse {

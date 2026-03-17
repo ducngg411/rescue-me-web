@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, Matches, IsEnum, IsOptional, ValidateNested, IsNumber, IsArray, ArrayMinSize, Min, Max, IsBoolean } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, Matches, IsEnum, IsOptional, ValidateNested, IsNumber, IsArray, ArrayMinSize, Min, Max, IsBoolean, IsUrl } from 'class-validator';
 import { UserRole, VehicleType, ServiceType, ProviderType } from '@prisma/client';
 import { Type } from 'class-transformer';
 
@@ -22,6 +22,25 @@ class RescueVehicleDto {
 
     @IsBoolean()
     isPrimary: boolean;
+}
+
+class UserVehicleDto {
+    @IsEnum(VehicleType, { message: 'Loại phương tiện phải là CAR hoặc MOTORCYCLE' })
+    type: VehicleType;
+
+    @IsString({ message: 'Biển số xe không được để trống' })
+    @Matches(/^[1-9][0-9][A-Z0-9]{1,2}[- .]?(\d{4}|\d{3}[.]?\d{2})$/i, {
+        message: 'Biển số xe không hợp lệ (ví dụ: 29A-123.45 hoặc 59T1-1234)'
+    })
+    plateNumber: string;
+
+    @IsString({ message: 'Màu xe không được để trống' })
+    @MaxLength(50, { message: 'Màu xe không được vượt quá 50 ký tự' })
+    color: string;
+
+    @IsString({ message: 'Hãng xe không được để trống' })
+    @MaxLength(50, { message: 'Hãng xe không được vượt quá 50 ký tự' })
+    brand: string;
 }
 
 export class RegisterEmailDto {
@@ -65,8 +84,22 @@ export class SelectRoleDto {
     role: UserRole;
 }
 
+export class ChangePasswordDto {
+    @IsString()
+    @MinLength(1, { message: 'Mật khẩu cũ không được để trống' })
+    oldPassword: string;
+
+    @IsString()
+    @MinLength(8, { message: 'Mật khẩu mới phải có ít nhất 8 ký tự' })
+    @Matches(/^(?=.*[A-Z])(?=.*\d)/, {
+        message: 'Mật khẩu mới phải có ít nhất 1 chữ hoa và 1 số',
+    })
+    newPassword: string;
+}
+
 export class UpdateUserProfileDto {
     @IsString({ message: 'Họ tên không được để trống' })
+    @MaxLength(100, { message: 'Họ tên không được vượt quá 100 ký tự' })
     fullName: string;
 
     @IsString({ message: 'Số điện thoại không được để trống' })
@@ -84,16 +117,33 @@ export class UpdateUserProfileDto {
     @Type(() => DefaultAddressDto)
     defaultAddress?: DefaultAddressDto;
 
+    @IsOptional()
+    @IsString()
+    avatar?: string;
+
+    @IsOptional()
+    @IsArray({ message: 'Danh sách xe phải là một mảng' })
+    @ValidateNested({ each: true })
+    @Type(() => UserVehicleDto)
+    vehicles?: UserVehicleDto[];
+
+    @IsOptional()
     @IsEnum(VehicleType, {
         message: 'Loại phương tiện phải là CAR hoặc MOTORCYCLE'
     })
-    vehicleType: VehicleType;
+    vehicleType?: VehicleType;
 
+    @IsOptional()
     @IsString({ message: 'Biển số xe không được để trống' })
-    licensePlate: string;
+    @Matches(/^[1-9][0-9][A-Z0-9]{1,2}[- .]?(\d{4}|\d{3}[.]?\d{2})$/i, {
+        message: 'Biển số xe không hợp lệ (ví dụ: 29A-123.45 hoặc 59T1-1234)'
+    })
+    licensePlate?: string;
 
+    @IsOptional()
     @IsString({ message: 'Màu xe không được để trống' })
-    vehicleColor: string;
+    @MaxLength(50, { message: 'Màu xe không được vượt quá 50 ký tự' })
+    vehicleColor?: string;
 }
 
 export class UpdateProviderProfileDto {

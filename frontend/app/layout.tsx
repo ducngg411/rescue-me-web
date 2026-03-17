@@ -1,20 +1,14 @@
 import type { Metadata } from "next";
-import { Poppins, Roboto } from "next/font/google";
+import { Lexend } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { Toaster } from "react-hot-toast";
 
-const poppins = Poppins({
-  variable: "--font-poppins",
+const lexend = Lexend({
+  variable: "--font-lexend",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
-});
-
-const roboto = Roboto({
-  variable: "--font-roboto",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "700"],
 });
 
 export const metadata: Metadata = {
@@ -30,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body
-        className={`${poppins.variable} ${roboto.variable} antialiased`}
+        className={`${lexend.variable} antialiased`}
       >
         <LanguageProvider>
           <AuthProvider>

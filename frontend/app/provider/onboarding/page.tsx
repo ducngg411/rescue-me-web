@@ -72,7 +72,7 @@ export default function ProviderOnboardingPage() {
 
     if (!isReady || loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+            <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
                 <div className="w-10 h-10 rounded-full border-[3px] border-t-transparent animate-spin" style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
             </div>
         );
@@ -94,7 +94,7 @@ export default function ProviderOnboardingPage() {
     ];
 
     return (
-        <div className="h-screen flex overflow-hidden" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+        <div className="h-screen flex overflow-hidden" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
 
             {/* ─── Left navy panel ─── */}
             <div className="hidden lg:flex flex-col gap-8 p-12 flex-shrink-0 h-screen overflow-y-auto" style={{ width: '420px', background: `linear-gradient(155deg, ${C.navy} 0%, #2d2d4e 100%)` }}>

@@ -580,7 +580,7 @@ export default function UserWalletPage() {
         { label: t('user.nav.home'), href: '/user', icon: homeIcon },
         { label: t('user.nav.history'), href: '/user/requests', icon: historyIcon },
         { label: t('user.nav.wallet'), href: '/user/wallet', icon: walletIcon },
-        { label: t('user.nav.settings'), href: '#', icon: settingsIcon },
+        { label: t('user.nav.settings'), href: '/user/settings', icon: settingsIcon },
     ];
 
     const loadWallet = useCallback(async () => {
@@ -633,7 +633,7 @@ export default function UserWalletPage() {
     const total = available + pending;
 
     return (
-        <div className="min-h-screen flex" style={{ fontFamily: 'Poppins, sans-serif', background: C.bg }}>
+        <div className="min-h-screen flex" style={{ fontFamily: 'Lexend, sans-serif', background: C.bg }}>
 
             {/* ═══ DESKTOP Sidebar ═══ */}
             <aside

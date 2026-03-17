@@ -72,7 +72,7 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
 
 
     return (
-        <div className="h-screen overflow-hidden flex" style={{ fontFamily: 'Poppins, sans-serif', background: C.bg }}>
+        <div className="h-screen overflow-hidden flex" style={{ fontFamily: 'Lexend, sans-serif', background: C.bg }}>
             {/* ═══ DESKTOP Sidebar ═══ */}
             <aside
                 className="hidden md:flex flex-col py-6 px-4 flex-shrink-0"

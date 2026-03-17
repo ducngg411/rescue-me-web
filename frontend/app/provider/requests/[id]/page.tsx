@@ -479,7 +479,7 @@ export default function ProviderRequestDetailPage() {
             navy: '#1a1a2e', gray: '#6b7280', border: '#f1f5f9', bg: '#f8fafc',
         };
         return (
-            <div className="min-h-screen" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+            <div className="min-h-screen" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
                 {/* Header */}
                 <div className="sticky top-0 z-10 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ borderColor: C.border }}>
                     <div className="flex-1">

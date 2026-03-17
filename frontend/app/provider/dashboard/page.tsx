@@ -145,7 +145,7 @@ export default function ProviderDashboard() {
 
     return (
         <ProviderLayout activeTab="/provider/dashboard">
-            <div className="min-h-screen py-8 px-4" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+            <div className="min-h-screen py-8 px-4" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
                 <div className="max-w-2xl mx-auto">
                     <h1 className="text-xl font-bold mb-6" style={{ color: C.navy }}>{t('provider.profileDashboard.title')}</h1>
 

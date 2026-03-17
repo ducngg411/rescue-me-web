@@ -793,7 +793,7 @@ export default function ProviderNavigationView({
 
     return (
         <>
-            <div className="flex flex-col" style={{ height: '100vh', fontFamily: 'Poppins, sans-serif' }}>
+            <div className="flex flex-col" style={{ height: '100vh', fontFamily: 'Lexend, sans-serif' }}>
                 {/* ── Top overlay panel ── */}
                 <div
                     className="absolute top-0 left-0 right-0 z-10 px-4 pt-3 pb-4"
@@ -1520,7 +1520,7 @@ export default function ProviderNavigationView({
                     className="fixed inset-0 z-[100] flex flex-col"
                     style={{
                         background: 'linear-gradient(160deg, #0f172a 0%, #1e293b 60%, #0c2340 100%)',
-                        fontFamily: 'Poppins, sans-serif',
+                        fontFamily: 'Lexend, sans-serif',
                     }}
                 >
                     {/* React Confetti */}

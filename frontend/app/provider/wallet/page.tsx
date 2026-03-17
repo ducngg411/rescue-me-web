@@ -447,7 +447,12 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
     const numeric = parseInt(amount.replace(/\D/g, ''), 10) || 0;
     const isInsufficient = numeric > availableBalance;
     const isBelowMin = numeric > 0 && numeric < MIN_WITHDRAWAL;
-    const isDisabled = loading || numeric <= 0 || isInsufficient || isBelowMin;
+    const remainingAfterWithdraw = availableBalance - numeric;
+    // Providers must keep at least 100,000 VND in their wallet to receive jobs
+    const MIN_REQUIRED_BALANCE = 100_000;
+    const isBelowRequiredBalance = numeric > 0 && !isInsufficient && remainingAfterWithdraw < MIN_REQUIRED_BALANCE;
+
+    const isDisabled = loading || numeric <= 0 || isInsufficient || isBelowMin || isBelowRequiredBalance;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -464,7 +469,8 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
         }
     };
 
-    const quickAmounts = [100_000, 200_000, 500_000, 1_000_000].filter(a => a <= availableBalance);
+    const maxWithdrawableAmount = Math.max(0, availableBalance - MIN_REQUIRED_BALANCE);
+    const quickAmounts = [100_000, 200_000, 500_000, 1_000_000].filter(a => a <= maxWithdrawableAmount);
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
@@ -503,17 +509,22 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
                                 placeholder="0"
                                 className="w-full px-4 py-3 pr-16 border rounded-xl text-lg font-semibold focus:outline-none focus:ring-2 transition-all"
                                 style={{
-                                    borderColor: isInsufficient || isBelowMin ? '#fca5a5' : '#e2e8f0',
-                                    color: isInsufficient || isBelowMin ? '#ef4444' : C.navy,
+                                    borderColor: isInsufficient || isBelowMin || isBelowRequiredBalance ? '#fca5a5' : '#e2e8f0',
+                                    color: isInsufficient || isBelowMin || isBelowRequiredBalance ? '#ef4444' : C.navy,
                                     boxShadow: 'none',
                                 }}
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium" style={{ color: C.gray }}>VND</span>
                         </div>
-                        {isBelowMin && <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{t('provider.wallet.withdrawModal.belowMin')} {formatVndFull(MIN_WITHDRAWAL)}</p>}
+                        {isBelowMin && <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />Cần rút tối thiểu {formatVndFull(MIN_WITHDRAWAL)}</p>}
                         {isInsufficient && <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{t('provider.wallet.withdrawModal.overBalance')}</p>}
-                        {!isBelowMin && !isInsufficient && numeric > 0 && (
-                            <p className="mt-1.5 text-xs" style={{ color: C.gray }}>{t('provider.wallet.withdrawModal.afterWithdraw')}: {formatVndFull(availableBalance - numeric)}</p>
+                        {isBelowRequiredBalance && !isInsufficient && !isBelowMin && (
+                            <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" />Phải chừa lại tối thiểu {formatVndFull(MIN_REQUIRED_BALANCE)} trong ví
+                            </p>
+                        )}
+                        {!isBelowMin && !isInsufficient && !isBelowRequiredBalance && numeric > 0 && (
+                            <p className="mt-1.5 text-xs" style={{ color: C.gray }}>{t('provider.wallet.withdrawModal.afterWithdraw')}: {formatVndFull(remainingAfterWithdraw)}</p>
                         )}
                     </div>
 
@@ -536,18 +547,18 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
                                         {formatVnd(a)}
                                     </button>
                                 ))}
-                                {availableBalance > 0 && (
+                                {maxWithdrawableAmount >= MIN_WITHDRAWAL && (
                                     <button
                                         type="button"
-                                        onClick={() => setAmount(availableBalance.toLocaleString('vi-VN'))}
+                                        onClick={() => setAmount(maxWithdrawableAmount.toLocaleString('vi-VN'))}
                                         className="px-3 py-1.5 text-xs rounded-lg border font-medium transition-all"
                                         style={{
-                                            borderColor: numeric === availableBalance ? C.orange : '#e2e8f0',
-                                            background: numeric === availableBalance ? C.orangeLight : 'white',
-                                            color: numeric === availableBalance ? C.orange : C.gray,
+                                            borderColor: numeric === maxWithdrawableAmount ? C.orange : '#e2e8f0',
+                                            background: numeric === maxWithdrawableAmount ? C.orangeLight : 'white',
+                                            color: numeric === maxWithdrawableAmount ? C.orange : C.gray,
                                         }}
                                     >
-                                        {t('provider.wallet.withdrawModal.all')}
+                                        Rút tối đa
                                     </button>
                                 )}
                             </div>
@@ -561,7 +572,7 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
                     )}
 
                     <div className="p-3 rounded-xl text-xs" style={{ background: C.orangeLight, color: C.orange }}>
-                        {t('provider.wallet.withdrawModal.hint')}
+                        Bạn cần duy trì ít nhất {formatVndFull(MIN_REQUIRED_BALANCE)} trong ví để có thể tiếp tục nhận cuốc xe cẩu mới.
                     </div>
 
                     <div className="flex gap-3">
@@ -608,8 +619,10 @@ function TxRow({ tx }: { tx: Transaction }) {
         switch (tx.referenceType) {
             case 'COMMISSION':
                 return t('provider.wallet.txDesc.commission').replace('{id}', shortId);
-            case 'JOB_PAYMENT':
-                return t('provider.wallet.txDesc.jobPayment');
+            case 'JOB_PAYMENT': {
+                const jobId = tx.referenceId?.slice(0, 8).toUpperCase() ?? shortId;
+                return t('provider.wallet.txDesc.jobPayment').replace('{id}', jobId);
+            }
             case 'TOPUP': {
                 const code = tx.description?.split('·')[1]?.trim() ?? shortId;
                 return t('provider.wallet.txDesc.topup').replace('{code}', code);
@@ -749,24 +762,47 @@ function TxRow({ tx }: { tx: Transaction }) {
 
                             {/* Payment section */}
                             <div className="pt-2 mt-2" style={{ borderTop: '1px solid #e2e8f0' }}>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs" style={{ color: C.gray }}>
-                                        {tx.referenceType === 'COMMISSION' ? t('provider.wallet.refLabel.COMMISSION') : t('provider.wallet.txRow.transactionAmount')}
-                                    </span>
-                                    <span
-                                        className="text-sm font-bold"
-                                        style={{ color: isCredit ? '#16a34a' : '#ef4444' }}
-                                    >
-                                        {isCredit ? '+' : '-'}{formatVndFull(tx.amount)}
-                                    </span>
-                                </div>
-                                {tx.referenceType === 'COMMISSION' && jobDetails.totalAmount && !jobDetails._paymentOnly && (
-                                    <div className="flex justify-between items-center mt-1">
-                                        <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.labels.grossRevenue')}</span>
-                                        <span className="text-xs font-semibold" style={{ color: C.navy }}>
-                                            {formatVndFull(jobDetails.totalAmount)}
-                                        </span>
-                                    </div>
+                                {tx.referenceType === 'JOB_PAYMENT' ? (() => {
+                                    const grossAmount = Math.round(tx.amount / 0.9);
+                                    const commissionAmount = grossAmount - tx.amount;
+                                    return (
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs" style={{ color: C.gray }}>Doanh thu gộp</span>
+                                                <span className="text-xs font-semibold" style={{ color: C.navy }}>{formatVndFull(grossAmount)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs" style={{ color: C.gray }}>Phí nền tảng (10%)</span>
+                                                <span className="text-xs font-semibold" style={{ color: '#ef4444' }}>−{formatVndFull(commissionAmount)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center pt-1" style={{ borderTop: '1px dashed #e2e8f0' }}>
+                                                <span className="text-xs font-semibold" style={{ color: C.gray }}>Thu nhập thực nhận</span>
+                                                <span className="text-sm font-bold" style={{ color: '#16a34a' }}>+{formatVndFull(tx.amount)}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })() : (
+                                    <>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs" style={{ color: C.gray }}>
+                                                {tx.referenceType === 'COMMISSION' ? t('provider.wallet.refLabel.COMMISSION') : t('provider.wallet.txRow.transactionAmount')}
+                                            </span>
+                                            <span
+                                                className="text-sm font-bold"
+                                                style={{ color: isCredit ? '#16a34a' : '#ef4444' }}
+                                            >
+                                                {isCredit ? '+' : '-'}{formatVndFull(tx.amount)}
+                                            </span>
+                                        </div>
+                                        {tx.referenceType === 'COMMISSION' && jobDetails.totalAmount && !jobDetails._paymentOnly && (
+                                            <div className="flex justify-between items-center mt-1">
+                                                <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.labels.grossRevenue')}</span>
+                                                <span className="text-xs font-semibold" style={{ color: C.navy }}>
+                                                    {formatVndFull(jobDetails.totalAmount)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
 
@@ -968,65 +1004,71 @@ export default function ProviderWalletPage() {
             </header>
 
             {/* ── Body ── */}
-            <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
+            <div className="p-4 md:p-6 max-w-3xl mx-auto w-full space-y-4">
 
                 {/* Hero balance banner */}
-                <div className="rounded-2xl p-6 text-white" style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`, boxShadow: `0 8px 24px ${C.orange}40` }}>
-                    <p className="text-sm opacity-80 mb-1">{t('provider.wallet.totalBalance')}</p>
-                    <p className="text-4xl font-bold tabular-nums mb-4">{formatVndFull(total)}</p>
-                    <div className="flex items-center justify-between">
-                        <div className="flex gap-6">
-                            <div>
-                                <p className="text-xs opacity-70">{t('provider.wallet.available')}</p>
-                                <p className="text-sm font-semibold">{formatVndFull(available)}</p>
+                <div className="rounded-2xl p-6 text-white relative overflow-hidden" style={{ background: C.navy, boxShadow: '0 8px 24px rgba(26,26,46,0.15)' }}>
+                    {/* Subtle flat aesthetic shapes instead of gradients */}
+                    <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full border-[16px] border-white opacity-5 pointer-events-none" />
+                    <div className="absolute -bottom-16 -right-8 w-40 h-40 rounded-full border-[16px] border-white opacity-5 pointer-events-none" />
+                    
+                    <div className="relative z-10">
+                        <p className="text-sm opacity-80 mb-1">{t('provider.wallet.totalBalance')}</p>
+                        <p className="text-4xl font-bold tabular-nums mb-4">{formatVndFull(total)}</p>
+                        <div className="flex items-center justify-between">
+                            <div className="flex gap-6">
+                                <div>
+                                    <p className="text-xs opacity-70">{t('provider.wallet.available')}</p>
+                                    <p className="text-sm font-semibold">{formatVndFull(available)}</p>
+                                </div>
+                                <div className="w-px bg-white/20" />
+                                <div>
+                                    <p className="text-xs opacity-70">{t('provider.wallet.pending')}</p>
+                                    <p className="text-sm font-semibold">{formatVndFull(pending)}</p>
+                                </div>
                             </div>
-                            <div className="w-px bg-white/20" />
-                            <div>
-                                <p className="text-xs opacity-70">{t('provider.wallet.pending')}</p>
-                                <p className="text-sm font-semibold">{formatVndFull(pending)}</p>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowTopup(true)}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all hover:bg-white/10"
+                                    style={{ background: 'transparent', color: 'white', border: '1px solid rgba(255,255,255,0.3)' }}
+                                >
+                                    <Plus style={{ width: 16, height: 16 }} />
+                                    {t('provider.wallet.deposit')}
+                                </button>
+                                <button
+                                    onClick={() => setShowModal(true)}
+                                    disabled={!wallet || available < MIN_WITHDRAWAL}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    style={{ background: C.orange, color: 'white', border: `1px solid ${C.orangeDark}` }}
+                                >
+                                    <Banknote style={{ width: 16, height: 16 }} />
+                                    {t('provider.wallet.withdraw')}
+                                </button>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setShowTopup(true)}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
-                                style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.3)' }}
-                            >
-                                <Plus style={{ width: 16, height: 16 }} />
-                                {t('provider.wallet.deposit')}
-                            </button>
-                            <button
-                                onClick={() => setShowModal(true)}
-                                disabled={!wallet || available < MIN_WITHDRAWAL}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                style={{ background: 'white', color: C.orange }}
-                            >
-                                <Banknote style={{ width: 16, height: 16 }} />
-                                {t('provider.wallet.withdraw')}
-                            </button>
-                        </div>
+                        {available < MIN_WITHDRAWAL && (
+                            <p className="mt-3 text-xs opacity-70 flex items-center gap-1">
+                                <AlertCircle style={{ width: 12, height: 12 }} />
+                                {t('provider.wallet.needMinimum').replace('{amount}', formatVndFull(MIN_WITHDRAWAL))}
+                            </p>
+                        )}
                     </div>
-                    {available < MIN_WITHDRAWAL && (
-                        <p className="mt-3 text-xs opacity-70 flex items-center gap-1">
-                            <AlertCircle style={{ width: 12, height: 12 }} />
-                            {t('provider.wallet.needMinimum').replace('{amount}', formatVndFull(MIN_WITHDRAWAL))}
-                        </p>
-                    )}
                 </div>
 
                 {/* Balance detail cards */}
                 <div className="grid grid-cols-2 gap-3">
                     <div className="bg-white rounded-xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3" style={{ background: '#f0fdf4' }}>
-                            <Wallet style={{ width: 18, height: 18, color: '#16a34a' }} />
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3" style={{ background: C.orangeLight }}>
+                            <Wallet style={{ width: 18, height: 18, color: C.orange }} />
                         </div>
                         <p className="text-xs mb-1" style={{ color: C.gray }}>{t('provider.wallet.availableBalance')}</p>
                         <p className="text-xl font-bold tabular-nums" style={{ color: C.navy }}>{formatVndFull(available)}</p>
                         <p className="text-xs mt-1" style={{ color: C.gray }}>{t('provider.wallet.withdrawableNow')}</p>
                     </div>
                     <div className="bg-white rounded-xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3" style={{ background: '#fefce8' }}>
-                            <Clock style={{ width: 18, height: 18, color: '#ca8a04' }} />
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3" style={{ background: '#f1f5f9' }}>
+                            <Clock style={{ width: 18, height: 18, color: '#64748b' }} />
                         </div>
                         <p className="text-xs mb-1" style={{ color: C.gray }}>{t('provider.wallet.pendingBalance')}</p>
                         <p className="text-xl font-bold tabular-nums" style={{ color: C.navy }}>{formatVndFull(pending)}</p>

@@ -184,7 +184,7 @@ export default function ProviderApprovalPage() {
                                 onChange={e => { setSearch(e.target.value); setPage(1); }}
                                 placeholder="Search by name, email or identity..."
                                 className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border focus:outline-none focus:ring-2"
-                                style={{ borderColor: C.border, color: C.navy, fontFamily: 'Poppins, sans-serif' }}
+                                style={{ borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                             />
                         </div>
 
@@ -195,7 +195,7 @@ export default function ProviderApprovalPage() {
                                 value={providerTypeFilter}
                                 onChange={e => { setProviderTypeFilter(e.target.value); setPage(1); }}
                                 className="bg-transparent text-sm focus:outline-none cursor-pointer pr-1"
-                                style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }}
+                                style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                             >
                                 <option value="ALL">Provider Type</option>
                                 <option value="INDIVIDUAL">Individual</option>

@@ -1238,7 +1238,7 @@ export class RescueRequestService {
             });
         }
 
-        console.log(`💳 [Payment] Provider ${providerId} created payment for request ${requestId}: ${dto.totalAmount} VND`);
+        console.log(` [Payment] Provider ${providerId} created payment for request ${requestId}: ${dto.totalAmount} VND`);
         return payment;
     }
 
@@ -1706,37 +1706,23 @@ export class RescueRequestService {
                                 status: WalletTransactionStatus.COMPLETED,
                                 referenceType: WalletReferenceType.JOB_PAYMENT,
                                 referenceId: requestId,
-                                description: `Thu nhập ví điện tử #${requestId.slice(0, 8).toUpperCase()} (sau phí ${commissionRate * 100}%)`,
+                                description: `Khách thanh toán qua ví RescueMe - Job #${requestId.slice(0, 8).toUpperCase()} • HH ${commissionRate * 100}%`,
                             },
                         });
 
-                        // Debit commission in a separate transaction for transparency
-                        await tx.walletTransaction.create({
-                            data: {
-                                walletId: providerWallet.id,
-                                type: WalletTransactionType.DEBIT,
-                                amount: commissionAmount,
-                                status: WalletTransactionStatus.COMPLETED,
-                                referenceType: WalletReferenceType.COMMISSION,
-                                referenceId: requestId,
-                                description: `Phí dịch vụ ${commissionRate * 100}% - Job #${requestId.slice(0, 8).toUpperCase()}`,
-                            },
-                        });
-
-                        // Increase availableBalance by net amount only (commission already deducted above)
                         await tx.providerWallet.update({
                             where: { id: providerWallet.id },
                             data: { availableBalance: { increment: netAmount } },
                         });
                     });
-                    console.log(`💳 [WalletPayment] Credited provider ${payment.providerId}: +${netAmount} VND net (gross ${payment.totalAmount}, commission ${commissionAmount})`);
+                    console.log(` [WalletPayment] Credited provider ${payment.providerId}: +${netAmount} VND net (gross ${payment.totalAmount}, commission ${commissionAmount})`);
                 }
             } catch (err) {
                 console.error(`❌ [WalletPayment] Post-payment processing failed for job ${requestId}:`, err.message);
             }
         });
 
-        console.log(`💳 [WalletPayment] User ${userId} confirmed wallet payment for request ${requestId}: ${payment.totalAmount} VND`);
+        console.log(` [WalletPayment] User ${userId} confirmed wallet payment for request ${requestId}: ${payment.totalAmount} VND`);
         return { success: true, message: 'Wallet payment confirmed', amount: payment.totalAmount };
     }
 

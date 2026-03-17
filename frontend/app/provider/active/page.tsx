@@ -467,7 +467,7 @@ export default function ProviderActivePage() {
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="h-screen overflow-hidden flex" style={{ fontFamily: 'Poppins, sans-serif', background: C.bg }}>
+        <div className="h-screen overflow-hidden flex" style={{ fontFamily: 'Lexend, sans-serif', background: C.bg }}>
 
             {/* ═══ DESKTOP Sidebar ═══ */}
             <aside

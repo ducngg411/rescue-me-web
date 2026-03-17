@@ -1,6 +1,7 @@
 import {
     Controller,
     Post,
+    Put,
     Body,
     UseGuards,
     Request,
@@ -15,6 +16,7 @@ import {
     GoogleAuthDto,
     CompleteProfileDto,
     SelectRoleDto,
+    ChangePasswordDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
@@ -61,6 +63,14 @@ export class AuthController {
     @UseGuards(JwtAuthGuard)
     async getCurrentUser(@Request() req) {
         return req.user;
+    }
+
+    // ==================== CHANGE PASSWORD ====================
+    @Put('change-password')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
+        return this.authService.changePassword(req.user.id, dto);
     }
 
     // ==================== LOGOUT ====================

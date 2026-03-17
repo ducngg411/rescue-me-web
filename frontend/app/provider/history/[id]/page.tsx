@@ -234,7 +234,7 @@ export default function HistoryJobDetailPage() {
     const videos = (req.media ?? []).filter((m: any) => m.mediaType === 'VIDEO').map((m: any) => m.publicUrl);
 
     return (
-        <div className="min-h-screen" style={{ background: C.bg, fontFamily: "'Inter', 'Poppins', sans-serif" }}>
+        <div className="min-h-screen" style={{ background: C.bg, fontFamily: "'Inter', 'Lexend', sans-serif" }}>
 
             {/* ── Header ── */}
             <div className="sticky top-0 z-20 bg-white flex items-center gap-3 px-4 py-3"

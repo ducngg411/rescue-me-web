@@ -616,7 +616,7 @@ export default function RequestTrackingPage() {
     const showLiveQuotes = isMatchingWithWindowOpen && liveQuotes.length > 0 && !acceptingId;
 
     return (
-        <div className="min-h-screen" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+        <div className="min-h-screen" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
 
             {/* ── Sticky Header ── */}
             <header

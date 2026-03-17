@@ -8,7 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
-import { RegisterEmailDto, LoginEmailDto, CompleteProfileDto, SelectRoleDto } from './dto/auth.dto';
+import { RegisterEmailDto, LoginEmailDto, CompleteProfileDto, SelectRoleDto, ChangePasswordDto } from './dto/auth.dto';
 import { AuthProvider, User } from '@prisma/client';
 
 @Injectable()
@@ -254,6 +254,32 @@ export class AuthService {
             user: this.sanitizeUser(updatedUser),
             message: 'Cập nhật role thành công',
         };
+    }
+
+    // ==================== CHANGE PASSWORD ====================
+    async changePassword(userId: string, dto: ChangePasswordDto) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+        if (!user) {
+            throw new UnauthorizedException('User không tồn tại');
+        }
+
+        if (user.authProvider !== AuthProvider.EMAIL) {
+            throw new BadRequestException('Tài khoản đăng nhập bằng Google không thể đổi mật khẩu');
+        }
+
+        const isOldPasswordValid = await bcrypt.compare(dto.oldPassword, user.hashedPassword || '');
+        if (!isOldPasswordValid) {
+            throw new UnauthorizedException('Mật khẩu cũ không chính xác');
+        }
+
+        const newHashedPassword = await bcrypt.hash(dto.newPassword, 10);
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { hashedPassword: newHashedPassword },
+        });
+
+        return { message: 'Đổi mật khẩu thành công' };
     }
 
     // ==================== HELPER METHODS ====================

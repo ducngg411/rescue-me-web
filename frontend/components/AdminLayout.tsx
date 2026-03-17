@@ -106,7 +106,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
     const initials = displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
 
     return (
-        <div className="h-screen overflow-hidden flex" style={{ fontFamily: 'Poppins, sans-serif', background: C.bg }}>
+        <div className="h-screen overflow-hidden flex" style={{ fontFamily: 'Lexend, sans-serif', background: C.bg }}>
             {/* Sidebar */}
             <aside
                 className="hidden md:flex flex-col flex-shrink-0"

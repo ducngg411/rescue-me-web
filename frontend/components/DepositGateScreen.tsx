@@ -24,7 +24,7 @@ export default function DepositGateScreen({ currentBalance }: DepositGateScreenP
     return (
         <div
             className="min-h-screen flex flex-col items-center justify-center p-4"
-            style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}
+            style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}
         >
             {/* Card */}
             <div

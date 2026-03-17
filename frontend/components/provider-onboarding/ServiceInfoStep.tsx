@@ -9,7 +9,7 @@ import { normalizeVietnamPlate, isValidVietnamPlate, formatVietnamPlate } from '
 const C = { orange: '#f97316', orangeDark: '#ea6c0a', orangeLight: '#fff7ed', navy: '#1a1a2e', gray: '#6b7280', border: '#e2e8f0', bg: '#f4f6f9', green: '#16a34a', red: '#ef4444' };
 
 const inputCls = (err?: boolean) =>
-    `w-full px-3 py-2.5 text-sm rounded-xl border transition-all focus:outline-none focus:ring-2 bg-white font-[Poppins] ${err ? 'border-red-400 bg-red-50 focus:ring-red-100' : 'border-gray-200 focus:ring-orange-100'}`;
+    `w-full px-3 py-2.5 text-sm rounded-xl border transition-all focus:outline-none focus:ring-2 bg-white font-[Lexend] ${err ? 'border-red-400 bg-red-50 focus:ring-red-100' : 'border-gray-200 focus:ring-orange-100'}`;
 
 const SectionCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <div className="bg-white rounded-2xl border p-5 mb-4" style={{ borderColor: C.border }}>
@@ -152,12 +152,12 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>{t('provider.onboarding.serviceInfo.basicInfo.fullName')} <span style={{ color: C.red }}>*</span></label>
-                            <input type="text" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} placeholder={t('provider.onboarding.serviceInfo.basicInfo.fullNamePlaceholder')} className={inputCls(!!errors.fullName)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                            <input type="text" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} placeholder={t('provider.onboarding.serviceInfo.basicInfo.fullNamePlaceholder')} className={inputCls(!!errors.fullName)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                             {errors.fullName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.fullName}</p>}
                         </div>
                         <div>
                             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>{t('provider.onboarding.serviceInfo.basicInfo.phone')} <span style={{ color: C.red }}>*</span></label>
-                            <input type="tel" value={formData.phoneNumber} onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder="0912345678" className={inputCls(!!errors.phoneNumber)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                            <input type="tel" value={formData.phoneNumber} onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder="0912345678" className={inputCls(!!errors.phoneNumber)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                             {errors.phoneNumber && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.phoneNumber}</p>}
                         </div>
                     </div>
@@ -165,7 +165,7 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
                     {formData.providerType === 'BUSINESS' && (
                         <div>
                             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>{t('provider.onboarding.serviceInfo.basicInfo.businessName')} <span style={{ color: C.red }}>*</span></label>
-                            <input type="text" value={formData.businessName} onChange={e => setFormData({ ...formData, businessName: e.target.value })} placeholder={t('provider.onboarding.serviceInfo.basicInfo.businessNamePlaceholder')} className={inputCls(!!errors.businessName)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                            <input type="text" value={formData.businessName} onChange={e => setFormData({ ...formData, businessName: e.target.value })} placeholder={t('provider.onboarding.serviceInfo.basicInfo.businessNamePlaceholder')} className={inputCls(!!errors.businessName)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                             {errors.businessName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.businessName}</p>}
                         </div>
                     )}
@@ -181,7 +181,7 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
                                 onChange={e => { const v = e.target.value; setAddressQuery(v); setAddressSelected(false); if (formData.providerType === 'INDIVIDUAL') setFormData(p => ({ ...p, permanentAddress: { addressText: '', lat: 0, lng: 0 } })); else setFormData(p => ({ ...p, businessAddress: { addressText: '', lat: 0, lng: 0 } })); if (v.trim().length >= 2) setShowSuggestions(true); }}
                                 onFocus={() => { if (addressSuggestions.length > 0 && !addressSelected) setShowSuggestions(true); }}
                                 placeholder={t('provider.onboarding.serviceInfo.basicInfo.addressPlaceholder')} autoComplete="off"
-                                className={inputCls(!!(errors.permanentAddress || errors.businessAddress))} style={{ paddingLeft: '2.25rem', color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                className={inputCls(!!(errors.permanentAddress || errors.businessAddress))} style={{ paddingLeft: '2.25rem', color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                         </div>
                         {showSuggestions && addressSuggestions.length > 0 && (
                             <div ref={suggestionsRef} className="absolute z-10 w-full mt-1 bg-white rounded-xl border shadow-lg max-h-52 overflow-y-auto" style={{ borderColor: C.border }}>
@@ -285,7 +285,7 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
                                         <label className="block text-[11px] font-medium mb-1" style={{ color: C.gray }}>{t('provider.onboarding.serviceInfo.rescueVehicles.vehicleType')}</label>
                                         <select value={vehicle.type}
                                             onChange={e => { const nv = [...formData.rescueVehicles]; nv[idx].type = e.target.value; setFormData({ ...formData, rescueVehicles: nv }); }}
-                                            className="w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-2 focus:ring-orange-100 bg-white" style={{ borderColor: C.border, color: C.navy, fontFamily: 'Poppins, sans-serif' }}>
+                                            className="w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-2 focus:ring-orange-100 bg-white" style={{ borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}>
                                             <option value="CAR">{t('provider.onboarding.serviceInfo.services.vehicleTypeOptions.car')}</option>
                                             <option value="MOTORCYCLE">{t('provider.onboarding.serviceInfo.services.vehicleTypeOptions.motorcycle')}</option>
                                         </select>

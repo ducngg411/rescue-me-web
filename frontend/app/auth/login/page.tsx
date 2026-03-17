@@ -79,7 +79,7 @@ export default function LoginPage() {
 
     return (
         <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''}>
-            <div className="min-h-screen flex" style={{ fontFamily: 'Poppins, sans-serif' }}>
+            <div className="min-h-screen flex" style={{ fontFamily: 'Lexend, sans-serif' }}>
 
                 {/* ── Left: Rescue illustration ── */}
                 <div className="hidden lg:flex flex-1 relative overflow-hidden bg-gray-50">

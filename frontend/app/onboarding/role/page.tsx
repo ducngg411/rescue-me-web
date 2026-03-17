@@ -60,7 +60,7 @@ export default function RoleSelectionPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+            <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
                 <div className="text-center">
                     <div className="w-10 h-10 rounded-full border-[3px] border-t-transparent animate-spin mx-auto mb-3"
                         style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
@@ -73,7 +73,7 @@ export default function RoleSelectionPage() {
     if (!user || user.profileCompleted) return null;
 
     return (
-        <div className="min-h-screen flex" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+        <div className="min-h-screen flex" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
             {/* Left decorative panel */}
             <div
                 className="hidden lg:flex flex-col justify-between p-12 w-[420px] flex-shrink-0"

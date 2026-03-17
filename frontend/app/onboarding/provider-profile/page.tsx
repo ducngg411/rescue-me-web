@@ -161,7 +161,7 @@ export default function ProviderProfilePage() {
     );
 
     return (
-        <div className="min-h-screen flex" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+        <div className="min-h-screen flex" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
             {/* Left panel */}
             <div className="hidden lg:flex flex-col justify-between p-10 flex-shrink-0" style={{ width: '340px', background: `linear-gradient(155deg, ${C.navy} 0%, #2d2d4e 100%)` }}>
                 <div className="flex items-center gap-3">
@@ -251,12 +251,12 @@ export default function ProviderProfilePage() {
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Họ và tên <span style={{ color: C.red }}>*</span></label>
-                                            <input type="text" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} placeholder="Nguyễn Văn A" className={inputCls(errors.fullName)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                            <input type="text" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} placeholder="Nguyễn Văn A" className={inputCls(errors.fullName)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                                             {errors.fullName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.fullName}</p>}
                                         </div>
                                         <div>
                                             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Số điện thoại <span style={{ color: C.red }}>*</span></label>
-                                            <input type="tel" value={formData.phoneNumber} onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder="0912345678" className={inputCls(errors.phoneNumber)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                            <input type="tel" value={formData.phoneNumber} onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder="0912345678" className={inputCls(errors.phoneNumber)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                                             {errors.phoneNumber && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.phoneNumber}</p>}
                                         </div>
                                     </div>
@@ -264,7 +264,7 @@ export default function ProviderProfilePage() {
                                     {formData.providerType === 'BUSINESS' && (
                                         <div>
                                             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>Tên doanh nghiệp <span style={{ color: C.red }}>*</span></label>
-                                            <input type="text" value={formData.businessName} onChange={e => setFormData({ ...formData, businessName: e.target.value })} placeholder="Cứu hộ ABC" className={inputCls(errors.businessName)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                            <input type="text" value={formData.businessName} onChange={e => setFormData({ ...formData, businessName: e.target.value })} placeholder="Cứu hộ ABC" className={inputCls(errors.businessName)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                                             {errors.businessName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.businessName}</p>}
                                         </div>
                                     )}
@@ -287,7 +287,7 @@ export default function ProviderProfilePage() {
                                                 }}
                                                 onFocus={() => { if (addressSuggestions.length > 0 && !isAddressSelected) setShowSuggestions(true); }}
                                                 placeholder="Nhập địa chỉ..." autoComplete="off"
-                                                className={inputCls(errors.permanentAddress || errors.businessAddress)} style={{ paddingLeft: '2.25rem', color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                                className={inputCls(errors.permanentAddress || errors.businessAddress)} style={{ paddingLeft: '2.25rem', color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                                         </div>
                                         {showSuggestions && (addressSuggestions.length > 0 || isSearching) && (
                                             <div ref={suggestionsRef} className="absolute z-10 w-full mt-1 bg-white rounded-xl border shadow-lg max-h-52 overflow-y-auto" style={{ borderColor: C.border }}>
@@ -393,7 +393,7 @@ export default function ProviderProfilePage() {
                                                         <label className="block text-[11px] font-medium mb-1" style={{ color: C.gray }}>Loại xe</label>
                                                         <select value={vehicle.type}
                                                             onChange={e => { const nv = [...formData.rescueVehicles]; nv[idx].type = e.target.value as any; setFormData({ ...formData, rescueVehicles: nv }); }}
-                                                            className="w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-2 focus:ring-orange-100 bg-white" style={{ borderColor: C.border, color: C.navy, fontFamily: 'Poppins, sans-serif' }}>
+                                                            className="w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-2 focus:ring-orange-100 bg-white" style={{ borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}>
                                                             <option value="CAR">Ô tô</option>
                                                             <option value="MOTORCYCLE">Xe máy</option>
                                                         </select>

@@ -115,7 +115,7 @@ export default function UserProfilePage() {
     const part2Done = !!(plateOk && formData.vehicleColor.trim());
 
     return (
-        <div className="h-screen flex overflow-hidden" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+        <div className="h-screen flex overflow-hidden" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
             {/* Left panel */}
             <div className="hidden lg:flex flex-col justify-between p-12 flex-shrink-0 h-screen overflow-y-auto" style={{ width: '420px', background: `linear-gradient(155deg, ${C.navy} 0%, #2d2d4e 100%)` }}>
                 <div className="flex items-center gap-3">
@@ -187,18 +187,18 @@ export default function UserProfilePage() {
                                 <div className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>{t('onboarding.userProfile.personal.fullName')} <span style={{ color: C.red }}>*</span></label>
-                                        <input type="text" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} placeholder={t('onboarding.userProfile.personal.fullNamePlaceholder')} className={inputCls(errors.fullName)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                        <input type="text" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} placeholder={t('onboarding.userProfile.personal.fullNamePlaceholder')} className={inputCls(errors.fullName)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                                         {errors.fullName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.fullName}</p>}
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>{t('onboarding.userProfile.personal.phone')} <span style={{ color: C.red }}>*</span></label>
-                                            <input type="tel" value={formData.phoneNumber} onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder={t('onboarding.userProfile.personal.phonePlaceholder')} className={inputCls(errors.phoneNumber)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                            <input type="tel" value={formData.phoneNumber} onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder={t('onboarding.userProfile.personal.phonePlaceholder')} className={inputCls(errors.phoneNumber)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                                             {errors.phoneNumber && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.phoneNumber}</p>}
                                         </div>
                                         <div>
                                             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>{t('onboarding.userProfile.personal.contactEmail')}</label>
-                                            <input type="email" value={formData.contactEmail} onChange={e => setFormData({ ...formData, contactEmail: e.target.value })} placeholder="email@example.com" className={inputCls(errors.contactEmail)} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                            <input type="email" value={formData.contactEmail} onChange={e => setFormData({ ...formData, contactEmail: e.target.value })} placeholder="email@example.com" className={inputCls(errors.contactEmail)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                                             {errors.contactEmail && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.contactEmail}</p>}
                                         </div>
                                     </div>
@@ -211,7 +211,7 @@ export default function UserProfilePage() {
                                                 onChange={e => { const v = e.target.value; setAddressQuery(v); if (isAddressSelected) { setIsAddressSelected(false); setFormData(p => ({ ...p, defaultAddress: undefined })); } if (v.trim().length >= 2) setShowSuggestions(true); }}
                                                 onFocus={() => { if (addressSuggestions.length > 0 && !isAddressSelected) setShowSuggestions(true); }}
                                                 placeholder={t('onboarding.userProfile.personal.addressPlaceholder')} autoComplete="off"
-                                                className={inputCls()} style={{ paddingLeft: '2.25rem', color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                                className={inputCls()} style={{ paddingLeft: '2.25rem', color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                                         </div>
                                         {showSuggestions && (addressSuggestions.length > 0 || isSearching) && (
                                             <div ref={suggestionsRef} className="absolute z-10 w-full mt-1 bg-white rounded-xl border shadow-lg max-h-52 overflow-y-auto" style={{ borderColor: C.border }}>
@@ -275,7 +275,7 @@ export default function UserProfilePage() {
                                             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>{t('onboarding.userProfile.vehicle.color')} <span style={{ color: C.red }}>*</span></label>
                                             <select value={showCustomColor ? 'custom' : formData.vehicleColor}
                                                 onChange={e => { if (e.target.value === 'custom') { setShowCustomColor(true); setFormData({ ...formData, vehicleColor: '' }); } else { setShowCustomColor(false); setFormData({ ...formData, vehicleColor: e.target.value }); } }}
-                                                className="w-full px-3 py-2.5 text-sm rounded-xl border focus:outline-none focus:ring-2 focus:ring-orange-100" style={{ borderColor: C.border, color: C.navy, background: 'white', fontFamily: 'Poppins, sans-serif' }}>
+                                                className="w-full px-3 py-2.5 text-sm rounded-xl border focus:outline-none focus:ring-2 focus:ring-orange-100" style={{ borderColor: C.border, color: C.navy, background: 'white', fontFamily: 'Lexend, sans-serif' }}>
                                                 {VEHICLE_COLOR_KEYS.map(c => <option key={c} value={c}>{t(`onboarding.userProfile.vehicle.colorOptions.${c}`)}</option>)}
                                                 <option value="custom">{t('onboarding.userProfile.vehicle.colorCustom')}</option>
                                             </select>
@@ -283,7 +283,7 @@ export default function UserProfilePage() {
                                         </div>
                                     </div>
                                     {showCustomColor && (
-                                        <input type="text" value={formData.vehicleColor} onChange={e => setFormData({ ...formData, vehicleColor: e.target.value })} placeholder={t('onboarding.userProfile.vehicle.colorCustomPlaceholder')} className={inputCls()} style={{ color: C.navy, fontFamily: 'Poppins, sans-serif' }} />
+                                        <input type="text" value={formData.vehicleColor} onChange={e => setFormData({ ...formData, vehicleColor: e.target.value })} placeholder={t('onboarding.userProfile.vehicle.colorCustomPlaceholder')} className={inputCls()} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
                                     )}
                                 </div>
                             </div>

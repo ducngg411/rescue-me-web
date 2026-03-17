@@ -143,7 +143,7 @@ export default function TxDetailPage() {
     }
 
     return (
-        <div className="min-h-screen pb-10" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}>
+        <div className="min-h-screen pb-10" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
             {/* Header */}
             <div className="sticky top-0 z-20 px-4 py-3 flex items-center gap-3" style={{ background: 'white', borderBottom: `1px solid ${C.border}`, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                 <button onClick={() => router.back()} className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-100 transition-colors">
@@ -231,7 +231,7 @@ export default function TxDetailPage() {
                         <div className="px-5 py-4 space-y-3">
                             <Row label={t('provider.txDetail.payment.method')} value={
                                 job.payment.paymentMethod === 'QR' ? `🏦 ${t('provider.txDetail.payment.transfer')}`
-                                : job.payment.paymentMethod === 'WALLET' ? '💳 Ví điện tử RescueMe'
+                                : job.payment.paymentMethod === 'WALLET' ? ' Ví điện tử RescueMe'
                                 : `💵 ${t('provider.txDetail.payment.cash')}`
                             } />
                             {job.payment.baseFee > 0 && <Row label={t('provider.txDetail.payment.basePrice')} value={fmt(job.payment.baseFee)} />}
@@ -246,8 +246,12 @@ export default function TxDetailPage() {
                                 <span className="text-base font-bold" style={{ color: C.orange }}>{fmt(job.payment.totalAmount)}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.payment.netIncome')}</span>
-                                <span className="text-sm font-bold" style={{ color: C.green }}>{fmt(Math.round(job.payment.totalAmount * 0.9))}</span>
+                                <span className="text-xs" style={{ color: C.gray }}>Phí nền tảng (10%)</span>
+                                <span className="text-xs font-semibold" style={{ color: '#ef4444' }}>−{fmt(Math.round(job.payment.totalAmount * 0.1))}</span>
+                            </div>
+                            <div className="flex items-center justify-between pt-1" style={{ borderTop: `1px dashed ${C.border}` }}>
+                                <span className="text-xs font-semibold" style={{ color: C.gray }}>{t('provider.txDetail.payment.netIncome')}</span>
+                                <span className="text-sm font-bold" style={{ color: C.green }}>+{fmt(Math.round(job.payment.totalAmount * 0.9))}</span>
                             </div>
                         </div>
                     </div>

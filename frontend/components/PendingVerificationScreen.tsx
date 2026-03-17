@@ -21,7 +21,7 @@ export default function PendingVerificationScreen() {
     return (
         <div
             className="min-h-screen flex items-center justify-center p-4"
-            style={{ background: C.bg, fontFamily: 'Poppins, sans-serif' }}
+            style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}
         >
             <div
                 className="bg-white rounded-2xl p-8 max-w-sm w-full text-center"

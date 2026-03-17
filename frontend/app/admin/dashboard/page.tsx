@@ -203,7 +203,7 @@ export default function AdminDashboardPage() {
                                 type="text"
                                 placeholder="Global Search..."
                                 className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border focus:outline-none focus:ring-2"
-                                style={{ background: '#ffffff', borderColor: C.border, color: C.navy, fontFamily: 'Poppins, sans-serif' }}
+                                style={{ background: '#ffffff', borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                             />
                         </div>
                     </div>

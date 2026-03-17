@@ -51,7 +51,7 @@ function Input({ label, value, onChange, placeholder, type = 'text', disabled, s
                         background: disabled ? '#f8fafc' : 'white',
                         border: `1.5px solid ${disabled ? '#e2e8f0' : C.border}`,
                         color: disabled ? C.gray : C.navy,
-                        fontFamily: 'Poppins, sans-serif',
+                        fontFamily: 'Lexend, sans-serif',
                     }}
                     onFocus={e => { if (!disabled) e.currentTarget.style.borderColor = C.orange; }}
                     onBlur={e => { if (!disabled) e.currentTarget.style.borderColor = C.border; }}

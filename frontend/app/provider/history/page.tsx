@@ -137,7 +137,7 @@ function PaymentBadge({ walletTxStatus, paymentMethod }: { walletTxStatus?: stri
         return (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
                 style={{ background: C.greenLight, color: C.green }}>
-                💳 Ví điện tử · Đã nhận
+                 Ví điện tử · Đã nhận
             </span>
         );
     }
@@ -499,7 +499,7 @@ export default function ProviderHistoryPage() {
 
     return (
         <ProviderLayout activeTab="/provider/history">
-            <div className="min-h-screen" style={{ background: C.bg, fontFamily: "'Inter', 'Poppins', sans-serif" }}>
+            <div className="min-h-screen" style={{ background: C.bg, fontFamily: "'Inter', 'Lexend', sans-serif" }}>
 
                 {/* ── Header (matches settings page pattern) ── */}
                 <header

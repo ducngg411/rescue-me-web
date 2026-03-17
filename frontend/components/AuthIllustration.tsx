@@ -436,8 +436,8 @@ export default function AuthIllustration() {
                     <path d="M22 20 L22 38 Q22 45 32 48 Q42 45 42 38 L42 20 L32 18 Z" fill="#f97316" />
                     <path d="M27 32 L30 35 L37 27" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
 
-                    <text x="55" y="30" fontSize="13" fontWeight="bold" fill="white" fontFamily="Poppins, sans-serif">Rescue Me</text>
-                    <text x="55" y="45" fontSize="9" fill="#94a3b8" fontFamily="Poppins, sans-serif">Cứu hộ 24/7 · Nhanh &amp; Tin cậy</text>
+                    <text x="55" y="30" fontSize="13" fontWeight="bold" fill="white" fontFamily="Lexend, sans-serif">Rescue Me</text>
+                    <text x="55" y="45" fontSize="9" fill="#94a3b8" fontFamily="Lexend, sans-serif">Cứu hộ 24/7 · Nhanh &amp; Tin cậy</text>
 
                     {/* Online dot */}
                     <circle cx="154" cy="16" r="5" fill="#22c55e" />
@@ -448,9 +448,9 @@ export default function AuthIllustration() {
                 <g transform="translate(80, 180)">
                     <rect x="0" y="0" width="140" height="55" rx="14" fill="#1e1b4b" opacity="0.8" />
                     <rect x="1" y="1" width="138" height="53" rx="13" fill="none" stroke="#f97316" strokeWidth="1" opacity="0.5" />
-                    <text x="16" y="22" fontSize="9" fill="#94a3b8" fontFamily="Poppins, sans-serif">Đã cứu hộ thành công</text>
-                    <text x="16" y="40" fontSize="18" fontWeight="bold" fill="#f97316" fontFamily="Poppins, sans-serif">12,847</text>
-                    <text x="108" y="40" fontSize="9" fill="#22c55e" fontFamily="Poppins, sans-serif">+8%</text>
+                    <text x="16" y="22" fontSize="9" fill="#94a3b8" fontFamily="Lexend, sans-serif">Đã cứu hộ thành công</text>
+                    <text x="16" y="40" fontSize="18" fontWeight="bold" fill="#f97316" fontFamily="Lexend, sans-serif">12,847</text>
+                    <text x="108" y="40" fontSize="9" fill="#22c55e" fontFamily="Lexend, sans-serif">+8%</text>
                     {/* Chart bars mini */}
                     {[22, 30, 18, 35, 28, 40].map((h, i) => (
                         <rect key={i} x={66 + i * 9} y={52 - h * 0.4} width="6" height={h * 0.4} rx="2" fill="#f97316" opacity={0.3 + i * 0.12} />
@@ -460,8 +460,8 @@ export default function AuthIllustration() {
                 <g transform="translate(575, 175)">
                     <rect x="0" y="0" width="130" height="55" rx="14" fill="#1e1b4b" opacity="0.8" />
                     <rect x="1" y="1" width="128" height="53" rx="13" fill="none" stroke="#6366f1" strokeWidth="1" opacity="0.5" />
-                    <text x="14" y="22" fontSize="9" fill="#94a3b8" fontFamily="Poppins, sans-serif">Thời gian phản hồi</text>
-                    <text x="14" y="40" fontSize="18" fontWeight="bold" fill="#6366f1" fontFamily="Poppins, sans-serif">&lt; 8 phút</text>
+                    <text x="14" y="22" fontSize="9" fill="#94a3b8" fontFamily="Lexend, sans-serif">Thời gian phản hồi</text>
+                    <text x="14" y="40" fontSize="18" fontWeight="bold" fill="#6366f1" fontFamily="Lexend, sans-serif">&lt; 8 phút</text>
                     {/* Clock icon */}
                     <circle cx="112" cy="30" r="14" fill="#312e81" opacity="0.7" />
                     <circle cx="112" cy="30" r="10" fill="none" stroke="#6366f1" strokeWidth="1.5" />

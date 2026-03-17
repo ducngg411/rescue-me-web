@@ -159,7 +159,11 @@ export default function CreateRescueRequestPage() {
                 const profile = response.data;
                 setUserProfile(profile);
                 const userVehicles: Vehicle[] = [];
-                if (profile.vehicleType && profile.licensePlate) {
+                if (profile.rescueVehicles?.length) {
+                    for (const v of profile.rescueVehicles) {
+                        userVehicles.push({ type: v.type, licensePlate: v.plateNumber, color: v.color });
+                    }
+                } else if (profile.vehicleType && profile.licensePlate) {
                     userVehicles.push({ type: profile.vehicleType, licensePlate: profile.licensePlate, color: profile.vehicleColor });
                 }
                 setVehicles(userVehicles);
@@ -262,7 +266,7 @@ export default function CreateRescueRequestPage() {
     };
 
     return (
-        <div className="min-h-screen" style={{ background: C.bg, fontFamily: 'Poppins, sans-serif', paddingBottom: '88px' }}>
+        <div className="min-h-screen" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif', paddingBottom: '88px' }}>
 
             {/* ── Sticky Top Bar ── */}
             <header
