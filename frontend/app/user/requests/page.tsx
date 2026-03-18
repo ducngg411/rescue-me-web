@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import api from '@/lib/api';
 import AvatarImage from '@/components/AvatarImage';
+import { Search, ArrowUpDown } from 'lucide-react';
 
 interface RescueRequest {
     id: string;
@@ -26,6 +27,16 @@ interface RescueRequest {
     description?: string;
     createdAt: string;
     media: any[];
+    assignedProvider?: {
+        id: string;
+        name: string;
+        avatar?: string;
+    };
+    payment?: {
+        id: string;
+        amount: number;
+        paymentMethod: string;
+    };
 }
 
 const C = {
@@ -123,6 +134,8 @@ export default function UserRequestsPage() {
     const [requests, setRequests] = useState<RescueRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('all');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
     const STATUS_LABELS: Record<string, string> = {
         CREATED: t('user.requests.status.created'),
@@ -180,10 +193,26 @@ export default function UserRequestsPage() {
     };
 
     const filteredRequests = requests.filter(r => {
-        if (activeTab === 'active') return ACTIVE_STATUSES.includes(r.status);
-        if (activeTab === 'done') return DONE_STATUSES.includes(r.status);
-        if (activeTab === 'failed') return FAILED_STATUSES.includes(r.status);
+        // Tab Filtering
+        if (activeTab === 'active' && !ACTIVE_STATUSES.includes(r.status)) return false;
+        if (activeTab === 'done' && !DONE_STATUSES.includes(r.status)) return false;
+        if (activeTab === 'failed' && !FAILED_STATUSES.includes(r.status)) return false;
+
+        // Search Filtering
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase();
+            const idMatch = r.id.toLowerCase().includes(term);
+            const typeMatch = (INCIDENT_LABELS[r.incidentType] || r.incidentType).toLowerCase().includes(term);
+            const addressMatch = (r.pickupLocation?.addressText || '').toLowerCase().includes(term);
+            if (!idMatch && !typeMatch && !addressMatch) return false;
+        }
+
         return true;
+    }).sort((a, b) => {
+        // Sort explicitly by createdAt date string
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
     });
 
     const activeCount = requests.filter(r => ACTIVE_STATUSES.includes(r.status)).length;
@@ -352,6 +381,30 @@ export default function UserRequestsPage() {
                     })}
                 </div>
 
+                {/* ── Search & Sort ── */}
+                <div className="px-4 py-3 flex items-center gap-2 flex-shrink-0" style={{ background: C.white, borderBottom: `1px solid ${C.border}` }}>
+                    <div className="flex-1 relative">
+                        <input
+                            type="text"
+                            placeholder={t('common.search')}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 rounded-xl text-sm transition-colors focus:outline-none"
+                            style={{ background: C.bg, color: C.navy, border: `1px solid ${C.border}` }}
+                        />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: C.gray }} />
+                    </div>
+                    <button
+                        onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors focus:outline-none"
+                        style={{ background: C.bg, color: C.gray, border: `1px solid ${C.border}` }}
+                        title={t('user.requests.sortNewest') || "Sắp xếp thời gian tạo"}
+                    >
+                        <ArrowUpDown className="w-4 h-4" />
+                        <span className="hidden sm:inline">{sortOrder === 'desc' ? t('user.requests.sortNewest') : t('user.requests.sortOldest')}</span>
+                    </button>
+                </div>
+
                 {/* ── Request List ── */}
                 <div className="flex-1 overflow-y-auto">
                     <div className="px-4 py-4 space-y-3 max-w-2xl mx-auto">
@@ -443,6 +496,40 @@ export default function UserRequestsPage() {
                                                         {request.pickupLocation?.addressText || t('components.incomingRequest.unknownLocation')}
                                                     </p>
                                                 </div>
+
+                                                {/* Provider & Payment Info */}
+                                                {(request.assignedProvider || request.payment) && (
+                                                    <div className="flex items-center gap-3 mt-3 pt-2" style={{ borderTop: `1px dashed ${C.border}` }}>
+                                                        {request.assignedProvider && (
+                                                            <div className="flex items-center gap-1.5 max-w-[60%]">
+                                                                <span className="text-[11px] font-medium" style={{ color: C.gray }}>
+                                                                    Cứu hộ viên:
+                                                                </span>
+                                                                <AvatarImage
+                                                                    name={request.assignedProvider.name}
+                                                                    avatar={request.assignedProvider.avatar}
+                                                                    className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                                                                    fallbackBackground={C.orangeLight}
+                                                                    initialsCount={1}
+                                                                    style={{ color: C.orange }}
+                                                                />
+                                                                <span className="text-[11px] font-medium truncate" style={{ color: C.navy }}>
+                                                                    {request.assignedProvider.name}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        {request.assignedProvider && request.payment && (
+                                                            <div className="w-1 h-1 rounded-full bg-slate-200" />
+                                                        )}
+                                                        {request.payment && (
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium" style={{ background: '#f8fafc', border: `1px solid ${C.border}`, color: C.gray }}>
+                                                                    {request.payment.paymentMethod === 'WALLET' ? 'Thanh toán qua Ví' : request.payment.paymentMethod === 'CASH' ? 'Tiền mặt' : request.payment.paymentMethod}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Arrow */}

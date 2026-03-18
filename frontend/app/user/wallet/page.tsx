@@ -479,6 +479,7 @@ const TX_STATUS_COLOR: Record<string, string> = {
 };
 
 function TxRow({ tx }: { tx: UserTransaction }) {
+    const router = useRouter();
     const [expanded, setExpanded] = useState(false);
     const isCredit = tx.type === 'CREDIT';
 
@@ -544,6 +545,23 @@ function TxRow({ tx }: { tx: UserTransaction }) {
                         <span style={{ color: C.gray }}>Mã GD</span>
                         <span className="font-mono text-[10px]" style={{ color: '#94a3b8' }}>#{tx.id.slice(0, 12).toUpperCase()}</span>
                     </div>
+                    {tx.referenceType === 'JOB_PAYMENT' && (
+                        <div className="pt-2 mt-2" style={{ borderTop: `1px dashed ${C.border}` }}>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/user/requests/${tx.referenceId}`);
+                                }}
+                                className="w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-95"
+                                style={{ background: C.orangeLight, color: C.orange }}
+                            >
+                                Xem chi tiết chuyến xe
+                                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

@@ -10,6 +10,8 @@ import ArrivalConfirmation from '@/components/ArrivalConfirmation';
 import PaymentRequest from '@/components/PaymentRequest';
 import ExpiredRetry from '@/components/ExpiredRetry';
 import QuoteSelectionPanel from '@/components/QuoteSelectionPanel';
+import AvatarImage from '@/components/AvatarImage';
+import { Clock, Banknote, User, Wrench, CheckCircle2, Image as ImageIcon, Play, Phone } from 'lucide-react';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 
@@ -21,6 +23,10 @@ const C = {
     gray: '#6b7280',
     border: '#f1f5f9',
     bg: '#f8fafc',
+    blue: '#3b82f6',
+    blueLight: '#eff6ff',
+    green: '#16a34a',
+    greenLight: '#f0fdf4',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -202,6 +208,33 @@ const QUICK_TAGS = [
     'Sạch sẽ', 'Chuyên nghiệp', 'Thân thiện', 'Nhanh chóng', 'Đúng giờ', 'Giá hợp lý',
 ];
 
+// ── Layout Components ──
+function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+    return (
+        <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight }}>
+                {icon}
+            </div>
+            <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: C.gray }}>{label}</p>
+                <p className="text-sm font-semibold mt-0.5" style={{ color: C.navy }}>{value}</p>
+            </div>
+        </div>
+    );
+}
+
+function SectionCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+    return (
+        <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+            <div className="px-5 py-4 flex items-center gap-2.5" style={{ borderBottom: `1px solid ${C.border}` }}>
+                {icon}
+                <h3 className="text-sm font-bold" style={{ color: C.navy }}>{title}</h3>
+            </div>
+            <div className="px-5 py-4 space-y-4">{children}</div>
+        </div>
+    );
+}
+
 function StarIcon({ filled, size = 32 }: { filled: boolean; size?: number }) {
     return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? '#f59e0b' : 'none'} stroke={filled ? '#f59e0b' : '#d1d5db'} strokeWidth={1.5}>
@@ -212,6 +245,15 @@ function StarIcon({ filled, size = 32 }: { filled: boolean; size?: number }) {
 
 function CompletedCard({ requestId }: { requestId: string }) {
     const router = useRouter();
+    const [request, setRequest] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        api.get(`/rescue-requests/${requestId}`)
+            .then(res => setRequest(res.data))
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [requestId]);
 
     // Dispute state
     const [showDispute, setShowDispute] = useState(false);
@@ -225,6 +267,22 @@ function CompletedCard({ requestId }: { requestId: string }) {
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [reviewSubmitted, setReviewSubmitted] = useState(false);
+
+    if (loading) {
+        return (
+            <div className="px-5 py-8 text-center bg-white">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-3" style={{ borderColor: C.orange }}></div>
+                <p className="text-sm font-medium" style={{ color: C.gray }}>Đang tải chi tiết đơn...</p>
+            </div>
+        );
+    }
+
+    if (!request) return null;
+
+    const payment = request?.payment;
+    const acceptedQuote = request?.quotes?.[0]; // backend only returns ACCEPTED
+    const images = (request?.media ?? []).filter((m: any) => m.mediaType === 'IMAGE').map((m: any) => m.publicUrl);
+    const videos = (request?.media ?? []).filter((m: any) => m.mediaType === 'VIDEO').map((m: any) => m.publicUrl);
 
     const handleDispute = async () => {
         if (!disputeReason.trim()) { toast.error('Vui lòng nhập lý do khiếu nại'); return; }
@@ -284,9 +342,191 @@ function CompletedCard({ requestId }: { requestId: string }) {
                     </p>
                 </div>
 
+                {/* ── Request Details ── */}
+                <div className="px-5 py-4 space-y-4 bg-white" style={{ borderBottom: `1px solid ${C.border}` }}>
+                    
+                    {/* ── Timeline ── */}
+                    <SectionCard title="Dòng thời gian" icon={<Clock size={16} style={{ color: C.blue }} />}>
+                        <div className="space-y-0">
+                            {[
+                                { label: 'Tạo yêu cầu', time: request?.createdAt, done: true },
+                                { label: 'Cứu hộ viên nhận đơn', time: request?.assignedAt, done: !!request?.assignedAt },
+                                { label: 'Thanh toán', time: payment?.createdAt, done: !!payment },
+                                { label: 'Hoàn thành dịch vụ', time: request?.completedAt || request?.updatedAt, done: true },
+                            ].map((step, i, arr) => (
+                                <div key={i} className="flex gap-3">
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                                            style={{
+                                                background: step.done ? C.orange : '#f1f5f9',
+                                                border: `2px solid ${step.done ? C.orange : C.border}`,
+                                            }}>
+                                            {step.done
+                                                ? <CheckCircle2 size={13} className="text-white" />
+                                                : <Clock size={11} style={{ color: C.gray }} />
+                                            }
+                                        </div>
+                                        {i < arr.length - 1 && (
+                                            <div className="w-0.5 h-8 mt-0.5"
+                                                style={{ background: step.done ? `${C.orange}40` : '#f1f5f9' }} />
+                                        )}
+                                    </div>
+                                    <div className="pb-4">
+                                        <p className="text-sm font-semibold" style={{ color: step.done ? C.navy : '#9ca3af' }}>
+                                            {step.label}
+                                        </p>
+                                        <p className="text-xs mt-0.5" style={{ color: step.time ? C.gray : '#d1d5db' }}>
+                                            {step.time ? new Date(step.time).toLocaleString('vi-VN', {
+                                                day: '2-digit', month: '2-digit', year: 'numeric',
+                                                hour: '2-digit', minute: '2-digit',
+                                            }) : 'Chưa thực hiện'}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </SectionCard>
+
+                    {/* ── Provider Info ── */}
+                    {request?.assignedProvider && (
+                        <SectionCard title="Thông tin Cứu hộ viên" icon={<User size={16} style={{ color: C.blue }} />}>
+                            <div className="flex items-center gap-3">
+                                <AvatarImage
+                                    name={request.assignedProvider.name}
+                                    avatar={request.assignedProvider.avatar}
+                                    className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
+                                    fallbackBackground={`linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`}
+                                    initialsCount={1}
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-bold" style={{ color: C.navy }}>{request.assignedProvider.name}</p>
+                                    <p className="text-xs mt-0.5" style={{ color: C.gray }}>{request.assignedProvider.phoneNumber || 'N/A'}</p>
+                                </div>
+                                {request.assignedProvider.phoneNumber && (
+                                    <a href={`tel:${request.assignedProvider.phoneNumber}`}
+                                        className="w-9 h-9 rounded-xl flex items-center justify-center"
+                                        style={{ background: C.greenLight }}>
+                                        <Phone size={14} style={{ color: C.green }} />
+                                    </a>
+                                )}
+                            </div>
+                            
+                            <div className="space-y-3 mt-3 pt-3" style={{ borderTop: `1px dashed ${C.border}` }}>
+                                {request.assignedProvider.licensePlate && (
+                                    <InfoRow
+                                        icon={<span style={{ color: C.orange, fontSize: 11, fontWeight: 700 }}>BSX</span>}
+                                        label="Biển số xe"
+                                        value={request.assignedProvider.licensePlate}
+                                    />
+                                )}
+                                {(request.assignedProvider.vehicleColor || request.assignedProvider.vehicleType) && (
+                                    <InfoRow
+                                        icon={<span style={{ color: C.orange, fontSize: 11, fontWeight: 700 }}>XE</span>}
+                                        label="Phương tiện"
+                                        value={[request.assignedProvider.vehicleColor, request.assignedProvider.vehicleType].filter(Boolean).join(' - ')}
+                                    />
+                                )}
+                            </div>
+                        </SectionCard>
+                    )}
+
+                    {/* ── Quote Info ── */}
+                    {acceptedQuote && (
+                        <SectionCard title="Báo giá của Provider" icon={<Wrench size={16} style={{ color: C.orange }} />}>
+                            <div className="grid grid-cols-2 gap-3 mb-3">
+                                <div className="rounded-xl p-3" style={{ background: C.bg }}>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Giá báo</p>
+                                    <p className="text-lg font-bold" style={{ color: C.navy }}>{acceptedQuote.price.toLocaleString('vi-VN')} đ</p>
+                                </div>
+                                <div className="rounded-xl p-3" style={{ background: C.bg }}>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>TG dự kiến</p>
+                                    <p className="text-lg font-bold" style={{ color: C.navy }}>{acceptedQuote.estimatedArrivalMinutes} Phút</p>
+                                </div>
+                            </div>
+                            {acceptedQuote.message && (
+                                <div className="rounded-xl p-3" style={{ background: '#fff7ed', border: `1px solid #fed7aa` }}>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.orange }}>Lời nhắn từ Cứu hộ viên</p>
+                                    <p className="text-sm" style={{ color: C.navy }}>"{acceptedQuote.message}"</p>
+                                </div>
+                            )}
+                        </SectionCard>
+                    )}
+
+                    {/* ── Payment Info ── */}
+                    {payment && (
+                        <SectionCard title="Thanh Toán" icon={<Banknote size={16} style={{ color: C.orange }} />}>
+                            <div className="grid grid-cols-2 gap-3 mb-3">
+                                <div className="rounded-xl p-3" style={{ background: C.bg }}>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Phương thức</p>
+                                    <p className="text-sm font-bold" style={{ color: C.navy }}>
+                                        {payment.paymentMethod === 'WALLET' ? 'Ví điện tử' : payment.paymentMethod === 'CASH' ? 'Tiền mặt' : payment.paymentMethod}
+                                    </p>
+                                </div>
+                                <div className="rounded-xl p-3" style={{ background: C.bg }}>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Tổng tiền</p>
+                                    <p className="text-sm font-bold" style={{ color: C.orange }}>{payment.totalAmount.toLocaleString('vi-VN')} đ</p>
+                                </div>
+                            </div>
+                            <div className="rounded-xl overflow-hidden border" style={{ borderColor: C.border }}>
+                                {[
+                                    { label: 'Phí dịch vụ cơ bản', val: payment.baseFee },
+                                    { label: 'Phí di chuyển', val: payment.distanceFee },
+                                    (payment.overtimeFee || 0) > 0 && { label: 'Phụ phí ngoài giờ', val: payment.overtimeFee },
+                                    (payment.otherFee || 0) > 0 && { label: 'Chi phí phát sinh khác', val: payment.otherFee },
+                                ].filter(Boolean).map((row: any, i: number, arr) => (
+                                    <div key={i} className="flex items-center justify-between px-4 py-2.5"
+                                        style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                                        <span className="text-xs" style={{ color: C.gray }}>{row.label}</span>
+                                        <span className="text-xs font-semibold" style={{ color: C.navy }}>{(row.val || 0).toLocaleString('vi-VN')} đ</span>
+                                    </div>
+                                ))}
+                                <div className="flex items-center justify-between px-4 py-3"
+                                    style={{ background: '#f8fafc', borderTop: `1px solid ${C.border}` }}>
+                                    <span className="text-sm font-bold" style={{ color: C.navy }}>Tổng thanh toán</span>
+                                    <span className="text-sm font-bold" style={{ color: C.orange }}>{payment.totalAmount.toLocaleString('vi-VN')} đ</span>
+                                </div>
+                            </div>
+                            {payment.surchargeNote && (
+                                <p className="text-xs mt-3 italic" style={{ color: C.gray }}>Ghi chú phụ phí: {payment.surchargeNote}</p>
+                            )}
+                        </SectionCard>
+                    )}
+
+                    {/* ── Media ── */}
+                    {(images.length > 0 || videos.length > 0) && (
+                        <SectionCard
+                            title={`Ảnh/Video đính kèm (${images.length + videos.length})`}
+                            icon={<ImageIcon size={16} style={{ color: C.blue }} />}
+                        >
+                            {images.length > 0 && (
+                                <div className="grid grid-cols-3 gap-2">
+                                    {images.map((src: string, i: number) => (
+                                        <div key={i} className="aspect-square rounded-xl overflow-hidden relative" style={{ background: '#f1f5f9' }}>
+                                            <img src={src} alt={`Ảnh ${i + 1}`} className="w-full h-full object-cover" />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {videos.length > 0 && (
+                                <div className="grid grid-cols-2 gap-2 mt-2">
+                                    {videos.map((src: string, i: number) => (
+                                        <div key={i} className="rounded-xl overflow-hidden aspect-video bg-black relative">
+                                            <video src={src} controls className="w-full h-full object-cover" />
+                                            <div className="absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center"
+                                                style={{ background: 'rgba(0,0,0,0.5)' }}>
+                                                <Play size={10} className="text-white" style={{ marginLeft: 1 }} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </SectionCard>
+                    )}
+                </div>
+
                 {/* ── Rating block (primary action) ── */}
                 <div className="px-5 pt-5 pb-4">
-                    {reviewSubmitted ? (
+                    {(reviewSubmitted || request?.review) ? (
                         /* ── Thank-you state ── */
                         <div
                             className="flex flex-col items-center gap-2 py-4 rounded-2xl"
@@ -296,7 +536,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                             <p className="text-sm font-bold" style={{ color: '#92400e' }}>Cảm ơn bạn đã đánh giá!</p>
                             <div className="flex gap-0.5 mt-1">
                                 {[1, 2, 3, 4, 5].map(s => (
-                                    <StarIcon key={s} filled={s <= selectedStar} size={20} />
+                                    <StarIcon key={s} filled={s <= (request?.review?.rating || selectedStar)} size={20} />
                                 ))}
                             </div>
                         </div>

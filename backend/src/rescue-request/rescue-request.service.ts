@@ -207,6 +207,14 @@ export class RescueRequestService {
             where: { userId },
             include: {
                 media: true,
+                assignedProvider: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true,
+                    },
+                },
+                payment: true,
             },
             orderBy: {
                 createdAt: 'desc',
@@ -242,9 +250,16 @@ export class RescueRequestService {
                         baseFee: true,
                         isOnline: true,
                         averageRating: true,
-                        reviewCount: true,
                         avatar: true,
+                        licensePlate: true,
+                        vehicleColor: true,
+                        vehicleType: true,
                     },
+                },
+                payment: true,
+                review: true,
+                quotes: {
+                    where: { status: 'ACCEPTED' },
                 },
             },
         });

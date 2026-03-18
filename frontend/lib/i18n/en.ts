@@ -265,6 +265,8 @@ const en = {
                 rejected: 'Rejected',
                 expired: 'Expired',
             },
+            sortNewest: 'Newest',
+            sortOldest: 'Oldest',
         },
         requestDetail: {
             title: 'Request Details',

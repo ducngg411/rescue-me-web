@@ -30,7 +30,7 @@ const vi = {
         wallet: 'Ví',
         notifications: 'Thông báo',
         viewAll: 'Xem tất cả',
-        viewDetails: 'Xem chi tiết →',
+        viewDetails: 'Xem chi tiết',
         justNow: 'Vừa xong',
         minutesAgo: 'p trước',
         photos: 'ảnh',
@@ -265,6 +265,8 @@ const vi = {
                 rejected: 'Bị từ chối',
                 expired: 'Hết hạn',
             },
+            sortNewest: 'Mới nhất',
+            sortOldest: 'Cũ nhất',
         },
         requestDetail: {
             title: 'Chi tiết yêu cầu',
