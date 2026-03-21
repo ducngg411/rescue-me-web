@@ -6,9 +6,10 @@ import { WalletService } from './wallet.service';
 import { CommissionService } from './commission.service';
 import { EscrowScheduler } from './escrow.scheduler';
 import { WalletController } from './wallet.controller';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-    imports: [PrismaModule, ScheduleModule.forRoot(), ConfigModule],
+    imports: [PrismaModule, ScheduleModule.forRoot(), ConfigModule, MailModule],
     controllers: [WalletController],
     providers: [WalletService, CommissionService, EscrowScheduler],
     exports: [WalletService, CommissionService, EscrowScheduler],

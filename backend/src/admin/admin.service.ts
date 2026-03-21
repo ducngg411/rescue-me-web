@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VerificationStatus } from '@prisma/client';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class AdminService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private mailService: MailService,
+    ) { }
 
     async getProviders(filters?: {
         status?: string;
@@ -110,7 +114,13 @@ export class AdminService {
             },
         });
 
-        // TODO: Create history entry (need to create VerificationHistory model)
+        // Send approval notification (fire-and-forget)
+        setImmediate(() => {
+            this.mailService.sendProviderApproved(
+                updated.email,
+                updated.fullName || updated.email,
+            );
+        });
 
         return updated;
     }
@@ -146,6 +156,16 @@ export class AdminService {
 
         // TODO: Create history entry
 
+        // Send rejection notification (fire-and-forget)
+        setImmediate(() => {
+            this.mailService.sendProviderRejected(
+                updated.email,
+                updated.fullName || updated.email,
+                rejectReasonCode,
+                rejectReasonDetail,
+            );
+        });
+
         return updated;
     }
 
@@ -173,6 +193,15 @@ export class AdminService {
 
         // TODO: Create history entry with reason
 
+        // Send suspension notification (fire-and-forget)
+        setImmediate(() => {
+            this.mailService.sendProviderSuspended(
+                updated.email,
+                updated.fullName || updated.email,
+                reason,
+            );
+        });
+
         return updated;
     }
 
@@ -198,6 +227,14 @@ export class AdminService {
         });
 
         // TODO: Create history entry
+
+        // Send unsuspension notification (fire-and-forget)
+        setImmediate(() => {
+            this.mailService.sendProviderUnsuspended(
+                updated.email,
+                updated.fullName || updated.email,
+            );
+        });
 
         return updated;
     }

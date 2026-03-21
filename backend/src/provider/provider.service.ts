@@ -4,6 +4,7 @@ import { VietMapService } from '../vietmap/vietmap.service';
 import { UpdateProviderProfileDto } from '../auth/dto/auth.dto';
 import { Prisma, UserRole, VerificationStatus, ProviderType, DocumentType } from '@prisma/client';
 import { SubmitVerificationResponseDto } from './dto/submit-verification.dto';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class ProviderService {
@@ -13,6 +14,7 @@ export class ProviderService {
     constructor(
         private prisma: PrismaService,
         private vietMapService: VietMapService,
+        private mailService: MailService,
     ) { }
 
     async updateProfile(userId: string, dto: UpdateProviderProfileDto, userRole: UserRole) {
@@ -204,6 +206,15 @@ export class ProviderService {
                 submittedAt: new Date(),
                 isActive: false, // Ensure offline during verification
             },
+        });
+
+        // Send confirmation email (fire-and-forget)
+        setImmediate(() => {
+            this.mailService.sendVerificationSubmitted(
+                user.email,
+                user.fullName || user.email,
+                updatedUser.submittedAt ?? new Date(),
+            );
         });
 
         return {

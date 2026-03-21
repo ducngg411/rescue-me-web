@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Hồ sơ đã được tiếp nhận</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f4f5; font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a2e; }
+    .wrapper { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); padding: 40px; text-align: center; }
+    .header h1 { margin: 0; color: #fff; font-size: 26px; font-weight: 700; }
+    .header p { margin: 8px 0 0; color: rgba(255,255,255,0.85); font-size: 15px; }
+    .badge { font-size: 48px; margin-bottom: 12px; }
+    .body { padding: 40px; }
+    .greeting { font-size: 20px; font-weight: 600; color: #1a1a2e; margin-bottom: 16px; }
+    .text { font-size: 15px; line-height: 1.7; color: #4a4a6a; margin-bottom: 16px; }
+    .status-box { background: #fff8f5; border: 1.5px solid #ff6b35; border-radius: 12px; padding: 20px 24px; margin: 24px 0; }
+    .status-box .label { font-size: 12px; color: #9999aa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .status-box .value { font-size: 16px; font-weight: 600; color: #ff6b35; }
+    .steps { background: #f9f9fb; border-radius: 12px; padding: 20px 24px; margin: 20px 0; }
+    .steps ol { margin: 8px 0 0; padding-left: 20px; }
+    .steps ol li { color: #4a4a6a; font-size: 15px; margin-bottom: 8px; line-height: 1.5; }
+    .cta { text-align: center; margin: 32px 0 8px; }
+    .cta a { background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); color: #fff; text-decoration: none; padding: 14px 36px; border-radius: 50px; font-size: 15px; font-weight: 600; display: inline-block; }
+    .footer { background: #f4f4f5; padding: 24px 40px; text-align: center; }
+    .footer p { margin: 0; font-size: 13px; color: #9999aa; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <div class="badge">📋</div>
+      <h1>Hồ sơ đã được tiếp nhận</h1>
+      <p>RescueMe — Dịch vụ cứu hộ xe tin cậy</p>
+    </div>
+    <div class="body">
+      <p class="greeting">Xin chào {{name}},</p>
+      <p class="text">Chúng tôi đã nhận được hồ sơ đăng ký nhà cứu hộ của bạn. Đội ngũ kiểm duyệt sẽ xem xét và phản hồi trong vòng <strong>24–48 giờ làm việc</strong>.</p>
+      <div class="status-box">
+        <div class="label">Trạng thái hiện tại</div>
+        <div class="value">⏳ Đang chờ phê duyệt (PENDING)</div>
+        <div style="margin-top: 8px; font-size: 13px; color: #9999aa;">Nộp lúc: {{submittedAt}}</div>
+      </div>
+      <div class="steps">
+        <strong style="color: #1a1a2e;">Quy trình phê duyệt:</strong>
+        <ol>
+          <li>Kiểm tra thông tin cá nhân và loại hình hoạt động</li>
+          <li>Xác minh giấy tờ tùy thân và phương tiện</li>
+          <li>Phê duyệt và kích hoạt tài khoản nhà cứu hộ</li>
+        </ol>
+      </div>
+      <p class="text">Bạn sẽ nhận được email thông báo kết quả ngay khi quá trình xét duyệt hoàn tất.</p>
+      <div class="cta">
+        <a href="{{appUrl}}/provider/profile">Xem hồ sơ của tôi</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>© {{year}} RescueMe. Mọi quyền được bảo lưu.<br/>Nếu bạn cần hỗ trợ, hãy liên hệ chúng tôi qua ứng dụng.</p>
+    </div>
+  </div>
+</body>
+</html>

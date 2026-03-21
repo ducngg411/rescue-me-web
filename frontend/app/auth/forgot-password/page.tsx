@@ -75,23 +75,48 @@ export default function ForgotPasswordPage() {
     };
 
     // ── Phone flow: send OTP ──
+    const normalizePhone = (raw: string): string => {
+        const cleaned = raw.replace(/[\s\-().]/g, '');
+        // 0xxxxxxxxx (10 digits) → +84xxxxxxxxx
+        if (/^0\d{9}$/.test(cleaned)) return '+84' + cleaned.slice(1);
+        // already E.164
+        if (cleaned.startsWith('+')) return cleaned;
+        return cleaned;
+    };
+
+    const getFirebasePhoneError = (code: string): string => {
+        switch (code) {
+            case 'auth/invalid-phone-number':
+                return 'Số điện thoại không hợp lệ. Nhập dạng 0912345678 hoặc +84912345678.';
+            case 'auth/too-many-requests':
+                return 'Gửi quá nhiều lần. Vui lòng thử lại sau vài phút.';
+            case 'auth/quota-exceeded':
+                return 'Hệ thống tạm thời quá tải. Vui lòng thử lại sau.';
+            case 'auth/captcha-check-failed':
+                return 'Xác minh reCAPTCHA thất bại. Vui lòng thử lại.';
+            case 'auth/missing-phone-number':
+                return 'Vui lòng nhập số điện thoại.';
+            default:
+                return `Gửi OTP thất bại (${code}). Vui lòng thử lại.`;
+        }
+    };
+
     const onSendOtp = async (data: PhoneForm) => {
+        const e164Phone = normalizePhone(data.phone);
         setLoading(true);
         try {
             const verifier = initRecaptcha();
-            const result = await signInWithPhoneNumber(auth, data.phone, verifier);
+            const result = await signInWithPhoneNumber(auth, e164Phone, verifier);
             setConfirmationResult(result);
             setPhoneStep('otp');
-            toast.success('Mã OTP đã được gửi!');
+            toast.success('Mã OTP đã được gửi đến ' + e164Phone);
         } catch (err: any) {
-            // Reset recaptcha on error
+            // Reset recaptcha on error so user can retry
             if (recaptchaVerifierRef.current) {
                 recaptchaVerifierRef.current.clear();
                 recaptchaVerifierRef.current = null;
             }
-            toast.error(err.code === 'auth/invalid-phone-number'
-                ? 'Số điện thoại không hợp lệ'
-                : 'Gửi OTP thất bại. Vui lòng thử lại.');
+            toast.error(getFirebasePhoneError(err?.code || ''));
         } finally {
             setLoading(false);
         }
@@ -256,6 +281,9 @@ export default function ForgotPasswordPage() {
                     {/* ── PHONE TAB ── */}
                     {tab === 'phone' && (
                         <>
+                            {/* reCAPTCHA container — always mounted so the library never gets a null ref */}
+                            <div id="recaptcha-container" ref={recaptchaContainerRef} style={{ display: 'none' }} />
+
                             {/* Step 1: enter phone */}
                             {phoneStep === 'input' && (
                                 <form onSubmit={phoneForm.handleSubmit(onSendOtp)} className="space-y-4" noValidate>
@@ -282,8 +310,6 @@ export default function ForgotPasswordPage() {
                                             {t('auth.forgotPassword.phoneHint')}
                                         </p>
                                     </div>
-                                    {/* Invisible reCAPTCHA container */}
-                                    <div id="recaptcha-container" ref={recaptchaContainerRef} />
                                     <button
                                         type="submit"
                                         disabled={loading}
@@ -324,7 +350,7 @@ export default function ForgotPasswordPage() {
                                         className="rounded-lg px-4 py-3 text-sm mb-2"
                                         style={{ background: '#fff8f5', border: '1px solid #fed7aa', color: '#92400e' }}
                                     >
-                                        📱 Mã OTP đã gửi đến <strong>{phoneForm.getValues('phone')}</strong>
+                                        Mã OTP đã gửi đến <strong>{phoneForm.getValues('phone')}</strong>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>

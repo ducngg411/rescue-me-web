@@ -7,6 +7,7 @@ import { QuoteStatus } from './dto/quote-response.dto';
 import { CommissionService } from '../wallet/commission.service';
 import { UserWalletService } from '../user-wallet/user-wallet.service';
 import { UserWalletReferenceType, WalletTransactionStatus, WalletTransactionType, WalletReferenceType } from '@prisma/client';
+import { MailService } from '../mail/mail.service';
 
 
 @Injectable()
@@ -15,6 +16,7 @@ export class RescueRequestService {
         private prisma: PrismaService,
         private commissionService: CommissionService,
         private userWalletService: UserWalletService,
+        private mailService: MailService,
     ) { }
 
     // Auto-expire MATCHING requests every minute
@@ -1304,6 +1306,28 @@ export class RescueRequestService {
         });
 
         console.log(` [Payment] User ${userId} confirmed payment sent for request ${requestId}`);
+
+        // Notify provider that user has confirmed payment (fire-and-forget)
+        setImmediate(async () => {
+            try {
+                const req = await this.prisma.rescueRequest.findUnique({
+                    where: { id: requestId },
+                    include: { assignedProvider: { select: { email: true, fullName: true } } },
+                });
+                if (req?.assignedProvider) {
+                    await this.mailService.sendPaymentReceipt({
+                        email: req.assignedProvider.email,
+                        name: req.assignedProvider.fullName || req.assignedProvider.email,
+                        isProvider: true,
+                        requestId,
+                        amount: updated.totalAmount,
+                        paymentMethod: String(updated.paymentMethod),
+                        completedAt: updated.userConfirmedAt ?? new Date(),
+                    });
+                }
+            } catch { /* silent */ }
+        });
+
         return updated;
     }
 
@@ -1333,6 +1357,44 @@ export class RescueRequestService {
         });
 
         console.log(`⚠️ [Payment] User ${userId} disputed payment for request ${requestId}: ${reason}`);
+
+        // Notify provider and admin (fire-and-forget)
+        setImmediate(async () => {
+            try {
+                const adminEmail = process.env.ADMIN_EMAIL;
+                const req = await this.prisma.rescueRequest.findUnique({
+                    where: { id: requestId },
+                    include: {
+                        user: { select: { fullName: true, email: true } },
+                        assignedProvider: { select: { email: true, fullName: true } },
+                    },
+                });
+                const disputedBy = req?.user?.fullName || req?.user?.email || userId;
+                // Notify provider
+                if (req?.assignedProvider) {
+                    await this.mailService.sendPaymentDispute({
+                        email: req.assignedProvider.email,
+                        name: req.assignedProvider.fullName || req.assignedProvider.email,
+                        isAdmin: false,
+                        requestId,
+                        reason,
+                        disputedBy,
+                    });
+                }
+                // Notify admin
+                if (adminEmail) {
+                    await this.mailService.sendPaymentDispute({
+                        email: adminEmail,
+                        name: 'Admin',
+                        isAdmin: true,
+                        requestId,
+                        reason,
+                        disputedBy,
+                    });
+                }
+            } catch { /* silent */ }
+        });
+
         return updated;
     }
 
@@ -1385,6 +1447,28 @@ export class RescueRequestService {
         });
 
         console.log(` [Payment] Provider ${providerId} confirmed payment received for request ${requestId}`);
+
+        // Send receipts to both sides (fire-and-forget)
+        setImmediate(async () => {
+            try {
+                const req = await this.prisma.rescueRequest.findUnique({
+                    where: { id: requestId },
+                    include: {
+                        user: { select: { email: true, fullName: true } },
+                        assignedProvider: { select: { email: true, fullName: true } },
+                    },
+                });
+                const completedAt = new Date();
+                const baseParams = { requestId, amount: payment.totalAmount, paymentMethod: String(payment.paymentMethod), completedAt };
+                if (req?.user) {
+                    await this.mailService.sendPaymentReceipt({ ...baseParams, email: req.user.email, name: req.user.fullName || req.user.email, isProvider: false });
+                }
+                if (req?.assignedProvider) {
+                    await this.mailService.sendPaymentReceipt({ ...baseParams, email: req.assignedProvider.email, name: req.assignedProvider.fullName || req.assignedProvider.email, isProvider: true });
+                }
+            } catch { /* silent */ }
+        });
+
         return updated;
     }
 
@@ -1780,6 +1864,28 @@ export class RescueRequestService {
         });
 
         console.log(` [WalletPayment] User ${userId} confirmed wallet payment for request ${requestId}: ${payment.totalAmount} VND`);
+
+        // Send receipts to both sides (fire-and-forget)
+        setImmediate(async () => {
+            try {
+                const req = await this.prisma.rescueRequest.findUnique({
+                    where: { id: requestId },
+                    include: {
+                        user: { select: { email: true, fullName: true } },
+                        assignedProvider: { select: { email: true, fullName: true } },
+                    },
+                });
+                const completedAt = new Date();
+                const baseParams = { requestId, amount: payment.totalAmount, paymentMethod: 'WALLET', completedAt };
+                if (req?.user) {
+                    await this.mailService.sendPaymentReceipt({ ...baseParams, email: req.user.email, name: req.user.fullName || req.user.email, isProvider: false });
+                }
+                if (req?.assignedProvider) {
+                    await this.mailService.sendPaymentReceipt({ ...baseParams, email: req.assignedProvider.email, name: req.assignedProvider.fullName || req.assignedProvider.email, isProvider: true });
+                }
+            } catch { /* silent */ }
+        });
+
         return { success: true, message: 'Wallet payment confirmed', amount: payment.totalAmount };
     }
 

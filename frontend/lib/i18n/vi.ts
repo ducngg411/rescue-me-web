@@ -128,7 +128,7 @@ const vi = {
             sendingOtpBtn: 'Đang gửi...',
             verifyBtn: 'Xác minh',
             verifyingBtn: 'Đang xác minh...',
-            otpSuccessTitle: 'Xác minh thành công! ✅',
+            otpSuccessTitle: 'Xác minh thành công! ',
             otpSuccessDesc: 'Chuyển đến trang đặt lại mật khẩu...',
             backToLogin: 'Quay lại đăng nhập',
             recaptchaNote: 'Cần xác minh reCAPTCHA để gửi OTP.',

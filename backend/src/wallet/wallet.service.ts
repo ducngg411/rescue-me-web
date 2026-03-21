@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { MailService } from '../mail/mail.service';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Option types
@@ -46,6 +47,7 @@ export class WalletService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly config: ConfigService,
+        private readonly mailService: MailService,
     ) { }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -930,6 +932,26 @@ export class WalletService {
             `code=${transferCode} sepayId=${sepayId}`,
         );
 
+        // Send topup receipt email (fire-and-forget)
+        setImmediate(async () => {
+            try {
+                const provider = await this.prisma.user.findUnique({
+                    where: { id: wallet.providerId },
+                    select: { email: true, fullName: true },
+                });
+                if (provider) {
+                    await this.mailService.sendTopupReceipt({
+                        email: provider.email,
+                        name: provider.fullName || provider.email,
+                        amount: Number(transferAmount),
+                        transferCode,
+                        completedAt: new Date(),
+                        walletUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/wallet`,
+                    });
+                }
+            } catch { /* silent */ }
+        });
+
         return { success: true };
     }
 
@@ -990,6 +1012,26 @@ export class WalletService {
         });
 
         this.logger.log(`USER_TOPUP_COMPLETED walletId=${pendingTx.walletId} amount=${pendingTx.amount} code=${transferCode} sepayId=${sepayId}`);
+
+        // Send topup receipt email (fire-and-forget)
+        setImmediate(async () => {
+            try {
+                const walletRow = await this.prisma.userWallet.findUnique({
+                    where: { id: pendingTx.walletId },
+                    include: { user: { select: { email: true, fullName: true } } },
+                });
+                if (walletRow?.user) {
+                    await this.mailService.sendTopupReceipt({
+                        email: walletRow.user.email,
+                        name: walletRow.user.fullName || walletRow.user.email,
+                        amount: pendingTx.amount,
+                        transferCode,
+                        completedAt: new Date(),
+                    });
+                }
+            } catch { /* silent */ }
+        });
+
         return { success: true };
     }
 
@@ -1193,7 +1235,7 @@ export class WalletService {
                 });
 
                 affectedWalletIds.add(t.walletId);
-                this.logger.log(`✅ [AutoRelease] txId=${t.id} amount=${t.amount}`);
+                this.logger.log(` [AutoRelease] txId=${t.id} amount=${t.amount}`);
             } catch (e: any) {
                 this.logger.error(`❌ [AutoRelease] txId=${t.id}: ${e.message}`);
             }

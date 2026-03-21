@@ -128,7 +128,7 @@ const en = {
             sendingOtpBtn: 'Sending...',
             verifyBtn: 'Verify',
             verifyingBtn: 'Verifying...',
-            otpSuccessTitle: 'Verified! ✅',
+            otpSuccessTitle: 'Verified! ',
             otpSuccessDesc: 'Redirecting to password reset...',
             backToLogin: 'Back to login',
             recaptchaNote: 'reCAPTCHA verification required to send OTP.',

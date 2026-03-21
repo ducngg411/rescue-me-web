@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Thông báo tranh chấp thanh toán</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f4f5; font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a2e; }
+    .wrapper { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%); padding: 40px; text-align: center; }
+    .header h1 { margin: 0; color: #fff; font-size: 26px; font-weight: 700; }
+    .header p { margin: 8px 0 0; color: rgba(255,255,255,0.85); font-size: 15px; }
+    .badge { font-size: 48px; margin-bottom: 12px; }
+    .body { padding: 40px; }
+    .greeting { font-size: 20px; font-weight: 600; color: #1a1a2e; margin-bottom: 16px; }
+    .text { font-size: 15px; line-height: 1.7; color: #4a4a6a; margin-bottom: 16px; }
+    .dispute-box { background: #faf5ff; border: 1.5px solid #c4b5fd; border-radius: 12px; padding: 20px 24px; margin: 24px 0; }
+    .dispute-box .label { font-size: 12px; color: #9999aa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .dispute-box .value { font-size: 15px; font-weight: 600; color: #5b21b6; margin-bottom: 12px; }
+    .dispute-box .reason { font-size: 15px; color: #4c1d95; line-height: 1.6; background: #ede9fe; border-radius: 8px; padding: 12px 16px; }
+    .cta { text-align: center; margin: 32px 0 8px; }
+    .cta a { background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%); color: #fff; text-decoration: none; padding: 14px 36px; border-radius: 50px; font-size: 15px; font-weight: 600; display: inline-block; }
+    .footer { background: #f4f4f5; padding: 24px 40px; text-align: center; }
+    .footer p { margin: 0; font-size: 13px; color: #9999aa; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <div class="badge">⚖️</div>
+      <h1>Tranh chấp thanh toán</h1>
+      <p>RescueMe — Dịch vụ cứu hộ xe tin cậy</p>
+    </div>
+    <div class="body">
+      <p class="greeting">Xin chào {{name}},</p>
+      <p class="text">{{#if isAdmin}}Người dùng đã báo cáo một sự cố thanh toán và yêu cầu hỗ trợ giải quyết.{{else}}Đã xảy ra tranh chấp thanh toán liên quan đến yêu cầu cứu hộ của bạn.{{/if}}</p>
+      <div class="dispute-box">
+        <div class="label">Mã yêu cầu</div>
+        <div class="value">#{{requestId}}</div>
+        <div class="label">Bên báo cáo</div>
+        <div class="value">{{disputedBy}}</div>
+        <div class="label">Lý do tranh chấp</div>
+        <div class="reason">{{reason}}</div>
+      </div>
+      <p class="text">{{#if isAdmin}}Vui lòng kiểm tra và xử lý tranh chấp này trong hệ thống quản trị.{{else}}Đội ngũ hỗ trợ RescueMe sẽ xem xét và liên hệ với bạn trong thời gian sớm nhất.{{/if}}</p>
+      <div class="cta">
+        <a href="{{appUrl}}/{{#if isAdmin}}admin/disputes{{else}}requests/{{requestId}}{{/if}}">Xem chi tiết</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>© {{year}} RescueMe. Mọi quyền được bảo lưu.<br/>Email này được gửi tự động khi có tranh chấp thanh toán.</p>
+    </div>
+  </div>
+</body>
+</html>
