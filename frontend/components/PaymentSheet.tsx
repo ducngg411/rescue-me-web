@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 
@@ -23,6 +23,7 @@ interface Item { id: number; label: string; amount: number; }
 interface PaymentSheetProps {
     requestId: string;
     defaultAmount: number;
+    defaultPaymentMethod?: 'CASH' | 'QR' | 'WALLET';
     onClose: () => void;
     onSubmitted: (method?: 'CASH' | 'QR' | 'WALLET') => void;
 }
@@ -30,7 +31,7 @@ interface PaymentSheetProps {
 let nextId = 1;
 const makeItem = (): Item => ({ id: nextId++, label: '', amount: 0 });
 
-export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubmitted }: PaymentSheetProps) {
+export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentMethod, onClose, onSubmitted }: PaymentSheetProps) {
     // ── Primary total (editable, pre-filled from accepted quote) ──────────────
     const [baseFee, setBaseFee] = useState(defaultAmount > 0 ? defaultAmount : 0);
 
@@ -48,12 +49,24 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
     const [showSurcharge, setShowSurcharge] = useState(false);
 
     const [note, setNote] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR' | 'WALLET'>('CASH');
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR' | 'WALLET'>(defaultPaymentMethod ?? 'CASH');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [cashSent, setCashSent] = useState(false);  // show cash-pending overlay after CASH submit
     const [walletSent, setWalletSent] = useState(false); // show wallet-sent overlay after WALLET submit
     const [walletReceived, setWalletReceived] = useState(false); // wallet payment confirmed by user
     const walletPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // ── Photo upload state ────────────────────────────────────────────────────
+    interface PhotoItem {
+        localId: string;        // random id for React key
+        previewUrl: string;     // object URL for preview
+        publicUrl: string | null; // R2 public URL after upload
+        uploadId: string | null;  // DB upload record id
+        status: 'uploading' | 'done' | 'error';
+    }
+    const [photos, setPhotos] = useState<PhotoItem[]>([]);
+    const photoInputRef = useRef<HTMLInputElement>(null);
+    const MAX_PHOTOS = 5;
 
     const surchargeTotal = surchargeItems.reduce((s, i) => s + i.amount, 0);
     const totalAmount = baseFee + surchargeTotal;
@@ -139,9 +152,88 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
         }, 3000);
     };
 
+    // ── Photo upload helpers ──────────────────────────────────────────────────
+    const handlePickPhotos = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+
+        const remaining = MAX_PHOTOS - photos.length;
+        if (remaining <= 0) {
+            toast.error(`Tối đa ${MAX_PHOTOS} ảnh`);
+            return;
+        }
+
+        const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+        const toUpload = files.slice(0, remaining).filter(f => {
+            if (!allowed.includes(f.type)) { toast.error(`${f.name}: chỉ hỗ trợ JPG/PNG/WebP`); return false; }
+            if (f.size > 5 * 1024 * 1024) { toast.error(`${f.name}: tối đa 5MB`); return false; }
+            return true;
+        });
+
+        // Reset input so same file can be re-selected
+        if (photoInputRef.current) photoInputRef.current.value = '';
+
+        toUpload.forEach(file => {
+            const localId = Math.random().toString(36).slice(2);
+            const previewUrl = URL.createObjectURL(file);
+
+            // Add placeholder immediately
+            setPhotos(prev => [...prev, { localId, previewUrl, publicUrl: null, uploadId: null, status: 'uploading' }]);
+
+            // Async upload
+            (async () => {
+                try {
+                    // 1) Presign
+                    const presignRes = await api.post('/uploads/presign', {
+                        purpose: 'request_photo',
+                        fileName: file.name,
+                        fileSize: file.size,
+                        contentType: file.type,
+                    });
+                    const { uploadUrl, publicUrl, uploadId } = presignRes.data;
+
+                    // 2) PUT to R2
+                    await fetch(uploadUrl, {
+                        method: 'PUT',
+                        body: file,
+                        headers: { 'Content-Type': file.type },
+                    });
+
+                    // 3) Confirm
+                    await api.post('/uploads/confirm', { uploadId });
+
+                    setPhotos(prev => prev.map(p =>
+                        p.localId === localId ? { ...p, publicUrl, uploadId, status: 'done' } : p
+                    ));
+                } catch {
+                    setPhotos(prev => prev.map(p =>
+                        p.localId === localId ? { ...p, status: 'error' } : p
+                    ));
+                    toast.error(`Không thể upload ảnh`);
+                }
+            })();
+        });
+    }, [photos.length]);
+
+    const removePhoto = useCallback((localId: string) => {
+        setPhotos(prev => {
+            const item = prev.find(p => p.localId === localId);
+            if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+            return prev.filter(p => p.localId !== localId);
+        });
+    }, []);
+
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleSubmit = async () => {
         if (totalAmount <= 0) { toast.error('Vui lòng nhập số tiền thanh toán'); return; }
+
+        // Don't submit while photos are still uploading
+        const stillUploading = photos.filter(p => p.status === 'uploading');
+        if (stillUploading.length > 0) {
+            toast.error(`Đang upload ${stillUploading.length} ảnh, vui lòng chờ...`);
+            return;
+        }
+
         setIsSubmitting(true);
 
         // Store both breakdown and surcharges in surchargeNote as JSON
@@ -153,6 +245,8 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
             ? JSON.stringify(structured)
             : undefined;
 
+        const photoUrls = photos.filter(p => p.status === 'done' && p.publicUrl).map(p => p.publicUrl as string);
+
         try {
             await api.post(`/rescue-requests/${requestId}/payment`, {
                 baseFee,
@@ -162,7 +256,7 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
                 totalAmount,
                 surchargeNote,
                 note: note || undefined,
-                photoUrls: [],
+                photoUrls,
                 paymentMethod,
             });
 
@@ -419,6 +513,117 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
                             />
                         </div>
 
+                        {/* ── Ảnh hiện trường (tùy chọn) ── */}
+                        <div className="mb-5">
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-bold" style={{ color: C.navy }}>
+                                     Ảnh hiện trường
+                                    <span className="font-normal ml-1" style={{ color: C.gray }}>(tùy chọn · tối đa {MAX_PHOTOS})</span>
+                                </p>
+                                {photos.length < MAX_PHOTOS && (
+                                    <button
+                                        type="button"
+                                        onClick={() => photoInputRef.current?.click()}
+                                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-[0.97]"
+                                        style={{ background: '#eff6ff', color: '#2563eb' }}
+                                    >
+                                        <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        Chọn ảnh
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Hidden file input */}
+                            <input
+                                ref={photoInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                multiple
+                                capture="environment"
+                                className="hidden"
+                                onChange={handlePickPhotos}
+                            />
+
+                            {photos.length === 0 ? (
+                                /* Empty state — tap to pick */
+                                <button
+                                    type="button"
+                                    onClick={() => photoInputRef.current?.click()}
+                                    className="w-full py-5 rounded-2xl flex flex-col items-center gap-2 transition-all active:scale-[0.98]"
+                                    style={{ background: C.bg, border: `1.5px dashed ${C.border}` }}
+                                >
+                                    <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={1.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                    <p className="text-xs" style={{ color: C.gray }}>Chụp hoặc chọn ảnh hiện trường</p>
+                                </button>
+                            ) : (
+                                /* Photo thumbnails grid */
+                                <div className="grid grid-cols-3 gap-2">
+                                    {photos.map(photo => (
+                                        <div key={photo.localId} className="relative aspect-square rounded-xl overflow-hidden" style={{ background: C.bg }}>
+                                            <img
+                                                src={photo.previewUrl}
+                                                alt="Ảnh hiện trường"
+                                                className="w-full h-full object-cover"
+                                            />
+                                            {/* Status overlay */}
+                                            {photo.status === 'uploading' && (
+                                                <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+                                                    <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
+                                                        <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" />
+                                                    </svg>
+                                                </div>
+                                            )}
+                                            {photo.status === 'error' && (
+                                                <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(220,38,38,0.6)' }}>
+                                                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                                                    </svg>
+                                                </div>
+                                            )}
+                                            {photo.status === 'done' && (
+                                                <div className="absolute top-1 left-1 w-4 h-4 rounded-full flex items-center justify-center" style={{ background: '#16a34a' }}>
+                                                    <svg width="9" height="9" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={3}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                </div>
+                                            )}
+                                            {/* Remove button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => removePhoto(photo.localId)}
+                                                className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center"
+                                                style={{ background: 'rgba(0,0,0,0.55)' }}
+                                            >
+                                                <svg width="8" height="8" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={3}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {/* Add more button (inline in grid) */}
+                                    {photos.length < MAX_PHOTOS && (
+                                        <button
+                                            type="button"
+                                            onClick={() => photoInputRef.current?.click()}
+                                            className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.96]"
+                                            style={{ background: C.bg, border: `1.5px dashed ${C.border}` }}
+                                        >
+                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                            </svg>
+                                            <span className="text-[9px]" style={{ color: C.gray }}>Thêm</span>
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
                         {/* ── Phương thức thanh toán ── */}
                         <div className="mb-5">
                             <p className="text-xs font-bold mb-2" style={{ color: C.navy }}>Phương thức thanh toán</p>
@@ -648,7 +853,7 @@ export default function PaymentSheet({ requestId, defaultAmount, onClose, onSubm
                                         </div>
                                     </div>
                                     <button
-                                        onClick={() => { if (walletPollRef.current) { clearInterval(walletPollRef.current); walletPollRef.current = null; } setWalletSent(false); onSubmitted(); }}
+                                        onClick={() => { if (walletPollRef.current) { clearInterval(walletPollRef.current); walletPollRef.current = null; } setWalletSent(false); onSubmitted('WALLET'); }}
                                         className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
                                         style={{ background: C.bg, color: C.gray }}
                                     >

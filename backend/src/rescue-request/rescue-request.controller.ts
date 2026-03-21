@@ -240,10 +240,16 @@ export class RescueRequestController {
         return this.rescueRequestService.getQrPaymentStatus(requestId);
     }
 
-    /** Provider switches payment method from QR → CASH mid-flow */
+    /** Provider switches payment method to CASH mid-flow */
     @Patch(':id/payment/switch-to-cash')
     async switchPaymentToCash(@Request() req, @Param('id') requestId: string) {
         return this.rescueRequestService.switchPaymentToCash(requestId, req.user.id);
+    }
+
+    /** Provider switches payment method to QR mid-flow */
+    @Patch(':id/payment/switch-to-qr')
+    async switchPaymentToQr(@Request() req, @Param('id') requestId: string) {
+        return this.rescueRequestService.switchPaymentToQr(requestId, req.user.id);
     }
 
     /** User xác nhận thanh toán bằng ví (WALLET) → tự động trừ tiền + hoàn thành đơn */

@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import AvatarImage from '@/components/AvatarImage';
 import dynamic from 'next/dynamic';
+import api from '@/lib/api';
 
 const VietMap = dynamic(() => import('@/components/VietMap'), {
     ssr: false,
@@ -33,10 +34,20 @@ const C = {
     bg: '#f8fafc',
 };
 
-const recentActivity = [
-    { id: 1, type: 'battery', title: 'Battery Jump Start', location: 'Main St. & 6th Ave', status: 'Completed', price: '$45.00', date: 'Oct 21' },
-    { id: 2, type: 'tire', title: 'Flat Tire Change', location: 'Highway 101, Exit 42', status: 'Completed', price: '$65.00', date: 'Sep 12' },
-];
+const ACTIVE_STATUSES = ['CREATED', 'MATCHING', 'SEARCHING', 'MATCHED', 'ASSIGNED', 'ACCEPTED', 'IN_PROGRESS', 'ARRIVED', 'WORKING', 'PAYMENT_PENDING'];
+
+const STATUS_LABELS: Record<string, string> = {
+    CREATED: 'Đã tạo', MATCHING: 'Đang tìm', SEARCHING: 'Đang tìm',
+    MATCHED: 'Đã ghép đôi', ASSIGNED: 'Có provider', ACCEPTED: 'Đã chấp nhận',
+    IN_PROGRESS: 'Đang di chuyển', ARRIVED: 'Đã đến', WORKING: 'Đang làm việc',
+    PAYMENT_PENDING: 'Chờ thanh toán', COMPLETED: 'Hoàn thành', CANCELLED: 'Đã hủy',
+    REJECTED: 'Từ chối', EXPIRED: 'Hết hạn',
+};
+
+const INCIDENT_LABELS: Record<string, string> = {
+    BREAKDOWN: 'Hỏng xe', ACCIDENT: 'Tai nạn', FLAT_TIRE: 'Lốp xe hỏng',
+    BATTERY_DEAD: 'Hết bình điện', OUT_OF_FUEL: 'Hết nhiên liệu', LOCKED_OUT: 'Khóa xe', OTHER: 'Khác',
+};
 
 function BatteryIcon() {
     return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="2" y="7" width="18" height="10" rx="2" /><path d="M22 11v2" strokeLinecap="round" /></svg>;
@@ -53,6 +64,37 @@ export default function UserDashboard() {
     const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
     const [isLoadingLocation, setIsLoadingLocation] = useState(true);
     const [locationError, setLocationError] = useState<string | null>(null);
+    const [requests, setRequests] = useState<any[]>([]);
+    const [isLoadingRequests, setIsLoadingRequests] = useState(true);
+
+    const fetchRequests = async () => {
+        try {
+            const res = await api.get('/rescue-requests');
+            setRequests(res.data);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsLoadingRequests(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!isReady) return;
+        fetchRequests();
+    }, [isReady]);
+
+    // Poll more aggressively when there's an active request
+    useEffect(() => {
+        if (!isReady) return;
+        const hasActive = requests.some(r => ACTIVE_STATUSES.includes(r.status));
+        const interval = hasActive ? 5000 : 15000;
+        const id = setInterval(fetchRequests, interval);
+        return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isReady, requests.some(r => ACTIVE_STATUSES.includes(r.status))]);
+
+    const activeRequest = requests.find(r => ACTIVE_STATUSES.includes(r.status));
+    const recentRequests = requests.filter(r => !ACTIVE_STATUSES.includes(r.status)).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 3);
 
     const DEFAULT_LOCATION: LocationData = { lat: 21.028511, lng: 105.804817, address: 'Hà Nội, Việt Nam' };
 
@@ -293,64 +335,177 @@ export default function UserDashboard() {
                             <div className="bg-white rounded-xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: C.orange }}></div>
+                                        <div
+                                            className="w-2 h-2 rounded-full"
+                                            style={{ background: activeRequest ? C.orange : '#94a3b8', animation: activeRequest ? 'pulse 2s infinite' : 'none' }}
+                                        ></div>
                                         <h3 className="font-semibold text-sm" style={{ color: C.navy }}>{t('user.dashboard.rescueInProgress')}</h3>
                                     </div>
-                                    <span className="text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: C.orangeLight, color: C.orange }}>{t('user.dashboard.eta')}: 12 Mins</span>
+                                    {activeRequest && (
+                                        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: C.orangeLight, color: C.orange }}>
+                                            {STATUS_LABELS[activeRequest.status] ?? activeRequest.status}
+                                        </span>
+                                    )}
                                 </div>
 
-                                {/* Steps */}
-                                <div className="flex items-start justify-between mb-4">
-                                    {[t('user.dashboard.steps.requested'), t('user.dashboard.steps.assigned'), t('user.dashboard.steps.enRoute'), t('user.dashboard.steps.arrived')].map((step, i) => {
-                                        const done = i <= 1;
-                                        const active = i === 2;
-                                        return (
-                                            <div key={step} className="flex flex-col items-center gap-1 flex-1">
-                                                <div
-                                                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                                                    style={{
-                                                        background: done ? C.orange : active ? '#3b82f6' : '#f1f5f9',
-                                                        color: (done || active) ? 'white' : '#94a3b8',
-                                                    }}
-                                                >
-                                                    {done ? (
-                                                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                                    ) : i + 1}
+                                {isLoadingRequests ? (
+                                    /* Loading skeleton */
+                                    <div className="space-y-3 py-1">
+                                        <div className="flex items-center justify-between">
+                                            {[0, 1, 2, 3].map(i => (
+                                                <div key={i} className="flex flex-col items-center gap-1 flex-1">
+                                                    <div className="w-8 h-8 rounded-full animate-pulse" style={{ background: '#f1f5f9' }}></div>
+                                                    <div className="w-10 h-2 rounded animate-pulse" style={{ background: '#f1f5f9' }}></div>
                                                 </div>
-                                                <span className="text-[9px] md:text-[10px] font-medium text-center leading-tight" style={{ color: active ? '#3b82f6' : done ? C.orange : '#94a3b8' }}>
-                                                    {step}
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* Provider */}
-                                <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: C.bg }}>
-                                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ background: 'linear-gradient(135deg, #64748b, #475569)' }}>MT</div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>Michael Thompson</p>
-                                        <p className="text-xs truncate" style={{ color: C.gray }}>Ford F-150 • License: 4X2-992</p>
-                                        <div className="flex items-center gap-1 mt-0.5">
-                                            <svg width="10" height="10" viewBox="0 0 20 20" fill="#f59e0b"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                                            <span className="text-xs font-medium" style={{ color: '#374151' }}>4.9</span>
-                                            <span className="text-xs" style={{ color: C.gray }}>(124 {t('components.assignedProvider.rescues')})</span>
+                                            ))}
                                         </div>
+                                        <div className="h-14 rounded-lg animate-pulse" style={{ background: '#f8fafc' }}></div>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#dcfce7', color: '#16a34a' }}>
-                                            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                                        </button>
-                                        <button className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#dbeafe', color: '#2563eb' }}>
-                                            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                                        </button>
+                                ) : !activeRequest ? (
+                                    /* Empty state */
+                                    <div className="flex flex-col items-center justify-center py-5 gap-2">
+                                        <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: C.bg }}>
+                                            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#94a3b8" strokeWidth={1.5}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-3-3v6m-7 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                            </svg>
+                                        </div>
+                                        <p className="text-sm font-medium" style={{ color: C.navy }}>Không có yêu cầu cứu hộ</p>
+                                        <p className="text-xs text-center" style={{ color: C.gray }}>Hiện tại không có yêu cầu nào đang thực hiện</p>
                                     </div>
-                                </div>
+                                ) : (
+                                    <>
+                                        {/* Steps */}
+                                        <div className="flex items-start justify-between mb-4">
+                                            {[
+                                                { label: t('user.dashboard.steps.requested'), done: true, active: false },
+                                                { label: t('user.dashboard.steps.assigned'), done: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS', 'ARRIVED', 'WORKING', 'PAYMENT_PENDING'].includes(activeRequest.status), active: ['MATCHING', 'SEARCHING', 'MATCHED'].includes(activeRequest.status) },
+                                                { label: t('user.dashboard.steps.enRoute'), done: ['ARRIVED', 'WORKING', 'PAYMENT_PENDING'].includes(activeRequest.status), active: ['ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'].includes(activeRequest.status) },
+                                                { label: t('user.dashboard.steps.arrived'), done: ['WORKING', 'PAYMENT_PENDING'].includes(activeRequest.status), active: ['ARRIVED'].includes(activeRequest.status) }
+                                            ].map((step, i) => {
+                                                const done = step.done;
+                                                const stepActive = step.active;
+                                                return (
+                                                    <div key={i} className="flex flex-col items-center gap-1 flex-1">
+                                                        <div
+                                                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                                                            style={{
+                                                                background: done ? C.orange : stepActive ? '#3b82f6' : '#f1f5f9',
+                                                                color: (done || stepActive) ? 'white' : '#94a3b8',
+                                                            }}
+                                                        >
+                                                            {done ? (
+                                                                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                                            ) : stepActive ? (
+                                                                <div className="w-3 h-3 rounded-full bg-white opacity-80 animate-ping absolute"></div>
+                                                            ) : i + 1}
+                                                        </div>
+                                                        <span className="text-[9px] md:text-[10px] font-medium text-center leading-tight" style={{ color: stepActive ? '#3b82f6' : done ? C.orange : '#94a3b8' }}>
+                                                            {step.label}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
 
-                                <div className="flex items-center justify-between mt-3">
-                                    <button className="text-xs font-medium" style={{ color: '#ef4444' }}>{t('user.dashboard.cancelRequest')}</button>
-                                    <button className="text-xs font-semibold" style={{ color: C.orange }}>{t('common.viewDetails')}</button>
-                                </div>
+                                        {/* Provider */}
+                                        {activeRequest.assignedProvider ? (
+                                            <div className="rounded-lg p-3" style={{ background: C.bg }}>
+                                                {/* Top row: avatar + name/stats + call button */}
+                                                <div className="flex items-center gap-3">
+                                                    <AvatarImage
+                                                        name={activeRequest.assignedProvider.name}
+                                                        avatar={activeRequest.assignedProvider.avatar}
+                                                        className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                                                        fallbackBackground={`linear-gradient(135deg, ${C.gray}, ${C.navy})`}
+                                                        initialsCount={2}
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-semibold leading-tight" style={{ color: C.navy }}>{activeRequest.assignedProvider.name}</p>
+                                                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                            {/* Rating */}
+                                                            <div className="flex items-center gap-0.5">
+                                                                <svg width="10" height="10" viewBox="0 0 20 20" fill="#f59e0b"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                                                                <span className="text-xs font-semibold" style={{ color: '#374151' }}>
+                                                                    {activeRequest.assignedProvider.averageRating != null
+                                                                        ? Number(activeRequest.assignedProvider.averageRating).toFixed(1)
+                                                                        : '5.0'}
+                                                                </span>
+                                                            </div>
+                                                            {/* Total trips */}
+                                                            {activeRequest.assignedProvider.reviewCount != null && activeRequest.assignedProvider.reviewCount > 0 && (
+                                                                <>
+                                                                    <span style={{ color: '#cbd5e1', fontSize: '10px' }}>•</span>
+                                                                    <div className="flex items-center gap-0.5">
+                                                                        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="#22c55e" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                        <span className="text-xs" style={{ color: C.gray }}>{activeRequest.assignedProvider.reviewCount} chuyến</span>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {activeRequest.assignedProvider.phoneNumber && (
+                                                        <a
+                                                            href={`tel:${activeRequest.assignedProvider.phoneNumber}`}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 flex-shrink-0"
+                                                            style={{ background: '#dcfce7', color: '#16a34a' }}
+                                                        >
+                                                            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                                        </a>
+                                                    )}
+                                                </div>
+
+                                                {/* Vehicle info row */}
+                                                {(activeRequest.assignedProvider.licensePlate || activeRequest.assignedProvider.vehicleType) && (
+                                                    <div className="flex items-center gap-2 mt-2.5 pt-2.5" style={{ borderTop: `1px solid ${C.border}` }}>
+                                                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={2}><rect x="1" y="3" width="15" height="13" rx="2" /><path strokeLinecap="round" strokeLinejoin="round" d="M16 8h4l3 3v5h-7V8z" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>
+                                                        <span className="text-xs" style={{ color: C.gray }}>
+                                                            {[activeRequest.assignedProvider.vehicleColor, activeRequest.assignedProvider.vehicleType].filter(Boolean).join(' ')}
+                                                        </span>
+                                                        {activeRequest.assignedProvider.licensePlate && (
+                                                            <span
+                                                                className="ml-auto text-xs font-bold px-2 py-0.5 rounded"
+                                                                style={{ background: '#1e293b', color: '#fff', letterSpacing: '0.08em', fontFamily: 'monospace' }}
+                                                            >
+                                                                {activeRequest.assignedProvider.licensePlate}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* ETA row — only show once a quote is accepted */}
+                                                {activeRequest.matchedEta != null && !['ARRIVED', 'WORKING', 'PAYMENT_PENDING'].includes(activeRequest.status) && (
+                                                    <div className="flex items-center gap-2 mt-2 pt-2" style={{ borderTop: `1px solid ${C.border}` }}>
+                                                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" /></svg>
+                                                        <span className="text-xs" style={{ color: C.gray }}>Dự kiến đến nơi</span>
+                                                        <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: C.orangeLight, color: C.orange }}>
+                                                            {activeRequest.matchedEta} phút
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: C.bg }}>
+                                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 animate-pulse" style={{ background: C.gray }}>
+                                                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-semibold" style={{ color: C.navy }}>Đang tìm cứu hộ viên...</p>
+                                                    <p className="text-xs truncate" style={{ color: C.gray }}>Hệ thống đang ghép nối với các xe gần bạn</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center justify-between mt-3">
+                                            {['CREATED', 'MATCHING', 'SEARCHING'].includes(activeRequest.status) ? (
+                                                <button onClick={() => router.push(`/user/requests/${activeRequest.id}`)} className="text-xs font-medium" style={{ color: '#ef4444' }}>{t('user.dashboard.cancelRequest')}</button>
+                                            ) : (
+                                                <span />
+                                            )}
+                                            <button onClick={() => router.push(`/user/requests/${activeRequest.id}`)} className="text-xs font-semibold" style={{ color: C.orange }}>{t('common.viewDetails')}</button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             {/* Recent Activity */}
@@ -359,27 +514,42 @@ export default function UserDashboard() {
                                     <h3 className="font-semibold text-sm" style={{ color: C.navy }}>{t('user.dashboard.recentActivity')}</h3>
                                     <button onClick={() => router.push('/user/requests')} className="text-xs font-medium" style={{ color: C.orange }}>{t('common.viewAll')}</button>
                                 </div>
-                                <div className="space-y-2">
-                                    {recentActivity.map((item, idx) => (
-                                        <div
-                                            key={item.id}
-                                            className="flex items-center gap-3 py-2"
-                                            style={{ borderBottom: idx < recentActivity.length - 1 ? `1px solid ${C.border}` : 'none' }}
-                                        >
-                                            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight, color: C.orange }}>
-                                                {item.type === 'battery' ? <BatteryIcon /> : <TireIcon />}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium" style={{ color: C.navy }}>{item.title}</p>
-                                                <p className="text-xs truncate" style={{ color: C.gray }}>{item.location} • {item.status}</p>
-                                            </div>
-                                            <div className="text-right flex-shrink-0">
-                                                <p className="text-sm font-semibold" style={{ color: C.navy }}>{item.price}</p>
-                                                <p className="text-xs" style={{ color: C.gray }}>{item.date}</p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                {recentRequests.length === 0 ? (
+                                    <div className="text-center py-6">
+                                        <p className="text-sm" style={{ color: C.gray }}>Chưa có hoạt động nào gần đây</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {recentRequests.map((req: any, idx: number) => (
+                                            <button
+                                                key={req.id}
+                                                onClick={() => router.push(`/user/requests/${req.id}`)}
+                                                className="w-full text-left flex items-center gap-3 py-2 transition-all hover:bg-slate-50 rounded-lg px-2 -mx-2"
+                                                style={{ borderBottom: idx < recentRequests.length - 1 ? `1px solid ${C.border}` : 'none' }}
+                                            >
+                                                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight, color: C.orange }}>
+                                                    {req.incidentType === 'BATTERY_DEAD' ? <BatteryIcon /> : <TireIcon />}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium truncate" style={{ color: C.navy }}>
+                                                        {INCIDENT_LABELS[req.incidentType] || req.incidentType}
+                                                    </p>
+                                                    <p className="text-xs truncate" style={{ color: C.gray }}>
+                                                        {(req.pickupLocation?.addressText?.split(',') || [''])[0]} • {STATUS_LABELS[req.status] || req.status}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right flex-shrink-0">
+                                                    <p className="text-sm font-semibold" style={{ color: C.navy }}>
+                                                        {req.payment?.totalAmount ? `${req.payment.totalAmount.toLocaleString('vi-VN')} đ` : '-'}
+                                                    </p>
+                                                    <p className="text-xs" style={{ color: C.gray }}>
+                                                        {new Date(req.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="h-2 md:hidden" />

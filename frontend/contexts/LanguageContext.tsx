@@ -34,7 +34,7 @@ function getNestedValue(obj: any, path: string): string {
 interface LanguageContextValue {
     locale: Locale;
     setLocale: (locale: Locale) => void;
-    t: (path: string) => string;
+    t: (path: string, params?: Record<string, string | number>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -66,7 +66,15 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const t = useCallback(
-        (path: string): string => getNestedValue(translations[locale], path),
+        (path: string, params?: Record<string, string | number>): string => {
+            let str = getNestedValue(translations[locale], path);
+            if (params && typeof str === 'string') {
+                Object.entries(params).forEach(([key, value]) => {
+                    str = str.replace(new RegExp(`{${key}}`, 'g'), String(value));
+                });
+            }
+            return str;
+        },
         [locale],
     );
 

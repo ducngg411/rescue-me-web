@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { searchPlaces, getPlaceDetails, PlaceSearchResult, PlaceDetails } from '@/lib/vietmap';
 import { MagnifyingGlassIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface LocationData {
     addressText: string;
@@ -23,9 +24,10 @@ export default function LocationPicker({
     label,
     value,
     onChange,
-    placeholder = 'Nhập địa chỉ...',
+    placeholder,
     required = false,
 }: LocationPickerProps) {
+    const { t } = useLanguage();
     const [query, setQuery] = useState('');
     const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -103,7 +105,7 @@ export default function LocationPicker({
 
                     // Use reverse geocoding or just use coordinates
                     const locationData: LocationData = {
-                        addressText: `Vị trí hiện tại (${latitude.toFixed(6)}, ${longitude.toFixed(6)})`,
+                        addressText: t('common.locationPicker.currentLocation', { lat: latitude.toFixed(6), lng: longitude.toFixed(6) }),
                         lat: latitude,
                         lng: longitude,
                     };
@@ -122,7 +124,7 @@ export default function LocationPicker({
                         POSITION_UNAVAILABLE: error.code === 2,
                         TIMEOUT: error.code === 3
                     });
-                    toast.error('Không thể lấy vị trí hiện tại. Vui lòng cho phép truy cập vị trí.');
+                    toast.error(t('common.locationPicker.error'));
                 },
                 {
                     enableHighAccuracy: true,  // Sử dụng GPS chính xác nhất
@@ -131,7 +133,7 @@ export default function LocationPicker({
                 }
             );
         } else {
-            toast.error('Trình duyệt của bạn không hỗ trợ định vị.');
+            toast.error(t('common.locationPicker.noSupport'));
         }
     };
 
@@ -158,7 +160,7 @@ export default function LocationPicker({
                                 setShowResults(true);
                             }
                         }}
-                        placeholder={placeholder}
+                        placeholder={placeholder || t('common.locationPicker.placeholder')}
                         className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
                     />
                     <MagnifyingGlassIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -185,7 +187,7 @@ export default function LocationPicker({
 
                 {isSearching && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
-                        Đang tìm kiếm...
+                        {t('common.locationPicker.searching')}
                     </div>
                 )}
             </div>
@@ -196,10 +198,10 @@ export default function LocationPicker({
                     <div className="flex items-start gap-2">
                         <MapPinIcon className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                         <div>
-                            <div className="text-sm font-medium text-green-900">Địa điểm đã chọn</div>
+                            <div className="text-sm font-medium text-green-900">{t('common.locationPicker.selected')}</div>
                             <div className="text-sm text-green-700">{selectedPlace.addressText}</div>
                             <div className="text-xs text-green-600 mt-1">
-                                Tọa độ: {selectedPlace.lat.toFixed(6)}, {selectedPlace.lng.toFixed(6)}
+                                {t('common.locationPicker.coordinates', { lat: selectedPlace.lat.toFixed(6), lng: selectedPlace.lng.toFixed(6) })}
                             </div>
                         </div>
                     </div>

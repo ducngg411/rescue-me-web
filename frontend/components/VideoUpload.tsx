@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { Upload, X, Loader2, AlertCircle, CheckCircle, Video } from 'lucide-react';
+import { Upload, X, Loader2, AlertCircle, Video } from 'lucide-react';
 import api from '@/lib/api';
 
 interface VideoUploadProps {
@@ -14,6 +14,16 @@ interface VideoUploadProps {
     uploadedVideos?: Array<{ url: string; uploadId: string }>;
     disabled?: boolean;
 }
+
+const C = {
+    orange: '#f97316',
+    orangeDark: '#ea6c0a',
+    orangeLight: '#fff7ed',
+    navy: '#1a1a2e',
+    gray: '#6b7280',
+    border: '#e5e7eb',
+    bg: '#f8fafc',
+};
 
 export default function VideoUpload({
     label = 'Upload Video',
@@ -30,6 +40,9 @@ export default function VideoUpload({
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+    const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(null);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -50,6 +63,10 @@ export default function VideoUpload({
 
         setSelectedFile(file);
         setError(null);
+
+        // Create local preview URL
+        const url = URL.createObjectURL(file);
+        setPreviewUrl(url);
     };
 
     const handleUpload = async () => {
@@ -125,10 +142,10 @@ export default function VideoUpload({
 
             onSuccess?.(videoUrl, response.data.uploadId);
             setSelectedFile(null);
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            setPreviewUrl(null);
             setProgress(0);
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
+            if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (error) {
             console.error('Failed to track upload:', error);
             setError('Không thể lưu video. Vui lòng thử lại.');
@@ -158,11 +175,11 @@ export default function VideoUpload({
 
     const handleReset = () => {
         setSelectedFile(null);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
         setError(null);
         setProgress(0);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
     const handleButtonClick = () => {
@@ -173,24 +190,11 @@ export default function VideoUpload({
         fileInputRef.current?.click();
     };
 
-    const formatFileSize = (bytes: number): string => {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-    };
-
-    const canUploadMore = uploadedVideos.length < maxVideos;
+    const canUploadMore = uploadedVideos.length < maxVideos && !disabled;
 
     return (
-        <div className="space-y-4">
-            {/* Label */}
-            {label && (
-                <label className="block text-sm font-semibold text-gray-700">
-                    {label} ({uploadedVideos.length}/{maxVideos})
-                </label>
-            )}
+        <div className="space-y-3">
+            {label && <label className="block text-sm font-medium" style={{ color: C.navy }}>{label}</label>}
 
             {/* Hidden File Input */}
             <input
@@ -203,129 +207,177 @@ export default function VideoUpload({
             />
 
             {/* Upload Area */}
-            {!selectedFile && canUploadMore && (
+            {canUploadMore && !selectedFile && (
                 <div
                     onClick={handleButtonClick}
-                    className={`relative border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all group ${disabled ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
+                    className="relative rounded-xl p-5 text-center cursor-pointer transition-all group"
+                    style={{
+                        border: `2px dashed ${C.border}`,
+                        background: C.bg,
+                    }}
+                    onMouseEnter={e => {
+                        (e.currentTarget as HTMLDivElement).style.borderColor = C.orange;
+                        (e.currentTarget as HTMLDivElement).style.background = C.orangeLight;
+                    }}
+                    onMouseLeave={e => {
+                        (e.currentTarget as HTMLDivElement).style.borderColor = C.border;
+                        (e.currentTarget as HTMLDivElement).style.background = C.bg;
+                    }}
                 >
-                    <div className="flex flex-col items-center gap-3">
-                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                            <Video className="w-6 h-6 text-blue-600" />
+                    <div className="flex flex-col items-center gap-2.5">
+                        <div className="w-11 h-11 rounded-full flex items-center justify-center transition-colors"
+                            style={{ background: C.orangeLight }}>
+                            <Video className="w-5 h-5" style={{ color: C.orange }} />
                         </div>
                         <div>
-                            <p className="text-base font-medium text-gray-700 group-hover:text-blue-600">
+                            <p className="text-sm font-semibold" style={{ color: C.navy }}>
                                 Nhấn để chọn video
                             </p>
-                            <p className="text-sm text-gray-500 mt-1">
-                                hoặc kéo thả video vào đây
+                            <p className="text-xs mt-0.5" style={{ color: C.gray }}>
+                                Hỗ trợ: MP4, MOV, AVI (tối đa 50MB)
                             </p>
                         </div>
-                        <p className="text-xs text-gray-400">
-                            Hỗ trợ: MP4, MOV, AVI (tối đa 50MB)
-                        </p>
+                        <span className="text-[11px] px-2.5 py-0.5 rounded-full font-medium"
+                            style={{ background: C.orangeLight, color: C.orange }}>
+                            {uploadedVideos.length}/{maxVideos} video
+                        </span>
                     </div>
                 </div>
             )}
 
-            {/* File Selected */}
-            {selectedFile && !uploading && (
-                <div className="bg-white rounded-lg border-2 border-gray-200 p-4 space-y-4">
-                    <div className="flex items-start gap-3">
-                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Video className="w-6 h-6 text-blue-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900 truncate">{selectedFile.name}</p>
-                            <p className="text-sm text-gray-500">{formatFileSize(selectedFile.size)}</p>
-                        </div>
+            {/* File Selected Preview & Action */}
+            {selectedFile && previewUrl && (
+                <div className="rounded-xl overflow-hidden border" style={{ borderColor: C.border }}>
+                    <div className="w-full bg-black aspect-video flex items-center justify-center">
+                        <video src={previewUrl} controls className="max-w-full max-h-full" />
                     </div>
-                    <div className="flex gap-2">
-                        <button
-                            type="button"
-                            onClick={handleReset}
-                            className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors flex items-center justify-center gap-2"
-                        >
-                            <X className="w-4 h-4" />
-                            Hủy
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleUpload}
-                            className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm transition-all flex items-center justify-center gap-2"
-                        >
-                            <Upload className="w-4 h-4" />
-                            Tải lên
-                        </button>
+                    <div className="flex items-center justify-between px-3 py-2.5" style={{ background: '#fff' }}>
+                        <div className="text-xs min-w-0">
+                            <p className="font-semibold truncate" style={{ color: C.navy }}>{selectedFile.name}</p>
+                            <p style={{ color: C.gray }}>{(selectedFile.size / (1024 * 1024)).toFixed(1)} MB</p>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                            <button
+                                type="button"
+                                onClick={handleReset}
+                                disabled={uploading}
+                                className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50"
+                                style={{ borderColor: C.border, color: C.gray }}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleUpload}
+                                disabled={uploading}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 transition-all disabled:opacity-50"
+                                style={{ background: uploading ? C.orangeDark : C.orange }}
+                            >
+                                {uploading ? (
+                                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải...</>
+                                ) : (
+                                    <><Upload className="w-3.5 h-3.5" /> Tải lên</>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* Progress bar */}
             {uploading && (
-                <div className="bg-white rounded-lg border-2 border-blue-200 p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">Đang tải lên video...</span>
-                        <span className="text-sm font-bold text-blue-600">{Math.round(progress)}%</span>
+                <div className="rounded-xl p-3 border" style={{ borderColor: `${C.orange}40`, background: C.orangeLight }}>
+                    <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-medium" style={{ color: C.navy }}>Đang tải lên...</span>
+                        <span className="text-xs font-bold" style={{ color: C.orange }}>{Math.round(progress)}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                    <div className="w-full rounded-full h-1.5" style={{ background: '#fed7aa' }}>
                         <div
-                            className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
-                            style={{ width: `${progress}%` }}
+                            className="h-1.5 rounded-full transition-all duration-300"
+                            style={{ width: `${progress}%`, background: C.orange }}
                         />
                     </div>
-                    <p className="text-xs text-gray-500 text-center">Vui lòng không đóng trang này...</p>
+                    <p className="text-[10px] mt-2 text-center" style={{ color: C.orangeDark }}>Vui lòng không đóng trang này...</p>
                 </div>
             )}
 
             {/* Error */}
             {error && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
-                    <div className="flex items-start gap-2">
-                        <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-red-800 font-medium">{error}</p>
+                <div className="rounded-xl p-3 flex items-start gap-2" style={{ background: '#fef2f2', border: '1px solid #fca5a5' }}>
+                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-700">{error}</p>
+                </div>
+            )}
+
+            {/* Uploaded Videos Grid */}
+            {uploadedVideos.length > 0 && (
+                <div>
+                    <p className="text-xs font-semibold mb-2" style={{ color: C.gray }}>
+                        Video đã tải lên ({uploadedVideos.length}/{maxVideos})
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                        {uploadedVideos.map((video, index) => (
+                            <div key={index} className="relative group aspect-square rounded-xl overflow-hidden bg-black flex items-center justify-center">
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedVideoIndex(index)}
+                                    className="w-full h-full block"
+                                >
+                                    <video
+                                        src={video.url}
+                                        className="w-full h-full object-cover opacity-80"
+                                    />
+                                    {/* Play icon overlay */}
+                                    <div className="absolute inset-0 flex items-center justify-center transition-opacity" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                                        <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            <svg width="20" height="20" fill="white" viewBox="0 0 24 24" className="ml-1">
+                                                <path d="M8 5v14l11-7z" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleRemove(video.uploadId, video.url)}
+                                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
+                                    style={{ background: '#ef4444' }}
+                                    title="Xóa video"
+                                >
+                                    <X className="w-3.5 h-3.5 text-white" />
+                                </button>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
 
-            {/* Uploaded Videos */}
-            {uploadedVideos.length > 0 && (
-                <div className="space-y-3">
-                    <p className="text-sm font-medium text-gray-700">Video đã upload:</p>
-                    {uploadedVideos.map((video, index) => (
-                        <div key={index} className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
-                            <div className="flex items-start gap-3">
-                                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <CheckCircle className="w-6 h-6 text-green-600" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-green-800 mb-2">Video {index + 1}</p>
-                                    <video
-                                        src={video.url}
-                                        controls
-                                        className="w-full max-h-48 rounded-lg border border-green-300"
-                                    />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => handleRemove(video.uploadId, video.url)}
-                                    disabled={disabled}
-                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
+            {/* Video Viewer Modal */}
+            {selectedVideoIndex !== null && uploadedVideos[selectedVideoIndex] && (
+                <div className="fixed inset-0 z-[100] flex flex-col bg-black overflow-hidden animate-in fade-in duration-200">
+                    {/* Header Controls */}
+                    <div className="flex items-center justify-end p-4 z-10 bg-gradient-to-b from-black/80 to-transparent">
+                        <div className="flex bg-black/40 backdrop-blur-md rounded-full border border-white/20 p-1">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedVideoIndex(null)}
+                                className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
                         </div>
-                    ))}
-                </div>
-            )}
+                    </div>
 
-            {/* Max reached message */}
-            {!canUploadMore && (
-                <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-lg">
-                    <p className="text-sm text-yellow-800 font-medium">
-                        Bạn đã upload tối đa {maxVideos} video
-                    </p>
+                    {/* Main Video Area */}
+                    <div className="flex-1 relative flex items-center justify-center w-full h-full group pb-12">
+                        <div className="relative w-full h-full max-w-4xl max-h-[80vh] flex items-center justify-center">
+                            <video
+                                src={uploadedVideos[selectedVideoIndex].url}
+                                controls
+                                autoPlay
+                                className="max-w-full max-h-full drop-shadow-2xl"
+                            />
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

@@ -212,6 +212,19 @@ export class RescueRequestService {
                         id: true,
                         name: true,
                         avatar: true,
+                        phoneNumber: true,
+                        vehicleType: true,
+                        vehicleColor: true,
+                        licensePlate: true,
+                        averageRating: true,
+                        reviewCount: true,
+                    },
+                },
+                quotes: {
+                    where: { status: 'ACCEPTED' },
+                    select: {
+                        estimatedArrivalMinutes: true,
+                        price: true,
                     },
                 },
                 payment: true,
@@ -443,7 +456,7 @@ export class RescueRequestService {
             throw new Error('Can only retry EXPIRED or CANCELLED requests');
         }
 
-        console.log(`🔄 [RescueRequest] Retrying request ${requestId}`);
+        console.log(` [RescueRequest] Retrying request ${requestId}`);
 
         // Create new request with same data - start with Phase 1
         const now = new Date();
@@ -614,7 +627,7 @@ export class RescueRequestService {
                     },
                 });
 
-                console.log(`🔄 [RescueRequest] ${request.id} → Phase 2 (expanded search), new expires: ${newExpiresAt.toISOString()}`);
+                console.log(` [RescueRequest] ${request.id} → Phase 2 (expanded search), new expires: ${newExpiresAt.toISOString()}`);
                 phase1ToPhase2Count++;
 
                 // TODO: Broadcast to providers with expanded radius (P2 - Provider side)
@@ -1215,7 +1228,7 @@ export class RescueRequestService {
         });
         if (!request) throw new NotFoundException('Rescue request not found');
         if (request.assignedProviderId !== providerId) throw new ForbiddenException('Not assigned to this request');
-        if (!['WORKING', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED'].includes(request.status)) {
+        if (!['WORKING', 'ARRIVED', 'IN_PROGRESS', 'PAYMENT_PENDING', 'COMPLETED'].includes(request.status)) {
             throw new BadRequestException(`Cannot create payment from status: ${request.status}`);
         }
 
@@ -1520,7 +1533,30 @@ export class RescueRequestService {
             data: { paymentMethod: 'CASH' },
         });
 
-        console.log(`🔄 [Payment] Provider ${providerId} switched job ${requestId} from QR to CASH`);
+        console.log(` [Payment] Provider ${providerId} switched job ${requestId} to CASH`);
+        return updated;
+    }
+
+    async switchPaymentToQr(requestId: string, providerId: string) {
+        const request = await this.prisma.rescueRequest.findUnique({ where: { id: requestId } });
+        if (!request) throw new NotFoundException('Request not found');
+        if (request.assignedProviderId !== providerId) throw new ForbiddenException('Not your job');
+
+        const payment = await this.prisma.payment.findUnique({ where: { requestId } });
+        if (!payment) throw new NotFoundException('Payment not found');
+
+        // Cancel any stale QR or WALLET-related transactions
+        await this.prisma.jobPaymentTransaction.updateMany({
+            where: { requestId, status: { in: ['PENDING'] } },
+            data: { status: 'CANCELLED' },
+        });
+
+        const updated = await this.prisma.payment.update({
+            where: { requestId },
+            data: { paymentMethod: 'QR' },
+        });
+
+        console.log(` [Payment] Provider ${providerId} switched job ${requestId} to QR`);
         return updated;
     }
 

@@ -27,7 +27,9 @@ interface WorkingViewProps {
         contactPhone?: string;
     };
     customerName?: string | null;
-    acceptedQuotePrice?: number | null; // Pre-fill from accepted quote
+    acceptedQuotePrice?: number | null;
+    autoOpenPaymentSheet?: boolean;
+    defaultPaymentMethod?: 'CASH' | 'QR' | 'WALLET';
     onPaymentSubmitted: (method?: 'CASH' | 'QR' | 'WALLET') => void;
 }
 
@@ -36,10 +38,12 @@ export default function WorkingView({
     request,
     customerName,
     acceptedQuotePrice,
+    autoOpenPaymentSheet = false,
+    defaultPaymentMethod,
     onPaymentSubmitted,
 }: WorkingViewProps) {
     const { t } = useLanguage();
-    const [showPaymentSheet, setShowPaymentSheet] = useState(false);
+    const [showPaymentSheet, setShowPaymentSheet] = useState(autoOpenPaymentSheet);
 
     const incidentLabels: Record<string, string> = {
         BREAKDOWN: t('provider.requestDetail.incidentLabels.BREAKDOWN'),
@@ -208,6 +212,7 @@ export default function WorkingView({
                 <PaymentSheet
                     requestId={requestId}
                     defaultAmount={acceptedQuotePrice ?? 0}
+                    defaultPaymentMethod={defaultPaymentMethod}
                     onClose={() => setShowPaymentSheet(false)}
                     onSubmitted={(method?: 'CASH' | 'QR' | 'WALLET') => onPaymentSubmitted(method)}
                 />

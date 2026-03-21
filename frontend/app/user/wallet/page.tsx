@@ -73,13 +73,14 @@ interface TransactionsResponse {
 }
 
 // ─── Topup Modal ─────────────────────────────────────────────────────────────
-function TopupModal({ initialQrData, onClose, onSuccess }: {
+function TopupModal({ initialQrData, onClose, onSuccess, t }: {
     initialQrData?: {
         topupTxId: string; transferCode: string; qrUrl: string;
         bankAccount: string; bankCode: string; amount: number; expireAt: string;
     };
     onClose: () => void;
     onSuccess: () => void;
+    t: any;
 }) {
     type Step = 'amount' | 'qr' | 'done' | 'expired';
     const [step, setStep] = useState<Step>(initialQrData ? 'qr' : 'amount');
@@ -144,7 +145,7 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
             startPolling(res.data.topupTxId);
             startCountdown(res.data.expireAt);
         } catch (err: any) {
-            setError(err?.response?.data?.message || 'Không thể tạo QR. Vui lòng thử lại.');
+            setError(err?.response?.data?.message || t('user.wallet.topupModal.errors.createFailed'));
         } finally { setLoading(false); }
     };
 
@@ -154,8 +155,8 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
         try {
             const res = await api.get(`/user-wallet/topup/${qrData.topupTxId}/status`);
             handlePollResponse(res.data.status);
-            if (res.data.status === 'PENDING') setError('Chưa nhận được thanh toán. Vui lòng thử lại sau.');
-        } catch { setError('Không thể kiểm tra. Vui lòng thử lại.'); }
+            if (res.data.status === 'PENDING') setError(t('user.wallet.topupModal.errors.paymentNotReceived'));
+        } catch { setError(t('user.wallet.topupModal.errors.checkFailed')); }
         finally { setManualChecking(false); }
     };
 
@@ -177,8 +178,8 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
                         <QrCode style={{ width: 20, height: 20, color: '#2563eb' }} />
                     </div>
                     <div className="flex-1">
-                        <p className="font-bold text-base" style={{ color: C.navy }}>Nạp tiền vào ví</p>
-                        <p className="text-xs" style={{ color: C.gray }}>Chuyển khoản qua VietQR</p>
+                        <p className="font-bold text-base" style={{ color: C.navy }}>{t('user.wallet.topupModal.title')}</p>
+                        <p className="text-xs" style={{ color: C.gray }}>{t('user.wallet.topupModal.method')}</p>
                     </div>
                     {step !== 'done' && (
                         <button onClick={handleClose} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.bg, color: C.gray }}>
@@ -193,7 +194,7 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
                     {step === 'amount' && (
                         <form onSubmit={handleInit} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-semibold mb-1.5" style={{ color: C.gray }}>Số tiền muốn nạp</label>
+                                <label className="block text-xs font-semibold mb-1.5" style={{ color: C.gray }}>{t('user.wallet.topupModal.amountLabel')}</label>
                                 <div className="relative">
                                     <input
                                         type="text"
@@ -208,7 +209,7 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
                                 </div>
                                 {numeric > 0 && (
                                     <p className="text-xs mt-1" style={{ color: C.gray }}>
-                                        Số dư sau khi nạp: <strong style={{ color: C.navy }}>{formatVndFull(numeric)}</strong>
+                                        {t('user.wallet.topupModal.balanceAfter')}<strong style={{ color: C.navy }}>{formatVndFull(numeric)}</strong>
                                     </p>
                                 )}
                             </div>
@@ -236,7 +237,7 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
                                 className="w-full py-3 rounded-xl text-white font-semibold text-sm transition-all disabled:opacity-40"
                                 style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)` }}
                             >
-                                {loading ? 'Đang tạo QR...' : 'Tạo mã QR nạp tiền'}
+                                {loading ? t('user.wallet.topupModal.generatingQR') : t('user.wallet.topupModal.createQR')}
                             </button>
                         </form>
                     )}
@@ -245,12 +246,12 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
                     {step === 'qr' && qrData && (
                         <div className="space-y-4">
                             <div className="rounded-xl p-3 border text-center" style={{ borderColor: '#bfdbfe', background: '#eff6ff' }}>
-                                <p className="text-xs font-semibold mb-0.5" style={{ color: '#1e40af' }}>Số tiền cần chuyển</p>
+                                <p className="text-xs font-semibold mb-0.5" style={{ color: '#1e40af' }}>{t('user.wallet.topupModal.transferAmount')}</p>
                                 <p className="text-2xl font-bold" style={{ color: '#1e40af' }}>{formatVndFull(qrData.amount)}</p>
                                 <div className="flex items-center justify-center gap-1.5 mt-1">
                                     <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: countdownColor }} />
                                     <p className="text-xs font-mono font-semibold" style={{ color: countdownColor }}>
-                                        Hết hạn sau {mins}:{secs}
+                                        {t('user.wallet.topupModal.expiresIn').replace('{mins}', mins).replace('{secs}', secs)}
                                     </p>
                                 </div>
                             </div>
@@ -261,20 +262,20 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
                                 )}
                                 <div className="w-full rounded-xl p-3 border space-y-2 text-xs" style={{ background: C.bg, borderColor: C.border }}>
                                     <div className="flex justify-between">
-                                        <span style={{ color: C.gray }}>Ngân hàng</span>
+                                        <span style={{ color: C.gray }}>{t('user.wallet.topupModal.bank')}</span>
                                         <span className="font-semibold" style={{ color: C.navy }}>{qrData.bankCode}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span style={{ color: C.gray }}>Số tài khoản</span>
+                                        <span style={{ color: C.gray }}>{t('user.wallet.topupModal.accountNumber')}</span>
                                         <span className="font-semibold font-mono" style={{ color: C.navy }}>{qrData.bankAccount}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
-                                        <span style={{ color: C.gray }}>Nội dung CK</span>
+                                        <span style={{ color: C.gray }}>{t('user.wallet.topupModal.transferContent')}</span>
                                         <span className="font-bold uppercase text-sm tracking-wider" style={{ color: C.orange }}>{qrData.transferCode}</span>
                                     </div>
                                 </div>
                                 <p className="text-xs text-center" style={{ color: '#ef4444' }}>
-                                    ⚠️ Nhập chính xác nội dung chuyển khoản để hệ thống tự động xác nhận
+                                    {t('user.wallet.topupModal.warningNote')}
                                 </p>
                             </div>
 
@@ -282,14 +283,14 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
 
                             <div className="flex gap-2">
                                 <button onClick={handleClose} className="flex-1 py-2.5 rounded-xl text-sm border font-medium" style={{ borderColor: C.border, color: C.gray }}>
-                                    Đóng
+                                    {t('user.wallet.topupModal.close')}
                                 </button>
                                 <button
                                     onClick={handleManualCheck} disabled={manualChecking}
                                     className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60"
                                     style={{ background: C.orange }}
                                 >
-                                    {manualChecking ? 'Đang kiểm tra...' : 'Đã chuyển khoản'}
+                                    {manualChecking ? t('user.wallet.topupModal.checking') : t('user.wallet.topupModal.transferred')}
                                 </button>
                             </div>
                         </div>
@@ -302,11 +303,11 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
                                 <CheckCircle2 style={{ width: 32, height: 32, color: '#16a34a' }} />
                             </div>
                             <div>
-                                <p className="font-bold text-lg" style={{ color: C.navy }}>Nạp tiền thành công!</p>
-                                <p className="text-sm mt-1" style={{ color: C.gray }}>Số dư ví đã được cập nhật.</p>
+                                <p className="font-bold text-lg" style={{ color: C.navy }}>{t('user.wallet.topupModal.successTitle')}</p>
+                                <p className="text-sm mt-1" style={{ color: C.gray }}>{t('user.wallet.topupModal.successSubtitle')}</p>
                             </div>
                             <button onClick={handleClose} className="w-full py-3 rounded-xl font-semibold text-white text-sm" style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}>
-                                Xong
+                                {t('user.wallet.topupModal.done')}
                             </button>
                         </div>
                     )}
@@ -318,12 +319,12 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
                                 <AlertCircle style={{ width: 32, height: 32, color: '#ca8a04' }} />
                             </div>
                             <div>
-                                <p className="font-bold text-lg" style={{ color: C.navy }}>Mã QR đã hết hạn</p>
-                                <p className="text-sm mt-1" style={{ color: C.gray }}>Tạo mã mới để tiếp tục nạp tiền.</p>
+                                <p className="font-bold text-lg" style={{ color: C.navy }}>{t('user.wallet.topupModal.expiredTitle')}</p>
+                                <p className="text-sm mt-1" style={{ color: C.gray }}>{t('user.wallet.topupModal.expiredSubtitle')}</p>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={handleClose} className="flex-1 py-2.5 rounded-xl text-sm border font-medium" style={{ borderColor: C.border, color: C.gray }}>Đóng</button>
-                                <button onClick={() => { setStep('amount'); setQrData(null); setError(''); }} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.orange }}>Tạo mã mới</button>
+                                <button onClick={handleClose} className="flex-1 py-2.5 rounded-xl text-sm border font-medium" style={{ borderColor: C.border, color: C.gray }}>{t('user.wallet.topupModal.close')}</button>
+                                <button onClick={() => { setStep('amount'); setQrData(null); setError(''); }} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: C.orange }}>{t('user.wallet.topupModal.createNewCode')}</button>
                             </div>
                         </div>
                     )}
@@ -334,10 +335,11 @@ function TopupModal({ initialQrData, onClose, onSuccess }: {
 }
 
 // ─── Withdraw Modal ───────────────────────────────────────────────────────────
-function WithdrawModal({ availableBalance, onClose, onSuccess }: {
+function WithdrawModal({ availableBalance, onClose, onSuccess, t }: {
     availableBalance: number;
     onClose: () => void;
     onSuccess: () => void;
+    t: any;
 }) {
     const [rawAmount, setRawAmount] = useState('');
     const [loading, setLoading] = useState(false);
@@ -356,7 +358,7 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
             await api.post('/user-wallet/withdraw', { amount });
             onSuccess();
         } catch (err: any) {
-            setError(err?.response?.data?.message || 'Không thể rút tiền. Vui lòng thử lại.');
+            setError(err?.response?.data?.message || t('user.wallet.withdrawModal.errors.withdrawFailed'));
         } finally { setLoading(false); }
     };
 
@@ -372,8 +374,8 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
                         <Banknote style={{ width: 20, height: 20, color: C.orange }} />
                     </div>
                     <div className="flex-1">
-                        <p className="font-bold text-base" style={{ color: C.navy }}>Rút tiền</p>
-                        <p className="text-xs" style={{ color: C.gray }}>Khả dụng: <strong>{formatVndFull(availableBalance)}</strong></p>
+                        <p className="font-bold text-base" style={{ color: C.navy }}>{t('user.wallet.withdrawModal.title')}</p>
+                        <p className="text-xs" style={{ color: C.gray }}>{t('user.wallet.withdrawModal.available')}<strong>{formatVndFull(availableBalance)}</strong></p>
                     </div>
                     <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.bg, color: C.gray }}>
                         <XCircle style={{ width: 18, height: 18 }} />
@@ -382,7 +384,7 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
 
                 <form onSubmit={handleWithdraw} className="px-6 py-5 space-y-4">
                     <div>
-                        <label className="block text-xs font-semibold mb-1.5" style={{ color: C.gray }}>Số tiền muốn rút</label>
+                        <label className="block text-xs font-semibold mb-1.5" style={{ color: C.gray }}>{t('user.wallet.withdrawModal.amountLabel')}</label>
                         <div className="relative">
                             <input
                                 type="text" inputMode="numeric"
@@ -394,18 +396,18 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold" style={{ color: C.gray }}>₫</span>
                         </div>
-                        {isBelowMin && <p className="text-xs mt-1" style={{ color: '#ef4444' }}>Tối thiểu {formatVnd(MIN_WITHDRAWAL)}</p>}
-                        {isOverBalance && <p className="text-xs mt-1" style={{ color: '#ef4444' }}>Vượt quá số dư khả dụng</p>}
+                        {isBelowMin && <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{t('user.wallet.withdrawModal.minAmount').replace('{amount}', formatVnd(MIN_WITHDRAWAL))}</p>}
+                        {isOverBalance && <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{t('user.wallet.withdrawModal.overBalance')}</p>}
                         {amount >= MIN_WITHDRAWAL && !isOverBalance && (
                             <p className="text-xs mt-1" style={{ color: C.gray }}>
-                                Sau khi rút: <strong style={{ color: C.navy }}>{formatVndFull(availableBalance - amount)}</strong>
+                                {t('user.wallet.withdrawModal.balanceAfter')}<strong style={{ color: C.navy }}>{formatVndFull(availableBalance - amount)}</strong>
                             </p>
                         )}
                     </div>
 
                     {QUICK.length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                            <span className="text-xs" style={{ color: C.gray, alignSelf: 'center' }}>Chọn nhanh:</span>
+                            <span className="text-xs" style={{ color: C.gray, alignSelf: 'center' }}>{t('user.wallet.withdrawModal.quickSelect')}</span>
                             {QUICK.map(q => (
                                 <button type="button" key={q}
                                     onClick={() => setRawAmount(String(q))}
@@ -428,27 +430,27 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
                                     borderColor: amount === availableBalance ? C.orange : C.border,
                                 }}
                             >
-                                Tất cả
+                                {t('user.wallet.withdrawModal.all')}
                             </button>
                         </div>
                     )}
 
                     <div className="rounded-xl p-3 text-xs" style={{ background: '#fefce8', color: '#92400e' }}>
-                        💡 Tiền sẽ được chuyển về tài khoản ngân hàng đã đăng ký trong 1–2 ngày làm việc.
+                        {t('user.wallet.withdrawModal.hint')}
                     </div>
 
                     {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle style={{ width: 12, height: 12 }} />{error}</p>}
 
                     <div className="flex gap-2 pt-1">
                         <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm border font-medium" style={{ borderColor: C.border, color: C.gray }}>
-                            Hủy
+                            {t('user.wallet.withdrawModal.cancel')}
                         </button>
                         <button
                             type="submit" disabled={isDisabled}
                             className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
                             style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
                         >
-                            {loading ? 'Đang xử lý...' : 'Xác nhận rút tiền'}
+                            {loading ? t('user.wallet.withdrawModal.processing') : t('user.wallet.withdrawModal.confirm')}
                         </button>
                     </div>
                 </form>
@@ -478,7 +480,7 @@ const TX_STATUS_COLOR: Record<string, string> = {
     FAILED: '#ef4444',
 };
 
-function TxRow({ tx }: { tx: UserTransaction }) {
+function TxRow({ tx, t }: { tx: UserTransaction, t: any }) {
     const router = useRouter();
     const [expanded, setExpanded] = useState(false);
     const isCredit = tx.type === 'CREDIT';
@@ -503,7 +505,7 @@ function TxRow({ tx }: { tx: UserTransaction }) {
 
                 <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>
-                        {REF_LABEL[tx.referenceType] || tx.referenceType}
+                        {t('user.wallet.refLabel.' + tx.referenceType) || tx.referenceType}
                     </p>
                     <p className="text-xs" style={{ color: C.gray }}>
                         {new Date(tx.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
@@ -516,7 +518,7 @@ function TxRow({ tx }: { tx: UserTransaction }) {
                         className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                         style={{ background: TX_STATUS_COLOR[tx.status] + '18', color: TX_STATUS_COLOR[tx.status] }}
                     >
-                        {TX_STATUS_LABEL[tx.status] || tx.status}
+                        {t('user.wallet.txStatus.' + tx.status) || tx.status}
                     </span>
                 </div>
 
@@ -529,20 +531,20 @@ function TxRow({ tx }: { tx: UserTransaction }) {
                 <div className="pb-4 px-2 space-y-2.5 rounded-xl p-3 mb-2 text-xs" style={{ background: C.bg }}>
                     {tx.description && (
                         <div className="flex justify-between items-start gap-4">
-                            <span style={{ color: C.gray }}>Ghi chú</span>
+                            <span style={{ color: C.gray }}>{t('user.wallet.txRow.note')}</span>
                             <span className="text-right font-medium max-w-[60%]" style={{ color: C.navy }}>{tx.description}</span>
                         </div>
                     )}
                     <div className="flex justify-between items-center">
-                        <span style={{ color: C.gray }}>Loại giao dịch</span>
-                        <span className="font-semibold" style={{ color: C.navy }}>{REF_LABEL[tx.referenceType] || tx.referenceType}</span>
+                        <span style={{ color: C.gray }}>{t('user.wallet.txRow.txType')}</span>
+                        <span className="font-semibold" style={{ color: C.navy }}>{t('user.wallet.refLabel.' + tx.referenceType) || tx.referenceType}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                        <span style={{ color: C.gray }}>Số tiền</span>
+                        <span style={{ color: C.gray }}>{t('user.wallet.txRow.amount')}</span>
                         <span className="font-bold" style={{ color: amountColor }}>{amountText}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                        <span style={{ color: C.gray }}>Mã GD</span>
+                        <span style={{ color: C.gray }}>{t('user.wallet.txRow.txCode')}</span>
                         <span className="font-mono text-[10px]" style={{ color: '#94a3b8' }}>#{tx.id.slice(0, 12).toUpperCase()}</span>
                     </div>
                     {tx.referenceType === 'JOB_PAYMENT' && (
@@ -555,7 +557,7 @@ function TxRow({ tx }: { tx: UserTransaction }) {
                                 className="w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-95"
                                 style={{ background: C.orangeLight, color: C.orange }}
                             >
-                                Xem chi tiết chuyến xe
+                                {t('user.wallet.txRow.viewDetails')}
                                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                                 </svg>
@@ -638,7 +640,7 @@ export default function UserWalletPage() {
             <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-3" style={{ borderColor: C.orange }} />
-                    <p className="text-sm" style={{ color: C.gray }}>Đang tải ví...</p>
+                    <p className="text-sm" style={{ color: C.gray }}>{t('user.wallet.main.loadingWallet')}</p>
                 </div>
             </div>
         );
@@ -759,17 +761,17 @@ export default function UserWalletPage() {
 
                     {/* Hero Balance */}
                     <div className="rounded-2xl p-6 text-white" style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`, boxShadow: `0 8px 24px ${C.orange}40` }}>
-                        <p className="text-sm opacity-80 mb-1">Tổng số dư</p>
+                        <p className="text-sm opacity-80 mb-1">{t('user.wallet.main.totalBalance')}</p>
                         <p className="text-4xl font-bold tabular-nums mb-4">{formatVndFull(total)}</p>
                         <div className="flex items-center justify-between">
                             <div className="flex gap-6">
                                 <div>
-                                    <p className="text-xs opacity-70">Khả dụng</p>
+                                    <p className="text-xs opacity-70">{t('user.wallet.main.available')}</p>
                                     <p className="text-sm font-semibold">{formatVndFull(available)}</p>
                                 </div>
                                 <div className="w-px bg-white/20" />
                                 <div>
-                                    <p className="text-xs opacity-70">Đang chờ</p>
+                                    <p className="text-xs opacity-70">{t('user.wallet.main.pending')}</p>
                                     <p className="text-sm font-semibold">{formatVndFull(pending)}</p>
                                 </div>
                             </div>
@@ -780,7 +782,7 @@ export default function UserWalletPage() {
                                     style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.3)' }}
                                 >
                                     <Plus style={{ width: 16, height: 16 }} />
-                                    Nạp tiền
+                                    {t('user.wallet.main.topup')}
                                 </button>
                                 <button
                                     onClick={() => setShowWithdraw(true)}
@@ -789,14 +791,14 @@ export default function UserWalletPage() {
                                     style={{ background: 'white', color: C.orange }}
                                 >
                                     <Banknote style={{ width: 16, height: 16 }} />
-                                    Rút tiền
+                                    {t('user.wallet.main.withdraw')}
                                 </button>
                             </div>
                         </div>
                         {available < MIN_WITHDRAWAL && (
                             <p className="mt-3 text-xs opacity-70 flex items-center gap-1">
                                 <AlertCircle style={{ width: 12, height: 12 }} />
-                                Cần tối thiểu {formatVndFull(MIN_WITHDRAWAL)} để rút tiền
+                                {t('user.wallet.main.minWithdraw').replace('{amount}', formatVndFull(MIN_WITHDRAWAL))}
                             </p>
                         )}
                     </div>
@@ -807,17 +809,17 @@ export default function UserWalletPage() {
                             <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3" style={{ background: '#f0fdf4' }}>
                                 <Wallet style={{ width: 18, height: 18, color: '#16a34a' }} />
                             </div>
-                            <p className="text-xs mb-1" style={{ color: C.gray }}>Số dư khả dụng</p>
+                            <p className="text-xs mb-1" style={{ color: C.gray }}>{t('user.wallet.main.availableBalance')}</p>
                             <p className="text-xl font-bold tabular-nums" style={{ color: C.navy }}>{formatVndFull(available)}</p>
-                            <p className="text-xs mt-1" style={{ color: C.gray }}>Có thể rút ngay</p>
+                            <p className="text-xs mt-1" style={{ color: C.gray }}>{t('user.wallet.main.canWithdrawNow')}</p>
                         </div>
                         <div className="bg-white rounded-xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                             <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3" style={{ background: '#fefce8' }}>
                                 <Clock style={{ width: 18, height: 18, color: '#ca8a04' }} />
                             </div>
-                            <p className="text-xs mb-1" style={{ color: C.gray }}>Số dư đang chờ</p>
+                            <p className="text-xs mb-1" style={{ color: C.gray }}>{t('user.wallet.main.pendingBalance')}</p>
                             <p className="text-xl font-bold tabular-nums" style={{ color: C.navy }}>{formatVndFull(pending)}</p>
-                            <p className="text-xs mt-1" style={{ color: C.gray }}>Đang xử lý</p>
+                            <p className="text-xs mt-1" style={{ color: C.gray }}>{t('user.wallet.main.processing')}</p>
                         </div>
                     </div>
 
@@ -834,12 +836,12 @@ export default function UserWalletPage() {
                                         <QrCode style={{ width: 16, height: 16, color: 'white' }} />
                                     </div>
                                     <div>
-                                        <p className="text-xs font-bold" style={{ color: '#1e40af' }}>Giao dịch đang chờ thanh toán</p>
-                                        <p className="text-xs" style={{ color: '#3b82f6' }}>{formatVndFull(pendingTopup.amount)} · Hết hạn lúc {new Date(pendingTopup.expireAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
+                                        <p className="text-xs font-bold" style={{ color: '#1e40af' }}>{t('user.wallet.main.pendingTopupTitle')}</p>
+                                        <p className="text-xs" style={{ color: '#3b82f6' }}>{formatVndFull(pendingTopup.amount)} · {t('user.wallet.main.expiresAt').replace('{time}', new Date(pendingTopup.expireAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }))}</p>
                                     </div>
                                 </div>
                                 <button className="px-3 py-1.5 rounded-lg text-xs font-bold text-white flex-shrink-0" style={{ background: '#2563eb' }}>
-                                    Tiếp tục
+                                    {t('user.wallet.main.continue')}
                                 </button>
                             </div>
                         </div>
@@ -849,8 +851,8 @@ export default function UserWalletPage() {
                     <div className="bg-white rounded-xl" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                         <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: C.border }}>
                             <TrendingUp style={{ width: 18, height: 18, color: C.orange }} />
-                            <h2 className="text-sm font-bold flex-1" style={{ color: C.navy }}>Lịch sử giao dịch</h2>
-                            {txData && <span className="text-xs" style={{ color: C.gray }}>{txData.total} giao dịch</span>}
+                            <h2 className="text-sm font-bold flex-1" style={{ color: C.navy }}>{t('user.wallet.main.txHistory')}</h2>
+                            {txData && <span className="text-xs" style={{ color: C.gray }}>{t('user.wallet.main.txCount').replace('{count}', String(txData.total))}</span>}
                             {txLoading && <RefreshCw style={{ width: 14, height: 14, color: C.gray }} className="animate-spin" />}
                         </div>
 
@@ -858,19 +860,19 @@ export default function UserWalletPage() {
                             {txLoading && items.length === 0 ? (
                                 <div className="py-10 text-center">
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-3" style={{ borderColor: C.orange }} />
-                                    <p className="text-sm" style={{ color: C.gray }}>Đang tải giao dịch...</p>
+                                    <p className="text-sm" style={{ color: C.gray }}>{t('user.wallet.main.loadingTx')}</p>
                                 </div>
                             ) : items.length === 0 ? (
                                 <div className="py-12 text-center">
                                     <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: C.border }}>
                                         <Wallet style={{ width: 22, height: 22, color: '#94a3b8' }} />
                                     </div>
-                                    <p className="text-sm font-medium" style={{ color: C.navy }}>Chưa có giao dịch nào</p>
-                                    <p className="text-xs mt-1" style={{ color: C.gray }}>Nạp tiền để bắt đầu sử dụng ví</p>
+                                    <p className="text-sm font-medium" style={{ color: C.navy }}>{t('user.wallet.main.noTxTitle')}</p>
+                                    <p className="text-xs mt-1" style={{ color: C.gray }}>{t('user.wallet.main.noTxSubtitle')}</p>
                                 </div>
                             ) : (
                                 <>
-                                    {displayedItems.map(tx => <TxRow key={tx.id} tx={tx} />)}
+                                    {displayedItems.map(tx => <TxRow key={tx.id} tx={tx} t={t} />)}
 
                                     {items.length > 5 && (
                                         <button
@@ -879,17 +881,17 @@ export default function UserWalletPage() {
                                             style={{ borderColor: C.border, color: C.orange }}
                                         >
                                             {showAll
-                                                ? <><ChevronUp className="w-4 h-4" />Thu gọn</>
-                                                : <><ChevronDown className="w-4 h-4" />Xem thêm ({items.length - 5})</>
+                                                ? <><ChevronUp className="w-4 h-4" />{t('user.wallet.main.collapse')}</>
+                                                : <><ChevronDown className="w-4 h-4" />{t('user.wallet.main.showMore').replace('{count}', String(items.length - 5))}</>
                                             }
                                         </button>
                                     )}
 
                                     {(hasMore || page > 0) && showAll && (
                                         <div className="flex items-center justify-between py-3 border-t text-sm" style={{ borderColor: C.border, color: C.gray }}>
-                                            <button onClick={() => loadTransactions(Math.max(0, page - PAGE_SIZE))} disabled={page === 0 || txLoading} className="px-3 py-1.5 rounded-lg border disabled:opacity-40" style={{ borderColor: '#e2e8f0' }}>← Trước</button>
+                                            <button onClick={() => loadTransactions(Math.max(0, page - PAGE_SIZE))} disabled={page === 0 || txLoading} className="px-3 py-1.5 rounded-lg border disabled:opacity-40" style={{ borderColor: '#e2e8f0' }}>{t('user.wallet.main.prev')}</button>
                                             <span>{page + 1}–{Math.min(page + PAGE_SIZE, txData?.total ?? 0)} / {txData?.total ?? 0}</span>
-                                            <button onClick={() => loadTransactions(page + PAGE_SIZE)} disabled={!hasMore || txLoading} className="px-3 py-1.5 rounded-lg border disabled:opacity-40" style={{ borderColor: '#e2e8f0' }}>Sau →</button>
+                                            <button onClick={() => loadTransactions(page + PAGE_SIZE)} disabled={!hasMore || txLoading} className="px-3 py-1.5 rounded-lg border disabled:opacity-40" style={{ borderColor: '#e2e8f0' }}>{t('user.wallet.main.next')}</button>
                                         </div>
                                     )}
                                 </>
@@ -899,7 +901,7 @@ export default function UserWalletPage() {
 
                     {wallet && (
                         <p className="text-center text-xs" style={{ color: '#94a3b8' }}>
-                            Cập nhật lần cuối: {formatDate(wallet.updatedAt)}
+                            {t('user.wallet.main.lastUpdated').replace('{date}', formatDate(wallet.updatedAt))}
                         </p>
                     )}
                 </div>
@@ -935,6 +937,7 @@ export default function UserWalletPage() {
                         api.get('/user-wallet/topup/pending').catch(() => ({ data: null })).then(r => setPendingTopup(r.data));
                     }}
                     onSuccess={() => { setPendingTopup(null); loadWallet(); loadTransactions(0); }}
+                    t={t}
                 />
             )}
 
@@ -944,6 +947,7 @@ export default function UserWalletPage() {
                     availableBalance={available}
                     onClose={() => setShowWithdraw(false)}
                     onSuccess={() => { setShowWithdraw(false); loadWallet(); loadTransactions(0); }}
+                    t={t}
                 />
             )}
         </div>

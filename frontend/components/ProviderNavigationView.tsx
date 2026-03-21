@@ -79,13 +79,23 @@ const C = {
 };
 
 // ── WalletPaymentWaiting: polls until user confirms → shows job-done ──────────
-function WalletPaymentWaiting({ requestId, onCompleted }: { requestId: string; onCompleted: () => void }) {
+function WalletPaymentWaiting({ requestId, onCompleted, onSwitchToCash, onSwitchToQr }: {
+    requestId: string;
+    onCompleted: () => void;
+    onSwitchToCash: () => void;
+    onSwitchToQr: () => void;
+}) {
     const [totalAmount, setTotalAmount] = useState<number | null>(null);
+    const [isSwitchingCash, setIsSwitchingCash] = useState(false);
+    const [isSwitchingQr, setIsSwitchingQr] = useState(false);
 
     useEffect(() => {
-        // Fetch payment amount for display
+        // Fetch payment amount for display; also check if already COMPLETED
         api.get(`/rescue-requests/${requestId}/payment`)
-            .then(res => setTotalAmount(res.data?.totalAmount ?? null))
+            .then(res => {
+                setTotalAmount(res.data?.totalAmount ?? null);
+                if (res.data?.status === 'COMPLETED') onCompleted();
+            })
             .catch(() => { });
 
         // Poll every 3 seconds until status = COMPLETED
@@ -103,6 +113,30 @@ function WalletPaymentWaiting({ requestId, onCompleted }: { requestId: string; o
     }, [requestId]);
 
     const fmt = (n: number) => n.toLocaleString('vi-VN') + 'đ';
+
+    const handleSwitchToCash = async () => {
+        setIsSwitchingCash(true);
+        try {
+            await api.patch(`/rescue-requests/${requestId}/payment/switch-to-cash`);
+            onSwitchToCash();
+        } catch {
+            // ignore — let provider try again
+        } finally {
+            setIsSwitchingCash(false);
+        }
+    };
+
+    const handleSwitchToQr = async () => {
+        setIsSwitchingQr(true);
+        try {
+            await api.patch(`/rescue-requests/${requestId}/payment/switch-to-qr`);
+            onSwitchToQr();
+        } catch {
+            // ignore — let provider try again
+        } finally {
+            setIsSwitchingQr(false);
+        }
+    };
 
     return (
         <div className="flex flex-col items-center w-full max-w-sm">
@@ -124,13 +158,53 @@ function WalletPaymentWaiting({ requestId, onCompleted }: { requestId: string; o
             <p className="text-xs text-center mb-5" style={{ color: '#6b7280' }}>
                 Tiền sẽ được chuyển vào ví của bạn ngay khi user xác nhận
             </p>
-            <div className="w-full rounded-2xl p-3 flex items-start gap-2" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+            <div className="w-full rounded-2xl p-3 mb-4 flex items-start gap-2" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
                 <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#2563eb" strokeWidth={2} className="flex-shrink-0 mt-0.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="text-xs" style={{ color: '#1d4ed8' }}>
-                    📱 User sẽ nhận thông báo và xác nhận trên app — hệ thống tự động hoàn tất đơn
+                    User sẽ nhận thông báo và xác nhận trên app — hệ thống tự động hoàn tất đơn
                 </p>
+            </div>
+            {/* Escape hatches: switch payment method */}
+            <p className="text-[10px] mb-2" style={{ color: '#94a3b8' }}>User không đủ số dư? Đổi phương thức khác:</p>
+            <div className="w-full flex gap-2">
+                <button
+                    onClick={handleSwitchToCash}
+                    disabled={isSwitchingCash || isSwitchingQr}
+                    className="flex-1 py-3 rounded-2xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+                    style={{ background: '#fff7ed', color: '#f97316', border: '1px solid #fed7aa' }}
+                >
+                    {isSwitchingCash ? (
+                        <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="#f97316" strokeWidth="4" />
+                            <path className="opacity-75" fill="#f97316" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                    ) : (
+                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                    )}
+                    Tiền mặt
+                </button>
+                <button
+                    onClick={handleSwitchToQr}
+                    disabled={isSwitchingCash || isSwitchingQr}
+                    className="flex-1 py-3 rounded-2xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+                    style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}
+                >
+                    {isSwitchingQr ? (
+                        <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="#16a34a" strokeWidth="4" />
+                            <path className="opacity-75" fill="#16a34a" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                    ) : (
+                        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                        </svg>
+                    )}
+                    Chuyển khoản QR
+                </button>
             </div>
         </div>
     );
@@ -262,6 +336,7 @@ export default function ProviderNavigationView({
     const [workingCountdown, setWorkingCountdown] = useState(5);
     const [isPaymentPending, setIsPaymentPending] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'QR' | 'WALLET'>('CASH');
+    const [switchToMethod, setSwitchToMethod] = useState<'CASH' | 'QR' | null>(null);
     const [isConfirmingReceived, setIsConfirmingReceived] = useState(false);
     const [showJobDone, setShowJobDone] = useState(false);
     const [jobEarnings, setJobEarnings] = useState<{ totalAmount: number; commissionRate: number } | null>(null);
@@ -303,6 +378,35 @@ export default function ProviderNavigationView({
         currentUserName: providerName,
         enabled: chatEnabled,
     });
+
+    // ── State recovery on mount: restore PAYMENT_PENDING state if page reloaded mid-payment ──
+    useEffect(() => {
+        if (!requestId) return;
+        api.get(`/rescue-requests/${requestId}/provider-view`).then(res => {
+            const status = res.data?.status;
+            if (status === 'PAYMENT_PENDING') {
+                // Fetch actual payment method from payment record
+                api.get(`/rescue-requests/${requestId}/payment`).then(payRes => {
+                    const method: 'CASH' | 'QR' | 'WALLET' = payRes.data?.paymentMethod ?? 'CASH';
+                    setPaymentMethod(method);
+                    setIsPaymentPending(true);
+                    setArrivalState('working');
+                }).catch(() => {
+                    setPaymentMethod('CASH');
+                    setIsPaymentPending(true);
+                    setArrivalState('working');
+                });
+            } else if (status === 'WORKING') {
+                setArrivalState('working');
+            } else if (status === 'COMPLETED') {
+                api.get(`/rescue-requests/${requestId}/payment`).then(payRes => {
+                    if (payRes.data) setJobEarnings({ totalAmount: payRes.data.totalAmount, commissionRate: 0.1 });
+                }).catch(() => { });
+                setShowJobDone(true);
+            }
+        }).catch(() => { });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [requestId]);
 
     // Mark arrived — calls PATCH mark-arrived, then polls for customer response
     const handleMarkArrived = async () => {
@@ -1362,19 +1466,12 @@ export default function ProviderNavigationView({
                     request={requestDetails ?? { pickupLocation: { addressText: (pickupLocation as any).addressText } }}
                     customerName={customerName}
                     acceptedQuotePrice={acceptedQuotePrice}
-                    onPaymentSubmitted={async (method?: 'CASH' | 'QR' | 'WALLET') => {
-                        if (method === 'WALLET') {
-                            // PaymentSheet already handled the wallet poll + success screen.
-                            // Request is COMPLETED — skip WalletPaymentWaiting and go straight to job-done.
-                            try {
-                                const payRes = await api.get(`/rescue-requests/${requestId}/payment`);
-                                if (payRes.data) setJobEarnings({ totalAmount: payRes.data.totalAmount, commissionRate: 0.1 });
-                            } catch { /* ignore */ }
-                            setShowJobDone(true);
-                        } else {
-                            setPaymentMethod(method ?? 'CASH');
-                            setIsPaymentPending(true);
-                        }
+                    autoOpenPaymentSheet={switchToMethod !== null}
+                    defaultPaymentMethod={switchToMethod ?? undefined}
+                    onPaymentSubmitted={(method?: 'CASH' | 'QR' | 'WALLET') => {
+                        setSwitchToMethod(null);
+                        setPaymentMethod(method ?? 'CASH');
+                        setIsPaymentPending(true);
                     }}
                 />
             )}
@@ -1396,6 +1493,11 @@ export default function ProviderNavigationView({
                                 } catch { /* ignore */ }
                                 setIsPaymentPending(false);
                                 setShowJobDone(true);
+                            }}
+                            onSwitchToCash={() => setPaymentMethod('CASH')}
+                            onSwitchToQr={() => {
+                                setSwitchToMethod('QR');
+                                setIsPaymentPending(false);
                             }}
                         />
                     ) : paymentMethod === 'QR' ? (

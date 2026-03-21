@@ -111,18 +111,18 @@ const navItems_static = [
     { label: 'Settings', href: '#', icon: <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
 ];
 
-function formatDate(dateString: string) {
+function formatDate(dateString: string, t: any) {
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / 86400000);
 
     if (diffDays === 0) {
-        return 'Hôm nay, ' + date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        return t('user.requests.time.today') + ', ' + date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     } else if (diffDays === 1) {
-        return 'Hôm qua, ' + date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        return t('user.requests.time.yesterday') + ', ' + date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     } else if (diffDays < 7) {
-        return `${diffDays} ngày trước`;
+        return t('user.requests.time.daysAgo').replace('{days}', String(diffDays));
     }
     return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
@@ -398,7 +398,7 @@ export default function UserRequestsPage() {
                         onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors focus:outline-none"
                         style={{ background: C.bg, color: C.gray, border: `1px solid ${C.border}` }}
-                        title={t('user.requests.sortNewest') || "Sắp xếp thời gian tạo"}
+                        title={t('user.requests.sortTimeTooltip')}
                     >
                         <ArrowUpDown className="w-4 h-4" />
                         <span className="hidden sm:inline">{sortOrder === 'desc' ? t('user.requests.sortNewest') : t('user.requests.sortOldest')}</span>
@@ -467,7 +467,7 @@ export default function UserRequestsPage() {
                                                             {INCIDENT_LABELS[request.incidentType] || request.incidentType}
                                                         </p>
                                                         <p className="text-xs mt-0.5" style={{ color: C.gray }}>
-                                                            {formatDate(request.createdAt)}
+                                                            {formatDate(request.createdAt, t)}
                                                         </p>
                                                     </div>
                                                     {/* Status chip */}
@@ -503,7 +503,7 @@ export default function UserRequestsPage() {
                                                         {request.assignedProvider && (
                                                             <div className="flex items-center gap-1.5 max-w-[60%]">
                                                                 <span className="text-[11px] font-medium" style={{ color: C.gray }}>
-                                                                    Cứu hộ viên:
+                                                                    {t('user.requests.providerLabel')}
                                                                 </span>
                                                                 <AvatarImage
                                                                     name={request.assignedProvider.name}
@@ -524,7 +524,11 @@ export default function UserRequestsPage() {
                                                         {request.payment && (
                                                             <div className="flex items-center gap-1">
                                                                 <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium" style={{ background: '#f8fafc', border: `1px solid ${C.border}`, color: C.gray }}>
-                                                                    {request.payment.paymentMethod === 'WALLET' ? 'Thanh toán qua Ví' : request.payment.paymentMethod === 'CASH' ? 'Tiền mặt' : request.payment.paymentMethod}
+                                                                    {request.payment.paymentMethod === 'WALLET' 
+                                                                        ? t('user.requests.payment.WALLET') 
+                                                                        : request.payment.paymentMethod === 'CASH' 
+                                                                        ? t('user.requests.payment.CASH') 
+                                                                        : request.payment.paymentMethod}
                                                                 </span>
                                                             </div>
                                                         )}

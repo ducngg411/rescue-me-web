@@ -247,6 +247,8 @@ function CompletedCard({ requestId }: { requestId: string }) {
     const router = useRouter();
     const [request, setRequest] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    // State for viewing photos in full-screen modal
+    const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
     useEffect(() => {
         api.get(`/rescue-requests/${requestId}`)
@@ -459,7 +461,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                 <div className="rounded-xl p-3" style={{ background: C.bg }}>
                                     <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Phương thức</p>
                                     <p className="text-sm font-bold" style={{ color: C.navy }}>
-                                        {payment.paymentMethod === 'WALLET' ? 'Ví điện tử' : payment.paymentMethod === 'CASH' ? 'Tiền mặt' : payment.paymentMethod}
+                                        {payment.paymentMethod === 'WALLET' ? 'Ví điện tử' : payment.paymentMethod === 'CASH' ? 'Tiền mặt' : 'Chuyển khoản QR'}
                                     </p>
                                 </div>
                                 <div className="rounded-xl p-3" style={{ background: C.bg }}>
@@ -486,8 +488,64 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                     <span className="text-sm font-bold" style={{ color: C.orange }}>{payment.totalAmount.toLocaleString('vi-VN')} đ</span>
                                 </div>
                             </div>
-                            {payment.surchargeNote && (
-                                <p className="text-xs mt-3 italic" style={{ color: C.gray }}>Ghi chú phụ phí: {payment.surchargeNote}</p>
+                            {/* Parsed surchargeNote breakdown */}
+                            {(() => {
+                                if (!payment.surchargeNote) return null;
+                                try {
+                                    const parsed = JSON.parse(payment.surchargeNote);
+                                    const breakdown = parsed?.breakdown ?? [];
+                                    const surcharges = parsed?.surcharges ?? [];
+                                    if (breakdown.length === 0 && surcharges.length === 0) return null;
+                                    return (
+                                        <div className="mt-3 rounded-xl overflow-hidden border" style={{ borderColor: C.border }}>
+                                            {breakdown.length > 0 && (
+                                                <>
+                                                    <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ background: '#eff6ff', color: '#2563eb' }}>Chi tiết dịch vụ</div>
+                                                    {breakdown.map((item: { label: string; amount: number }, i: number) => (
+                                                        <div key={i} className="flex justify-between px-3 py-2 text-xs"
+                                                            style={{ borderTop: `1px solid ${C.border}`, color: C.navy }}>
+                                                            <span style={{ color: C.gray }}>{item.label || `Mục ${i + 1}`}</span>
+                                                            <span className="font-semibold">{(item.amount || 0).toLocaleString('vi-VN')}đ</span>
+                                                        </div>
+                                                    ))}
+                                                </>
+                                            )}
+                                            {surcharges.length > 0 && (
+                                                <>
+                                                    <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ background: '#fff7ed', color: C.orange }}>Phụ phí phát sinh</div>
+                                                    {surcharges.map((item: { label: string; amount: number }, i: number) => (
+                                                        <div key={i} className="flex justify-between px-3 py-2 text-xs"
+                                                            style={{ borderTop: `1px solid ${C.border}`, color: C.navy }}>
+                                                            <span style={{ color: C.gray }}>{item.label || `Khoản ${i + 1}`}</span>
+                                                            <span className="font-semibold" style={{ color: C.orange }}>+{(item.amount || 0).toLocaleString('vi-VN')}đ</span>
+                                                        </div>
+                                                    ))}
+                                                </>
+                                            )}
+                                        </div>
+                                    );
+                                } catch {
+                                    return <p className="text-xs mt-3 italic" style={{ color: C.gray }}>{payment.surchargeNote}</p>;
+                                }
+                            })()}
+                            {/* Payment photos from provider */}
+                            {payment.photoUrls && payment.photoUrls.length > 0 && (
+                                <div className="mt-4">
+                                    <p className="text-xs font-semibold mb-2" style={{ color: C.navy }}>
+                                         Ảnh hiện trường từ cứu hộ viên
+                                        <span className="font-normal ml-1" style={{ color: C.gray }}>({payment.photoUrls.length} ảnh)</span>
+                                    </p>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {payment.photoUrls.map((url: string, i: number) => (
+                                            <button key={i} onClick={() => setSelectedPhoto(url)}
+                                                className="aspect-square rounded-xl overflow-hidden block outline-none focus:ring-2 focus:ring-orange-500"
+                                                style={{ background: '#f1f5f9' }}
+                                            >
+                                                <img src={url} alt={`Ảnh ${i + 1}`} className="w-full h-full object-cover" />
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             )}
                         </SectionCard>
                     )}
@@ -715,6 +773,30 @@ function CompletedCard({ requestId }: { requestId: string }) {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Photo Viewer Modal */}
+            {selectedPhoto && (
+                <div
+                    className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+                    style={{ background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(4px)' }}
+                    onClick={() => setSelectedPhoto(null)}
+                >
+                    <button
+                        onClick={() => setSelectedPhoto(null)}
+                        className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center bg-white/10 text-white hover:bg-white/20"
+                    >
+                        <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                    <img
+                        src={selectedPhoto}
+                        alt="View"
+                        className="max-w-full max-h-full object-contain rounded-lg"
+                        onClick={e => e.stopPropagation()}
+                    />
                 </div>
             )}
         </>

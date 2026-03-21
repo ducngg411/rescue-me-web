@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const C = {
     orange: '#f97316',
@@ -45,6 +46,7 @@ export default function QuoteSelectionPanel({
     quoteCount,
     onQuoteAccepted,
 }: QuoteSelectionPanelProps) {
+    const { t } = useLanguage();
     const [quotes, setQuotes] = useState<Quote[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [acceptingId, setAcceptingId] = useState<string | null>(null);
@@ -62,7 +64,7 @@ export default function QuoteSelectionPanel({
             setQuotes(pending);
         } catch (err) {
             console.error('Error fetching quotes:', err);
-            toast.error('Không thể tải danh sách báo giá');
+            toast.error(t('user.tracking.quotes.loadError'));
         } finally {
             setIsLoading(false);
         }
@@ -75,10 +77,10 @@ export default function QuoteSelectionPanel({
             await api.patch(`/rescue-requests/${requestId}/quotes/${quoteId}/respond`, {
                 action: 'ACCEPT',
             });
-            toast.success('Đã chọn báo giá! Provider đang chuẩn bị đến.');
+            toast.success(t('user.tracking.quotes.successToast'));
             onQuoteAccepted();
         } catch (err: any) {
-            const msg = err.response?.data?.message || 'Không thể chọn báo giá. Vui lòng thử lại.';
+            const msg = err.response?.data?.message || t('user.tracking.quotes.errorToast');
             toast.error(msg);
             setAcceptingId(null);
         }
@@ -90,7 +92,7 @@ export default function QuoteSelectionPanel({
         return (
             <div className="bg-white rounded-2xl p-8 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-3" style={{ borderColor: C.orange }} />
-                <p className="text-sm" style={{ color: C.gray }}>Đang tải báo giá...</p>
+                <p className="text-sm" style={{ color: C.gray }}>{t('user.tracking.quotes.loading')}</p>
             </div>
         );
     }
@@ -103,8 +105,8 @@ export default function QuoteSelectionPanel({
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                 </div>
-                <h3 className="text-sm font-bold mb-1" style={{ color: C.navy }}>Các báo giá đã hết hạn</h3>
-                <p className="text-xs" style={{ color: C.gray }}>Không còn báo giá khả dụng. Vui lòng thử lại yêu cầu.</p>
+                <h3 className="text-sm font-bold mb-1" style={{ color: C.navy }}>{t('user.tracking.quotes.expiredTitle')}</h3>
+                <p className="text-xs" style={{ color: C.gray }}>{t('user.tracking.quotes.expiredSub')}</p>
             </div>
         );
     }
@@ -120,19 +122,15 @@ export default function QuoteSelectionPanel({
                         </svg>
                     </div>
                     <div>
-                        <h2 className="font-bold text-sm" style={{ color: C.navy }}>Chọn báo giá phù hợp</h2>
-                        <p className="text-xs" style={{ color: C.gray }}>
-                            Đã nhận <span className="font-semibold" style={{ color: '#7c3aed' }}>{pendingQuotes.length}</span> báo giá từ providers
-                        </p>
+                        <h2 className="font-bold text-sm" style={{ color: C.navy }}>{t('user.tracking.quotes.selectionHeader')}</h2>
+                        <p className="text-xs" style={{ color: C.gray }} dangerouslySetInnerHTML={{ __html: t('user.tracking.quotes.selectionSubtext', { count: pendingQuotes.length }) }} />
                     </div>
                 </div>
                 <div className="rounded-xl p-3 flex items-start gap-2" style={{ background: '#f5f3ff' }}>
                     <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#7c3aed" strokeWidth={2} className="flex-shrink-0 mt-0.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <p className="text-xs" style={{ color: '#7c3aed' }}>
-                        Nhấn <strong>"Chọn báo giá này"</strong> để xác nhận provider. Các provider còn lại sẽ được thông báo và tự do nhận yêu cầu khác.
-                    </p>
+                    <p className="text-xs" style={{ color: '#7c3aed' }} dangerouslySetInnerHTML={{ __html: t('user.tracking.quotes.selectionHint') }} />
                 </div>
             </div>
 
@@ -163,7 +161,7 @@ export default function QuoteSelectionPanel({
                                 <svg width="12" height="12" viewBox="0 0 20 20" fill={C.orange}>
                                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                                 </svg>
-                                Báo giá tốt nhất
+                                {t('user.tracking.quotes.bestQuote')}
                             </div>
                         )}
 
@@ -181,7 +179,7 @@ export default function QuoteSelectionPanel({
                                             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                                         </svg>
                                         <span className="text-[11px] font-medium" style={{ color: C.navy }}>4.8</span>
-                                        <span className="text-[11px]" style={{ color: C.gray }}>(52 đánh giá)</span>
+                                        <span className="text-[11px]" style={{ color: C.gray }}>{t('user.tracking.quotes.reviews', { count: 52 })}</span>
                                     </div>
                                 </div>
                                 {quote.provider.phoneNumber && (
@@ -204,7 +202,7 @@ export default function QuoteSelectionPanel({
                                         <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
-                                        <span className="text-[10px]" style={{ color: C.gray }}>Giá dịch vụ</span>
+                                        <span className="text-[10px]" style={{ color: C.gray }}>{t('user.tracking.quotes.priceLabel')}</span>
                                     </div>
                                     <p className="text-base font-bold" style={{ color: C.navy }}>{formatPrice(quote.price)}</p>
                                 </div>
@@ -213,16 +211,16 @@ export default function QuoteSelectionPanel({
                                         <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
-                                        <span className="text-[10px]" style={{ color: C.gray }}>Đến trong</span>
+                                        <span className="text-[10px]" style={{ color: C.gray }}>{t('user.tracking.quotes.etaLabel')}</span>
                                     </div>
-                                    <p className="text-base font-bold" style={{ color: C.navy }}>{quote.estimatedArrivalMinutes} phút</p>
+                                    <p className="text-base font-bold" style={{ color: C.navy }}>{t('user.tracking.quotes.etaValue', { minutes: quote.estimatedArrivalMinutes })}</p>
                                 </div>
                             </div>
 
                             {/* Message */}
                             {quote.message && (
                                 <div className="rounded-xl p-3 mb-4" style={{ background: C.bg }}>
-                                    <p className="text-[10px] font-medium mb-1" style={{ color: C.gray }}>Lời nhắn từ provider</p>
+                                    <p className="text-[10px] font-medium mb-1" style={{ color: C.gray }}>{t('user.tracking.quotes.providerMessage')}</p>
                                     <p className="text-xs italic" style={{ color: C.navy }}>"{quote.message}"</p>
                                 </div>
                             )}
@@ -243,14 +241,14 @@ export default function QuoteSelectionPanel({
                                 {isAccepting ? (
                                     <>
                                         <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                                        Đang xác nhận...
+                                        {t('user.tracking.quotes.acceptingBtn')}
                                     </>
                                 ) : (
                                     <>
                                         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                         </svg>
-                                        Chọn báo giá này
+                                        {t('user.tracking.quotes.acceptFullBtn')}
                                     </>
                                 )}
                             </button>

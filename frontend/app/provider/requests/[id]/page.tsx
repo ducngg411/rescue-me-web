@@ -13,6 +13,16 @@ import AvatarImage from '@/components/AvatarImage';
 
 const ChatModal = lazy(() => import('@/components/ChatModal'));
 
+// Translate raw vehicle color values to Vietnamese
+const VEHICLE_COLOR_LABELS: Record<string, string> = {
+    black: 'Đen', white: 'Trắng', red: 'Đỏ', blue: 'Xanh dương',
+    green: 'Xanh lá', silver: 'Bạc', gray: 'Xám', grey: 'Xám',
+    yellow: 'Vàng', orange: 'Cam', brown: 'Nâu', purple: 'Tím',
+    pink: 'Hồng', gold: 'Vàng đồng', beige: 'Be',
+};
+const translateColor = (color: string) =>
+    VEHICLE_COLOR_LABELS[color?.toLowerCase()] ?? color;
+
 const ProviderNavigationView = dynamic(
     () => import('@/components/ProviderNavigationView'),
     { ssr: false, loading: () => <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500" /></div> }
@@ -76,6 +86,7 @@ export default function ProviderRequestDetailPage() {
     const [showNavigationMap, setShowNavigationMap] = useState(false);
     const [isStartingNav, setIsStartingNav] = useState(false);
     const [selectedConfirmImage, setSelectedConfirmImage] = useState<string | null>(null);
+    const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
     const [isChatOpen, setIsChatOpen] = useState(false);
 
     // Quote window timer
@@ -342,6 +353,8 @@ export default function ProviderRequestDetailPage() {
                 status: 'PENDING',
                 providerId: user?.id,
             });
+            // Optimistically increment quoteCount so the slot badge updates immediately
+            setRequest(prev => prev ? { ...prev, quoteCount: (prev.quoteCount ?? 0) + 1 } : prev);
             console.log(' Set hasPendingQuote = true, myQuoteDetails updated');
 
             // Reset form
@@ -607,7 +620,7 @@ export default function ProviderRequestDetailPage() {
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-medium" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.vehicleColor')}</p>
-                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{req.user.vehicleColor}</p>
+                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{translateColor(req.user.vehicleColor)}</p>
                                     </div>
                                 </div>
                             )}
@@ -739,12 +752,14 @@ export default function ProviderRequestDetailPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                         {t('provider.requestDetail.accepted.chatBtn')}
-                        <span
-                            className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
-                            style={{ background: '#ef4444', boxShadow: '0 1px 4px rgba(239,68,68,0.5)' }}
-                        >
-                            {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
-                        </span>
+                        {chatUnreadCount > 0 && (
+                            <span
+                                className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+                                style={{ background: '#ef4444', boxShadow: '0 1px 4px rgba(239,68,68,0.5)' }}
+                            >
+                                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                            </span>
+                        )}
                     </button>
 
                 </div>
@@ -919,16 +934,32 @@ export default function ProviderRequestDetailPage() {
                                             {request.status === 'ASSIGNED' && request.assignedProviderId === user?.id && t('provider.requestDetail.statusLabel.selected')}
                                         </span>
                                         {request.status === 'MATCHING' && (
-                                            <div className="flex items-center gap-1.5 md:gap-2">
+                                            <div className="flex items-center gap-1.5 mt-1">
+                                                {/* High priority badge */}
                                                 <span className="px-1.5 md:px-2 py-0.5 bg-orange-100 text-[#f97316] text-[8px] md:text-[10px] font-bold rounded uppercase border border-[#fed7aa] flex-shrink-0">
                                                     {t('provider.requestDetail.statusBadge.highPriority')}
                                                 </span>
-                                                <span className="px-1.5 md:px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] md:text-[10px] font-bold rounded uppercase border border-blue-200 flex-shrink-0 flex items-center gap-1">
-                                                    <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                                    </svg>
-                                                    {t('provider.requestDetail.statusBadge.quotesCount').replace('{count}', String(request.quoteCount || 0)).replace('{max}', String(request.maxQuotes || 3))}
-                                                </span>
+                                                {/* Quote slots indicator */}
+                                                {(() => {
+                                                    const count = request.quoteCount || 0;
+                                                    const max = request.maxQuotes || 3;
+                                                    const pct = Math.round((count / max) * 100);
+                                                    const urgentColor = count >= max - 1 ? '#dc2626' : count > 0 ? '#f97316' : '#16a34a';
+                                                    return (
+                                                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{ background: `${urgentColor}15`, border: `1px solid ${urgentColor}30` }}>
+                                                            <div className="flex gap-0.5">
+                                                                {Array.from({ length: max }).map((_, i) => (
+                                                                    <div key={i} className="w-2.5 h-2.5 rounded-sm"
+                                                                        style={{ background: i < count ? urgentColor : `${urgentColor}30` }}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                            <span className="text-[9px] md:text-[10px] font-bold" style={{ color: urgentColor }}>
+                                                                {count}/{max} báo giá
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         )}
                                     </div>
@@ -1014,7 +1045,7 @@ export default function ProviderRequestDetailPage() {
                                     </div>
                                     <div>
                                         <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">{t('provider.requestDetail.infoLabels.vehicleColor')}</p>
-                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e]">{request.user.vehicleColor || t('common.unknown')}</p>
+                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e]">{translateColor(request.user.vehicleColor || '') || t('common.unknown')}</p>
                                     </div>
                                     <div>
                                         <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">{t('provider.requestDetail.infoLabels.incidentType')}</p>
@@ -1075,7 +1106,17 @@ export default function ProviderRequestDetailPage() {
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <video src={item.publicUrl} controls className="w-full h-full object-cover rounded-xl border border-gray-200 bg-black" />
+                                                <button
+                                                    onClick={() => setSelectedVideoUrl(item.publicUrl)}
+                                                    className="cursor-pointer w-full h-full rounded-xl overflow-hidden border border-gray-200 bg-black relative flex items-center justify-center"
+                                                >
+                                                    <video src={item.publicUrl} className="w-full h-full object-cover opacity-80" />
+                                                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                                                        <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center hover:scale-110 transition-transform">
+                                                            <svg width="20" height="20" fill="white" viewBox="0 0 24 24" className="ml-1"><path d="M8 5v14l11-7z" /></svg>
+                                                        </div>
+                                                    </div>
+                                                </button>
                                             )}
                                         </div>
                                     ))}
@@ -1087,19 +1128,24 @@ export default function ProviderRequestDetailPage() {
                     {/* Right Column: Quoting Form / Actions */}
                     <div className="w-full lg:w-[380px] flex-shrink-0 mt-2 md:mt-0">
                         {request.status === 'MATCHING' && !hasPendingQuote ? (
-                            <div className="bg-white rounded-3xl p-5 md:p-6 border border-gray-100 shadow-lg md:sticky top-24">
-                                <div className="flex items-center gap-3 mb-5 md:mb-6">
-                                    <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
-                                        <svg width="20" height="20" fill="none" stroke="#f97316" viewBox="0 0 24 24" strokeWidth={2}>
+                            <div className="rounded-2xl overflow-hidden" style={{ background: '#fff', boxShadow: '0 4px 20px rgba(249,115,22,0.12)', border: '1.5px solid #fed7aa' }}>
+                                {/* Form Header */}
+                                <div className="px-5 py-4 flex items-center gap-3" style={{ background: 'linear-gradient(135deg, #fff7ed, #ffedd5)', borderBottom: '1px solid #fed7aa' }}>
+                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#f97316' }}>
+                                        <svg width="20" height="20" fill="none" stroke="white" viewBox="0 0 24 24" strokeWidth={2.5}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                         </svg>
                                     </div>
-                                    <h2 className="text-base md:text-lg font-bold text-[#1a1a2e]">{t('provider.requestDetail.quoteSendTitle')}</h2>
+                                    <div>
+                                        <h2 className="text-sm font-bold" style={{ color: '#1a1a2e' }}>{t('provider.requestDetail.quoteSendTitle')}</h2>
+                                        <p className="text-[11px]" style={{ color: '#6b7280' }}>Điền thông tin và gửi nhanh để được chọn</p>
+                                    </div>
                                 </div>
 
-                                <form onSubmit={handleSubmitQuote} className="space-y-4 md:space-y-5">
+                                <form onSubmit={handleSubmitQuote} className="p-5 space-y-4">
+                                    {/* Price */}
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">{t('provider.requestDetail.quote.priceLabel')}</label>
+                                        <label className="block text-[11px] font-bold mb-1.5 uppercase tracking-wide" style={{ color: '#6b7280' }}>{t('provider.requestDetail.quote.priceLabel')}</label>
                                         <div className="relative">
                                             <input
                                                 type="number"
@@ -1108,14 +1154,18 @@ export default function ProviderRequestDetailPage() {
                                                 placeholder={t('provider.requestDetail.quote.pricePlaceholder')}
                                                 min="10000"
                                                 required
-                                                className="w-full pl-4 pr-10 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#f97316] outline-none transition-colors text-sm font-semibold"
+                                                className="w-full pl-4 pr-10 py-3 rounded-xl text-sm font-semibold outline-none transition-all"
+                                                style={{ background: '#f8fafc', border: '1.5px solid #e5e7eb', color: '#1a1a2e' }}
+                                                onFocus={e => (e.target.style.border = '1.5px solid #f97316')}
+                                                onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
                                             />
-                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">₫</span>
+                                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: '#f97316' }}>₫</span>
                                         </div>
                                     </div>
 
+                                    {/* ETA */}
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">{t('provider.requestDetail.quote.etaLabel')}</label>
+                                        <label className="block text-[11px] font-bold mb-1.5 uppercase tracking-wide" style={{ color: '#6b7280' }}>{t('provider.requestDetail.quote.etaLabel')}</label>
                                         <div className="relative">
                                             <input
                                                 type="number"
@@ -1125,57 +1175,65 @@ export default function ProviderRequestDetailPage() {
                                                 min="1"
                                                 max="300"
                                                 required
-                                                className="w-full pl-4 pr-14 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#f97316] outline-none transition-colors text-sm font-semibold"
+                                                className="w-full pl-4 pr-16 py-3 rounded-xl text-sm font-semibold outline-none transition-all"
+                                                style={{ background: '#f8fafc', border: '1.5px solid #e5e7eb', color: '#1a1a2e' }}
+                                                onFocus={e => (e.target.style.border = '1.5px solid #f97316')}
+                                                onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
                                             />
-                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-semibold">{t('provider.requestDetail.minutesLabel')}</span>
+                                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold" style={{ color: '#6b7280' }}>{t('provider.requestDetail.minutesLabel')}</span>
                                         </div>
                                     </div>
 
+                                    {/* Message */}
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-600 mb-1.5 uppercase">{t('provider.requestDetail.quote.messageLabel')}</label>
+                                        <label className="block text-[11px] font-bold mb-1.5 uppercase tracking-wide" style={{ color: '#6b7280' }}>{t('provider.requestDetail.quote.messageLabel')}</label>
                                         <textarea
                                             value={message}
                                             onChange={(e) => setMessage(e.target.value)}
                                             placeholder={t('provider.requestDetail.quote.messagePlaceholder')}
                                             rows={3}
-                                            className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#f97316] outline-none transition-colors text-sm resize-none"
+                                            className="w-full p-3.5 rounded-xl text-sm resize-none outline-none transition-all"
+                                            style={{ background: '#f8fafc', border: '1.5px solid #e5e7eb', color: '#1a1a2e' }}
+                                            onFocus={e => (e.target.style.border = '1.5px solid #f97316')}
+                                            onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
                                         />
                                     </div>
 
-                                    <div className="pt-2">
-                                        <button
-                                            type="submit"
-                                            disabled={isSubmitting}
-                                            className="w-full py-3.5 rounded-xl font-bold text-white uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                                            style={{
-                                                background: 'linear-gradient(135deg, #f97316 0%, #ea6c0a 100%)',
-                                                boxShadow: '0 4px 14px rgba(249,115,22,0.3)'
-                                            }}
-                                        >
-                                            {isSubmitting ? t('provider.requestDetail.quote.submitting') : t('provider.requestDetail.quote.submitBtn')}
-                                            {!isSubmitting && (
-                                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                                                </svg>
-                                            )}
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={handleCancel}
-                                            disabled={isSubmitting}
-                                            className="w-full mt-3 py-3 rounded-xl font-semibold text-gray-500 hover:text-gray-800 transition-colors text-sm"
-                                        >
-                                            {t('provider.requestDetail.goBack')}
-                                        </button>
-                                        <div className="flex items-start gap-2 bg-orange-50/60 rounded-lg p-3 mt-3">
-                                            <svg width="16" height="16" fill="none" stroke="#f97316" viewBox="0 0 24 24" className="flex-shrink-0 mt-0.5">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    {/* Submit */}
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                        className="w-full py-3.5 rounded-xl font-bold text-white text-sm uppercase tracking-wider flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50"
+                                        style={{
+                                            background: 'linear-gradient(135deg, #f97316 0%, #ea6c0a 100%)',
+                                            boxShadow: '0 4px 14px rgba(249,115,22,0.35)',
+                                        }}
+                                    >
+                                        {isSubmitting ? t('provider.requestDetail.quote.submitting') : t('provider.requestDetail.quote.submitBtn')}
+                                        {!isSubmitting && (
+                                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                                             </svg>
-                                            <p className="text-[10px] text-gray-600 leading-relaxed">
-                                                {t('provider.requestDetail.quote.feeNote')}
-                                            </p>
-                                        </div>
+                                        )}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleCancel}
+                                        disabled={isSubmitting}
+                                        className="w-full py-2.5 rounded-xl text-sm font-medium transition-colors"
+                                        style={{ color: '#6b7280' }}
+                                    >
+                                        {t('provider.requestDetail.goBack')}
+                                    </button>
+
+                                    <div className="flex items-start gap-2 rounded-xl p-3" style={{ background: '#fff7ed' }}>
+                                        <svg width="16" height="16" fill="none" stroke="#f97316" viewBox="0 0 24 24" className="flex-shrink-0 mt-0.5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <p className="text-[11px] leading-relaxed" style={{ color: '#9a3412' }}>
+                                            {t('provider.requestDetail.quote.feeNote')}
+                                        </p>
                                     </div>
                                 </form>
                             </div>
@@ -1335,6 +1393,32 @@ export default function ProviderRequestDetailPage() {
                                 {t('provider.requestDetail.declineConfirm.confirm')}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Video Viewer Modal */}
+            {selectedVideoUrl && (
+                <div className="fixed inset-0 z-[100] flex flex-col bg-black overflow-hidden">
+                    {/* Header */}
+                    <div className="flex items-center justify-end p-4 bg-gradient-to-b from-black/80 to-transparent">
+                        <button
+                            onClick={() => setSelectedVideoUrl(null)}
+                            className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white transition-colors"
+                        >
+                            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Video */}
+                    <div className="flex-1 flex items-center justify-center px-4 pb-8">
+                        <video
+                            src={selectedVideoUrl}
+                            controls
+                            autoPlay
+                            className="max-w-full max-h-full rounded-xl drop-shadow-2xl"
+                        />
                     </div>
                 </div>
             )}

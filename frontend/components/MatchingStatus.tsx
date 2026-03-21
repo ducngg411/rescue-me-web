@@ -1,4 +1,5 @@
 'use client';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const C = {
     orange: '#f97316',
@@ -31,6 +32,7 @@ export default function MatchingStatus({
     onCancel,
     onViewQuotes,
 }: MatchingStatusProps) {
+    const { t } = useLanguage();
     const minutes = Math.floor(timeRemaining / 60);
     const seconds = timeRemaining % 60;
 
@@ -46,27 +48,27 @@ export default function MatchingStatus({
     else if (searchPhase === 2) state = 'expanded';
 
     const stateConfig = {
-        searching: { color: C.orange, bg: C.orangeLight, label: 'Đang tìm provider', pulse: true },
-        viewing: { color: '#2563eb', bg: '#eff6ff', label: 'Providers đang xem', pulse: true },
-        quotes: { color: '#16a34a', bg: '#f0fdf4', label: `Nhận báo giá (${quoteCount}/${maxQuotes})`, pulse: true },
-        closed: { color: '#7c3aed', bg: '#f5f3ff', label: `Đã nhận ${quoteCount} báo giá`, pulse: false },
-        expanded: { color: C.orange, bg: C.orangeLight, label: 'Đang mở rộng tìm kiếm', pulse: true },
+        searching: { color: C.orange, bg: C.orangeLight, label: t('user.tracking.matching.searching'), pulse: true },
+        viewing: { color: '#2563eb', bg: '#eff6ff', label: t('user.tracking.matching.viewing'), pulse: true },
+        quotes: { color: '#16a34a', bg: '#f0fdf4', label: t('user.tracking.matching.quotes', { count: quoteCount, max: maxQuotes }), pulse: true },
+        closed: { color: '#7c3aed', bg: '#f5f3ff', label: t('user.tracking.matching.closed', { count: quoteCount }), pulse: false },
+        expanded: { color: C.orange, bg: C.orangeLight, label: t('user.tracking.matching.expanded'), pulse: true },
     }[state];
 
     const messageTitle = (() => {
-        if (windowClosed) return `Đã nhận ${quoteCount}/${maxQuotes} báo giá`;
-        if (hasQuotes) return `Đã nhận ${quoteCount}/${maxQuotes} báo giá`;
-        if (hasViewingProviders) return `${viewingProvidersCount} provider đang xem yêu cầu`;
-        if (searchPhase === 2) return 'Đang mở rộng phạm vi tìm kiếm…';
-        return 'Đang gửi yêu cầu tới providers gần bạn';
+        if (windowClosed) return t('user.tracking.matching.msgReceivedQuotes', { count: quoteCount, max: maxQuotes });
+        if (hasQuotes) return t('user.tracking.matching.msgReceivedQuotes', { count: quoteCount, max: maxQuotes });
+        if (hasViewingProviders) return t('user.tracking.matching.msgViewing', { count: viewingProvidersCount });
+        if (searchPhase === 2) return t('user.tracking.matching.msgExpanding');
+        return t('user.tracking.matching.msgSending');
     })();
 
     const messageSubtitle = (() => {
-        if (windowClosed) return 'Vui lòng chờ hệ thống xử lý';
-        if (hasQuotes) return `Còn ${Math.floor(timeRemaining)}s để nhận thêm`;
-        if (hasViewingProviders) return `Còn ${Math.floor(timeRemaining)}s để nhận báo giá`;
-        if (searchPhase === 2) return 'Tìm kiếm trong phạm vi rộng hơn';
-        return 'Providers sẽ gửi báo giá sớm cho bạn';
+        if (windowClosed) return t('user.tracking.matching.subWait');
+        if (hasQuotes) return t('user.tracking.matching.subCountdownQuotes', { seconds: Math.floor(timeRemaining) });
+        if (hasViewingProviders) return t('user.tracking.matching.subCountdownViewing', { seconds: Math.floor(timeRemaining) });
+        if (searchPhase === 2) return t('user.tracking.matching.subExpanded');
+        return t('user.tracking.matching.subSending');
     })();
 
     return (
@@ -97,7 +99,7 @@ export default function MatchingStatus({
                     >
                         {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
                     </div>
-                    <p className="text-xs" style={{ color: C.gray }}>Còn lại để nhận báo giá</p>
+                    <p className="text-xs" style={{ color: C.gray }}>{t('user.tracking.matching.timeLeft')}</p>
                     {/* Progress bar */}
                     <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden mx-auto" style={{ background: C.border, maxWidth: '200px' }}>
                         <div
@@ -114,7 +116,7 @@ export default function MatchingStatus({
                     <div className="text-5xl font-bold mb-1" style={{ color: '#7c3aed' }}>
                         {quoteCount}<span className="text-2xl text-gray-400">/{maxQuotes}</span>
                     </div>
-                    <p className="text-xs" style={{ color: C.gray }}>Báo giá đã nhận</p>
+                    <p className="text-xs" style={{ color: C.gray }}>{t('user.tracking.matching.quotesReceivedInfo')}</p>
                 </div>
             )}
 
@@ -173,7 +175,7 @@ export default function MatchingStatus({
                         className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98]"
                         style={{ background: '#7c3aed', boxShadow: '0 4px 12px rgba(124,58,237,0.4)' }}
                     >
-                        Chọn báo giá ({quoteCount}) →
+                        {t('user.tracking.matching.selectQuoteBtn', { count: quoteCount })}
                     </button>
                 )}
                 <button
@@ -183,7 +185,7 @@ export default function MatchingStatus({
                     onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#fee2e2'}
                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fef2f2'}
                 >
-                    Huỷ yêu cầu
+                    {t('user.tracking.matching.cancelBtn')}
                 </button>
             </div>
         </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUserGuard } from '@/lib/guards';
+import { useLanguage } from '@/contexts/LanguageContext';
 import LocationPicker from '@/components/LocationPicker';
 import ImageUpload from '@/components/ImageUpload';
 import VideoUpload from '@/components/VideoUpload';
@@ -131,6 +132,7 @@ function SectionHeader({ step, title, icon }: { step: number; title: string; ico
 export default function CreateRescueRequestPage() {
     const router = useRouter();
     const { isReady, user } = useUserGuard();
+    const { t } = useLanguage();
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingProfile, setIsLoadingProfile] = useState(true);
     const [isLoadingLocation, setIsLoadingLocation] = useState(false);
@@ -180,7 +182,7 @@ export default function CreateRescueRequestPage() {
     }, [isReady]);
 
     const fetchLocation = async () => {
-        if (!('geolocation' in navigator)) { toast.error('Trình duyệt không hỗ trợ định vị'); return; }
+        if (!('geolocation' in navigator)) { toast.error(t('user.create.toasts.browserNoLocation')); return; }
         setIsLoadingLocation(true);
         navigator.geolocation.getCurrentPosition(
             async (position) => {
@@ -193,7 +195,7 @@ export default function CreateRescueRequestPage() {
             },
             (error) => {
                 setIsLoadingLocation(false);
-                toast.error(`Không thể lấy vị trí: ${error.message}`);
+                toast.error(t('user.create.toasts.locationError').replace('{error}', error.message));
             },
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
         );
@@ -202,7 +204,7 @@ export default function CreateRescueRequestPage() {
     useEffect(() => { fetchLocation(); }, []);
 
     const handleAddVehicle = () => {
-        if (!newVehicle.licensePlate.trim()) { toast.error('Vui lòng nhập biển số xe'); return; }
+        if (!newVehicle.licensePlate.trim()) { toast.error(t('user.create.toasts.plateRequired')); return; }
         const vehicle: Vehicle = { type: newVehicle.type, licensePlate: newVehicle.licensePlate.trim(), color: newVehicle.color.trim() || undefined };
         setVehicles(prev => [...prev, vehicle]);
         setFormData(prev => ({ ...prev, vehicleIndex: vehicles.length }));
@@ -213,7 +215,7 @@ export default function CreateRescueRequestPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.incidentType || vehicles.length === 0 || !formData.incidentLocation || !formData.contactPhone) {
-            toast.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+            toast.error(t('user.create.toasts.fillRequired'));
             return;
         }
         const selectedVehicle = vehicles[formData.vehicleIndex];
@@ -230,10 +232,10 @@ export default function CreateRescueRequestPage() {
                 videoUrls: formData.videoUrls,
             };
             const response = await api.post('/rescue-requests', payload);
-            toast.success('Tạo yêu cầu cứu hộ thành công!');
+            toast.success(t('user.create.toasts.createSuccess'));
             router.push(`/user/requests/${response.data.id}`);
         } catch (error: any) {
-            toast.error(`Lỗi: ${error.response?.data?.message || 'Đã xảy ra lỗi. Vui lòng thử lại.'}`);
+            toast.error(error.response?.data?.message ? t('user.create.toasts.createError').replace('{error}', error.response.data.message) : t('user.create.toasts.defaultError'));
         } finally {
             setIsLoading(false);
         }
@@ -283,8 +285,8 @@ export default function CreateRescueRequestPage() {
                     </svg>
                 </button>
                 <div>
-                    <h1 className="font-bold text-base leading-tight" style={{ color: C.navy }}>Tạo yêu cầu cứu hộ</h1>
-                    <p className="text-xs" style={{ color: C.gray }}>Điền thông tin để gọi cứu hộ ngay</p>
+                    <h1 className="font-bold text-base leading-tight" style={{ color: C.navy }}>{t('user.create.title')}</h1>
+                    <p className="text-xs" style={{ color: C.gray }}>{t('user.create.subtitle')}</p>
                 </div>
             </header>
 
@@ -295,7 +297,7 @@ export default function CreateRescueRequestPage() {
                     <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                         <SectionHeader
                             step={1}
-                            title="Loại sự cố"
+                            title={t('user.create.selectType')}
                             icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}
                         />
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
@@ -314,7 +316,7 @@ export default function CreateRescueRequestPage() {
                                         }}
                                     >
                                         <span style={{ color: active ? C.orange : '#94a3b8' }}>{type.icon}</span>
-                                        <span className="text-[11px] font-medium leading-tight text-center" style={{ color: active ? C.orange : C.navy }}>{type.label}</span>
+                                        <span className="text-[11px] font-medium leading-tight text-center" style={{ color: active ? C.orange : C.navy }}>{t('provider.incidents.' + type.value) || type.label}</span>
                                     </button>
                                 );
                             })}
@@ -325,7 +327,7 @@ export default function CreateRescueRequestPage() {
                     <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                         <SectionHeader
                             step={2}
-                            title="Phương tiện gặp nạn"
+                            title={t('user.create.vehicleSection')}
                             icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13l1.5-4.5A2 2 0 016.4 7h11.2a2 2 0 011.9 1.5L21 13m-18 0v5a1 1 0 001 1h1a1 1 0 001-1v-1h12v1a1 1 0 001 1h1a1 1 0 001-1v-5m-18 0h18M6 13h.01M18 13h.01" /></svg>}
                         />
                         {vehicles.length === 0 ? (
@@ -333,14 +335,14 @@ export default function CreateRescueRequestPage() {
                                 <div className="w-12 h-12 rounded-full mx-auto mb-2 flex items-center justify-center" style={{ background: C.orangeLight }}>
                                     <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
                                 </div>
-                                <p className="text-xs mb-3" style={{ color: C.gray }}>Chưa có xe, hãy thêm để tạo yêu cầu</p>
+                                <p className="text-xs mb-3" style={{ color: C.gray }}>{t('user.create.noVehicle')}</p>
                                 <button
                                     type="button"
                                     onClick={() => setShowAddVehicle(true)}
                                     className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
                                     style={{ background: C.orange }}
                                 >
-                                    + Thêm xe
+                                    {t('user.create.addVehicleBtn')}
                                 </button>
                             </div>
                         ) : (
@@ -366,9 +368,9 @@ export default function CreateRescueRequestPage() {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-semibold" style={{ color: active ? C.orange : C.navy }}>
-                                                    {VEHICLE_TYPE_LABELS[vehicle.type]} — {vehicle.licensePlate}
+                                                    {t('user.create.' + vehicle.type.toLowerCase())} — {vehicle.licensePlate}
                                                 </p>
-                                                {vehicle.color && <p className="text-xs" style={{ color: C.gray }}>Màu: {vehicle.color}</p>}
+                                                {vehicle.color && <p className="text-xs" style={{ color: C.gray }}>{t('user.create.colorLabel')} {vehicle.color}</p>}
                                             </div>
                                             {active && (
                                                 <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: C.orange }}>
@@ -385,7 +387,7 @@ export default function CreateRescueRequestPage() {
                                     style={{ color: C.orange, background: C.orangeLight, border: `1.5px dashed ${C.orange}50` }}
                                 >
                                     <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                                    Thêm xe mới
+                                    {t('user.create.addVehicleNewBtn')}
                                 </button>
                             </div>
                         )}
@@ -393,47 +395,47 @@ export default function CreateRescueRequestPage() {
                         {/* Add Vehicle Form */}
                         {showAddVehicle && (
                             <div className="mt-3 p-4 rounded-xl space-y-3" style={{ background: C.bg, border: `1.5px solid ${C.border}` }}>
-                                <p className="text-sm font-semibold" style={{ color: C.navy }}>Thêm xe mới</p>
+                                <p className="text-sm font-semibold" style={{ color: C.navy }}>{t('user.create.addNewVehicleTitle')}</p>
                                 {/* Vehicle type toggle */}
                                 <div className="flex gap-2">
-                                    {['CAR', 'MOTORCYCLE'].map(t => (
+                                    {['CAR', 'MOTORCYCLE'].map(vType => (
                                         <button
-                                            key={t}
+                                            key={vType}
                                             type="button"
-                                            onClick={() => setNewVehicle({ ...newVehicle, type: t as 'CAR' | 'MOTORCYCLE' })}
+                                            onClick={() => setNewVehicle({ ...newVehicle, type: vType as 'CAR' | 'MOTORCYCLE' })}
                                             className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
                                             style={{
-                                                background: newVehicle.type === t ? C.orange : C.white,
-                                                color: newVehicle.type === t ? 'white' : C.gray,
-                                                border: `1.5px solid ${newVehicle.type === t ? C.orange : '#e5e7eb'}`,
+                                                background: newVehicle.type === vType ? C.orange : C.white,
+                                                color: newVehicle.type === vType ? 'white' : C.gray,
+                                                border: `1.5px solid ${newVehicle.type === vType ? C.orange : '#e5e7eb'}`,
                                             }}
                                         >
-                                            {t === 'CAR' ? 'Ô tô' : 'Xe máy'}
+                                            {t('user.create.' + vType.toLowerCase())}
                                         </button>
                                     ))}
                                 </div>
-                                <input
-                                    type="text"
-                                    value={newVehicle.licensePlate}
-                                    onChange={e => setNewVehicle({ ...newVehicle, licensePlate: e.target.value.toUpperCase() })}
-                                    placeholder="Biển số xe (VD: 29A-12345)"
-                                    style={inputStyle}
-                                    onFocus={e => (e.target.style.border = `1.5px solid ${C.orange}`)}
-                                    onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
-                                />
-                                <input
-                                    type="text"
-                                    value={newVehicle.color}
-                                    onChange={e => setNewVehicle({ ...newVehicle, color: e.target.value })}
-                                    placeholder="Màu xe (VD: Đen, Đỏ...)"
-                                    style={inputStyle}
-                                    onFocus={e => (e.target.style.border = `1.5px solid ${C.orange}`)}
-                                    onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
-                                />
-                                <div className="flex gap-2">
-                                    <button type="button" onClick={handleAddVehicle} className="flex-1 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: C.orange }}>Thêm</button>
-                                    <button type="button" onClick={() => setShowAddVehicle(false)} className="flex-1 py-2 rounded-xl text-sm font-medium" style={{ background: C.white, color: C.gray, border: `1px solid #e5e7eb` }}>Hủy</button>
-                                </div>
+                                    <input
+                                        type="text"
+                                        value={newVehicle.licensePlate}
+                                        onChange={e => setNewVehicle({ ...newVehicle, licensePlate: e.target.value.toUpperCase() })}
+                                        placeholder={t('user.create.platePlaceholder')}
+                                        style={inputStyle}
+                                        onFocus={e => (e.target.style.border = `1.5px solid ${C.orange}`)}
+                                        onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
+                                    />
+                                    <input
+                                        type="text"
+                                        value={newVehicle.color}
+                                        onChange={e => setNewVehicle({ ...newVehicle, color: e.target.value })}
+                                        placeholder={t('user.create.colorPlaceholder')}
+                                        style={inputStyle}
+                                        onFocus={e => (e.target.style.border = `1.5px solid ${C.orange}`)}
+                                        onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
+                                    />
+                                    <div className="flex gap-2">
+                                        <button type="button" onClick={handleAddVehicle} className="flex-1 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: C.orange }}>{t('user.create.addBtn')}</button>
+                                        <button type="button" onClick={() => setShowAddVehicle(false)} className="flex-1 py-2 rounded-xl text-sm font-medium" style={{ background: C.white, color: C.gray, border: `1px solid #e5e7eb` }}>{t('user.create.cancelBtn')}</button>
+                                    </div>
                             </div>
                         )}
                     </div>
@@ -442,14 +444,14 @@ export default function CreateRescueRequestPage() {
                     <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                         <SectionHeader
                             step={3}
-                            title="Vị trí gặp nạn"
+                            title={t('user.create.locationSection')}
                             icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
                         />
                         <LocationPicker
-                            label="Chọn vị trí hiện tại của bạn"
+                            label={t('user.create.locationLabel')}
                             value={formData.incidentLocation}
                             onChange={(location) => setFormData({ ...formData, incidentLocation: location })}
-                            placeholder="Tìm kiếm địa điểm gặp nạn..."
+                            placeholder={t('user.create.locationSearchPlaceholder')}
                             required
                         />
                         {/* Current Location Card */}
@@ -457,7 +459,7 @@ export default function CreateRescueRequestPage() {
                             {isLoadingLocation ? (
                                 <div className="flex items-center gap-3 px-4 py-3">
                                     <div className="animate-spin rounded-full h-4 w-4 border-2 flex-shrink-0" style={{ borderColor: C.orange, borderTopColor: 'transparent' }}></div>
-                                    <span className="text-sm" style={{ color: C.gray }}>Đang lấy vị trí của bạn...</span>
+                                    <span className="text-sm" style={{ color: C.gray }}>{t('user.create.gettingLocation')}</span>
                                 </div>
                             ) : currentLocation ? (
                                 <div className="px-4 py-3">
@@ -466,13 +468,13 @@ export default function CreateRescueRequestPage() {
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" /></svg>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-semibold mb-0.5" style={{ color: C.orange }}>Vị trí hiện tại của bạn</p>
+                                            <p className="text-xs font-semibold mb-0.5" style={{ color: C.orange }}>{t('user.create.currentLocationLabel')}</p>
                                             <p className="text-sm leading-snug" style={{ color: C.navy }}>{currentLocation.addressText}</p>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={fetchLocation}
-                                            title="Làm mới vị trí"
+                                            title={t('user.create.refreshLocation')}
                                             className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-opacity hover:opacity-70"
                                             style={{ background: C.orange + '20', color: C.orange }}
                                         >
@@ -487,7 +489,7 @@ export default function CreateRescueRequestPage() {
                                         className="mt-2.5 w-full py-2 rounded-lg text-sm font-semibold transition-all active:scale-[0.98]"
                                         style={{ background: C.orange, color: 'white' }}
                                     >
-                                        Dùng vị trí này
+                                        {t('user.create.useThisLocation')}
                                     </button>
                                 </div>
                             ) : (
@@ -499,7 +501,7 @@ export default function CreateRescueRequestPage() {
                                     <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: C.border }}>
                                         <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                     </div>
-                                    <span className="text-sm" style={{ color: C.gray }}>Nhấn để lấy vị trí hiện tại</span>
+                                    <span className="text-sm" style={{ color: C.gray }}>{t('user.create.tapToGetLocation')}</span>
                                 </button>
                             )}
                         </div>
@@ -509,36 +511,36 @@ export default function CreateRescueRequestPage() {
                     <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                         <SectionHeader
                             step={4}
-                            title="Thông tin liên hệ"
+                            title={t('user.create.contactSection')}
                             icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>}
                         />
                         <label className="block text-xs font-medium mb-1.5" style={{ color: C.gray }}>
-                            Số điện thoại <span style={{ color: '#ef4444' }}>*</span>
+                            {t('user.create.phoneLabel')} <span style={{ color: '#ef4444' }}>*</span>
                         </label>
                         <input
                             type="tel"
                             value={formData.contactPhone}
                             onChange={e => setFormData({ ...formData, contactPhone: e.target.value })}
-                            placeholder="Nhập số điện thoại liên hệ"
+                            placeholder={t('user.create.phonePlaceholder')}
                             style={inputStyle}
                             onFocus={e => (e.target.style.border = `1.5px solid ${C.orange}`)}
                             onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
                             required
                         />
-                        <p className="mt-1.5 text-xs" style={{ color: C.gray }}>Provider sẽ liên hệ qua số này khi nhận yêu cầu</p>
+                        <p className="mt-1.5 text-xs" style={{ color: C.gray }}>{t('user.create.phoneHint')}</p>
                     </div>
 
                     {/* ── 5. Description ── */}
                     <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                         <SectionHeader
                             step={5}
-                            title="Mô tả chi tiết"
+                            title={t('user.create.descriptionSection')}
                             icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" /></svg>}
                         />
                         <textarea
                             value={formData.description}
                             onChange={e => setFormData({ ...formData, description: e.target.value })}
-                            placeholder="Mô tả tình trạng xe, vị trí cụ thể, thông tin bổ sung..."
+                            placeholder={t('user.create.descriptionPlaceholder')}
                             rows={3}
                             style={{ ...inputStyle, resize: 'none' }}
                             onFocus={e => (e.target.style.border = `1.5px solid ${C.orange}`)}
@@ -550,12 +552,12 @@ export default function CreateRescueRequestPage() {
                     <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                         <SectionHeader
                             step={6}
-                            title="Hình ảnh & Video"
+                            title={t('user.create.mediaSection')}
                             icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
                         />
                         <div className="space-y-4">
                             <div>
-                                <p className="text-xs font-medium mb-2" style={{ color: C.gray }}>Ảnh hiện trường (tối đa 5 ảnh)</p>
+                                <p className="text-xs font-medium mb-2" style={{ color: C.gray }}>{t('user.create.photoLabel')}</p>
                                 <ImageUpload
                                     purpose={UploadPurpose.REQUEST_PHOTO}
                                     maxImages={5}
@@ -566,7 +568,7 @@ export default function CreateRescueRequestPage() {
                                 />
                             </div>
                             <div>
-                                <p className="text-xs font-medium mb-2" style={{ color: C.gray }}>Video tình trạng xe (tùy chọn, tối đa 2 video)</p>
+                                <p className="text-xs font-medium mb-2" style={{ color: C.gray }}>{t('user.create.videoLabel')}</p>
                                 <VideoUpload
                                     label=""
                                     maxVideos={2}
@@ -621,14 +623,14 @@ export default function CreateRescueRequestPage() {
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                                     </svg>
-                                    Đang gửi...
+                                    {t('user.create.submitting')}
                                 </span>
                             ) : (
                                 <span className="flex items-center justify-center gap-2">
                                     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                     </svg>
-                                    Tạo yêu cầu cứu hộ
+                                    {t('user.create.submitBtn')}
                                 </span>
                             )}
                         </button>

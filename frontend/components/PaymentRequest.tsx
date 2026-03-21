@@ -48,6 +48,8 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
     const [disputeReason, setDisputeReason] = useState('');
     const [isDisputing, setIsDisputing] = useState(false);
     const [done, setDone] = useState(false);
+    // State for viewing photos in full-screen modal
+    const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
     // Wallet balance (only fetched when paymentMethod === WALLET)
     const [walletBalance, setWalletBalance] = useState<number | null>(null);
@@ -295,6 +297,26 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                             "{payment.note}"
                         </div>
                     )}
+
+                    {/* ── Ảnh từ Provider ── */}
+                    {payment.photoUrls && payment.photoUrls.length > 0 && (
+                        <div className="mb-2">
+                            <p className="text-xs font-semibold mb-2" style={{ color: C.navy }}>
+                                 Ảnh hiện trường từ cứu hộ viên
+                                <span className="font-normal ml-1" style={{ color: C.gray }}>({payment.photoUrls.length} ảnh)</span>
+                            </p>
+                            <div className="grid grid-cols-3 gap-1.5">
+                                {payment.photoUrls.map((url: string, i: number) => (
+                                    <button key={i} onClick={() => setSelectedPhoto(url)}
+                                        className="aspect-square rounded-xl overflow-hidden block relative outline-none focus:ring-2 focus:ring-orange-500"
+                                        style={{ background: '#f1f5f9' }}
+                                    >
+                                        <img src={url} alt={`Ảnh ${i + 1}`} className="w-full h-full object-cover" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -521,6 +543,30 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Photo Viewer Modal */}
+            {selectedPhoto && (
+                <div
+                    className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+                    style={{ background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(4px)' }}
+                    onClick={() => setSelectedPhoto(null)}
+                >
+                    <button
+                        onClick={() => setSelectedPhoto(null)}
+                        className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center bg-white/10 text-white hover:bg-white/20"
+                    >
+                        <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                    <img
+                        src={selectedPhoto}
+                        alt="View"
+                        className="max-w-full max-h-full object-contain rounded-lg"
+                        onClick={e => e.stopPropagation()}
+                    />
                 </div>
             )}
         </>

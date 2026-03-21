@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const C = {
     orange: '#f97316',
@@ -21,6 +22,7 @@ interface ArrivalConfirmationProps {
 }
 
 export default function ArrivalConfirmation({ requestId, providerName, onResponded }: ArrivalConfirmationProps) {
+    const { t } = useLanguage();
     const [isLoading, setIsLoading] = useState(false);
 
     const handleResponse = async (confirmed: boolean) => {
@@ -33,7 +35,7 @@ export default function ArrivalConfirmation({ requestId, providerName, onRespond
             }
             onResponded(confirmed);
         } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Có lỗi xảy ra. Thử lại.');
+            toast.error(err.response?.data?.message || t('user.tracking.arrival.defaultError'));
         } finally {
             setIsLoading(false);
         }
@@ -73,13 +75,11 @@ export default function ArrivalConfirmation({ requestId, providerName, onRespond
                 </div>
 
                 <h2 className="text-lg font-bold text-center mb-1" style={{ color: C.navy }}>
-                    Provider đã đến nơi!
+                    {t('user.tracking.arrival.title')}
                 </h2>
-                <p className="text-sm text-center mb-1" style={{ color: C.gray }}>
-                    <span className="font-semibold" style={{ color: C.navy }}>{providerName}</span> báo đã đến vị trí của bạn.
-                </p>
+                <p className="text-sm text-center mb-1" style={{ color: C.gray }} dangerouslySetInnerHTML={{ __html: t('user.tracking.arrival.desc', { name: providerName }) }} />
                 <p className="text-sm text-center mb-7" style={{ color: C.gray }}>
-                    Bạn có thấy provider chưa?
+                    {t('user.tracking.arrival.warning')}
                 </p>
 
                 {/* Action buttons */}
@@ -98,7 +98,7 @@ export default function ArrivalConfirmation({ requestId, providerName, onRespond
                         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#dc2626" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
-                        Chưa thấy
+                        {t('user.tracking.arrival.denyBtn')}
                     </button>
 
                     {/* YES button */}
@@ -123,7 +123,7 @@ export default function ArrivalConfirmation({ requestId, providerName, onRespond
                                 <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                 </svg>
-                                Đã thấy rồi!
+                                {t('user.tracking.arrival.confirmBtn')}
                             </>
                         )}
                     </button>
@@ -131,7 +131,7 @@ export default function ArrivalConfirmation({ requestId, providerName, onRespond
 
                 {/* Contact note */}
                 <p className="text-xs text-center mt-4" style={{ color: C.gray }}>
-                    Chưa thấy? Provider sẽ liên lạc lại với bạn ngay
+                    {t('user.tracking.arrival.contactNote')}
                 </p>
             </div>
 

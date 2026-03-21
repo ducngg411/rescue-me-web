@@ -3,6 +3,7 @@
 import { useState, lazy, Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChat } from '@/lib/hooks/useChat';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const ChatModal = lazy(() => import('@/components/ChatModal'));
 
@@ -60,8 +61,9 @@ export default function AssignedProvider({
 
     // Get current user identity directly — avoids relying on parent to pass userId correctly
     const { user: currentUser } = useAuth();
+    const { t } = useLanguage();
     const currentUserId = currentUser?.id ?? '';
-    const currentUserName = currentUser?.name ?? currentUser?.email?.split('@')[0] ?? 'Khách hàng';
+    const currentUserName = currentUser?.name ?? currentUser?.email?.split('@')[0] ?? t('user.tracking.assignedProvider.customerFallback');
 
     const displayName = provider.serviceName || provider.name || 'Provider';
     const initials = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
@@ -93,12 +95,12 @@ export default function AssignedProvider({
                 {requestStatus === 'IN_PROGRESS' ? (
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold" style={{ background: '#eff6ff', color: '#2563eb' }}>
                         <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#3b82f6' }} />
-                        Đang di chuyển đến bạn
+                        {t('user.tracking.assignedProvider.statusInProgress')}
                     </div>
                 ) : (
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold" style={{ background: '#f0fdf4', color: '#16a34a' }}>
                         <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#22c55e' }} />
-                        Đã có provider — Đang chuẩn bị
+                        {t('user.tracking.assignedProvider.statusAssigned')}
                     </div>
                 )}
             </div>
@@ -131,10 +133,10 @@ export default function AssignedProvider({
                             {provider.averageRating != null ? (
                                 <>
                                     <span className="text-xs font-medium" style={{ color: C.navy }}>{provider.averageRating.toFixed(1)}</span>
-                                    <span className="text-xs" style={{ color: C.gray }}>({provider.reviewCount} đánh giá)</span>
+                                    <span className="text-xs" style={{ color: C.gray }}>({t('user.tracking.quotes.reviews', { count: provider.reviewCount })})</span>
                                 </>
                             ) : (
-                                <span className="text-xs" style={{ color: C.gray }}>Chưa có đánh giá</span>
+                                <span className="text-xs" style={{ color: C.gray }}>{t('user.tracking.assignedProvider.noReviews')}</span>
                             )}
                         </div>
                         {/* Services */}
@@ -151,7 +153,7 @@ export default function AssignedProvider({
                             <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                             </svg>
-                            <span className="text-[10px]" style={{ color: C.gray }}>Khoảng cách</span>
+                            <span className="text-[10px]" style={{ color: C.gray }}>{t('user.tracking.assignedProvider.distanceLabel')}</span>
                         </div>
                         <p className="text-lg font-bold" style={{ color: C.navy }}>{displayDistance}</p>
                     </div>
@@ -160,7 +162,7 @@ export default function AssignedProvider({
                             <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <span className="text-[10px]" style={{ color: C.gray }}>Dự kiến tới</span>
+                            <span className="text-[10px]" style={{ color: C.gray }}>{t('user.tracking.assignedProvider.etaLabel')}</span>
                         </div>
                         <p className="text-lg font-bold" style={{ color: C.navy }}>{displayEta}</p>
                     </div>
@@ -176,7 +178,7 @@ export default function AssignedProvider({
                         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                         </svg>
-                        Gọi điện
+                        {t('user.tracking.assignedProvider.callBtn')}
                     </button>
 
                     {/* In-app chat button with UNREAD BADGE */}
@@ -188,7 +190,7 @@ export default function AssignedProvider({
                         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
-                        Nhắn tin
+                        {t('user.tracking.assignedProvider.messageBtn')}
                         {/* Unread badge */}
                         {unreadCount > 0 && (
                             <span
@@ -214,13 +216,13 @@ export default function AssignedProvider({
                 <div>
                     {requestStatus === 'IN_PROGRESS' ? (
                         <>
-                            <p className="text-sm font-semibold" style={{ color: '#1d4ed8' }}>Provider đang trên đường đến bạn</p>
-                            <p className="text-xs mt-0.5" style={{ color: '#3b82f6' }}>Vui lòng ở lại vị trí và chờ provider đến.</p>
+                            <p className="text-sm font-semibold" style={{ color: '#1d4ed8' }}>{t('user.tracking.assignedProvider.noteInProgressTitle')}</p>
+                            <p className="text-xs mt-0.5" style={{ color: '#3b82f6' }}>{t('user.tracking.assignedProvider.noteInProgressDesc')}</p>
                         </>
                     ) : (
                         <>
-                            <p className="text-sm font-semibold" style={{ color: C.navy }}>Provider đang trên đường tới</p>
-                            <p className="text-xs mt-0.5" style={{ color: C.gray }}>Vui lòng để điện thoại bật và chờ cuộc gọi xác nhận.</p>
+                            <p className="text-sm font-semibold" style={{ color: C.navy }}>{t('user.tracking.assignedProvider.noteAssignedTitle')}</p>
+                            <p className="text-xs mt-0.5" style={{ color: C.gray }}>{t('user.tracking.assignedProvider.noteAssignedDesc')}</p>
                         </>
                     )}
                 </div>
