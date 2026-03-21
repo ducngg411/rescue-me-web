@@ -166,7 +166,7 @@ export default function LoginPage() {
                                         {t('auth.login.passwordLabel')}
                                     </label>
                                     <a
-                                        href="#"
+                                        href="/auth/forgot-password"
                                         className="text-xs transition-colors"
                                         style={{ color: '#f97316' }}
                                         onMouseEnter={e => (e.currentTarget.style.color = '#ea6c0a')}

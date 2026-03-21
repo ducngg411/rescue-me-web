@@ -1,30 +1,46 @@
 import {
     Injectable,
+    Logger,
     ConflictException,
     UnauthorizedException,
     BadRequestException,
+    NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
 import { OAuth2Client } from 'google-auth-library';
-import { RegisterEmailDto, LoginEmailDto, CompleteProfileDto, SelectRoleDto, ChangePasswordDto } from './dto/auth.dto';
-import { AuthProvider, User } from '@prisma/client';
+import {
+    RegisterEmailDto,
+    LoginEmailDto,
+    CompleteProfileDto,
+    SelectRoleDto,
+    ChangePasswordDto,
+    ForgotPasswordEmailDto,
+    ForgotPasswordPhoneDto,
+    ResetPasswordDto,
+} from './dto/auth.dto';
+import { AuthProvider, ResetType, User } from '@prisma/client';
+import { MailService } from '../mail/mail.service';
+import { FirebaseService } from '../firebase/firebase.service';
 
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(AuthService.name);
     private googleClient: OAuth2Client;
 
     constructor(
         private prisma: PrismaService,
         private jwtService: JwtService,
+        private mailService: MailService,
+        private firebaseService: FirebaseService,
     ) {
         this.googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
     }
 
     // ==================== EMAIL REGISTRATION ====================
     async registerWithEmail(dto: RegisterEmailDto) {
-        // Kiểm tra email đã tồn tại
         const existingUser = await this.prisma.user.findUnique({
             where: { email: dto.email },
         });
@@ -33,10 +49,8 @@ export class AuthService {
             throw new ConflictException('Email đã được sử dụng');
         }
 
-        // Hash password
         const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-        // Tạo user mới
         const user = await this.prisma.user.create({
             data: {
                 email: dto.email,
@@ -47,7 +61,9 @@ export class AuthService {
             },
         });
 
-        // Tạo session và tokens
+        // Gửi welcome email ngay sau khi đăng ký (fire-and-forget)
+        this.mailService.sendWelcomeEmail(user.email, user.name || user.email).catch(() => {});
+
         const tokens = await this.createSession(user);
 
         return {
@@ -59,7 +75,6 @@ export class AuthService {
 
     // ==================== EMAIL LOGIN ====================
     async loginWithEmail(dto: LoginEmailDto) {
-        // Tìm user
         const user = await this.prisma.user.findUnique({
             where: { email: dto.email },
         });
@@ -68,14 +83,12 @@ export class AuthService {
             throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
         }
 
-        // Kiểm tra authProvider
         if (user.authProvider !== AuthProvider.EMAIL) {
             throw new BadRequestException(
                 'Tài khoản này được tạo bằng Google. Vui lòng đăng nhập bằng Google',
             );
         }
 
-        // Verify password
         const isPasswordValid = await bcrypt.compare(
             dto.password,
             user.hashedPassword || '',
@@ -85,13 +98,11 @@ export class AuthService {
             throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
         }
 
-        // Update last login
         await this.prisma.user.update({
             where: { id: user.id },
             data: { lastLogin: new Date() },
         });
 
-        // Tạo session và tokens
         const tokens = await this.createSession(user);
 
         return {
@@ -104,7 +115,6 @@ export class AuthService {
     // ==================== GOOGLE AUTH ====================
     async loginWithGoogle(idToken: string) {
         try {
-            // Verify Google ID Token
             const ticket = await this.googleClient.verifyIdToken({
                 idToken,
                 audience: process.env.GOOGLE_CLIENT_ID,
@@ -117,7 +127,6 @@ export class AuthService {
 
             const { email, name, picture, sub: googleId } = payload;
 
-            // Tìm hoặc tạo user
             let user = await this.prisma.user.findUnique({
                 where: { email },
             });
@@ -125,7 +134,6 @@ export class AuthService {
             let isNewUser = false;
 
             if (!user) {
-                // Tạo user mới
                 user = await this.prisma.user.create({
                     data: {
                         email,
@@ -137,15 +145,15 @@ export class AuthService {
                     },
                 });
                 isNewUser = true;
+                // Gửi welcome email cho Google user mới
+                this.mailService.sendWelcomeEmail(email, name || email).catch(() => {});
             } else {
-                // Update last login
                 await this.prisma.user.update({
                     where: { id: user.id },
                     data: { lastLogin: new Date() },
                 });
             }
 
-            // Tạo session và tokens
             const tokens = await this.createSession(user);
 
             return {
@@ -172,6 +180,150 @@ export class AuthService {
         return this.sanitizeUser(user);
     }
 
+    // ==================== FORGOT PASSWORD — EMAIL ====================
+    async forgotPasswordByEmail(dto: ForgotPasswordEmailDto) {
+        const user = await this.prisma.user.findUnique({
+            where: { email: dto.email },
+        });
+
+        if (!user) {
+            throw new NotFoundException('Email này chưa được đăng ký trong hệ thống.');
+        }
+
+        if (user.authProvider !== AuthProvider.EMAIL) {
+            throw new BadRequestException(
+                'Tài khoản này được tạo bằng Google. Vui lòng đăng nhập bằng Google.',
+            );
+        }
+
+        // Xóa các token cũ chưa dùng của user
+        await this.prisma.passwordResetToken.deleteMany({
+            where: { userId: user.id, type: ResetType.EMAIL, used: false },
+        });
+
+        const token = uuidv4();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 phút
+
+        await this.prisma.passwordResetToken.create({
+            data: {
+                userId: user.id,
+                token,
+                type: ResetType.EMAIL,
+                expiresAt,
+            },
+        });
+
+        try {
+            await this.mailService.sendPasswordResetEmail(
+                user.email,
+                user.name || user.email,
+                token,
+            );
+        } catch (err) {
+            // SMTP/template errors must not become 500: same generic response as "email not found"
+            this.logger.error(
+                `Password reset email failed for ${user.email}`,
+                err instanceof Error ? err.stack : err,
+            );
+        }
+
+        return { message: 'Email đặt lại mật khẩu đã được gửi.' };
+    }
+
+    // ==================== FORGOT PASSWORD — PHONE (Firebase) ====================
+    async forgotPasswordByPhone(dto: ForgotPasswordPhoneDto) {
+        // Verify Firebase token và lấy phoneNumber
+        let phoneNumber: string;
+        try {
+            const result = await this.firebaseService.verifyPhoneToken(dto.firebaseIdToken);
+            phoneNumber = result.phoneNumber;
+        } catch (error) {
+            throw new UnauthorizedException('Firebase token không hợp lệ hoặc đã hết hạn');
+        }
+
+        // Chuẩn hóa số điện thoại: Firebase trả về +84xxxxxxxxx, convert về 0xxxxxxxxx
+        const normalizedPhone = phoneNumber.startsWith('+84')
+            ? '0' + phoneNumber.slice(3)
+            : phoneNumber;
+
+        const user = await this.prisma.user.findFirst({
+            where: { phoneNumber: normalizedPhone },
+        });
+
+        if (!user) {
+            throw new NotFoundException('Không tìm thấy tài khoản với số điện thoại này');
+        }
+
+        // Xóa các token cũ chưa dùng của user
+        await this.prisma.passwordResetToken.deleteMany({
+            where: { userId: user.id, type: ResetType.PHONE, used: false },
+        });
+
+        const resetToken = uuidv4();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 phút
+
+        await this.prisma.passwordResetToken.create({
+            data: {
+                userId: user.id,
+                token: resetToken,
+                type: ResetType.PHONE,
+                expiresAt,
+            },
+        });
+
+        return {
+            message: 'Xác thực điện thoại thành công',
+            resetToken,
+        };
+    }
+
+    // ==================== RESET PASSWORD ====================
+    async resetPassword(dto: ResetPasswordDto) {
+        const resetToken = await this.prisma.passwordResetToken.findUnique({
+            where: { token: dto.token },
+            include: { user: true },
+        });
+
+        if (!resetToken) {
+            throw new BadRequestException('Token không hợp lệ hoặc đã được sử dụng');
+        }
+
+        if (resetToken.used) {
+            throw new BadRequestException('Token đã được sử dụng');
+        }
+
+        if (resetToken.expiresAt < new Date()) {
+            await this.prisma.passwordResetToken.delete({ where: { id: resetToken.id } });
+            throw new BadRequestException('Token đã hết hạn. Vui lòng yêu cầu đặt lại mật khẩu mới');
+        }
+
+        const user = resetToken.user;
+
+        if (user.authProvider !== AuthProvider.EMAIL) {
+            throw new BadRequestException('Tài khoản Google không thể đặt lại mật khẩu bằng cách này');
+        }
+
+        const newHashedPassword = await bcrypt.hash(dto.newPassword, 10);
+
+        // Cập nhật password và đánh dấu token đã dùng (transaction)
+        await this.prisma.$transaction([
+            this.prisma.user.update({
+                where: { id: user.id },
+                data: { hashedPassword: newHashedPassword },
+            }),
+            this.prisma.passwordResetToken.update({
+                where: { id: resetToken.id },
+                data: { used: true },
+            }),
+            // Xóa toàn bộ session cũ để buộc đăng nhập lại
+            this.prisma.session.deleteMany({
+                where: { userId: user.id },
+            }),
+        ]);
+
+        return { message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.' };
+    }
+
     // ==================== SESSION & TOKEN MANAGEMENT ====================
     private async createSession(user: User) {
         const accessToken = this.jwtService.sign(
@@ -184,14 +336,13 @@ export class AuthService {
             { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' },
         );
 
-        // Lưu session vào database (upsert để tránh lỗi unique constraint khi double-submit)
         await this.prisma.session.upsert({
             where: { token: accessToken },
             create: {
                 userId: user.id,
                 token: accessToken,
                 refreshToken,
-                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
             },
             update: {
                 refreshToken,
@@ -230,7 +381,6 @@ export class AuthService {
 
     // ==================== ROLE SELECTION ====================
     async selectRole(userId: string, dto: SelectRoleDto) {
-        // Kiểm tra user tồn tại
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
         });
@@ -239,12 +389,10 @@ export class AuthService {
             throw new UnauthorizedException('User không tồn tại');
         }
 
-        // Không cho phép thay đổi role nếu đã hoàn thành profile
         if (user.profileCompleted) {
             throw new BadRequestException('Không thể thay đổi role sau khi hoàn thành profile');
         }
 
-        // Cập nhật role
         const updatedUser = await this.prisma.user.update({
             where: { id: userId },
             data: { role: dto.role },

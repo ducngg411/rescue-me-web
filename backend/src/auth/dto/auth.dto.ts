@@ -97,6 +97,29 @@ export class ChangePasswordDto {
     newPassword: string;
 }
 
+export class ForgotPasswordEmailDto {
+    @IsEmail({}, { message: 'Email không hợp lệ' })
+    email: string;
+}
+
+export class ForgotPasswordPhoneDto {
+    @IsString({ message: 'Firebase ID Token không được để trống' })
+    firebaseIdToken: string;
+}
+
+export class ResetPasswordDto {
+    @IsString({ message: 'Token không được để trống' })
+    token: string;
+
+    @IsString()
+    @MinLength(8, { message: 'Mật khẩu mới phải có ít nhất 8 ký tự' })
+    @Matches(/^(?=.*[A-Z])(?=.*\d)/, {
+        message: 'Mật khẩu mới phải có ít nhất 1 chữ hoa và 1 số',
+    })
+    newPassword: string;
+}
+
+
 export class UpdateUserProfileDto {
     @IsString({ message: 'Họ tên không được để trống' })
     @MaxLength(100, { message: 'Họ tên không được vượt quá 100 ký tự' })

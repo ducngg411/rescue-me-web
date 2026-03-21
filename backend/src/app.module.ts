@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { join } from 'path';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -13,15 +14,22 @@ import { RescueRequestModule } from './rescue-request/rescue-request.module';
 import { VietMapModule } from './vietmap/vietmap.module';
 import { WalletModule } from './wallet/wallet.module';
 import { UserWalletModule } from './user-wallet/user-wallet.module';
+import { FirebaseModule } from './firebase/firebase.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      // Default is cwd-relative; running from another folder (IDE/monorepo) skips backend/.env.
+      envFilePath: [
+        join(__dirname, '..', '..', '.env'),
+        join(process.cwd(), '.env'),
+      ],
     }),
     ScheduleModule.forRoot(),
     PrismaModule,
     VietMapModule,
+    FirebaseModule,
     AuthModule,
     UserModule,
     ProviderModule,

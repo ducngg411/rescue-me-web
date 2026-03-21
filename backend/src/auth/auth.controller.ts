@@ -17,6 +17,9 @@ import {
     CompleteProfileDto,
     SelectRoleDto,
     ChangePasswordDto,
+    ForgotPasswordEmailDto,
+    ForgotPasswordPhoneDto,
+    ResetPasswordDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
@@ -71,6 +74,25 @@ export class AuthController {
     @HttpCode(HttpStatus.OK)
     async changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
         return this.authService.changePassword(req.user.id, dto);
+    }
+
+    // ==================== FORGOT PASSWORD ====================
+    @Post('forgot-password/email')
+    @HttpCode(HttpStatus.OK)
+    async forgotPasswordEmail(@Body() dto: ForgotPasswordEmailDto) {
+        return this.authService.forgotPasswordByEmail(dto);
+    }
+
+    @Post('forgot-password/phone')
+    @HttpCode(HttpStatus.OK)
+    async forgotPasswordPhone(@Body() dto: ForgotPasswordPhoneDto) {
+        return this.authService.forgotPasswordByPhone(dto);
+    }
+
+    @Post('reset-password')
+    @HttpCode(HttpStatus.OK)
+    async resetPassword(@Body() dto: ResetPasswordDto) {
+        return this.authService.resetPassword(dto);
     }
 
     // ==================== LOGOUT ====================

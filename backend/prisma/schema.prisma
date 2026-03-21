@@ -63,6 +63,7 @@ model User {
   sessions              Session[]
   uploads               Upload[]
   userWallet            UserWallet?        @relation("UserWallet")
+  passwordResetTokens   PasswordResetToken[]
 
   @@index([email])
   @@index([googleId])
@@ -371,6 +372,26 @@ model UserTopupTransaction {
   @@index([walletId, status])
   @@index([transferCode])
   @@map("user_topup_transactions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  type      ResetType
+  expiresAt DateTime
+  used      Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("password_reset_tokens")
+}
+
+enum ResetType {
+  EMAIL
+  PHONE
 }
 
 enum AuthProvider {

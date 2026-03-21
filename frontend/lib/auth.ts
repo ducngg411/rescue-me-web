@@ -164,3 +164,19 @@ export const updateProviderProfile = async (data: UpdateProviderProfileData): Pr
     const response = await api.put('/me/provider/profile', data);
     return response.data;
 };
+
+// ==================== FORGOT PASSWORD ====================
+export const forgotPasswordByEmail = async (email: string): Promise<{ message: string }> => {
+    const response = await api.post('/auth/forgot-password/email', { email });
+    return response.data;
+};
+
+export const forgotPasswordByPhone = async (firebaseIdToken: string): Promise<{ message: string; resetToken: string }> => {
+    const response = await api.post('/auth/forgot-password/phone', { firebaseIdToken });
+    return response.data;
+};
+
+export const resetPassword = async (token: string, newPassword: string): Promise<{ message: string }> => {
+    const response = await api.post('/auth/reset-password', { token, newPassword });
+    return response.data;
+};

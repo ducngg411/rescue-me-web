@@ -6,11 +6,15 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
+import { MailModule } from '../mail/mail.module';
+import { FirebaseModule } from '../firebase/firebase.module';
 
 @Module({
     imports: [
         PrismaModule,
         PassportModule,
+        MailModule,
+        FirebaseModule,
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: async (configService: ConfigService) => ({
