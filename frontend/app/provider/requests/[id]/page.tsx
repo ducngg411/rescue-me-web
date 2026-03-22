@@ -99,6 +99,8 @@ export default function ProviderRequestDetailPage() {
     const [quoteAccepted, setQuoteAccepted] = useState(false);
     /** Customer accepted another provider; this quote was superseded (CANCELLED) */
     const [lostSelection, setLostSelection] = useState(false);
+    /** Initial load 403 — no request payload; still show message + manual back */
+    const [lostAccessWithoutRequest, setLostAccessWithoutRequest] = useState(false);
     const [showNavigationMap, setShowNavigationMap] = useState(false);
     const [isStartingNav, setIsStartingNav] = useState(false);
     const [selectedConfirmImage, setSelectedConfirmImage] = useState<string | null>(null);
@@ -131,6 +133,10 @@ export default function ProviderRequestDetailPage() {
     // Image viewer state
     const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
     const imageUrls = request?.media.filter(m => m.mediaType === 'IMAGE').map(m => m.publicUrl) || [];
+
+    useEffect(() => {
+        setLostAccessWithoutRequest(false);
+    }, [requestId]);
 
     useEffect(() => {
         if (user && user.role === 'PROVIDER') {
@@ -181,11 +187,14 @@ export default function ProviderRequestDetailPage() {
                     // Another provider was chosen (or quote expired)
                     setHasPendingQuote(false);
                     setLostSelection(true);
-                    toast.error('💔 ' + t('provider.requestDetail.otherProviderChosen'), { duration: 4000 });
+                    toast.error(t('provider.requestDetail.otherProviderChosenToast'), { duration: 5000 });
                     removeFromHistoryStorage(requestId);
-                    setTimeout(() => {
-                        router.push('/provider/active');
-                    }, 2500);
+                    try {
+                        const rr = await api.get(`/rescue-requests/${requestId}/provider-view`);
+                        setRequest((prev) => (prev ? { ...prev, ...rr.data } : rr.data));
+                    } catch {
+                        /* giữ UI hiện tại + banner */
+                    }
                     return;
                 }
             }
@@ -214,14 +223,19 @@ export default function ProviderRequestDetailPage() {
             if (rd.status === 'ASSIGNED' && rd.assignedProviderId !== user?.id) {
                 setHasPendingQuote(false);
                 setLostSelection(true);
-                toast.error('💔 ' + t('provider.requestDetail.otherProviderChosen'), { duration: 4000 });
+                toast.error(t('provider.requestDetail.otherProviderChosenToast'), { duration: 5000 });
                 removeFromHistoryStorage(requestId);
-                setTimeout(() => {
-                    router.push('/provider/active');
-                }, 2500);
+                setRequest((prev) => (prev ? { ...prev, ...rd } : prev));
             }
-        } catch (err) {
-            console.error('Error checking quote status:', err);
+        } catch (err: any) {
+            if (err.response?.status === 403) {
+                setHasPendingQuote(false);
+                setLostSelection(true);
+                toast.error(t('provider.requestDetail.otherProviderChosenToast'), { duration: 5000 });
+                removeFromHistoryStorage(requestId);
+            } else {
+                console.error('Error checking quote status:', err);
+            }
         }
     };
 
@@ -269,9 +283,20 @@ export default function ProviderRequestDetailPage() {
 
                 if (rd.status === 'ASSIGNED' && rd.assignedProviderId && rd.assignedProviderId !== user.id) {
                     setLostSelection(true);
-                    toast.error('💔 ' + t('provider.requestDetail.otherProviderChosen'), { duration: 4000 });
+                    toast.error(t('provider.requestDetail.otherProviderChosenToast'), { duration: 5000 });
                     removeFromHistoryStorage(requestId);
-                    setTimeout(() => router.push('/provider/active'), 2500);
+                    setRequest((prev) =>
+                        prev
+                            ? {
+                                  ...prev,
+                                  status: rd.status,
+                                  assignedProviderId: rd.assignedProviderId,
+                                  quoteCount: rd.quoteCount ?? prev.quoteCount,
+                                  maxQuotes: rd.maxQuotes ?? prev.maxQuotes,
+                                  quoteWindowOpen: rd.quoteWindowOpen ?? false,
+                              }
+                            : prev
+                    );
                 }
             } catch (err: any) {
                 const errorMessage = err.response?.data?.message || '';
@@ -285,6 +310,10 @@ export default function ProviderRequestDetailPage() {
                         duration: 4000,
                     });
                     setTimeout(() => router.push('/provider/active'), 2000);
+                } else if (err.response?.status === 403) {
+                    setLostSelection(true);
+                    toast.error(t('provider.requestDetail.otherProviderChosenToast'), { duration: 5000 });
+                    removeFromHistoryStorage(requestId);
                 }
             }
         };
@@ -403,6 +432,7 @@ export default function ProviderRequestDetailPage() {
             }
 
             setError(null);
+            setLostAccessWithoutRequest(false);
         } catch (err: any) {
             console.error('Error fetching request:', err);
 
@@ -424,6 +454,12 @@ export default function ProviderRequestDetailPage() {
                 setTimeout(() => {
                     router.push('/provider/active');
                 }, 2000);
+            } else if (err.response?.status === 403) {
+                setRequest(null);
+                toast.error(t('provider.requestDetail.otherProviderChosenToast'), { duration: 5000 });
+                removeFromHistoryStorage(requestId);
+                setLostSelection(true);
+                setLostAccessWithoutRequest(true);
             } else {
                 setError(errorMessage || t('provider.requestDetail.loadError'));
             }
@@ -566,6 +602,28 @@ export default function ProviderRequestDetailPage() {
         );
     }
 
+    if (lostAccessWithoutRequest && !request) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+                <div
+                    className="bg-white rounded-2xl p-8 max-w-md w-full border-2"
+                    style={{ borderColor: '#fed7aa', boxShadow: '0 1px 12px rgba(0,0,0,0.06)' }}
+                >
+                    <p className="font-bold text-[#9a3412] text-base mb-2">{t('provider.requestDetail.otherProviderChosen')}</p>
+                    <p className="text-sm text-[#c2410c] mb-6">{t('provider.requestDetail.lostSelectionHint')}</p>
+                    <button
+                        type="button"
+                        onClick={() => router.push('/provider/active')}
+                        className="w-full py-3 rounded-xl text-sm font-bold text-white"
+                        style={{ background: '#f97316' }}
+                    >
+                        {t('provider.requestDetail.backToActiveList')}
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     if (error || !request) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -596,7 +654,11 @@ export default function ProviderRequestDetailPage() {
                 user={{ name: request!.user?.name, phoneNumber: request!.contactPhone, avatar: request!.user?.avatar }}
                 eta={myQuoteDetails?.estimatedArrivalMinutes ?? null}
                 requestId={requestId}
-                customerName={request!.user?.name ?? t('provider.requestDetail.customerFallback')}
+                customerName={
+                    request!.requesterType === 'GUEST'
+                        ? (request!.user?.name ?? t('provider.requestDetail.walkInGuest'))
+                        : (request!.user?.name ?? t('provider.requestDetail.customerFallback'))
+                }
                 requestDetails={{
                     incidentType: request!.incidentType,
                     vehicleType: request!.vehicleType,
@@ -648,14 +710,22 @@ export default function ProviderRequestDetailPage() {
                         <p className="text-xs font-semibold mb-3" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.customerInfo')}</p>
                         <div className="flex items-center gap-3 mb-3">
                             <AvatarImage
-                                name={req.user?.name || t('provider.requestDetail.customerFallback')}
+                                name={
+                                    req.requesterType === 'GUEST'
+                                        ? (req.user?.name || t('provider.requestDetail.walkInGuest'))
+                                        : (req.user?.name || t('provider.requestDetail.customerFallback'))
+                                }
                                 avatar={req.user?.avatar}
                                 className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold"
                                 fallbackBackground={`linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`}
                                 initialsCount={1}
                             />
                             <div>
-                                <p className="text-sm font-bold" style={{ color: C.navy }}>{req.user?.name || t('provider.requestDetail.customerFallback')}</p>
+                                <p className="text-sm font-bold" style={{ color: C.navy }}>
+                                    {req.requesterType === 'GUEST'
+                                        ? (req.user?.name || t('provider.requestDetail.walkInGuest'))
+                                        : (req.user?.name || t('provider.requestDetail.customerFallback'))}
+                                </p>
                                 <p className="text-xs" style={{ color: C.gray }}>{req.contactPhone}</p>
                             </div>
                             <a
@@ -958,7 +1028,11 @@ export default function ProviderRequestDetailPage() {
                             currentUserRole="PROVIDER"
                             currentUserName={user.name ?? 'Provider'}
                             myAvatar={user.avatar}
-                            otherPartyName={request.user?.name ?? 'Khách hàng'}
+                            otherPartyName={
+                                request.requesterType === 'GUEST'
+                                    ? (request.user?.name ?? t('provider.requestDetail.walkInGuest'))
+                                    : (request.user?.name ?? t('provider.requestDetail.customerFallback'))
+                            }
                             otherPartyAvatar={request.user?.avatar}
                             onClose={() => setIsChatOpen(false)}
                         />
@@ -1148,11 +1222,17 @@ export default function ProviderRequestDetailPage() {
                                     <svg width="16" height="16" className="md:w-[18px] md:h-[18px]" fill="none" stroke="#f97316" viewBox="0 0 24 24" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                     </svg>
-                                    {t('provider.requestDetail.customerInfoSection')}
+                                    {request.requesterType === 'GUEST'
+                                        ? t('provider.requestDetail.customerInfoSectionWalkIn')
+                                        : t('provider.requestDetail.customerInfoSection')}
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <AvatarImage
-                                        name={request.user?.name || t('provider.requestDetail.customerFallback')}
+                                        name={
+                                            request.requesterType === 'GUEST'
+                                                ? (request.user?.name || t('provider.requestDetail.walkInGuest'))
+                                                : (request.user?.name || t('provider.requestDetail.customerFallback'))
+                                        }
                                         avatar={request.user?.avatar}
                                         className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-orange-100 flex-shrink-0 flex items-center justify-center text-lg md:text-xl font-bold text-orange-600"
                                         fallbackBackground="#ffedd5"
@@ -1160,7 +1240,9 @@ export default function ProviderRequestDetailPage() {
                                     />
                                     <div>
                                         <div className="font-bold text-[#1a1a2e] text-[15px] md:text-base mb-0.5 md:mb-1">
-                                            {request.user?.name || (request.requesterType === 'GUEST' ? 'Khách vãng lai' : t('provider.requestDetail.customerFallback'))}
+                                            {request.requesterType === 'GUEST'
+                                                ? (request.user?.name || t('provider.requestDetail.walkInGuest'))
+                                                : (request.user?.name || t('provider.requestDetail.customerFallback'))}
                                         </div>
                                         <div className="flex items-center gap-1.5 text-xs md:text-sm font-medium text-gray-500">
                                             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

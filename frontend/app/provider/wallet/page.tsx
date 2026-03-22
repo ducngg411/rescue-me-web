@@ -7,6 +7,7 @@ import {
     AlertCircle, ShieldX, ArrowLeft, QrCode, Plus, ExternalLink,
 } from 'lucide-react';
 import api from '@/lib/api';
+import { isJobPaymentQrProviderTx } from '@/lib/providerWalletTxLabels';
 import { useProviderGuard } from '@/lib/guards';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -622,7 +623,10 @@ function TxRow({ tx }: { tx: Transaction }) {
                 return t('provider.wallet.txDesc.commission').replace('{id}', shortId);
             case 'JOB_PAYMENT': {
                 const jobId = tx.referenceId?.slice(0, 8).toUpperCase() ?? shortId;
-                return t('provider.wallet.txDesc.jobPayment').replace('{id}', jobId);
+                const key = isJobPaymentQrProviderTx(tx.description)
+                    ? 'provider.wallet.txDesc.jobPaymentQr'
+                    : 'provider.wallet.txDesc.jobPaymentWallet';
+                return t(key).replace('{id}', jobId);
             }
             case 'TOPUP': {
                 const code = tx.description?.split('·')[1]?.trim() ?? shortId;
@@ -742,11 +746,17 @@ function TxRow({ tx }: { tx: Transaction }) {
                                             </span>
                                         </div>
                                     )}
-                                    {(jobDetails.user?.name || jobDetails.user?.fullName) && (
+                                    {(jobDetails.requesterType === 'GUEST' || jobDetails.user?.name || jobDetails.user?.fullName) && (
                                         <div className="flex justify-between items-center">
-                                            <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.labels.customer')}</span>
+                                            <span className="text-xs" style={{ color: C.gray }}>
+                                                {jobDetails.requesterType === 'GUEST'
+                                                    ? t('provider.txDetail.labels.walkInGuest')
+                                                    : t('provider.txDetail.labels.customer')}
+                                            </span>
                                             <span className="text-xs font-semibold" style={{ color: C.navy }}>
-                                                {jobDetails.user?.fullName || jobDetails.user?.name}
+                                                {jobDetails.requesterType === 'GUEST'
+                                                    ? (jobDetails.user?.fullName || jobDetails.user?.name || t('provider.requestDetail.walkInGuest'))
+                                                    : (jobDetails.user?.fullName || jobDetails.user?.name)}
                                             </span>
                                         </div>
                                     )}

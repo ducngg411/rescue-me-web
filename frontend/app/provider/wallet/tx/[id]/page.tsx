@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { isJobPaymentQrProviderTx } from '@/lib/providerWalletTxLabels';
 import { useProviderGuard } from '@/lib/guards';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
@@ -121,6 +122,18 @@ export default function TxDetailPage() {
 
     const { transaction: tx, jobDetail: job } = data;
     const isCredit = tx.type === 'CREDIT';
+    const jobPaymentDisplayDesc =
+        tx.referenceType === 'JOB_PAYMENT' && tx.referenceId
+            ? (isJobPaymentQrProviderTx(tx.description)
+                ? t('provider.wallet.txDesc.jobPaymentQr').replace(
+                    '{id}',
+                    String(tx.referenceId).slice(0, 8).toUpperCase(),
+                )
+                : t('provider.wallet.txDesc.jobPaymentWallet').replace(
+                    '{id}',
+                    String(tx.referenceId).slice(0, 8).toUpperCase(),
+                ))
+            : null;
     const statusConfig = {
         PENDING: { label: t('provider.txDetail.statusLabels.PENDING' as any), bg: '#fefce8', color: '#ca8a04', Icon: Clock },
         COMPLETED: { label: t('provider.txDetail.statusLabels.COMPLETED' as any), bg: C.greenLight, color: C.green, Icon: CheckCircle2 },
@@ -180,7 +193,12 @@ export default function TxDetailPage() {
                         <Row label={t('provider.txDetail.rowLabels.date')} value={fmtDate(tx.createdAt)} />
                         <Row label={t('provider.txDetail.rowLabels.type')} value={isCredit ? t('provider.txDetail.rowLabels.credit') : t('provider.txDetail.rowLabels.debit')} />
                         <Row label={t('provider.txDetail.labels.status')} value={statusConfig.label} valueColor={statusConfig.color} />
-                        {tx.description && <Row label={t('provider.txDetail.rowLabels.description')} value={tx.description} />}
+                        {(jobPaymentDisplayDesc || tx.description) && (
+                            <Row
+                                label={t('provider.txDetail.rowLabels.description')}
+                                value={jobPaymentDisplayDesc ?? tx.description}
+                            />
+                        )}
                         {tx.holdReleaseAt && (
                             <Row label={t('provider.txDetail.rowLabels.disbursedAt')} value={fmtDate(tx.holdReleaseAt)} valueColor={C.orange} />
                         )}
@@ -230,7 +248,7 @@ export default function TxDetailPage() {
                         <SectionHeader icon={<Banknote className="w-4 h-4" style={{ color: C.green }} />} title={t('provider.txDetail.payment.title')} bg={C.greenLight} />
                         <div className="px-5 py-4 space-y-3">
                             <Row label={t('provider.txDetail.payment.method')} value={
-                                job.payment.paymentMethod === 'QR' ? `🏦 ${t('provider.txDetail.payment.transfer')}`
+                                job.payment.paymentMethod === 'QR' ? ` ${t('provider.txDetail.payment.transfer')}`
                                     : job.payment.paymentMethod === 'WALLET' ? ' Ví điện tử RescueMe'
                                         : ` ${t('provider.txDetail.payment.cash')}`
                             } />

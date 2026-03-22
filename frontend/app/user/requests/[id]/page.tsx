@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUserGuard } from '@/lib/guards';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useRequestTracking } from '@/lib/hooks/useRequestTracking';
 import MatchingStatus from '@/components/MatchingStatus';
 import AssignedProvider from '@/components/AssignedProvider';
@@ -10,6 +11,7 @@ import ArrivalConfirmation from '@/components/ArrivalConfirmation';
 import PaymentRequest from '@/components/PaymentRequest';
 import ExpiredRetry from '@/components/ExpiredRetry';
 import QuoteSelectionPanel from '@/components/QuoteSelectionPanel';
+import RescueProgressTimeline from '@/components/RescueProgressTimeline';
 import AvatarImage from '@/components/AvatarImage';
 import { Clock, Banknote, User, Wrench, CheckCircle2, Image as ImageIcon, Play, Phone } from 'lucide-react';
 import api from '@/lib/api';
@@ -808,6 +810,7 @@ export default function RequestTrackingPage() {
     const router = useRouter();
     const params = useParams();
     const requestId = params.id as string;
+    const { t } = useLanguage();
     const { isReady } = useUserGuard();
     const [isRetrying, setIsRetrying] = useState(false);
     const [showQuoteSelection, setShowQuoteSelection] = useState(false);
@@ -994,6 +997,23 @@ export default function RequestTrackingPage() {
                         </p>
                     </div>
                 </div>
+            </div>
+
+            {/* ── Two-phase progress timeline (same UX as guest) ── */}
+            <div className="px-4 pt-3 max-w-2xl mx-auto w-full">
+                <RescueProgressTimeline
+                    status={status.status}
+                    quoteCount={status.quoteCount ?? 0}
+                    labels={{
+                        sent: t('user.tracking.progressTimeline.sent'),
+                        searching: t('user.tracking.progressTimeline.searching'),
+                        chooseQuote: t('user.tracking.progressTimeline.chooseQuote'),
+                        moving: t('user.tracking.progressTimeline.moving'),
+                        working: t('user.tracking.progressTimeline.working'),
+                        payment: t('user.tracking.progressTimeline.payment'),
+                        done: t('user.tracking.progressTimeline.done'),
+                    }}
+                />
             </div>
 
             {/* ── Main Content ── */}
