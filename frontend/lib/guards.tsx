@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGuest } from '@/contexts/GuestContext';
 
 /**
  * Hook to protect routes that require authentication and profile completion
@@ -281,4 +282,26 @@ export function ProtectedRoute({
     }
 
     return <>{children} </>;
+}
+
+/**
+ * Hook to protect guest-only routes.
+ * Redirects to /guest/rescue/new if no valid guest token is found.
+ */
+export function useGuestGuard() {
+    const router = useRouter();
+    const { guestToken, guestSession, loading } = useGuest();
+
+    useEffect(() => {
+        if (loading) return;
+        if (!guestToken || !guestSession) {
+            router.push('/guest/rescue/new');
+        }
+    }, [guestToken, guestSession, loading, router]);
+
+    return {
+        guestSession,
+        loading,
+        isReady: !loading && !!guestToken && !!guestSession,
+    };
 }

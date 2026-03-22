@@ -331,18 +331,18 @@ export default function HistoryJobDetailPage() {
                             value={t(`provider.historyDetail.vehicleLabels.${req.vehicleType}` as any) ?? req.vehicleType}
                         />
                     )}
-                    {req.user?.licensePlate && (
+                    {(req.licensePlate?.trim() || req.user?.licensePlate) && (
                         <InfoRow
                             icon={<span style={{ color: C.orange, fontSize: 11, fontWeight: 700 }}>{t('provider.historyDetail.infoLabels2.bsx')}</span>}
                             label={t('provider.historyDetail.infoLabels2.licensePlate')}
-                            value={req.user.licensePlate}
+                            value={req.licensePlate?.trim() || req.user?.licensePlate}
                         />
                     )}
-                    {req.user?.vehicleColor && (
+                    {(req.vehicleColor?.trim() || req.user?.vehicleColor) && (
                         <InfoRow
                             icon={<span style={{ color: C.orange, fontSize: 11, fontWeight: 700 }}>{t('provider.historyDetail.infoLabels2.color')}</span>}
                             label={t('provider.historyDetail.infoLabels2.vehicleColor')}
-                            value={req.user.vehicleColor}
+                            value={req.vehicleColor?.trim() || req.user?.vehicleColor}
                         />
                     )}
                     {req.pickupLocation?.addressText && (

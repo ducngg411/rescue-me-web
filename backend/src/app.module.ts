@@ -15,6 +15,8 @@ import { VietMapModule } from './vietmap/vietmap.module';
 import { WalletModule } from './wallet/wallet.module';
 import { UserWalletModule } from './user-wallet/user-wallet.module';
 import { FirebaseModule } from './firebase/firebase.module';
+import { GuestAuthModule } from './guest-auth/guest-auth.module';
+import { GuestRescueModule } from './guest-rescue/guest-rescue.module';
 
 @Module({
   imports: [
@@ -38,6 +40,8 @@ import { FirebaseModule } from './firebase/firebase.module';
     RescueRequestModule,
     WalletModule,
     UserWalletModule,
+    GuestAuthModule,
+    GuestRescueModule,
   ],
   controllers: [AppController],
   providers: [AppService],

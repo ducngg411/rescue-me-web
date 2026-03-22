@@ -143,6 +143,8 @@ export class RescueRequestService {
                 userId,
                 incidentType: dto.incidentType,
                 vehicleType: dto.vehicleType,
+                licensePlate: dto.licensePlate?.trim() || null,
+                vehicleColor: dto.vehicleColor?.trim() || null,
                 description: dto.description,
                 contactPhone: dto.contactPhone,
                 pickupLocation: dto.pickupLocation as any,
@@ -470,6 +472,8 @@ export class RescueRequestService {
                 userId,
                 incidentType: originalRequest.incidentType,
                 vehicleType: originalRequest.vehicleType,
+                licensePlate: originalRequest.licensePlate,
+                vehicleColor: originalRequest.vehicleColor,
                 description: originalRequest.description,
                 contactPhone: originalRequest.contactPhone,
                 pickupLocation: originalRequest.pickupLocation as any,
@@ -1234,6 +1238,10 @@ export class RescueRequestService {
             throw new BadRequestException(`Cannot create payment from status: ${request.status}`);
         }
 
+        if (request.requesterType === 'GUEST' && dto.paymentMethod === 'WALLET') {
+            throw new BadRequestException('Wallet payment is not allowed for guest requests');
+        }
+
         // Upsert payment (allow re-submission to update amount)
         const payment = await this.prisma.payment.upsert({
             where: { requestId },
@@ -1241,6 +1249,7 @@ export class RescueRequestService {
                 requestId,
                 providerId,
                 userId: request.userId,
+                guestSessionId: request.guestSessionId,
                 totalAmount: dto.totalAmount,
                 baseFee: dto.baseFee ?? dto.totalAmount,
                 distanceFee: dto.distanceFee ?? 0,
@@ -1757,6 +1766,7 @@ export class RescueRequestService {
     async confirmWalletPayment(requestId: string, userId: string) {
         const request = await this.prisma.rescueRequest.findUnique({ where: { id: requestId } });
         if (!request) throw new NotFoundException('Rescue request not found');
+        if (request.requesterType === 'GUEST') throw new ForbiddenException('Wallet payment is not available for guest requests');
         if (request.userId !== userId) throw new ForbiddenException('Not your request');
         if (request.status !== 'PAYMENT_PENDING') {
             throw new BadRequestException(`Cannot confirm wallet payment from status: ${request.status}`);

@@ -483,4 +483,38 @@ export class UploadsService {
             deletedCount: unconfirmedVideos.length,
         };
     }
+
+    // ==================== GUEST UPLOAD (no DB record) ====================
+
+    async presignGuestUpload(
+        guestSessionId: string,
+        dto: { fileName: string; fileSize: number; contentType: string },
+    ): Promise<{ uploadUrl: string; objectKey: string; publicUrl: string; expiresIn: number }> {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(dto.contentType)) {
+            throw new BadRequestException(`Content type must be one of: ${allowedTypes.join(', ')}`);
+        }
+
+        if (dto.fileSize > 5 * 1024 * 1024) {
+            throw new BadRequestException('File size must not exceed 5MB');
+        }
+
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substring(2, 8);
+        const extension = dto.fileName.split('.').pop() || 'jpg';
+        const objectKey = `requests/guest/${guestSessionId}/${timestamp}_${random}.${extension}`;
+        const publicUrl = `${this.publicDomain}/${objectKey}`;
+
+        const command = new PutObjectCommand({
+            Bucket: this.bucketName,
+            Key: objectKey,
+            ContentType: dto.contentType,
+            ContentLength: dto.fileSize,
+        });
+
+        const expiresIn = 120;
+        const uploadUrl = await getSignedUrl(this.s3Client, command, { expiresIn });
+
+        return { uploadUrl, objectKey, publicUrl, expiresIn };
+    }
 }

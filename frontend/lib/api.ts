@@ -10,9 +10,19 @@ const api = axios.create({
 // Request interceptor để thêm token
 api.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+        const url = config.url || '';
+        const isGuestRoute = url.startsWith('/guest/');
+
+        if (isGuestRoute) {
+            const guestToken = localStorage.getItem('guestAccessToken');
+            if (guestToken) {
+                config.headers.Authorization = `Bearer ${guestToken}`;
+            }
+        } else {
+            const token = localStorage.getItem('accessToken');
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
         }
         return config;
     },
@@ -37,14 +47,24 @@ api.interceptors.response.use(
                 message === 'Unauthorized'; // raw JWT guard rejection
 
             if (isTokenError) {
-                const isAuthPage = typeof window !== 'undefined' &&
-                    (window.location.pathname.startsWith('/auth/') ||
-                        window.location.pathname === '/auth');
+                const isGuestRoute = error.config?.url?.startsWith('/guest/');
+                const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
 
-                if (!isAuthPage) {
-                    localStorage.removeItem('accessToken');
-                    localStorage.removeItem('refreshToken');
-                    window.location.href = '/auth/login';
+                if (isGuestRoute) {
+                    localStorage.removeItem('guestAccessToken');
+                    localStorage.removeItem('guestSession');
+                    if (!pathname.startsWith('/guest/rescue/new')) {
+                        window.location.href = '/guest/rescue/new';
+                    }
+                } else {
+                    const isAuthPage = typeof window !== 'undefined' &&
+                        (pathname.startsWith('/auth/') || pathname === '/auth');
+
+                    if (!isAuthPage) {
+                        localStorage.removeItem('accessToken');
+                        localStorage.removeItem('refreshToken');
+                        window.location.href = '/auth/login';
+                    }
                 }
             }
         }

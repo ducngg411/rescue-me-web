@@ -24,6 +24,8 @@ interface PaymentSheetProps {
     requestId: string;
     defaultAmount: number;
     defaultPaymentMethod?: 'CASH' | 'QR' | 'WALLET';
+    /** When true the WALLET option is shown but disabled (e.g. guest requester) */
+    disableWallet?: boolean;
     onClose: () => void;
     onSubmitted: (method?: 'CASH' | 'QR' | 'WALLET') => void;
 }
@@ -31,7 +33,7 @@ interface PaymentSheetProps {
 let nextId = 1;
 const makeItem = (): Item => ({ id: nextId++, label: '', amount: 0 });
 
-export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentMethod, onClose, onSubmitted }: PaymentSheetProps) {
+export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentMethod, disableWallet = false, onClose, onSubmitted }: PaymentSheetProps) {
     // ── Primary total (editable, pre-filled from accepted quote) ──────────────
     const [baseFee, setBaseFee] = useState(defaultAmount > 0 ? defaultAmount : 0);
 
@@ -632,30 +634,39 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                     { value: 'CASH', label: 'Tiền mặt', sub: 'Thanh toán trực tiếp tại nơi sửa chữa' },
                                     { value: 'QR', label: 'Chuyển khoản QR', sub: 'Quét mã QR để chuyển tiền' },
                                     { value: 'WALLET', label: 'Ví điện tử RescueMe', sub: 'Tự động trừ từ ví user ngay khi xác nhận' },
-                                ] as const).map(opt => (
-                                    <button
-                                        key={opt.value}
-                                        onClick={() => setPaymentMethod(opt.value)}
-                                        className="w-full flex items-center gap-3 p-3 rounded-2xl text-left"
-                                        style={{
-                                            border: `1.5px solid ${paymentMethod === opt.value ? C.orange : C.border}`,
-                                            background: paymentMethod === opt.value ? '#fff7ed' : 'white',
-                                        }}
-                                    >
-                                        <div
-                                            className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                                            style={{ borderColor: paymentMethod === opt.value ? C.orange : C.border }}
+                                ] as const).map(opt => {
+                                    const isDisabled = opt.value === 'WALLET' && disableWallet;
+                                    const isSelected = paymentMethod === opt.value;
+                                    return (
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => !isDisabled && setPaymentMethod(opt.value)}
+                                            disabled={isDisabled}
+                                            className="w-full flex items-center gap-3 p-3 rounded-2xl text-left"
+                                            style={{
+                                                border: `1.5px solid ${isDisabled ? '#e5e7eb' : isSelected ? C.orange : C.border}`,
+                                                background: isDisabled ? '#f9fafb' : isSelected ? '#fff7ed' : 'white',
+                                                opacity: isDisabled ? 0.5 : 1,
+                                                cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                            }}
                                         >
-                                            {paymentMethod === opt.value && (
-                                                <div className="w-2.5 h-2.5 rounded-full" style={{ background: C.orange }} />
-                                            )}
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-semibold" style={{ color: C.navy }}>{opt.label}</p>
-                                            <p className="text-xs" style={{ color: C.gray }}>{opt.sub}</p>
-                                        </div>
-                                    </button>
-                                ))}
+                                            <div
+                                                className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                                                style={{ borderColor: isDisabled ? '#d1d5db' : isSelected ? C.orange : C.border }}
+                                            >
+                                                {isSelected && !isDisabled && (
+                                                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: C.orange }} />
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-sm font-semibold" style={{ color: isDisabled ? '#9ca3af' : C.navy }}>{opt.label}</p>
+                                                <p className="text-xs" style={{ color: isDisabled ? '#9ca3af' : C.gray }}>
+                                                    {isDisabled ? 'Không khả dụng cho khách vãng lai' : opt.sub}
+                                                </p>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 

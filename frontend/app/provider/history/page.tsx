@@ -41,7 +41,8 @@ interface Quote {
         pickupAddress: string | null;
         createdAt: string;
         completedAt?: string | null;
-        user: { id: string; name: string | null; phoneNumber: string | null; avatar?: string | null };
+        user: { id: string; name: string | null; phoneNumber: string | null; avatar?: string | null } | null;
+        contactPhone?: string | null;
         payment?: { id: string; totalAmount: number; baseFee: number; distanceFee: number; otherFee: number; status: string; paymentMethod?: string; walletTxStatus?: string | null } | null;
     };
 }
@@ -407,8 +408,8 @@ export default function ProviderHistoryPage() {
     const filtered = useMemo(() => {
         return quotes.filter(q => {
             const req = q.rescueRequest;
-            const customerName = req.user.name?.toLowerCase() ?? '';
-            const phone = req.user.phoneNumber ?? '';
+            const customerName = (req.user?.name ?? 'khách vãng lai').toLowerCase();
+            const phone = req.user?.phoneNumber ?? req.contactPhone ?? '';
             const srch = search.toLowerCase();
 
             if (srch && !customerName.includes(srch) && !phone.includes(srch) && !req.id.toLowerCase().includes(srch)) return false;
@@ -457,8 +458,8 @@ export default function ProviderHistoryPage() {
                 idx + 1,
                 date,
                 time,
-                req.user.name ?? t('provider.history.customerFallback'),
-                req.user.phoneNumber ?? '',
+                req.user?.name ?? t('provider.history.customerFallback'),
+                req.user?.phoneNumber ?? req.contactPhone ?? '',
                 (t(`provider.incidents.${req.incidentType}`) || req.incidentType),
                 revenueAmount,
                 profit,
@@ -796,14 +797,14 @@ export default function ProviderHistoryPage() {
                                                         <p className="text-[10px] mt-1 font-mono font-bold" style={{ color: '#94a3b8' }}>#{req.id.slice(0, 8).toUpperCase()}</p>
                                                     </div>
                                                     <div className="flex items-center gap-3 min-w-0">
-                                                        <Avatar name={req.user.name ?? 'K'} avatar={req.user.avatar} />
+                                                        <Avatar name={req.user?.name ?? 'K'} avatar={req.user?.avatar} />
                                                         <div className="min-w-0">
                                                             <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>
-                                                                {req.user.name ?? t('provider.history.customerFallback')}
+                                                                {req.user?.name ?? t('provider.history.customerFallback')}
                                                             </p>
-                                                            {req.user.phoneNumber && (
+                                                            {(req.user?.phoneNumber ?? req.contactPhone) && (
                                                                 <p className="text-xs truncate" style={{ color: C.gray }}>
-                                                                    {req.user.phoneNumber}
+                                                                    {req.user?.phoneNumber ?? req.contactPhone}
                                                                 </p>
                                                             )}
                                                         </div>
@@ -840,11 +841,11 @@ export default function ProviderHistoryPage() {
                                                 <div className="md:hidden px-4 py-4">
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="flex items-center gap-3 min-w-0">
-                                                            <Avatar name={req.user.name ?? 'K'} avatar={req.user.avatar} />
-                                                            <div className="min-w-0">
-                                                                <p className="font-semibold text-sm truncate" style={{ color: C.navy }}>
-                                                                    {req.user.name ?? t('provider.history.customerFallback')}
-                                                                </p>
+                                            <Avatar name={req.user?.name ?? 'K'} avatar={req.user?.avatar} />
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-sm truncate" style={{ color: C.navy }}>
+                                                    {req.user?.name ?? t('provider.history.customerFallback')}
+                                                </p>
                                                                 <p className="text-xs" style={{ color: C.gray }}>{date} · {time}</p>
                                                                 <p className="text-[10px] font-mono font-bold mt-0.5" style={{ color: '#94a3b8' }}>#{req.id.slice(0, 8).toUpperCase()}</p>
                                                             </div>

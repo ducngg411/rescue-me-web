@@ -32,8 +32,12 @@ interface RescueRequest {
     id: string;
     incidentType: string;
     vehicleType: string;
+    /** Snapshot on the request (guests); falls back to user profile for older rows */
+    licensePlate?: string | null;
+    vehicleColor?: string | null;
     description: string;
     contactPhone: string;
+    requesterType?: 'USER' | 'GUEST';
     pickupLocation: {
         addressText: string;
         lat: number;
@@ -54,7 +58,7 @@ interface RescueRequest {
         avatar?: string | null;
         licensePlate?: string | null;
         vehicleColor?: string | null;
-    };
+    } | null;
     media: Array<{
         mediaType: string;
         publicUrl: string;
@@ -65,6 +69,14 @@ interface RescueRequest {
     quoteWindowExpiresAt?: string | null;
     quoteCount?: number;
     maxQuotes?: number;
+}
+
+/** Plate/color stored on the request (guest) or legacy User profile */
+function requesterPlate(r: RescueRequest) {
+    return r.licensePlate?.trim() || r.user?.licensePlate || null;
+}
+function requesterVehicleColorRaw(r: RescueRequest) {
+    return r.vehicleColor?.trim() || r.user?.vehicleColor || null;
 }
 
 export default function ProviderRequestDetailPage() {
@@ -481,6 +493,7 @@ export default function ProviderRequestDetailPage() {
                     contactPhone: request!.contactPhone,
                 }}
                 acceptedQuotePrice={myQuoteDetails?.price ?? null}
+                isGuestRequest={request!.requesterType === 'GUEST'}
                 onBack={() => setShowNavigationMap(false)}
                 onCompleted={() => router.push('/provider/active')}
             />
@@ -597,7 +610,7 @@ export default function ProviderRequestDetailPage() {
                                     </div>
                                 </div>
                             )}
-                            {req.user?.licensePlate && (
+                            {requesterPlate(req) && (
                                 <div className="flex gap-3">
                                     <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight }}>
                                         <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
@@ -607,11 +620,11 @@ export default function ProviderRequestDetailPage() {
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-medium" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.licensePlate')}</p>
-                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{req.user.licensePlate}</p>
+                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{requesterPlate(req)}</p>
                                     </div>
                                 </div>
                             )}
-                            {req.user?.vehicleColor && (
+                            {requesterVehicleColorRaw(req) && (
                                 <div className="flex gap-3">
                                     <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: C.orangeLight }}>
                                         <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2}>
@@ -620,7 +633,7 @@ export default function ProviderRequestDetailPage() {
                                     </div>
                                     <div>
                                         <p className="text-[10px] font-medium" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.vehicleColor')}</p>
-                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{translateColor(req.user.vehicleColor)}</p>
+                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{translateColor(requesterVehicleColorRaw(req) ?? '')}</p>
                                     </div>
                                 </div>
                             )}
@@ -1008,14 +1021,16 @@ export default function ProviderRequestDetailPage() {
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <AvatarImage
-                                        name={request.user.name || t('provider.requestDetail.customerFallback')}
-                                        avatar={request.user.avatar}
+                                        name={request.user?.name || t('provider.requestDetail.customerFallback')}
+                                        avatar={request.user?.avatar}
                                         className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-orange-100 flex-shrink-0 flex items-center justify-center text-lg md:text-xl font-bold text-orange-600"
                                         fallbackBackground="#ffedd5"
                                         initialsCount={1}
                                     />
                                     <div>
-                                        <div className="font-bold text-[#1a1a2e] text-[15px] md:text-base mb-0.5 md:mb-1">{request.user.name}</div>
+                                        <div className="font-bold text-[#1a1a2e] text-[15px] md:text-base mb-0.5 md:mb-1">
+                                            {request.user?.name || (request.requesterType === 'GUEST' ? 'Khách vãng lai' : t('provider.requestDetail.customerFallback'))}
+                                        </div>
                                         <div className="flex items-center gap-1.5 text-xs md:text-sm font-medium text-gray-500">
                                             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -1041,11 +1056,11 @@ export default function ProviderRequestDetailPage() {
                                     </div>
                                     <div>
                                         <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">{t('provider.requestDetail.infoLabels.licensePlate')}</p>
-                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e] uppercase">{request.user.licensePlate || t('common.unknown')}</p>
+                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e] uppercase">{requesterPlate(request) || t('common.unknown')}</p>
                                     </div>
                                     <div>
                                         <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">{t('provider.requestDetail.infoLabels.vehicleColor')}</p>
-                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e]">{translateColor(request.user.vehicleColor || '') || t('common.unknown')}</p>
+                                        <p className="text-[13px] md:text-sm font-bold text-[#1a1a2e]">{translateColor(requesterVehicleColorRaw(request) || '') || t('common.unknown')}</p>
                                     </div>
                                     <div>
                                         <p className="text-[9px] md:text-[10px] uppercase font-bold text-gray-400 mb-0.5 md:mb-1">{t('provider.requestDetail.infoLabels.incidentType')}</p>

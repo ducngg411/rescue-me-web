@@ -304,6 +304,8 @@ interface ProviderNavigationViewProps {
     };
     /** Accepted quote price to pre-fill PaymentSheet */
     acceptedQuotePrice?: number | null;
+    /** Whether the requester is a guest — disables WALLET payment option */
+    isGuestRequest?: boolean;
     /** Called when provider presses back (stays in trip flow) */
     onBack?: () => void;
     /** Called after payment submitted (replaced onCompleted) */
@@ -318,6 +320,7 @@ export default function ProviderNavigationView({
     customerName,
     requestDetails,
     acceptedQuotePrice,
+    isGuestRequest = false,
     onBack,
     onCompleted,
 }: ProviderNavigationViewProps) {
@@ -1468,6 +1471,7 @@ export default function ProviderNavigationView({
                     acceptedQuotePrice={acceptedQuotePrice}
                     autoOpenPaymentSheet={switchToMethod !== null}
                     defaultPaymentMethod={switchToMethod ?? undefined}
+                    disableWallet={isGuestRequest}
                     onPaymentSubmitted={(method?: 'CASH' | 'QR' | 'WALLET') => {
                         setSwitchToMethod(null);
                         setPaymentMethod(method ?? 'CASH');

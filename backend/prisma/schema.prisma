@@ -113,9 +113,14 @@ model Upload {
 
 model RescueRequest {
   id                   String         @id @default(cuid())
-  userId               String
+  userId               String?
+  guestSessionId       String?
+  requesterType        RequesterType  @default(USER)
   incidentType         IncidentType
   vehicleType          VehicleType
+  /// Snapshot of requester vehicle at time of request (guests have no User row)
+  licensePlate         String?
+  vehicleColor         String?
   description          String?
   pickupLocation       Json
   dropoffLocation      Json?
@@ -145,10 +150,12 @@ model RescueRequest {
   quotes               Quote[]
   media                RequestMedia[]
   assignedProvider     User?          @relation("AssignedRequests", fields: [assignedProviderId], references: [id])
-  user                 User           @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
+  user                 User?          @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
+  guestSession         GuestSession?  @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
   review               Review?
 
   @@index([userId])
+  @@index([guestSessionId, status])
   @@index([status])
   @@index([createdAt])
   @@index([assignedProviderId])
@@ -203,7 +210,8 @@ model Payment {
   id                  String        @id @default(cuid())
   requestId           String        @unique
   providerId          String
-  userId              String
+  userId              String?
+  guestSessionId      String?
   baseFee             Int           @default(0)
   distanceFee         Int           @default(0)
   overtimeFee         Int           @default(0)
@@ -389,9 +397,32 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
+model GuestSession {
+  id              String          @id @default(cuid())
+  phoneNormalized String
+  phoneVerifiedAt DateTime
+  expiresAt       DateTime
+  deviceId        String?
+  lastIp          String?
+  isConverted     Boolean         @default(false)
+  convertedUserId String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  rescueRequests  RescueRequest[]
+
+  @@index([phoneNormalized])
+  @@index([expiresAt])
+  @@map("guest_sessions")
+}
+
 enum ResetType {
   EMAIL
   PHONE
+}
+
+enum RequesterType {
+  USER
+  GUEST
 }
 
 enum AuthProvider {

@@ -30,6 +30,7 @@ interface WorkingViewProps {
     acceptedQuotePrice?: number | null;
     autoOpenPaymentSheet?: boolean;
     defaultPaymentMethod?: 'CASH' | 'QR' | 'WALLET';
+    disableWallet?: boolean;
     onPaymentSubmitted: (method?: 'CASH' | 'QR' | 'WALLET') => void;
 }
 
@@ -40,6 +41,7 @@ export default function WorkingView({
     acceptedQuotePrice,
     autoOpenPaymentSheet = false,
     defaultPaymentMethod,
+    disableWallet = false,
     onPaymentSubmitted,
 }: WorkingViewProps) {
     const { t } = useLanguage();
@@ -213,6 +215,7 @@ export default function WorkingView({
                     requestId={requestId}
                     defaultAmount={acceptedQuotePrice ?? 0}
                     defaultPaymentMethod={defaultPaymentMethod}
+                    disableWallet={disableWallet}
                     onClose={() => setShowPaymentSheet(false)}
                     onSubmitted={(method?: 'CASH' | 'QR' | 'WALLET') => onPaymentSubmitted(method)}
                 />

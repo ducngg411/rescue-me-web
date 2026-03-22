@@ -500,10 +500,16 @@ export class ProviderService {
 
                 matchedRequests.push({
                     id: request.id,
-                    user: {
-                        name: request.user.fullName || request.user.name,
-                        phone: request.user.phoneNumber,
-                    },
+                    requesterType: request.requesterType ?? 'USER',
+                    user: request.user
+                        ? {
+                            name: request.user.fullName || request.user.name,
+                            phone: request.user.phoneNumber,
+                          }
+                        : {
+                            name: 'Khách vãng lai',
+                            phone: request.contactPhone,
+                          },
                     incidentType: request.incidentType,
                     vehicleType: request.vehicleType,
                     description: request.description,

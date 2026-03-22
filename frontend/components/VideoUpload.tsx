@@ -13,6 +13,8 @@ interface VideoUploadProps {
     onRemove?: (videoUrl: string, uploadId: string) => void;
     uploadedVideos?: Array<{ url: string; uploadId: string }>;
     disabled?: boolean;
+    /** Skip the backend tracking call — use for guest users who have no userId */
+    skipTracking?: boolean;
 }
 
 const C = {
@@ -34,6 +36,7 @@ export default function VideoUpload({
     onRemove,
     uploadedVideos = [],
     disabled = false,
+    skipTracking = false,
 }: VideoUploadProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
@@ -108,8 +111,18 @@ export default function VideoUpload({
                     const videoUrl = response.secure_url;
                     const publicId = response.public_id;
 
-                    // Track upload in backend
-                    trackVideoUpload(videoUrl, publicId, selectedFile);
+                    if (skipTracking) {
+                        // Guest mode: no backend tracking needed, use publicId as uploadId
+                        onSuccess?.(videoUrl, publicId);
+                        setSelectedFile(null);
+                        if (previewUrl) URL.revokeObjectURL(previewUrl);
+                        setPreviewUrl(null);
+                        setProgress(0);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                        setUploading(false);
+                    } else {
+                        trackVideoUpload(videoUrl, publicId, selectedFile);
+                    }
                 } else {
                     setError('Upload thất bại. Vui lòng thử lại.');
                     setUploading(false);
@@ -155,6 +168,11 @@ export default function VideoUpload({
     };
 
     const handleRemove = async (uploadId: string, videoUrl: string) => {
+        if (skipTracking) {
+            // Guest mode: no backend record to delete, just update UI
+            onRemove?.(videoUrl, uploadId);
+            return;
+        }
         try {
             await api.delete(`/uploads/cloudinary/${uploadId}`);
             onRemove?.(videoUrl, uploadId);

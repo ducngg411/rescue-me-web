@@ -203,9 +203,25 @@ export default function CreateRescueRequestPage() {
 
     useEffect(() => { fetchLocation(); }, []);
 
+    const isPlateInvalid = newVehicle.licensePlate.trim() !== '' && !/^[0-9]{2}[A-Z]{1,2}[0-9]?[- ]?[0-9]{4,5}$/i.test(newVehicle.licensePlate.replace(/\./g, ''));
+    const isColorInvalid = newVehicle.color.trim() !== '' && /\d/.test(newVehicle.color);
+    const isAddBtnDisabled = !newVehicle.licensePlate.trim() || isPlateInvalid || !newVehicle.color.trim() || isColorInvalid;
+
     const handleAddVehicle = () => {
-        if (!newVehicle.licensePlate.trim()) { toast.error(t('user.create.toasts.plateRequired')); return; }
-        const vehicle: Vehicle = { type: newVehicle.type, licensePlate: newVehicle.licensePlate.trim(), color: newVehicle.color.trim() || undefined };
+        const plate = newVehicle.licensePlate.trim();
+        const color = newVehicle.color.trim();
+
+        if (!plate) { toast.error(t('user.create.toasts.plateRequired') || 'Vui lòng nhập biển số'); return; }
+        
+        const plateStr = plate.replace(/\./g, '');
+        if (!/^[0-9]{2}[A-Z]{1,2}[0-9]?[- ]?[0-9]{4,5}$/i.test(plateStr)) {
+            toast.error(t('user.create.toasts.plateInvalid') || 'Biển số không hợp lệ (VD: 51A-12345)');
+            return;
+        }
+
+        if (!color) { toast.error(t('user.create.toasts.colorRequired') || 'Vui lòng nhập màu xe'); return; }
+
+        const vehicle: Vehicle = { type: newVehicle.type, licensePlate: plate, color: color };
         setVehicles(prev => [...prev, vehicle]);
         setFormData(prev => ({ ...prev, vehicleIndex: vehicles.length }));
         setNewVehicle({ type: 'CAR', licensePlate: '', color: '' });
@@ -224,6 +240,8 @@ export default function CreateRescueRequestPage() {
             const payload = {
                 incidentType: formData.incidentType,
                 vehicleType: selectedVehicle.type,
+                licensePlate: selectedVehicle.licensePlate,
+                vehicleColor: selectedVehicle.color,
                 pickupLocation: formData.incidentLocation,
                 contactPhone: formData.contactPhone,
                 description: formData.description,
@@ -414,26 +432,44 @@ export default function CreateRescueRequestPage() {
                                         </button>
                                     ))}
                                 </div>
-                                    <input
-                                        type="text"
-                                        value={newVehicle.licensePlate}
-                                        onChange={e => setNewVehicle({ ...newVehicle, licensePlate: e.target.value.toUpperCase() })}
-                                        placeholder={t('user.create.platePlaceholder')}
-                                        style={inputStyle}
-                                        onFocus={e => (e.target.style.border = `1.5px solid ${C.orange}`)}
-                                        onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
-                                    />
-                                    <input
-                                        type="text"
-                                        value={newVehicle.color}
-                                        onChange={e => setNewVehicle({ ...newVehicle, color: e.target.value })}
-                                        placeholder={t('user.create.colorPlaceholder')}
-                                        style={inputStyle}
-                                        onFocus={e => (e.target.style.border = `1.5px solid ${C.orange}`)}
-                                        onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
-                                    />
+                                    <div>
+                                        <input
+                                            type="text"
+                                            value={newVehicle.licensePlate}
+                                            onChange={e => setNewVehicle({ ...newVehicle, licensePlate: e.target.value.toUpperCase() })}
+                                            placeholder={t('user.create.platePlaceholder')}
+                                            style={{ ...inputStyle, border: isPlateInvalid ? '1.5px solid #ef4444' : '1.5px solid #e5e7eb' }}
+                                            onFocus={e => { if (!isPlateInvalid) e.target.style.border = `1.5px solid ${C.orange}`; }}
+                                            onBlur={e => { if (!isPlateInvalid) e.target.style.border = '1.5px solid #e5e7eb'; }}
+                                        />
+                                        {isPlateInvalid && (
+                                            <p className="text-[11px] text-red-500 mt-1.5 pl-1">{t('user.create.toasts.plateInvalid') || 'Biển số không hợp lệ (VD: 51A-12345)'}</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <input
+                                            type="text"
+                                            value={newVehicle.color}
+                                            onChange={e => setNewVehicle({ ...newVehicle, color: e.target.value })}
+                                            placeholder={t('user.create.colorPlaceholder')}
+                                            style={{ ...inputStyle, border: isColorInvalid ? '1.5px solid #ef4444' : '1.5px solid #e5e7eb' }}
+                                            onFocus={e => { if (!isColorInvalid) e.target.style.border = `1.5px solid ${C.orange}`; }}
+                                            onBlur={e => { if (!isColorInvalid) e.target.style.border = '1.5px solid #e5e7eb'; }}
+                                        />
+                                        {isColorInvalid && (
+                                            <p className="text-[11px] text-red-500 mt-1.5 pl-1">{t('user.create.toasts.colorInvalid') || 'Màu xe không hợp lệ (không chứa số)'}</p>
+                                        )}
+                                    </div>
                                     <div className="flex gap-2">
-                                        <button type="button" onClick={handleAddVehicle} className="flex-1 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: C.orange }}>{t('user.create.addBtn')}</button>
+                                        <button 
+                                            type="button" 
+                                            onClick={handleAddVehicle} 
+                                            disabled={isAddBtnDisabled}
+                                            className="flex-1 py-2 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                                            style={{ background: isAddBtnDisabled ? '#fdba74' : C.orange }}
+                                        >
+                                            {t('user.create.addBtn')}
+                                        </button>
                                         <button type="button" onClick={() => setShowAddVehicle(false)} className="flex-1 py-2 rounded-xl text-sm font-medium" style={{ background: C.white, color: C.gray, border: `1px solid #e5e7eb` }}>{t('user.create.cancelBtn')}</button>
                                     </div>
                             </div>

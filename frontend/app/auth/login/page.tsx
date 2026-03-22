@@ -257,6 +257,35 @@ export default function LoginPage() {
                                 shape="rectangular"
                             />
                         </div>
+
+                        {/* Guest CTA */}
+                        <div className="mt-5 pt-5" style={{ borderTop: '1px solid #f3f4f6' }}>
+                            <a
+                                href="/guest/rescue/new"
+                                className="flex items-center justify-center gap-2 w-full py-3 rounded-lg font-semibold text-sm transition-all"
+                                style={{
+                                    background: '#fef2f2',
+                                    color: '#dc2626',
+                                    border: '1.5px solid #fecaca',
+                                }}
+                                onMouseEnter={e => {
+                                    (e.currentTarget as HTMLAnchorElement).style.background = '#fee2e2';
+                                    (e.currentTarget as HTMLAnchorElement).style.borderColor = '#fca5a5';
+                                }}
+                                onMouseLeave={e => {
+                                    (e.currentTarget as HTMLAnchorElement).style.background = '#fef2f2';
+                                    (e.currentTarget as HTMLAnchorElement).style.borderColor = '#fecaca';
+                                }}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                                </svg>
+                                {t('guest.landing.ctaBtn')}
+                            </a>
+                            <p className="text-center text-xs mt-2" style={{ color: '#9ca3af' }}>
+                                Không cần đăng ký — xác minh SĐT là dùng được
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

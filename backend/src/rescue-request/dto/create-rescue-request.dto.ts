@@ -67,6 +67,15 @@ export class CreateRescueRequestDto {
   @IsNotEmpty()
   contactPhone: string;
 
+  /** Customer vehicle plate for this request (required for accurate provider display, esp. guests) */
+  @IsString()
+  @IsOptional()
+  licensePlate?: string;
+
+  @IsString()
+  @IsOptional()
+  vehicleColor?: string;
+
   @IsArray()
   @IsString({ each: true })
   @IsOptional()

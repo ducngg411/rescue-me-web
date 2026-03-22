@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUserGuard } from '@/lib/guards';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import api from '@/lib/api';
@@ -130,6 +131,7 @@ function formatDate(dateString: string, t: any) {
 export default function UserRequestsPage() {
     const router = useRouter();
     const { isReady, user } = useUserGuard();
+    const { logout } = useAuth();
     const { t } = useLanguage();
     const [requests, setRequests] = useState<RescueRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -273,10 +275,20 @@ export default function UserRequestsPage() {
                         fallbackBackground={C.orange}
                         initialsCount={1}
                     />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
-                        <p className="text-xs" style={{ color: C.gray }}>{t('user.dashboard.basicPlan')}</p>
+                        <p className="text-xs" style={{ color: C.gray }}>{t('user.dashboard.customer')}</p>
                     </div>
+                    <button
+                        onClick={logout}
+                        title="Đăng xuất"
+                        className="flex-shrink-0 p-1.5 rounded-lg transition-colors hover:bg-red-50"
+                        style={{ color: '#ef4444' }}
+                    >
+                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                    </button>
                 </div>
             </aside>
 
