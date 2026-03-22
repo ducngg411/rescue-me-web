@@ -13,6 +13,7 @@ import {
     OptionalDocsStep,
     ReviewSubmitStep
 } from '@/components/provider-onboarding';
+import RescueMeLogo from '@/components/RescueMeLogo';
 
 const C = { orange: '#f97316', orangeDark: '#ea6c0a', navy: '#1a1a2e', gray: '#6b7280', border: '#e2e8f0', bg: '#f4f6f9', green: '#16a34a' };
 
@@ -100,10 +101,7 @@ export default function ProviderOnboardingPage() {
             <div className="hidden lg:flex flex-col gap-8 p-12 flex-shrink-0 h-screen overflow-y-auto" style={{ width: '420px', background: `linear-gradient(155deg, ${C.navy} 0%, #2d2d4e 100%)` }}>
                 {/* Logo */}
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: C.orange }}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
-                    </div>
-                    <span className="text-white font-bold text-base">RescueMe</span>
+                    <RescueMeLogo size={36} textClass="text-base" textColor="white" />
                 </div>
 
                 {/* Steps */}
@@ -168,10 +166,7 @@ export default function ProviderOnboardingPage() {
 
                     {/* Mobile logo */}
                     <div className="flex items-center gap-2 mb-6 lg:hidden">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
-                        </div>
-                        <span className="font-bold" style={{ color: C.navy }}>RescueMe</span>
+                        <RescueMeLogo size={32} textClass="text-base" />
                     </div>
 
                     {/* Edit mode banner */}

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import RescueMeLogo from '@/components/RescueMeLogo';
 
 const orange = '#f97316';
 const orangeDark = '#ea6c0a';
@@ -54,15 +55,7 @@ export default function HomePage() {
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
         {/* Logo */}
         <div className="flex items-center gap-3 mb-8">
-          <div
-            className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
-            style={{ background: orange }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.95" />
-            </svg>
-          </div>
-          <span className="text-2xl font-bold" style={{ color: navy }}>Rescue Me</span>
+          <RescueMeLogo size={48} textClass="text-2xl" />
         </div>
 
         <p className="text-base mb-10 text-center" style={{ color: gray }}>

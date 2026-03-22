@@ -13,6 +13,7 @@ import {
 import toast from 'react-hot-toast';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useLanguage } from '@/contexts/LanguageContext';
+import RescueMeLogo from '@/components/RescueMeLogo';
 
 const C = {
     orange: '#f97316',
@@ -399,10 +400,7 @@ export default function ProviderSettingsPage() {
                             <ArrowLeft style={{ width: 18, height: 18 }} />
                         </button>
                         <div className="flex md:hidden items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
-                            </div>
-                            <span className="font-bold text-sm" style={{ color: C.navy }}>RescueMe</span>
+                            <RescueMeLogo size={24} textClass="hidden" />
                         </div>
                         <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>{t('provider.nav.settings')}</h2>
                     </div>

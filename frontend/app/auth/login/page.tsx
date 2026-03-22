@@ -8,6 +8,7 @@ import { loginWithEmail, loginWithGoogle } from '@/lib/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import RescueMeLogo from '@/components/RescueMeLogo';
 import toast from 'react-hot-toast';
 import { resolveAuthErrorMessage } from '@/lib/i18n/authErrorMessages';
 
@@ -102,12 +103,7 @@ export default function LoginPage() {
                     <div className="w-full max-w-sm">
                         {/* Mobile logo */}
                         <div className="flex items-center gap-2 mb-8 lg:hidden">
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#f97316' }}>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                    <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" />
-                                </svg>
-                            </div>
-                            <span className="font-bold text-lg" style={{ color: '#1e1b4b' }}>Rescue Me</span>
+                            <RescueMeLogo size={32} textClass="text-lg" />
                         </div>
 
                         {/* Heading */}

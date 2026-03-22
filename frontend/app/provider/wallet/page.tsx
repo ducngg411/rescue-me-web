@@ -4,8 +4,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Wallet, ArrowDownCircle, ArrowUpCircle, Clock, CheckCircle2,
     XCircle, RefreshCw, TrendingUp, Banknote, ChevronDown, ChevronUp,
-    AlertCircle, ShieldX, ArrowLeft, QrCode, Plus, ExternalLink,
+    AlertCircle, QrCode, ExternalLink, ShieldX, ArrowLeft, Plus
 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import RescueMeLogo from '@/components/RescueMeLogo';
 import api from '@/lib/api';
 import { isJobPaymentQrProviderTx } from '@/lib/providerWalletTxLabels';
 import { useProviderGuard } from '@/lib/guards';
@@ -980,10 +982,7 @@ export default function ProviderWalletPage() {
                         <ArrowLeft style={{ width: 18, height: 18 }} />
                     </button>
                     <div className="flex md:hidden items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
-                        </div>
-                        <span className="font-bold text-sm" style={{ color: C.navy }}>RescueMe</span>
+                        <RescueMeLogo size={24} textClass="hidden" />
                     </div>
                     <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>{t('provider.wallet.myWallet')}</h2>
                 </div>
@@ -1030,7 +1029,7 @@ export default function ProviderWalletPage() {
                     <div className="relative z-10">
                         <p className="text-sm opacity-80 mb-1">{t('provider.wallet.totalBalance')}</p>
                         <p className="text-4xl font-bold tabular-nums mb-4">{formatVndFull(total)}</p>
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 sm:gap-0">
                             <div className="flex gap-6">
                                 <div>
                                     <p className="text-xs opacity-70">{t('provider.wallet.available')}</p>
@@ -1042,10 +1041,10 @@ export default function ProviderWalletPage() {
                                     <p className="text-sm font-semibold">{formatVndFull(pending)}</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full sm:w-auto mt-1 sm:mt-0">
                                 <button
                                     onClick={() => setShowTopup(true)}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all hover:bg-white/10"
+                                    className="flex-1 sm:flex-auto flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-xl text-sm font-bold transition-all hover:bg-white/10"
                                     style={{ background: 'transparent', color: 'white', border: '1px solid rgba(255,255,255,0.3)' }}
                                 >
                                     <Plus style={{ width: 16, height: 16 }} />
@@ -1054,7 +1053,7 @@ export default function ProviderWalletPage() {
                                 <button
                                     onClick={() => setShowModal(true)}
                                     disabled={!wallet || available < MIN_WITHDRAWAL}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className="flex-1 sm:flex-auto flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-xl text-sm font-bold transition-all hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
                                     style={{ background: C.orange, color: 'white', border: `1px solid ${C.orangeDark}` }}
                                 >
                                     <Banknote style={{ width: 16, height: 16 }} />

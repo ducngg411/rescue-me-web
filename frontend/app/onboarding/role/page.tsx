@@ -6,6 +6,7 @@ import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { selectRole } from '@/lib/auth';
+import RescueMeLogo from '@/components/RescueMeLogo';
 
 const C = {
     orange: '#f97316',
@@ -81,12 +82,7 @@ export default function RoleSelectionPage() {
             >
                 {/* Logo */}
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: C.orange }}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" />
-                        </svg>
-                    </div>
-                    <span className="text-white font-bold text-lg tracking-tight">RescueMe</span>
+                    <RescueMeLogo size={36} textClass="text-lg" textColor="white" />
                 </div>
 
                 {/* Illustration area */}
@@ -133,12 +129,7 @@ export default function RoleSelectionPage() {
                 <div className="w-full max-w-md">
                     {/* Mobile logo */}
                     <div className="flex items-center gap-2 mb-8 lg:hidden">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" />
-                            </svg>
-                        </div>
-                        <span className="font-bold text-base" style={{ color: C.navy }}>RescueMe</span>
+                        <RescueMeLogo size={28} textClass="text-base" />
                     </div>
 
                     {/* Heading */}

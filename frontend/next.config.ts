@@ -7,7 +7,14 @@ const nextConfig: NextConfig = {
   },
   // Silence the "webpack config but no turbopack config" warning in Next.js 16+
   turbopack: {},
+  images: {
+    // Allow Next/Image to render .svg files from /public
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
 };
 
 export default nextConfig;
+
 

@@ -3,6 +3,7 @@
 import React, { ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import RescueMeLogo from '@/components/RescueMeLogo';
 
 const C = {
     orange: '#f97316',
@@ -114,20 +115,9 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
             >
                 <div className="flex-1 py-6 px-4">
                     {/* Logo */}
-                    <div className="flex items-center gap-2 mb-8 px-2">
-                        <div
-                            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                            style={{ background: C.orange }}
-                        >
-                            {/* Asterisk star icon */}
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                <path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-                            </svg>
-                        </div>
-                        <div>
-                            <p className="font-bold text-sm leading-tight" style={{ color: C.navy }}>RescueMe</p>
-                            <p className="text-xs" style={{ color: C.gray }}>Admin Panel</p>
-                        </div>
+                    <div className="flex flex-col items-start gap-1 mb-8 px-2">
+                        <RescueMeLogo size={32} textClass="text-sm" />
+                        <p className="text-[10px] font-bold uppercase tracking-widest pl-[40px]" style={{ color: C.orange }}>Admin Panel</p>
                     </div>
 
                     {/* Nav Groups */}

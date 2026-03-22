@@ -6,12 +6,13 @@ import {
     XCircle, RefreshCw, TrendingUp, Banknote, ChevronDown, ChevronUp,
     AlertCircle, ArrowLeft, QrCode, Plus,
 } from 'lucide-react';
-import api from '@/lib/api';
 import { useUserGuard } from '@/lib/guards';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import AvatarImage from '@/components/AvatarImage';
+import api from '@/lib/api';
+import RescueMeLogo from '@/components/RescueMeLogo';
 import { useRouter } from 'next/navigation';
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
@@ -663,10 +664,7 @@ export default function UserWalletPage() {
             >
                 <div>
                     <div className="flex items-center gap-2 mb-8 px-2">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
-                        </div>
-                        <span className="font-bold text-base" style={{ color: C.navy }}>RescueMe</span>
+                        <RescueMeLogo size={28} textClass="text-base" />
                     </div>
                     <nav className="space-y-1">
                         {navItems.map(item => {
@@ -731,9 +729,7 @@ export default function UserWalletPage() {
                             </svg>
                         </button>
                         <div className="md:hidden flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
-                            </div>
+                            <RescueMeLogo size={24} textClass="hidden" />
                         </div>
                         <div className="flex-1 min-w-0 md:hidden">
                             <h1 className="font-bold text-base leading-tight" style={{ color: C.navy }}>{t('user.wallet.title')}</h1>
@@ -773,7 +769,7 @@ export default function UserWalletPage() {
                     <div className="rounded-2xl p-6 text-white" style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`, boxShadow: `0 8px 24px ${C.orange}40` }}>
                         <p className="text-sm opacity-80 mb-1">{t('user.wallet.main.totalBalance')}</p>
                         <p className="text-4xl font-bold tabular-nums mb-4">{formatVndFull(total)}</p>
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 sm:gap-0">
                             <div className="flex gap-6">
                                 <div>
                                     <p className="text-xs opacity-70">{t('user.wallet.main.available')}</p>
@@ -785,10 +781,10 @@ export default function UserWalletPage() {
                                     <p className="text-sm font-semibold">{formatVndFull(pending)}</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full sm:w-auto mt-1 sm:mt-0">
                                 <button
                                     onClick={() => setShowTopup(true)}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                                    className="flex-1 sm:flex-auto flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-xl text-sm font-bold transition-all"
                                     style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.3)' }}
                                 >
                                     <Plus style={{ width: 16, height: 16 }} />
@@ -797,7 +793,7 @@ export default function UserWalletPage() {
                                 <button
                                     onClick={() => setShowWithdraw(true)}
                                     disabled={!wallet || available < MIN_WITHDRAWAL}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className="flex-1 sm:flex-auto flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                                     style={{ background: 'white', color: C.orange }}
                                 >
                                     <Banknote style={{ width: 16, height: 16 }} />

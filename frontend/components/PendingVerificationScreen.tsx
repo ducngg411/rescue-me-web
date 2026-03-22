@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import RescueMeLogo from '@/components/RescueMeLogo';
 
 const C = {
     orange: '#f97316', orangeDark: '#ea6c0a', orangeLight: '#fff7ed',
@@ -28,13 +29,8 @@ export default function PendingVerificationScreen() {
                 style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}
             >
                 {/* Logo icon */}
-                <div
-                    className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
-                    style={{ background: C.orangeLight }}
-                >
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill={C.orange} opacity="0.9" />
-                    </svg>
+                <div className="flex justify-center mb-5">
+                    <RescueMeLogo size={56} showText={false} />
                 </div>
 
                 <h2 className="text-xl font-bold mb-2" style={{ color: C.navy }}>

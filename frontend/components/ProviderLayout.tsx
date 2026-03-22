@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProviderStatus } from '@/lib/hooks/useProviderStatus';
+import RescueMeLogo from '@/components/RescueMeLogo';
 
 const C = {
     orange: '#f97316',
@@ -81,10 +82,7 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
                 <div className="flex-1">
                     {/* Logo */}
                     <div className="flex items-center gap-2 mb-8 px-2">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
-                        </div>
-                        <span className="font-bold text-base" style={{ color: C.navy }}>RescueMe</span>
+                        <RescueMeLogo size={28} textClass="text-base" />
                     </div>
                     {/* Nav */}
                     <nav className="space-y-1">

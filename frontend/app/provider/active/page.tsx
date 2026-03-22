@@ -20,6 +20,7 @@ import {
     Star, CheckCircle2,
     Bell, Clock, Wifi, WifiOff,
 } from 'lucide-react';
+import RescueMeLogo from '@/components/RescueMeLogo';
 
 // ─── same color tokens as user dashboard ──────────────────────────────────────
 const C = {
@@ -489,10 +490,7 @@ export default function ProviderActivePage() {
                 <div>
                     {/* Logo */}
                     <div className="flex items-center gap-2 mb-8 px-2">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
-                        </div>
-                        <span className="font-bold text-base" style={{ color: C.navy }}>RescueMe</span>
+                        <RescueMeLogo size={28} textClass="text-base" />
                     </div>
                     {/* Nav */}
                     <nav className="space-y-1">
@@ -570,10 +568,7 @@ export default function ProviderActivePage() {
                 >
                     {/* Mobile: RescueMe logo | Desktop: "Dashboard" */}
                     <div className="flex items-center gap-2 md:hidden">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
-                        </div>
-                        <span className="font-bold text-sm" style={{ color: C.navy }}>RescueMe</span>
+                        <RescueMeLogo size={24} textClass="hidden" />
                     </div>
                     <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>{t('common.dashboard')}</h2>
 

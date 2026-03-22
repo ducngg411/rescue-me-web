@@ -9,6 +9,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import AvatarImage from '@/components/AvatarImage';
 import dynamic from 'next/dynamic';
 import api from '@/lib/api';
+import RescueMeLogo from '@/components/RescueMeLogo';
 
 const VietMap = dynamic(() => import('@/components/VietMap'), {
     ssr: false,
@@ -222,10 +223,7 @@ export default function UserDashboard() {
             >
                 <div>
                     <div className="flex items-center gap-2 mb-8 px-2">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
-                        </div>
-                        <span className="font-bold text-base" style={{ color: C.navy }}>RescueMe</span>
+                        <RescueMeLogo size={28} textClass="text-base" />
                     </div>
                     <nav className="space-y-1">
                         {navItems.map(item => {
@@ -277,11 +275,9 @@ export default function UserDashboard() {
                     className="flex items-center justify-between px-4 py-3 flex-shrink-0 sticky top-0 z-20"
                     style={{ background: '#ffffff', borderBottom: `1px solid ${C.border}` }}
                 >
-                    <div className="flex items-center gap-2 md:hidden">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.orange }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 7v10l8 5 8-5V7L12 2z" fill="white" opacity="0.9" /></svg>
-                        </div>
-                        <span className="font-bold text-sm" style={{ color: C.navy }}>RescueMe</span>
+                    {/* Mobile logo */}
+                    <div className="md:hidden flex items-center gap-2">
+                        <RescueMeLogo size={24} textClass="hidden" />
                     </div>
                     <h2 className="hidden md:block text-base font-semibold" style={{ color: C.navy }}>{t('common.dashboard')}</h2>
 

@@ -8,6 +8,7 @@ import {
     matchingQuoteWindowSecondsRemaining,
     type MatchingQuoteWindowSource,
 } from '@/lib/matchingQuoteWindowCountdown';
+import RescueMeLogo from '@/components/RescueMeLogo';
 
 function pendingToMatchingSource(r: PendingRequest): MatchingQuoteWindowSource {
     return {
@@ -108,10 +109,8 @@ export default function IncomingRequestModal({
                     <h2 className="text-xl font-bold tracking-tight">{t('components.incomingRequest.newRescueRequest')}</h2>
                     <p className="text-sm text-white/90 mt-1 font-medium">{t('components.incomingRequest.pleaseRespond')}</p>
                     {/* Decorative element */}
-                    <div className="absolute top-0 right-0 p-4 opacity-20 pointer-events-none">
-                        <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2L4 7v10l8 5 8-5V7L12 2z" />
-                        </svg>
+                    <div className="absolute -top-4 -right-4 p-4 opacity-20 pointer-events-none brightness-0 invert">
+                        <RescueMeLogo size={80} textClass="hidden" />
                     </div>
                 </div>
 
