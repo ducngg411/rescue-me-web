@@ -39,6 +39,9 @@ interface AssignedProviderProps {
     requestStatus?: string;
     /** requestId to identify which Firestore chat room to use */
     requestId?: string;
+    /** Guest flow: stable id + display name for chat (Firestore); logged-in user ignored for chat when set */
+    chatCustomerId?: string;
+    chatCustomerName?: string;
 }
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
@@ -56,14 +59,19 @@ export default function AssignedProvider({
     eta,
     requestStatus,
     requestId,
+    chatCustomerId,
+    chatCustomerName,
 }: AssignedProviderProps) {
     const [isChatOpen, setIsChatOpen] = useState(false);
 
-    // Get current user identity directly — avoids relying on parent to pass userId correctly
     const { user: currentUser } = useAuth();
     const { t } = useLanguage();
-    const currentUserId = currentUser?.id ?? '';
-    const currentUserName = currentUser?.name ?? currentUser?.email?.split('@')[0] ?? t('user.tracking.assignedProvider.customerFallback');
+    const currentUserId = chatCustomerId ?? currentUser?.id ?? '';
+    const currentUserName =
+        chatCustomerName ??
+        currentUser?.name ??
+        currentUser?.email?.split('@')[0] ??
+        t('user.tracking.assignedProvider.customerFallback');
 
     const displayName = provider.serviceName || provider.name || 'Provider';
     const initials = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
@@ -133,7 +141,11 @@ export default function AssignedProvider({
                             {provider.averageRating != null ? (
                                 <>
                                     <span className="text-xs font-medium" style={{ color: C.navy }}>{provider.averageRating.toFixed(1)}</span>
-                                    <span className="text-xs" style={{ color: C.gray }}>({t('user.tracking.quotes.reviews', { count: provider.reviewCount })})</span>
+                                    {provider.reviewCount > 0 && (
+                                        <span className="text-xs" style={{ color: C.gray }}>
+                                            {t('user.tracking.quotes.reviews', { count: provider.reviewCount })}
+                                        </span>
+                                    )}
                                 </>
                             ) : (
                                 <span className="text-xs" style={{ color: C.gray }}>{t('user.tracking.assignedProvider.noReviews')}</span>

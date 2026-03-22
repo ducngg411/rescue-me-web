@@ -3,11 +3,26 @@
 import React, { useRef, useState } from 'react';
 import { Upload, X, Loader2, AlertCircle } from 'lucide-react';
 import { uploadFile, UploadPurpose } from '@/lib/upload';
+import { useLanguage } from '@/contexts/LanguageContext';
+
+export type ImageUploadAdapterResult = {
+    success: boolean;
+    objectKey?: string;
+    publicUrl?: string;
+    error?: string;
+};
+
+export type ImageUploadAdapter = (
+    file: File,
+    onProgress: (pct: number) => void
+) => Promise<ImageUploadAdapterResult>;
 
 interface ImageUploadProps {
     label?: string;
     maxImages?: number;
-    purpose: UploadPurpose;
+    /** When set, used instead of `uploadFile` + `purpose` (e.g. guest presign flow). */
+    uploadImage?: ImageUploadAdapter;
+    purpose?: UploadPurpose;
     onSuccess?: (objectKey: string, publicUrl: string) => void;
     onRemove?: (objectKey: string) => void;
     uploadedImages?: Array<{ objectKey: string; publicUrl: string }>;
@@ -27,12 +42,14 @@ const C = {
 export default function ImageUpload({
     label = 'Upload Images',
     maxImages = 5,
+    uploadImage,
     purpose,
     onSuccess,
     onRemove,
     uploadedImages = [],
     disabled = false,
 }: ImageUploadProps) {
+    const { t } = useLanguage();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -79,22 +96,54 @@ export default function ImageUpload({
         setProgress(0);
         setError(null);
 
-        try {
-            const result = await uploadFile(
-                selectedFile,
-                purpose,
-                undefined,
-                (prog) => setProgress(prog)
-            );
+        if (!uploadImage && !purpose) {
+            setError('Thiếu cấu hình upload');
+            setUploading(false);
+            return;
+        }
 
-            if (result.success && result.upload) {
-                onSuccess?.(result.upload.objectKey, result.upload.publicUrl);
+        try {
+            let objectKey: string | undefined;
+            let publicUrl: string | undefined;
+            let errMsg: string | undefined;
+
+            if (uploadImage) {
+                const result = await uploadImage(selectedFile, (prog) => setProgress(prog));
+                if (result.success && result.objectKey && result.publicUrl) {
+                    objectKey = result.objectKey;
+                    publicUrl = result.publicUrl;
+                } else {
+                    errMsg = result.error || 'Upload thất bại';
+                }
+            } else {
+                const uploadPurpose = purpose;
+                if (!uploadPurpose) {
+                    setError('Thiếu cấu hình upload');
+                    setUploading(false);
+                    return;
+                }
+                const result = await uploadFile(
+                    selectedFile,
+                    uploadPurpose,
+                    undefined,
+                    (prog) => setProgress(prog)
+                );
+                if (result.success && result.upload) {
+                    objectKey = result.upload.objectKey;
+                    publicUrl = result.upload.publicUrl;
+                } else {
+                    errMsg = result.error || 'Upload thất bại';
+                }
+            }
+
+            if (objectKey && publicUrl) {
+                onSuccess?.(objectKey, publicUrl);
                 setSelectedFile(null);
                 setPreview(null);
                 setProgress(0);
                 if (fileInputRef.current) fileInputRef.current.value = '';
-            } else {
-                setError(result.error || 'Upload thất bại');
+            } else if (errMsg) {
+                setError(errMsg);
             }
         } catch (err: any) {
             setError(err.message || 'Có lỗi xảy ra khi upload ảnh');
@@ -152,7 +201,7 @@ export default function ImageUpload({
                         </div>
                         <div>
                             <p className="text-sm font-semibold" style={{ color: C.navy }}>
-                                Nhấn để chọn ảnh
+                                {t('components.fileUpload.clickToSelectImage')}
                             </p>
                             <p className="text-xs mt-0.5" style={{ color: C.gray }}>
                                 JPG, PNG, WEBP · Tối đa 5MB

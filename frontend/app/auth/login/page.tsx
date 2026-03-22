@@ -264,17 +264,17 @@ export default function LoginPage() {
                                 href="/guest/rescue/new"
                                 className="flex items-center justify-center gap-2 w-full py-3 rounded-lg font-semibold text-sm transition-all"
                                 style={{
-                                    background: '#fef2f2',
-                                    color: '#dc2626',
-                                    border: '1.5px solid #fecaca',
+                                    background: '#fff7ed',
+                                    color: '#f97316',
+                                    border: '1.5px solid #fed7aa',
                                 }}
                                 onMouseEnter={e => {
-                                    (e.currentTarget as HTMLAnchorElement).style.background = '#fee2e2';
-                                    (e.currentTarget as HTMLAnchorElement).style.borderColor = '#fca5a5';
+                                    (e.currentTarget as HTMLAnchorElement).style.background = '#ffedd5';
+                                    (e.currentTarget as HTMLAnchorElement).style.borderColor = '#fdba74';
                                 }}
                                 onMouseLeave={e => {
-                                    (e.currentTarget as HTMLAnchorElement).style.background = '#fef2f2';
-                                    (e.currentTarget as HTMLAnchorElement).style.borderColor = '#fecaca';
+                                    (e.currentTarget as HTMLAnchorElement).style.background = '#fff7ed';
+                                    (e.currentTarget as HTMLAnchorElement).style.borderColor = '#fed7aa';
                                 }}
                             >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -283,7 +283,7 @@ export default function LoginPage() {
                                 {t('guest.landing.ctaBtn')}
                             </a>
                             <p className="text-center text-xs mt-2" style={{ color: '#9ca3af' }}>
-                                Không cần đăng ký — xác minh SĐT là dùng được
+                                {t('guest.landing.loginHint')}
                             </p>
                         </div>
                     </div>

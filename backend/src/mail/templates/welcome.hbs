@@ -1,28 +1,123 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chào mừng đến với RescueMe</title>
   <style>
-    body { margin: 0; padding: 0; background: #f4f4f5; font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a2e; }
-    .wrapper { max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
-    .header { background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); padding: 48px 40px; text-align: center; }
-    .header h1 { margin: 0; color: #ffffff; font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
-    .header p { margin: 8px 0 0; color: rgba(255,255,255,0.85); font-size: 16px; }
-    .logo { font-size: 48px; margin-bottom: 16px; }
-    .body { padding: 48px 40px; }
-    .greeting { font-size: 22px; font-weight: 600; color: #1a1a2e; margin-bottom: 16px; }
-    .text { font-size: 16px; line-height: 1.7; color: #4a4a6a; margin-bottom: 16px; }
-    .features { background: #fff8f5; border-left: 4px solid #ff6b35; border-radius: 0 12px 12px 0; padding: 20px 24px; margin: 28px 0; }
-    .features ul { margin: 8px 0 0; padding-left: 20px; }
-    .features ul li { color: #4a4a6a; font-size: 15px; margin-bottom: 8px; line-height: 1.5; }
-    .cta { text-align: center; margin: 36px 0; }
-    .cta a { background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 50px; font-size: 16px; font-weight: 600; display: inline-block; letter-spacing: 0.3px; }
-    .footer { background: #f4f4f5; padding: 28px 40px; text-align: center; }
-    .footer p { margin: 0; font-size: 13px; color: #9999aa; line-height: 1.6; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f4f4f5;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #1a1a2e;
+    }
+
+    .wrapper {
+      max-width: 600px;
+      margin: 40px auto;
+      background: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+    }
+
+    .header {
+      background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+      padding: 48px 40px;
+      text-align: center;
+    }
+
+    .header h1 {
+      margin: 0;
+      color: #ffffff;
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .header p {
+      margin: 8px 0 0;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 16px;
+    }
+
+    .logo {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .body {
+      padding: 48px 40px;
+    }
+
+    .greeting {
+      font-size: 22px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 16px;
+    }
+
+    .text {
+      font-size: 16px;
+      line-height: 1.7;
+      color: #4a4a6a;
+      margin-bottom: 16px;
+    }
+
+    .features {
+      background: #fff8f5;
+      border-left: 4px solid #ff6b35;
+      border-radius: 0 12px 12px 0;
+      padding: 20px 24px;
+      margin: 28px 0;
+    }
+
+    .features ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+
+    .features ul li {
+      color: #4a4a6a;
+      font-size: 15px;
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+
+    .cta {
+      text-align: center;
+      margin: 36px 0;
+    }
+
+    .cta a {
+      background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+      color: #ffffff;
+      text-decoration: none;
+      padding: 16px 40px;
+      border-radius: 50px;
+      font-size: 16px;
+      font-weight: 600;
+      display: inline-block;
+      letter-spacing: 0.3px;
+    }
+
+    .footer {
+      background: #f4f4f5;
+      padding: 28px 40px;
+      text-align: center;
+    }
+
+    .footer p {
+      margin: 0;
+      font-size: 13px;
+      color: #9999aa;
+      line-height: 1.6;
+    }
   </style>
 </head>
+
 <body>
   <div class="wrapper">
     <div class="header">
@@ -32,12 +127,13 @@
     </div>
     <div class="body">
       <p class="greeting">Xin chào {{name}}! 👋</p>
-      <p class="text">Chúc mừng bạn đã tham gia <strong>RescueMe</strong> — nền tảng kết nối nhanh chóng giữa người dùng và các nhà cung cấp dịch vụ cứu hộ xe uy tín nhất!</p>
+      <p class="text">Chúc mừng bạn đã tham gia <strong>RescueMe</strong> — nền tảng kết nối nhanh chóng giữa người dùng
+        và các nhà cung cấp dịch vụ cứu hộ xe uy tín nhất!</p>
       <div class="features">
         <strong style="color: #ff6b35;">Bạn có thể làm gì trên RescueMe?</strong>
         <ul>
           <li>🔧 Yêu cầu cứu hộ xe khẩn cấp chỉ trong vài giây</li>
-          <li>📍 Theo dõi nhà cứu hộ đến tận nơi theo thời gian thực</li>
+          <li> Theo dõi nhà cứu hộ đến tận nơi theo thời gian thực</li>
           <li>💸 Thanh toán tiện lợi, an toàn</li>
           <li>⭐ Đánh giá và lựa chọn nhà cứu hộ chất lượng</li>
         </ul>
@@ -48,8 +144,9 @@
       </div>
     </div>
     <div class="footer">
-      <p>© {{year}} RescueMe. Mọi quyền được bảo lưu.<br/>Nếu bạn cần hỗ trợ, hãy liên hệ chúng tôi qua ứng dụng.</p>
+      <p>© {{year}} RescueMe. Mọi quyền được bảo lưu.<br />Nếu bạn cần hỗ trợ, hãy liên hệ chúng tôi qua ứng dụng.</p>
     </div>
   </div>
 </body>
+
 </html>

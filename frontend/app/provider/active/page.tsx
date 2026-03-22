@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -262,7 +262,7 @@ export default function ProviderActivePage() {
         }
     }, [user?.verificationStatus]);
 
-    const [selectedRequest, setSelectedRequest] = useState<any>(null);
+    const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [confirmDeclineReq, setConfirmDeclineReq] = useState<any>(null); // request pending decline confirmation
     // Load declinedIds synchronously in the initializer so it's ready before the
@@ -345,6 +345,17 @@ export default function ProviderActivePage() {
 
     const filteredRequests = requests.filter(r => !declinedIds.has(r.id));
 
+    const selectedRequest = useMemo(() => {
+        if (!selectedRequestId) return null;
+        return filteredRequests.find(r => r.id === selectedRequestId) ?? null;
+    }, [filteredRequests, selectedRequestId]);
+
+    useEffect(() => {
+        if (selectedRequestId && !selectedRequest) {
+            setSelectedRequestId(null);
+        }
+    }, [selectedRequestId, selectedRequest]);
+
     useEffect(() => {
         if (user?.isOnline !== undefined) setIsOnline(user.isOnline);
     }, [user, setIsOnline]);
@@ -365,10 +376,10 @@ export default function ProviderActivePage() {
     // Auto-popup: show modal for the first request not yet dismissed by the provider.
     // dismissed = provider explicitly pressed "Đóng" (close) — request stays in inbox list.
     useEffect(() => {
-        if (selectedRequest) return; // modal already open
+        if (selectedRequestId) return; // modal already open
         const next = filteredRequests.find(r => !dismissedModalIds.current.has(r.id));
-        if (next) setSelectedRequest(next);
-    }, [filteredRequests, selectedRequest]);
+        if (next) setSelectedRequestId(next.id);
+    }, [filteredRequests, selectedRequestId]);
 
     // ── Guards ────────────────────────────────────────────────────────────────
     if (authLoading) return (
@@ -434,15 +445,15 @@ export default function ProviderActivePage() {
         // pressing Back from the detail page won't re-trigger the auto-popup.
         addDismissedModalId(req.id);
         router.push(`/provider/requests/${req.id}`);
-        setSelectedRequest(null);
+        setSelectedRequestId(null);
     };
 
     // Closing the modal suppresses auto-popup for this request (persisted across navigation).
     const handleCloseModal = () => {
-        if (selectedRequest) {
-            addDismissedModalId(selectedRequest.id);
+        if (selectedRequestId) {
+            addDismissedModalId(selectedRequestId);
         }
-        setSelectedRequest(null);
+        setSelectedRequestId(null);
     };
 
     const handleDecline = async (req: any) => {
@@ -455,7 +466,7 @@ export default function ProviderActivePage() {
         if (!req) return;
         setConfirmDeclineReq(null);
         addDeclinedId(req.id);
-        if (selectedRequest?.id === req.id) setSelectedRequest(null);
+        if (selectedRequestId === req.id) setSelectedRequestId(null);
         try { await api.post(`/rescue-requests/${req.id}/decline`); } catch { }
     };
 
@@ -750,6 +761,7 @@ export default function ProviderActivePage() {
             {/* Incoming request full-screen modal */}
             {selectedRequest && (
                 <IncomingRequestModal
+                    key={selectedRequest.id}
                     request={selectedRequest}
                     onViewDetails={() => handleViewDetails(selectedRequest)}
                     onClose={handleCloseModal}

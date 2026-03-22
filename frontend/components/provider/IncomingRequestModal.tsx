@@ -4,6 +4,20 @@ import { useState, useEffect, useRef } from 'react';
 import { PendingRequest } from '@/lib/hooks/usePendingRequests';
 import { useLanguage } from '@/contexts/LanguageContext';
 import AvatarImage from '@/components/AvatarImage';
+import {
+    matchingQuoteWindowSecondsRemaining,
+    type MatchingQuoteWindowSource,
+} from '@/lib/matchingQuoteWindowCountdown';
+
+function pendingToMatchingSource(r: PendingRequest): MatchingQuoteWindowSource {
+    return {
+        status: 'MATCHING',
+        quoteWindowOpen: r.quoteWindowOpen,
+        quoteWindowExpiresAt: r.quoteWindowExpiresAt,
+        expiresAt: r.expiresAt,
+        quoteWindowTimeRemaining: r.quoteWindowTimeRemaining ?? r.timeRemaining,
+    };
+}
 
 interface IncomingRequestModalProps {
     request: PendingRequest;
@@ -33,44 +47,58 @@ export default function IncomingRequestModal({
     isProcessing,
 }: IncomingRequestModalProps) {
     const { t } = useLanguage();
-    // Use quote window time if available, fallback to search phase time
-    const initialTime = request.quoteWindowTimeRemaining ?? request.timeRemaining;
-    const isInitialMount = useRef(true);
-    const [timeLeft, setTimeLeft] = useState(initialTime);
+    const requestRef = useRef(request);
+    requestRef.current = request;
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+
+    const [timeLeft, setTimeLeft] = useState(() =>
+        matchingQuoteWindowSecondsRemaining(pendingToMatchingSource(request)),
+    );
+    const [progressDenom, setProgressDenom] = useState(() =>
+        Math.max(1, matchingQuoteWindowSecondsRemaining(pendingToMatchingSource(request))),
+    );
 
     useEffect(() => {
-        // Only set initial time on first mount, don't reset when request prop updates
-        if (isInitialMount.current) {
-            setTimeLeft(initialTime);
-            isInitialMount.current = false;
+        setProgressDenom(1);
+
+        const tick = () =>
+            matchingQuoteWindowSecondsRemaining(pendingToMatchingSource(requestRef.current));
+
+        const step = () => {
+            const tLeft = tick();
+            setTimeLeft(tLeft);
+            setProgressDenom((d) => Math.max(d, tLeft));
+            return tLeft;
+        };
+
+        const first = step();
+        if (first <= 0) {
+            onCloseRef.current();
+            return;
         }
 
         const interval = setInterval(() => {
-            setTimeLeft((prev) => {
-                if (prev <= 1) {
-                    clearInterval(interval);
-                    onClose(); // Auto-close when time runs out (request stays in inbox until backend expires it)
-                    return 0;
-                }
-                return prev - 1;
-            });
+            const tLeft = step();
+            if (tLeft <= 0) {
+                clearInterval(interval);
+                onCloseRef.current();
+            }
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [onClose]); // updated dependency
+    }, [request.id]);
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
-    const progressPercent = (timeLeft / initialTime) * 100;
+    const progressPercent = (timeLeft / Math.max(progressDenom, 1)) * 100;
 
     // Use real ETA from backend (VietMap API) or fallback to distance-based calculation
     const estimatedMinutes = request.eta || Math.ceil((request.distance / 40) * 60);
 
-    // Check quote window status
     const quoteWindowOpen = request.quoteWindowOpen ?? true;
-    const quoteWindowTime = request.quoteWindowTimeRemaining ?? 0;
-    const quoteWindowCritical = quoteWindowTime > 0 && quoteWindowTime <= 10; // Less than 10 seconds left
-    const quoteWindowClosed = !quoteWindowOpen || quoteWindowTime === 0;
+    const quoteWindowCritical = quoteWindowOpen && timeLeft > 0 && timeLeft <= 10;
+    const quoteWindowClosed = !quoteWindowOpen || timeLeft === 0;
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -194,7 +222,7 @@ export default function IncomingRequestModal({
                                 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
                             </div>
                             <div className="text-xs font-medium mt-0.5" style={{ color: C.gray }}>
-                                {request.quoteWindowTimeRemaining
+                                {request.quoteWindowExpiresAt
                                     ? t('components.incomingRequest.quoteTimeLabel')
                                     : t('components.incomingRequest.responseTimeLabel')
                                 }
@@ -228,7 +256,7 @@ export default function IncomingRequestModal({
                             <div className="flex items-center gap-2.5">
                                 <span className="text-lg">⚡</span>
                                 <div>
-                                    <div className="text-sm font-bold" style={{ color: '#9a3412' }}>{t('components.incomingRequest.quoteWindowCriticalTitle').replace('{time}', String(quoteWindowTime))}</div>
+                                    <div className="text-sm font-bold" style={{ color: '#9a3412' }}>{t('components.incomingRequest.quoteWindowCriticalTitle').replace('{time}', String(timeLeft))}</div>
                                     <div className="text-xs font-medium" style={{ color: C.orangeDark }}>{t('components.incomingRequest.quoteWindowCriticalDesc')}</div>
                                 </div>
                             </div>

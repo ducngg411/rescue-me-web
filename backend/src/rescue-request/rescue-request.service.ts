@@ -6,7 +6,7 @@ import { CreateQuoteDto } from './dto/create-quote.dto';
 import { QuoteStatus } from './dto/quote-response.dto';
 import { CommissionService } from '../wallet/commission.service';
 import { UserWalletService } from '../user-wallet/user-wallet.service';
-import { UserWalletReferenceType, WalletTransactionStatus, WalletTransactionType, WalletReferenceType } from '@prisma/client';
+import { Prisma, UserWalletReferenceType, WalletTransactionStatus, WalletTransactionType, WalletReferenceType } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
 
 
@@ -325,33 +325,48 @@ export class RescueRequestService {
             throw new NotFoundException('Rescue request not found');
         }
 
-        // Provider can only view:
-        // 1. MATCHING requests (to send quotes) - only if quote window is still open
-        // 2. Requests assigned to them
+        const myQuoteParticipation = await this.prisma.quote.findFirst({
+            where: { rescueRequestId: requestId, providerId },
+            select: { id: true, status: true },
+        });
+
+        // Provider can view:
+        // 1. MATCHING (subject to window/slots) or assigned to them
+        // 2. Any request they submitted a quote for (read-only; e.g. lost bid → show clear state instead of 403)
         if (request.status !== 'MATCHING' && request.assignedProviderId !== providerId) {
-            throw new ForbiddenException('You do not have permission to view this request');
+            if (!myQuoteParticipation) {
+                throw new ForbiddenException('You do not have permission to view this request');
+            }
         }
 
-        // If MATCHING status, check if quote window is still open
+        const actualPendingQuotes = await this.prisma.quote.count({
+            where: { rescueRequestId: requestId, status: 'PENDING' },
+        });
+        const maxQuotes = request.maxQuotes ?? 3;
+        const myHasPendingQuote = myQuoteParticipation?.status === 'PENDING';
+
+        // If MATCHING status, check if quote window is still open (providers who already quoted may still view)
         if (request.status === 'MATCHING' && request.assignedProviderId !== providerId) {
             const now = new Date();
 
-            // Check if quote window is closed
-            if (request.quoteWindowClosedAt) {
-                console.log(`❌ [Provider View] Quote window closed at ${request.quoteWindowClosedAt.toISOString()}`);
-                throw new BadRequestException('QUOTE_WINDOW_CLOSED: Yêu cầu này đã đóng cửa sổ nhận báo giá');
-            }
+            if (!myHasPendingQuote) {
+                // Check if quote window is closed
+                if (request.quoteWindowClosedAt) {
+                    console.log(`❌ [Provider View] Quote window closed at ${request.quoteWindowClosedAt.toISOString()}`);
+                    throw new BadRequestException('QUOTE_WINDOW_CLOSED: Yêu cầu này đã đóng cửa sổ nhận báo giá');
+                }
 
-            // Check if quote window has expired
-            if (request.quoteWindowExpiresAt && now > request.quoteWindowExpiresAt) {
-                console.log(`❌ [Provider View] Quote window expired at ${request.quoteWindowExpiresAt.toISOString()}`);
-                throw new BadRequestException('QUOTE_WINDOW_CLOSED: Cửa sổ nhận báo giá đã hết hạn');
-            }
+                // Check if quote window has expired
+                if (request.quoteWindowExpiresAt && now > request.quoteWindowExpiresAt) {
+                    console.log(`❌ [Provider View] Quote window expired at ${request.quoteWindowExpiresAt.toISOString()}`);
+                    throw new BadRequestException('QUOTE_WINDOW_CLOSED: Cửa sổ nhận báo giá đã hết hạn');
+                }
 
-            // Check if slots are already full
-            if (request.quoteCount >= request.maxQuotes) {
-                console.log(`❌ [Provider View] Slots full: ${request.quoteCount}/${request.maxQuotes}`);
-                throw new BadRequestException('SLOTS_FULL: Đã đủ số lượng báo giá');
+                // Slots full — provider who already has a PENDING quote can still open the job
+                if (actualPendingQuotes >= maxQuotes && !myHasPendingQuote) {
+                    console.log(`❌ [Provider View] Slots full: ${actualPendingQuotes}/${maxQuotes}`);
+                    throw new BadRequestException('SLOTS_FULL: Đã đủ số lượng báo giá');
+                }
             }
         }
 
@@ -385,14 +400,15 @@ export class RescueRequestService {
             }
         }
 
-        // Check if slots are full
-        if (request.quoteCount >= request.maxQuotes) {
+        // Slots full (by real PENDING count) closes the window for *new* quotes
+        if (actualPendingQuotes >= maxQuotes) {
             quoteWindowOpen = false;
         }
 
-        // Return request with quote window info
+        // Return request with quote window info — quoteCount matches customer/guest (count of PENDING quotes)
         return {
             ...request,
+            quoteCount: actualPendingQuotes,
             quoteWindowOpen,
             quoteWindowTimeRemaining,
         };
@@ -760,12 +776,6 @@ export class RescueRequestService {
             throw new BadRequestException('QUOTE_WINDOW_CLOSED');
         }
 
-        // Check 3: Slots are full
-        if (rescueRequest.quoteCount >= rescueRequest.maxQuotes) {
-            console.log(`❌ [Quote] Slots full: ${rescueRequest.quoteCount}/${rescueRequest.maxQuotes}`);
-            throw new BadRequestException('SLOTS_FULL');
-        }
-
         console.log(` [Quote] Window check passed. Expires at: ${rescueRequest.quoteWindowExpiresAt.toISOString()}, now: ${now.toISOString()}, remaining: ${Math.floor((rescueRequest.quoteWindowExpiresAt.getTime() - now.getTime()) / 1000)}s`);
 
         // Validate provider
@@ -794,54 +804,68 @@ export class RescueRequestService {
         const quoteTTL = 2 * 60 * 1000; // 2 minutes
         const quoteExpiresAt = new Date(now.getTime() + quoteTTL);
 
-        // Create quote and increment quote count in a transaction
-        const result = await this.prisma.$transaction(async (tx) => {
-            // Create the quote
-            const quote = await tx.quote.create({
-                data: {
-                    rescueRequestId,
-                    providerId,
-                    price: dto.price,
-                    estimatedArrivalMinutes: dto.estimatedArrivalMinutes,
-                    message: dto.message,
-                    providerLocation: dto.providerLocation ? (dto.providerLocation as any) : undefined,
-                    status: 'PENDING',
-                    expiresAt: quoteExpiresAt,
-                },
-                include: {
-                    provider: {
-                        select: {
-                            id: true,
-                            name: true,
-                            avatar: true,
-                            serviceName: true,
-                            phoneNumber: true,
+        // Create quote + sync quoteCount from real PENDING rows (avoids race vs cached quoteCount)
+        const maxQ = rescueRequest.maxQuotes ?? 3;
+        const result = await this.prisma.$transaction(
+            async (tx) => {
+                const pendingCount = await tx.quote.count({
+                    where: { rescueRequestId, status: 'PENDING' },
+                });
+
+                if (pendingCount >= maxQ) {
+                    console.log(`❌ [Quote] Slots full: ${pendingCount}/${maxQ}`);
+                    throw new BadRequestException('SLOTS_FULL');
+                }
+
+                const quote = await tx.quote.create({
+                    data: {
+                        rescueRequestId,
+                        providerId,
+                        price: dto.price,
+                        estimatedArrivalMinutes: dto.estimatedArrivalMinutes,
+                        message: dto.message,
+                        providerLocation: dto.providerLocation ? (dto.providerLocation as any) : undefined,
+                        status: 'PENDING',
+                        expiresAt: quoteExpiresAt,
+                    },
+                    include: {
+                        provider: {
+                            select: {
+                                id: true,
+                                name: true,
+                                avatar: true,
+                                serviceName: true,
+                                phoneNumber: true,
+                            },
                         },
                     },
-                },
-            });
+                });
 
-            // Increment quote count
-            const newQuoteCount = rescueRequest.quoteCount + 1;
-            const updateData: any = {
-                quoteCount: newQuoteCount,
-            };
+                const newQuoteCount = pendingCount + 1;
+                const updateData: any = {
+                    quoteCount: newQuoteCount,
+                };
 
-            // If this reaches maxQuotes, close the quote window immediately (Case 1)
-            if (newQuoteCount >= rescueRequest.maxQuotes) {
-                updateData.quoteWindowClosedAt = now;
-                console.log(`🔒 [Quote] Quote window closed for request ${rescueRequestId} - maxQuotes (${rescueRequest.maxQuotes}) reached`);
-            }
+                if (newQuoteCount >= maxQ) {
+                    updateData.quoteWindowClosedAt = now;
+                    console.log(`🔒 [Quote] Quote window closed for request ${rescueRequestId} - maxQuotes (${maxQ}) reached`);
+                }
 
-            await tx.rescueRequest.update({
-                where: { id: rescueRequestId },
-                data: updateData,
-            });
+                await tx.rescueRequest.update({
+                    where: { id: rescueRequestId },
+                    data: updateData,
+                });
 
-            return quote;
-        });
+                return quote;
+            },
+            {
+                maxWait: 5000,
+                timeout: 10000,
+                isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            },
+        );
 
-        console.log(` [Quote] Quote created: ${result.id}, expires at ${quoteExpiresAt.toISOString()}, count: ${rescueRequest.quoteCount + 1}/${rescueRequest.maxQuotes}`);
+        console.log(` [Quote] Quote created: ${result.id}, expires at ${quoteExpiresAt.toISOString()}, count synced on request`);
         return result;
     }
 
@@ -881,6 +905,8 @@ export class RescueRequestService {
                         avatar: true,
                         serviceName: true,
                         phoneNumber: true,
+                        averageRating: true,
+                        reviewCount: true,
                     },
                 },
             },
@@ -1036,7 +1062,7 @@ export class RescueRequestService {
         if (request.status === 'ARRIVED') return { success: true, status: 'ARRIVED' };
         if (request.status !== 'IN_PROGRESS') throw new BadRequestException(`Cannot mark arrived from status: ${request.status}`);
         await this.prisma.rescueRequest.update({ where: { id: requestId }, data: { status: 'ARRIVED' } });
-        console.log(`📍 [RescueRequest] Provider ${providerId} marked arrived → ARRIVED (awaiting user confirmation)`);
+        console.log(` [RescueRequest] Provider ${providerId} marked arrived → ARRIVED (awaiting user confirmation)`);
         return { success: true, status: 'ARRIVED' };
     }
 

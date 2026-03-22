@@ -346,7 +346,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
 
                 {/* ── Request Details ── */}
                 <div className="px-5 py-4 space-y-4 bg-white" style={{ borderBottom: `1px solid ${C.border}` }}>
-                    
+
                     {/* ── Timeline ── */}
                     <SectionCard title="Dòng thời gian" icon={<Clock size={16} style={{ color: C.blue }} />}>
                         <div className="space-y-0">
@@ -412,7 +412,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                     </a>
                                 )}
                             </div>
-                            
+
                             <div className="space-y-3 mt-3 pt-3" style={{ borderTop: `1px dashed ${C.border}` }}>
                                 {request.assignedProvider.licensePlate && (
                                     <InfoRow
@@ -532,7 +532,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                             {payment.photoUrls && payment.photoUrls.length > 0 && (
                                 <div className="mt-4">
                                     <p className="text-xs font-semibold mb-2" style={{ color: C.navy }}>
-                                         Ảnh hiện trường từ cứu hộ viên
+                                        Ảnh hiện trường từ cứu hộ viên
                                         <span className="font-normal ml-1" style={{ color: C.gray }}>({payment.photoUrls.length} ảnh)</span>
                                     </p>
                                     <div className="grid grid-cols-3 gap-2">
@@ -983,7 +983,7 @@ export default function RequestTrackingPage() {
                         </p>
                         {status.pickupLocation?.addressText && (
                             <p className="text-xs truncate mt-0.5" style={{ color: C.gray }}>
-                                📍 {status.pickupLocation.addressText}
+                                {status.pickupLocation.addressText}
                             </p>
                         )}
                     </div>

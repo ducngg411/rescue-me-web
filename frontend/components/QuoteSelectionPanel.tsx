@@ -21,20 +21,33 @@ interface Quote {
     estimatedArrivalMinutes: number;
     message?: string;
     status: string;
-    createdAt: string;
+    createdAt?: string;
     provider: {
         id: string;
         name: string | null;
         avatar?: string | null;
         serviceName: string | null;
         phoneNumber: string | null;
+        averageRating?: number | null;
+        reviewCount?: number | null;
     };
+}
+
+export type QuoteRequestScope = 'customer' | 'guest';
+
+function requestBasePath(scope: QuoteRequestScope, requestId: string) {
+    return scope === 'guest' ? `/guest/rescue-requests/${requestId}` : `/rescue-requests/${requestId}`;
 }
 
 interface QuoteSelectionPanelProps {
     requestId: string;
+    /** Default `customer` — uses `/rescue-requests/...`. Guest uses `/guest/rescue-requests/...`. */
+    requestScope?: QuoteRequestScope;
     quoteCount: number;
     onQuoteAccepted: () => void;
+    /** When true, show reject and call `onQuoteRejected` after successful REJECT. */
+    enableReject?: boolean;
+    onQuoteRejected?: () => void;
 }
 
 function formatPrice(price: number) {
@@ -43,22 +56,26 @@ function formatPrice(price: number) {
 
 export default function QuoteSelectionPanel({
     requestId,
+    requestScope = 'customer',
     quoteCount,
     onQuoteAccepted,
+    enableReject = false,
+    onQuoteRejected,
 }: QuoteSelectionPanelProps) {
     const { t } = useLanguage();
     const [quotes, setQuotes] = useState<Quote[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [acceptingId, setAcceptingId] = useState<string | null>(null);
+    const base = requestBasePath(requestScope, requestId);
 
     useEffect(() => {
         fetchQuotes();
-    }, [requestId]);
+    }, [requestId, requestScope, quoteCount]);
 
     const fetchQuotes = async () => {
         try {
             setIsLoading(true);
-            const res = await api.get(`/rescue-requests/${requestId}/quotes`);
+            const res = await api.get(`${base}/quotes`);
             // Only show PENDING quotes (not yet accepted/rejected)
             const pending = res.data.filter((q: Quote) => q.status === 'PENDING');
             setQuotes(pending);
@@ -74,14 +91,34 @@ export default function QuoteSelectionPanel({
         if (acceptingId) return;
         setAcceptingId(quoteId);
         try {
-            await api.patch(`/rescue-requests/${requestId}/quotes/${quoteId}/respond`, {
+            await api.patch(`${base}/quotes/${quoteId}/respond`, {
                 action: 'ACCEPT',
             });
             toast.success(t('user.tracking.quotes.successToast'));
             onQuoteAccepted();
+            await fetchQuotes();
         } catch (err: any) {
             const msg = err.response?.data?.message || t('user.tracking.quotes.errorToast');
             toast.error(msg);
+        } finally {
+            setAcceptingId(null);
+        }
+    };
+
+    const handleReject = async (quoteId: string) => {
+        if (acceptingId) return;
+        setAcceptingId(quoteId);
+        try {
+            await api.patch(`${base}/quotes/${quoteId}/respond`, {
+                action: 'REJECT',
+            });
+            toast.success(t('user.tracking.quotes.rejectSuccessToast'));
+            await fetchQuotes();
+            onQuoteRejected?.();
+        } catch (err: any) {
+            const msg = err.response?.data?.message || t('user.tracking.quotes.errorToast');
+            toast.error(msg);
+        } finally {
             setAcceptingId(null);
         }
     };
@@ -174,13 +211,25 @@ export default function QuoteSelectionPanel({
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-bold text-sm" style={{ color: C.navy }}>{providerName}</p>
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                        <svg width="10" height="10" viewBox="0 0 20 20" fill="#f59e0b">
-                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                        </svg>
-                                        <span className="text-[11px] font-medium" style={{ color: C.navy }}>4.8</span>
-                                        <span className="text-[11px]" style={{ color: C.gray }}>{t('user.tracking.quotes.reviews', { count: 52 })}</span>
-                                    </div>
+                                    {(quote.provider.averageRating != null || (quote.provider.reviewCount ?? 0) > 0) && (
+                                        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                            {quote.provider.averageRating != null && (
+                                                <>
+                                                    <svg width="10" height="10" viewBox="0 0 20 20" fill="#f59e0b" className="flex-shrink-0">
+                                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                                    </svg>
+                                                    <span className="text-[11px] font-medium" style={{ color: C.navy }}>
+                                                        {quote.provider.averageRating.toFixed(1)}
+                                                    </span>
+                                                </>
+                                            )}
+                                            {(quote.provider.reviewCount ?? 0) > 0 && (
+                                                <span className="text-[11px]" style={{ color: C.gray }}>
+                                                    {t('user.tracking.quotes.reviews', { count: quote.provider.reviewCount ?? 0 })}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 {quote.provider.phoneNumber && (
                                     <a
@@ -225,33 +274,47 @@ export default function QuoteSelectionPanel({
                                 </div>
                             )}
 
-                            {/* Accept button */}
-                            <button
-                                onClick={() => handleAccept(quote.id)}
-                                disabled={isDisabled}
-                                className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                                style={{
-                                    background: isAccepting
-                                        ? C.gray
-                                        : `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`,
-                                    boxShadow: isAccepting ? 'none' : `0 4px 12px ${C.orange}40`,
-                                    cursor: isDisabled ? 'not-allowed' : 'pointer',
-                                }}
-                            >
-                                {isAccepting ? (
-                                    <>
-                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                                        {t('user.tracking.quotes.acceptingBtn')}
-                                    </>
-                                ) : (
-                                    <>
-                                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                        {t('user.tracking.quotes.acceptFullBtn')}
-                                    </>
+                            {/* Accept / optional Reject */}
+                            <div className={enableReject ? 'flex gap-2' : ''}>
+                                <button
+                                    type="button"
+                                    onClick={() => handleAccept(quote.id)}
+                                    disabled={isDisabled}
+                                    className={`${enableReject ? 'flex-1' : 'w-full'} py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98] flex items-center justify-center gap-2`}
+                                    style={{
+                                        background: isAccepting
+                                            ? C.gray
+                                            : `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`,
+                                        boxShadow: isAccepting ? 'none' : `0 4px 12px ${C.orange}40`,
+                                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                    }}
+                                >
+                                    {isAccepting ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                                            {t('user.tracking.quotes.acceptingBtn')}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            {t('user.tracking.quotes.acceptFullBtn')}
+                                        </>
+                                    )}
+                                </button>
+                                {enableReject && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleReject(quote.id)}
+                                        disabled={isDisabled}
+                                        className="flex-1 py-3 rounded-xl text-sm font-medium transition-all active:scale-[0.98] disabled:opacity-50"
+                                        style={{ background: C.bg, color: C.gray, border: `1.5px solid ${C.border}` }}
+                                    >
+                                        {t('user.tracking.quotes.rejectBtn')}
+                                    </button>
                                 )}
-                            </button>
+                            </div>
                         </div>
                     </div>
                 );

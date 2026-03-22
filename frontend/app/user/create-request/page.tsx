@@ -4,25 +4,25 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUserGuard } from '@/lib/guards';
 import { useLanguage } from '@/contexts/LanguageContext';
-import LocationPicker from '@/components/LocationPicker';
 import ImageUpload from '@/components/ImageUpload';
 import VideoUpload from '@/components/VideoUpload';
 import { UploadPurpose } from '@/lib/upload';
 import api from '@/lib/api';
 import { reverseGeocode } from '@/lib/vietmap';
 import toast from 'react-hot-toast';
-
-interface LocationData {
-    addressText: string;
-    lat: number;
-    lng: number;
-}
-
-interface Vehicle {
-    type: 'CAR' | 'MOTORCYCLE';
-    licensePlate: string;
-    color?: string;
-}
+import {
+    RESCUE_FLOW_COLORS,
+    IncidentTypeSection,
+    VehicleSection,
+    LocationSection,
+    ContactSection,
+    DescriptionSection,
+    MediaSection,
+    StickySubmitBar,
+    type IncidentTypeValue,
+    type RescueLocationData,
+    type RescueVehicle,
+} from '@/components/rescue-flow';
 
 interface UserProfile {
     fullName?: string;
@@ -32,121 +32,25 @@ interface UserProfile {
     vehicleColor?: string;
 }
 
-const C = {
-    orange: '#f97316',
-    orangeDark: '#ea6c0a',
-    orangeLight: '#fff7ed',
-    navy: '#1a1a2e',
-    gray: '#6b7280',
-    border: '#f1f5f9',
-    bg: '#f8fafc',
-    white: '#ffffff',
-};
-
-const INCIDENT_TYPES = [
-    {
-        value: 'BREAKDOWN',
-        label: 'Hỏng xe',
-        icon: (
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-        ),
-    },
-    {
-        value: 'ACCIDENT',
-        label: 'Tai nạn',
-        icon: (
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-        ),
-    },
-    {
-        value: 'FLAT_TIRE',
-        label: 'Lốp hỏng',
-        icon: (
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" />
-            </svg>
-        ),
-    },
-    {
-        value: 'BATTERY_DEAD',
-        label: 'Hết bình',
-        icon: (
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <rect x="2" y="7" width="18" height="10" rx="2" /><path d="M22 11v2" strokeLinecap="round" />
-            </svg>
-        ),
-    },
-    {
-        value: 'OUT_OF_FUEL',
-        label: 'Hết xăng',
-        icon: (
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-        ),
-    },
-    {
-        value: 'LOCKED_OUT',
-        label: 'Khóa xe',
-        icon: (
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-        ),
-    },
-    {
-        value: 'OTHER',
-        label: 'Khác',
-        icon: (
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-        ),
-    },
-];
-
-const VEHICLE_TYPE_LABELS: Record<string, string> = { CAR: 'Ô tô', MOTORCYCLE: 'Xe máy' };
-
-function SectionHeader({ step, title, icon }: { step: number; title: string; icon: React.ReactNode }) {
-    return (
-        <div className="flex items-center gap-3 mb-4">
-            <div
-                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                style={{ background: C.orange }}
-            >
-                {step}
-            </div>
-            <div className="flex items-center gap-2">
-                <span style={{ color: C.orange }}>{icon}</span>
-                <h2 className="font-semibold text-sm" style={{ color: C.navy }}>{title}</h2>
-            </div>
-        </div>
-    );
-}
+const R = RESCUE_FLOW_COLORS;
 
 export default function CreateRescueRequestPage() {
     const router = useRouter();
-    const { isReady, user } = useUserGuard();
+    const { isReady } = useUserGuard();
     const { t } = useLanguage();
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingProfile, setIsLoadingProfile] = useState(true);
     const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-    const [locationTimestamp, setLocationTimestamp] = useState<Date | null>(null);
-    const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
+    const [currentLocation, setCurrentLocation] = useState<RescueLocationData | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+    const [vehicles, setVehicles] = useState<RescueVehicle[]>([]);
     const [showAddVehicle, setShowAddVehicle] = useState(false);
     const [newVehicle, setNewVehicle] = useState({ type: 'CAR' as 'CAR' | 'MOTORCYCLE', licensePlate: '', color: '' });
 
     const [formData, setFormData] = useState({
         incidentType: '',
         vehicleIndex: 0,
-        incidentLocation: null as LocationData | null,
+        incidentLocation: null as RescueLocationData | null,
         contactPhone: '',
         description: '',
         images: [] as Array<{ objectKey: string; publicUrl: string }>,
@@ -160,17 +64,21 @@ export default function CreateRescueRequestPage() {
                 const response = await api.get('/me/profile');
                 const profile = response.data;
                 setUserProfile(profile);
-                const userVehicles: Vehicle[] = [];
+                const userVehicles: RescueVehicle[] = [];
                 if (profile.rescueVehicles?.length) {
                     for (const v of profile.rescueVehicles) {
                         userVehicles.push({ type: v.type, licensePlate: v.plateNumber, color: v.color });
                     }
                 } else if (profile.vehicleType && profile.licensePlate) {
-                    userVehicles.push({ type: profile.vehicleType, licensePlate: profile.licensePlate, color: profile.vehicleColor });
+                    userVehicles.push({
+                        type: profile.vehicleType,
+                        licensePlate: profile.licensePlate,
+                        color: profile.vehicleColor,
+                    });
                 }
                 setVehicles(userVehicles);
                 if (profile.phoneNumber) {
-                    setFormData(prev => ({ ...prev, contactPhone: profile.phoneNumber }));
+                    setFormData((prev) => ({ ...prev, contactPhone: profile.phoneNumber }));
                 }
             } catch (error) {
                 console.error('Error fetching profile:', error);
@@ -182,15 +90,17 @@ export default function CreateRescueRequestPage() {
     }, [isReady]);
 
     const fetchLocation = async () => {
-        if (!('geolocation' in navigator)) { toast.error(t('user.create.toasts.browserNoLocation')); return; }
+        if (!('geolocation' in navigator)) {
+            toast.error(t('user.create.toasts.browserNoLocation'));
+            return;
+        }
         setIsLoadingLocation(true);
         navigator.geolocation.getCurrentPosition(
             async (position) => {
-                const { latitude, longitude, accuracy } = position.coords;
+                const { latitude, longitude } = position.coords;
                 const address = await reverseGeocode(latitude, longitude);
                 const location = { addressText: address, lat: latitude, lng: longitude };
                 setCurrentLocation(location);
-                setLocationTimestamp(new Date());
                 setIsLoadingLocation(false);
             },
             (error) => {
@@ -201,9 +111,13 @@ export default function CreateRescueRequestPage() {
         );
     };
 
-    useEffect(() => { fetchLocation(); }, []);
+    useEffect(() => {
+        fetchLocation();
+    }, []);
 
-    const isPlateInvalid = newVehicle.licensePlate.trim() !== '' && !/^[0-9]{2}[A-Z]{1,2}[0-9]?[- ]?[0-9]{4,5}$/i.test(newVehicle.licensePlate.replace(/\./g, ''));
+    const isPlateInvalid =
+        newVehicle.licensePlate.trim() !== '' &&
+        !/^[0-9]{2}[A-Z]{1,2}[0-9]?[- ]?[0-9]{4,5}$/i.test(newVehicle.licensePlate.replace(/\./g, ''));
     const isColorInvalid = newVehicle.color.trim() !== '' && /\d/.test(newVehicle.color);
     const isAddBtnDisabled = !newVehicle.licensePlate.trim() || isPlateInvalid || !newVehicle.color.trim() || isColorInvalid;
 
@@ -211,19 +125,25 @@ export default function CreateRescueRequestPage() {
         const plate = newVehicle.licensePlate.trim();
         const color = newVehicle.color.trim();
 
-        if (!plate) { toast.error(t('user.create.toasts.plateRequired') || 'Vui lòng nhập biển số'); return; }
-        
+        if (!plate) {
+            toast.error(t('user.create.toasts.plateRequired') || 'Vui lòng nhập biển số');
+            return;
+        }
+
         const plateStr = plate.replace(/\./g, '');
         if (!/^[0-9]{2}[A-Z]{1,2}[0-9]?[- ]?[0-9]{4,5}$/i.test(plateStr)) {
             toast.error(t('user.create.toasts.plateInvalid') || 'Biển số không hợp lệ (VD: 51A-12345)');
             return;
         }
 
-        if (!color) { toast.error(t('user.create.toasts.colorRequired') || 'Vui lòng nhập màu xe'); return; }
+        if (!color) {
+            toast.error(t('user.create.toasts.colorRequired') || 'Vui lòng nhập màu xe');
+            return;
+        }
 
-        const vehicle: Vehicle = { type: newVehicle.type, licensePlate: plate, color: color };
-        setVehicles(prev => [...prev, vehicle]);
-        setFormData(prev => ({ ...prev, vehicleIndex: vehicles.length }));
+        const vehicle: RescueVehicle = { type: newVehicle.type, licensePlate: plate, color: color };
+        setVehicles((prev) => [...prev, vehicle]);
+        setFormData((prev) => ({ ...prev, vehicleIndex: vehicles.length }));
         setNewVehicle({ type: 'CAR', licensePlate: '', color: '' });
         setShowAddVehicle(false);
     };
@@ -245,7 +165,7 @@ export default function CreateRescueRequestPage() {
                 pickupLocation: formData.incidentLocation,
                 contactPhone: formData.contactPhone,
                 description: formData.description,
-                mediaObjectKeys: formData.images.map(img => img.objectKey),
+                mediaObjectKeys: formData.images.map((img) => img.objectKey),
                 videoUploadIds: formData.videoUploadIds,
                 videoUrls: formData.videoUrls,
             };
@@ -253,425 +173,164 @@ export default function CreateRescueRequestPage() {
             toast.success(t('user.create.toasts.createSuccess'));
             router.push(`/user/requests/${response.data.id}`);
         } catch (error: any) {
-            toast.error(error.response?.data?.message ? t('user.create.toasts.createError').replace('{error}', error.response.data.message) : t('user.create.toasts.defaultError'));
+            toast.error(
+                error.response?.data?.message
+                    ? t('user.create.toasts.createError').replace('{error}', error.response.data.message)
+                    : t('user.create.toasts.defaultError')
+            );
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleImageUploadSuccess = (objectKey: string, publicUrl: string) => {
-        setFormData(prev => ({ ...prev, images: [...prev.images, { objectKey, publicUrl }] }));
+        setFormData((prev) => ({ ...prev, images: [...prev.images, { objectKey, publicUrl }] }));
     };
     const handleImageRemove = (objectKey: string) => {
-        setFormData(prev => ({ ...prev, images: prev.images.filter(img => img.objectKey !== objectKey) }));
+        setFormData((prev) => ({ ...prev, images: prev.images.filter((img) => img.objectKey !== objectKey) }));
     };
 
     if (!isReady || isLoadingProfile) {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: C.orange }}></div>
+            <div className="min-h-screen flex items-center justify-center" style={{ background: R.bg }}>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: R.orange }} />
             </div>
         );
     }
 
-    const inputStyle = {
-        width: '100%',
-        padding: '10px 14px',
-        borderRadius: '10px',
-        border: `1.5px solid #e5e7eb`,
-        color: C.navy,
-        fontSize: '14px',
-        outline: 'none',
-        background: C.white,
-    };
-
     return (
-        <div className="min-h-screen" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif', paddingBottom: '88px' }}>
-
-            {/* ── Sticky Top Bar ── */}
+        <div className="min-h-screen" style={{ background: R.bg, fontFamily: 'Lexend, sans-serif', paddingBottom: '88px' }}>
             <header
                 className="sticky top-0 z-20 flex items-center gap-3 px-4 py-3"
-                style={{ background: C.white, borderBottom: `1px solid ${C.border}` }}
+                style={{ background: R.white, borderBottom: `1px solid ${R.border}` }}
             >
                 <button
+                    type="button"
                     onClick={() => router.back()}
                     className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
-                    style={{ background: C.bg, color: C.navy }}
+                    style={{ background: R.bg, color: R.navy }}
                 >
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                     </svg>
                 </button>
                 <div>
-                    <h1 className="font-bold text-base leading-tight" style={{ color: C.navy }}>{t('user.create.title')}</h1>
-                    <p className="text-xs" style={{ color: C.gray }}>{t('user.create.subtitle')}</p>
+                    <h1 className="font-bold text-base leading-tight" style={{ color: R.navy }}>
+                        {t('user.create.title')}
+                    </h1>
+                    <p className="text-xs" style={{ color: R.gray }}>
+                        {t('user.create.subtitle')}
+                    </p>
                 </div>
             </header>
 
             <form onSubmit={handleSubmit}>
                 <div className="px-4 py-5 space-y-4 max-w-2xl mx-auto">
+                    <IncidentTypeSection
+                        colors={R}
+                        t={t}
+                        incidentType={formData.incidentType}
+                        onSelectType={(v: IncidentTypeValue) => setFormData({ ...formData, incidentType: v })}
+                    />
 
-                    {/* ── 1. Incident Type ── */}
-                    <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <SectionHeader
-                            step={1}
-                            title={t('user.create.selectType')}
-                            icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}
-                        />
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
-                            {INCIDENT_TYPES.map((type) => {
-                                const active = formData.incidentType === type.value;
-                                return (
-                                    <button
-                                        key={type.value}
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, incidentType: type.value })}
-                                        className="flex flex-col items-center gap-2 py-3 px-1 rounded-xl transition-all active:scale-95"
-                                        style={{
-                                            border: `1.5px solid ${active ? C.orange : '#e5e7eb'}`,
-                                            background: active ? C.orangeLight : C.white,
-                                            color: active ? C.orange : C.gray,
-                                        }}
-                                    >
-                                        <span style={{ color: active ? C.orange : '#94a3b8' }}>{type.icon}</span>
-                                        <span className="text-[11px] font-medium leading-tight text-center" style={{ color: active ? C.orange : C.navy }}>{t('provider.incidents.' + type.value) || type.label}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
+                    <VehicleSection
+                        colors={R}
+                        t={t}
+                        vehicles={vehicles}
+                        vehicleIndex={formData.vehicleIndex}
+                        onSelectVehicle={(index) => setFormData({ ...formData, vehicleIndex: index })}
+                        showAddVehicle={showAddVehicle}
+                        onOpenAddVehicle={() => setShowAddVehicle(true)}
+                        onCloseAddVehicle={() => setShowAddVehicle(false)}
+                        newVehicle={newVehicle}
+                        setNewVehicle={setNewVehicle}
+                        onAddVehicle={handleAddVehicle}
+                        isPlateInvalid={isPlateInvalid}
+                        isColorInvalid={isColorInvalid}
+                        isAddBtnDisabled={isAddBtnDisabled}
+                        showPlateError={isPlateInvalid}
+                        showColorError={isColorInvalid}
+                    />
 
-                    {/* ── 2. Vehicle ── */}
-                    <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <SectionHeader
-                            step={2}
-                            title={t('user.create.vehicleSection')}
-                            icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13l1.5-4.5A2 2 0 016.4 7h11.2a2 2 0 011.9 1.5L21 13m-18 0v5a1 1 0 001 1h1a1 1 0 001-1v-1h12v1a1 1 0 001 1h1a1 1 0 001-1v-5m-18 0h18M6 13h.01M18 13h.01" /></svg>}
-                        />
-                        {vehicles.length === 0 ? (
-                            <div className="text-center py-6 rounded-xl" style={{ border: `1.5px dashed #e5e7eb` }}>
-                                <div className="w-12 h-12 rounded-full mx-auto mb-2 flex items-center justify-center" style={{ background: C.orangeLight }}>
-                                    <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                                </div>
-                                <p className="text-xs mb-3" style={{ color: C.gray }}>{t('user.create.noVehicle')}</p>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAddVehicle(true)}
-                                    className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
-                                    style={{ background: C.orange }}
-                                >
-                                    {t('user.create.addVehicleBtn')}
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="space-y-2">
-                                {vehicles.map((vehicle, index) => {
-                                    const active = formData.vehicleIndex === index;
-                                    return (
-                                        <button
-                                            key={index}
-                                            type="button"
-                                            onClick={() => setFormData({ ...formData, vehicleIndex: index })}
-                                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left"
-                                            style={{
-                                                border: `1.5px solid ${active ? C.orange : '#e5e7eb'}`,
-                                                background: active ? C.orangeLight : C.white,
-                                            }}
-                                        >
-                                            <div
-                                                className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-                                                style={{ background: active ? C.orange : '#f1f5f9', color: active ? 'white' : C.gray }}
-                                            >
-                                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 13l1.5-4.5A2 2 0 016.4 7h11.2a2 2 0 011.9 1.5L21 13m-18 0v5a1 1 0 001 1h1a1 1 0 001-1v-1h12v1a1 1 0 001 1h1a1 1 0 001-1v-5m-18 0h18M6 13h.01M18 13h.01" /></svg>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-semibold" style={{ color: active ? C.orange : C.navy }}>
-                                                    {t('user.create.' + vehicle.type.toLowerCase())} — {vehicle.licensePlate}
-                                                </p>
-                                                {vehicle.color && <p className="text-xs" style={{ color: C.gray }}>{t('user.create.colorLabel')} {vehicle.color}</p>}
-                                            </div>
-                                            {active && (
-                                                <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: C.orange }}>
-                                                    <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                                </div>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAddVehicle(true)}
-                                    className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
-                                    style={{ color: C.orange, background: C.orangeLight, border: `1.5px dashed ${C.orange}50` }}
-                                >
-                                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                                    {t('user.create.addVehicleNewBtn')}
-                                </button>
-                            </div>
-                        )}
+                    <LocationSection
+                        colors={R}
+                        t={t}
+                        incidentLocation={formData.incidentLocation}
+                        onIncidentLocationChange={(loc) => setFormData({ ...formData, incidentLocation: loc })}
+                        currentLocation={currentLocation}
+                        isLoadingLocation={isLoadingLocation}
+                        onRefreshLocation={fetchLocation}
+                        onUseCurrentLocation={() => setFormData((prev) => ({ ...prev, incidentLocation: currentLocation! }))}
+                        locationPickerVariant="rescue"
+                    />
 
-                        {/* Add Vehicle Form */}
-                        {showAddVehicle && (
-                            <div className="mt-3 p-4 rounded-xl space-y-3" style={{ background: C.bg, border: `1.5px solid ${C.border}` }}>
-                                <p className="text-sm font-semibold" style={{ color: C.navy }}>{t('user.create.addNewVehicleTitle')}</p>
-                                {/* Vehicle type toggle */}
-                                <div className="flex gap-2">
-                                    {['CAR', 'MOTORCYCLE'].map(vType => (
-                                        <button
-                                            key={vType}
-                                            type="button"
-                                            onClick={() => setNewVehicle({ ...newVehicle, type: vType as 'CAR' | 'MOTORCYCLE' })}
-                                            className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
-                                            style={{
-                                                background: newVehicle.type === vType ? C.orange : C.white,
-                                                color: newVehicle.type === vType ? 'white' : C.gray,
-                                                border: `1.5px solid ${newVehicle.type === vType ? C.orange : '#e5e7eb'}`,
-                                            }}
-                                        >
-                                            {t('user.create.' + vType.toLowerCase())}
-                                        </button>
-                                    ))}
-                                </div>
-                                    <div>
-                                        <input
-                                            type="text"
-                                            value={newVehicle.licensePlate}
-                                            onChange={e => setNewVehicle({ ...newVehicle, licensePlate: e.target.value.toUpperCase() })}
-                                            placeholder={t('user.create.platePlaceholder')}
-                                            style={{ ...inputStyle, border: isPlateInvalid ? '1.5px solid #ef4444' : '1.5px solid #e5e7eb' }}
-                                            onFocus={e => { if (!isPlateInvalid) e.target.style.border = `1.5px solid ${C.orange}`; }}
-                                            onBlur={e => { if (!isPlateInvalid) e.target.style.border = '1.5px solid #e5e7eb'; }}
-                                        />
-                                        {isPlateInvalid && (
-                                            <p className="text-[11px] text-red-500 mt-1.5 pl-1">{t('user.create.toasts.plateInvalid') || 'Biển số không hợp lệ (VD: 51A-12345)'}</p>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <input
-                                            type="text"
-                                            value={newVehicle.color}
-                                            onChange={e => setNewVehicle({ ...newVehicle, color: e.target.value })}
-                                            placeholder={t('user.create.colorPlaceholder')}
-                                            style={{ ...inputStyle, border: isColorInvalid ? '1.5px solid #ef4444' : '1.5px solid #e5e7eb' }}
-                                            onFocus={e => { if (!isColorInvalid) e.target.style.border = `1.5px solid ${C.orange}`; }}
-                                            onBlur={e => { if (!isColorInvalid) e.target.style.border = '1.5px solid #e5e7eb'; }}
-                                        />
-                                        {isColorInvalid && (
-                                            <p className="text-[11px] text-red-500 mt-1.5 pl-1">{t('user.create.toasts.colorInvalid') || 'Màu xe không hợp lệ (không chứa số)'}</p>
-                                        )}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button 
-                                            type="button" 
-                                            onClick={handleAddVehicle} 
-                                            disabled={isAddBtnDisabled}
-                                            className="flex-1 py-2 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
-                                            style={{ background: isAddBtnDisabled ? '#fdba74' : C.orange }}
-                                        >
-                                            {t('user.create.addBtn')}
-                                        </button>
-                                        <button type="button" onClick={() => setShowAddVehicle(false)} className="flex-1 py-2 rounded-xl text-sm font-medium" style={{ background: C.white, color: C.gray, border: `1px solid #e5e7eb` }}>{t('user.create.cancelBtn')}</button>
-                                    </div>
-                            </div>
-                        )}
-                    </div>
+                    <ContactSection
+                        colors={R}
+                        t={t}
+                        contactPhone={formData.contactPhone}
+                        onContactPhoneChange={(v) => setFormData({ ...formData, contactPhone: v })}
+                    />
 
-                    {/* ── 3. Incident Location ── */}
-                    <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <SectionHeader
-                            step={3}
-                            title={t('user.create.locationSection')}
-                            icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                        />
-                        <LocationPicker
-                            label={t('user.create.locationLabel')}
-                            value={formData.incidentLocation}
-                            onChange={(location) => setFormData({ ...formData, incidentLocation: location })}
-                            placeholder={t('user.create.locationSearchPlaceholder')}
-                            required
-                        />
-                        {/* Current Location Card */}
-                        <div className="mt-3 rounded-xl overflow-hidden" style={{ border: `1.5px solid ${isLoadingLocation ? C.border : currentLocation ? C.orange + '40' : C.border}`, background: currentLocation ? C.orangeLight : C.bg }}>
-                            {isLoadingLocation ? (
-                                <div className="flex items-center gap-3 px-4 py-3">
-                                    <div className="animate-spin rounded-full h-4 w-4 border-2 flex-shrink-0" style={{ borderColor: C.orange, borderTopColor: 'transparent' }}></div>
-                                    <span className="text-sm" style={{ color: C.gray }}>{t('user.create.gettingLocation')}</span>
-                                </div>
-                            ) : currentLocation ? (
-                                <div className="px-4 py-3">
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: C.orange }}>
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" /></svg>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-semibold mb-0.5" style={{ color: C.orange }}>{t('user.create.currentLocationLabel')}</p>
-                                            <p className="text-sm leading-snug" style={{ color: C.navy }}>{currentLocation.addressText}</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={fetchLocation}
-                                            title={t('user.create.refreshLocation')}
-                                            className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-opacity hover:opacity-70"
-                                            style={{ background: C.orange + '20', color: C.orange }}
-                                        >
-                                            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData(prev => ({ ...prev, incidentLocation: currentLocation }))}
-                                        className="mt-2.5 w-full py-2 rounded-lg text-sm font-semibold transition-all active:scale-[0.98]"
-                                        style={{ background: C.orange, color: 'white' }}
-                                    >
-                                        {t('user.create.useThisLocation')}
-                                    </button>
-                                </div>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={fetchLocation}
-                                    className="w-full flex items-center gap-3 px-4 py-3 transition-opacity hover:opacity-70"
-                                >
-                                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: C.border }}>
-                                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                    </div>
-                                    <span className="text-sm" style={{ color: C.gray }}>{t('user.create.tapToGetLocation')}</span>
-                                </button>
-                            )}
-                        </div>
-                    </div>
+                    <DescriptionSection
+                        colors={R}
+                        t={t}
+                        description={formData.description}
+                        onDescriptionChange={(v) => setFormData({ ...formData, description: v })}
+                    />
 
-                    {/* ── 4. Contact Phone ── */}
-                    <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <SectionHeader
-                            step={4}
-                            title={t('user.create.contactSection')}
-                            icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>}
-                        />
-                        <label className="block text-xs font-medium mb-1.5" style={{ color: C.gray }}>
-                            {t('user.create.phoneLabel')} <span style={{ color: '#ef4444' }}>*</span>
-                        </label>
-                        <input
-                            type="tel"
-                            value={formData.contactPhone}
-                            onChange={e => setFormData({ ...formData, contactPhone: e.target.value })}
-                            placeholder={t('user.create.phonePlaceholder')}
-                            style={inputStyle}
-                            onFocus={e => (e.target.style.border = `1.5px solid ${C.orange}`)}
-                            onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
-                            required
-                        />
-                        <p className="mt-1.5 text-xs" style={{ color: C.gray }}>{t('user.create.phoneHint')}</p>
-                    </div>
-
-                    {/* ── 5. Description ── */}
-                    <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <SectionHeader
-                            step={5}
-                            title={t('user.create.descriptionSection')}
-                            icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" /></svg>}
-                        />
-                        <textarea
-                            value={formData.description}
-                            onChange={e => setFormData({ ...formData, description: e.target.value })}
-                            placeholder={t('user.create.descriptionPlaceholder')}
-                            rows={3}
-                            style={{ ...inputStyle, resize: 'none' }}
-                            onFocus={e => (e.target.style.border = `1.5px solid ${C.orange}`)}
-                            onBlur={e => (e.target.style.border = '1.5px solid #e5e7eb')}
-                        />
-                    </div>
-
-                    {/* ── 6. Media ── */}
-                    <div className="bg-white rounded-2xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-                        <SectionHeader
-                            step={6}
-                            title={t('user.create.mediaSection')}
-                            icon={<svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
-                        />
-                        <div className="space-y-4">
-                            <div>
-                                <p className="text-xs font-medium mb-2" style={{ color: C.gray }}>{t('user.create.photoLabel')}</p>
-                                <ImageUpload
-                                    purpose={UploadPurpose.REQUEST_PHOTO}
-                                    maxImages={5}
-                                    uploadedImages={formData.images}
-                                    onSuccess={handleImageUploadSuccess}
-                                    onRemove={handleImageRemove}
-                                    label=""
-                                />
-                            </div>
-                            <div>
-                                <p className="text-xs font-medium mb-2" style={{ color: C.gray }}>{t('user.create.videoLabel')}</p>
-                                <VideoUpload
-                                    label=""
-                                    maxVideos={2}
-                                    cloudinaryCloudName={process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ''}
-                                    cloudinaryUploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || ''}
-                                    uploadedVideos={formData.videoUrls.map((url, idx) => ({ url, uploadId: formData.videoUploadIds[idx] }))}
-                                    onSuccess={(videoUrl, uploadId) => {
-                                        setFormData(prev => ({ ...prev, videoUrls: [...prev.videoUrls, videoUrl], videoUploadIds: [...prev.videoUploadIds, uploadId] }));
-                                    }}
-                                    onRemove={(videoUrl) => {
-                                        setFormData(prev => {
-                                            const urlIndex = prev.videoUrls.indexOf(videoUrl);
-                                            return { ...prev, videoUrls: prev.videoUrls.filter((_, i) => i !== urlIndex), videoUploadIds: prev.videoUploadIds.filter((_, i) => i !== urlIndex) };
-                                        });
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
+                    <MediaSection
+                        colors={R}
+                        t={t}
+                        imageUploadSlot={
+                            <ImageUpload
+                                purpose={UploadPurpose.REQUEST_PHOTO}
+                                maxImages={5}
+                                uploadedImages={formData.images}
+                                onSuccess={handleImageUploadSuccess}
+                                onRemove={handleImageRemove}
+                                label=""
+                            />
+                        }
+                        videoUploadSlot={
+                            <VideoUpload
+                                label=""
+                                maxVideos={2}
+                                cloudinaryCloudName={process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ''}
+                                cloudinaryUploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || ''}
+                                uploadedVideos={formData.videoUrls.map((url, idx) => ({
+                                    url,
+                                    uploadId: formData.videoUploadIds[idx],
+                                }))}
+                                onSuccess={(videoUrl, uploadId) => {
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        videoUrls: [...prev.videoUrls, videoUrl],
+                                        videoUploadIds: [...prev.videoUploadIds, uploadId],
+                                    }));
+                                }}
+                                onRemove={(videoUrl) => {
+                                    setFormData((prev) => {
+                                        const urlIndex = prev.videoUrls.indexOf(videoUrl);
+                                        return {
+                                            ...prev,
+                                            videoUrls: prev.videoUrls.filter((_, i) => i !== urlIndex),
+                                            videoUploadIds: prev.videoUploadIds.filter((_, i) => i !== urlIndex),
+                                        };
+                                    });
+                                }}
+                            />
+                        }
+                    />
                 </div>
 
-                {/* ── Sticky Submit Bar ── */}
-                <div
-                    className="fixed bottom-0 left-0 right-0 z-20 px-4 py-3"
-                    style={{ background: C.white, borderTop: `1px solid ${C.border}`, boxShadow: '0 -4px 20px rgba(0,0,0,0.06)' }}
-                >
-                    <div className="max-w-2xl mx-auto flex gap-3">
-                        <button
-                            type="button"
-                            onClick={() => router.back()}
-                            className="w-14 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
-                            style={{ background: C.bg, color: C.gray, border: `1px solid ${C.border}` }}
-                        >
-                            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                            </svg>
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isLoading || vehicles.length === 0}
-                            className="flex-1 h-12 rounded-xl font-bold text-sm text-white transition-all active:scale-[0.98]"
-                            style={{
-                                background: isLoading || vehicles.length === 0 ? '#fdba74' : `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`,
-                                boxShadow: vehicles.length > 0 ? `0 4px 16px ${C.orange}40` : 'none',
-                                cursor: isLoading || vehicles.length === 0 ? 'not-allowed' : 'pointer',
-                            }}
-                        >
-                            {isLoading ? (
-                                <span className="flex items-center justify-center gap-2">
-                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                                    </svg>
-                                    {t('user.create.submitting')}
-                                </span>
-                            ) : (
-                                <span className="flex items-center justify-center gap-2">
-                                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                    {t('user.create.submitBtn')}
-                                </span>
-                            )}
-                        </button>
-                    </div>
-                </div>
+                <StickySubmitBar
+                    colors={R}
+                    t={t}
+                    onBack={() => router.back()}
+                    isSubmitting={isLoading}
+                    submitDisabled={isLoading || vehicles.length === 0}
+                    layout="withBack"
+                />
             </form>
         </div>
     );

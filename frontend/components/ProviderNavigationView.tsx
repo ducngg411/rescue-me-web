@@ -408,7 +408,7 @@ export default function ProviderNavigationView({
                 setShowJobDone(true);
             }
         }).catch(() => { });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [requestId]);
 
     // Mark arrived — calls PATCH mark-arrived, then polls for customer response
@@ -945,7 +945,7 @@ export default function ProviderNavigationView({
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold" style={{ color: C.navy }}>{displayName}</p>
                             <p className="text-xs truncate" style={{ color: C.gray }}>
-                                📍 {pickupLocation.addressText}
+                                {pickupLocation.addressText}
                             </p>
                         </div>
                     </div>

@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import ReactConfetti from 'react-confetti';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { GuestWalletLockedCard } from '@/components/rescue-flow/payment/GuestWalletLockedCard';
+import { RESCUE_FLOW_COLORS } from '@/components/rescue-flow/tokens';
 
 const C = {
     orange: '#f97316',
@@ -39,9 +42,22 @@ interface PaymentRequestProps {
     requestId: string;
     payment: Payment;
     providerName?: string | null;
+    /** Guest JWT uses `/guest/rescue-requests/...` */
+    paymentScope?: 'customer' | 'guest';
+    /** After cash confirm / QR success / wallet pay — e.g. refetch request status */
+    onPaymentComplete?: () => void;
 }
 
-export default function PaymentRequest({ requestId, payment, providerName }: PaymentRequestProps) {
+export default function PaymentRequest({
+    requestId,
+    payment,
+    providerName,
+    paymentScope = 'customer',
+    onPaymentComplete,
+}: PaymentRequestProps) {
+    const { t } = useLanguage();
+    const apiBase =
+        paymentScope === 'guest' ? `/guest/rescue-requests/${requestId}` : `/rescue-requests/${requestId}`;
     const [showBreakdown, setShowBreakdown] = useState(false);
     const [isConfirming, setIsConfirming] = useState(false);
     const [showDispute, setShowDispute] = useState(false);
@@ -56,13 +72,13 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
     const [walletLoading, setWalletLoading] = useState(false);
 
     useEffect(() => {
-        if (payment.paymentMethod !== 'WALLET') return;
+        if (paymentScope === 'guest' || payment.paymentMethod !== 'WALLET') return;
         setWalletLoading(true);
         api.get('/user-wallet/me')
             .then(res => setWalletBalance(res.data.availableBalance ?? 0))
             .catch(() => setWalletBalance(0))
             .finally(() => setWalletLoading(false));
-    }, [payment.paymentMethod]);
+    }, [payment.paymentMethod, paymentScope]);
 
     // QR payment state (for QR payment method)
     const [qrData, setQrData] = useState<{
@@ -72,11 +88,15 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const cdRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const toastShownRef = useRef(false);
+    const onPaymentCompleteRef = useRef(onPaymentComplete);
+    useEffect(() => {
+        onPaymentCompleteRef.current = onPaymentComplete;
+    }, [onPaymentComplete]);
 
     useEffect(() => {
         if (payment.paymentMethod !== 'QR') return;
-        // Fetch QR data for customer
-        api.get(`/rescue-requests/${requestId}/payment/qr/status`)
+        api
+            .get(`${apiBase}/payment/qr/status`)
             .then(res => {
                 if (res.data.status === 'PENDING') {
                     setQrData(res.data);
@@ -90,7 +110,7 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                     // Poll for completion
                     pollRef.current = setInterval(async () => {
                         try {
-                            const s = await api.get(`/rescue-requests/${requestId}/payment/qr/status`);
+                            const s = await api.get(`${apiBase}/payment/qr/status`);
                             if (s.data.status === 'COMPLETED') {
                                 clearInterval(pollRef.current!); pollRef.current = null;
                                 clearInterval(cdRef.current!); cdRef.current = null;
@@ -99,6 +119,7 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                                     toast.success('Đã thanh toán thành công! Cảm ơn bạn ủng hộ dịch vụ 🎉', { duration: 5000 });
                                 }
                                 setDone(true);
+                                onPaymentCompleteRef.current?.();
                             } else if (s.data.status === 'EXPIRED') {
                                 clearInterval(pollRef.current!); pollRef.current = null;
                                 clearInterval(cdRef.current!); cdRef.current = null;
@@ -115,16 +136,17 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
             if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
             if (cdRef.current) { clearInterval(cdRef.current); cdRef.current = null; }
         };
-    }, [requestId, payment.paymentMethod]);
+    }, [requestId, payment.paymentMethod, apiBase]);
 
     const alreadyConfirmed = !!payment.userConfirmedAt || done;
 
     const handleConfirm = async () => {
         setIsConfirming(true);
         try {
-            await api.patch(`/rescue-requests/${requestId}/payment/confirm-sent`);
+            await api.patch(`${apiBase}/payment/confirm-sent`);
             toast.success('Xác nhận thành công!');
             setDone(true);
+            onPaymentCompleteRef.current?.();
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Xác nhận thất bại');
         } finally {
@@ -135,9 +157,10 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
     const handleWalletConfirm = async () => {
         setIsConfirming(true);
         try {
-            await api.patch(`/rescue-requests/${requestId}/payment/wallet-confirm`);
+            await api.patch(`${apiBase}/payment/wallet-confirm`);
             toast.success('Thanh toán ví thành công! 🎉');
             setDone(true);
+            onPaymentCompleteRef.current?.();
         } catch (err: any) {
             toast.error(err.response?.data?.message || 'Thanh toán thất bại');
         } finally {
@@ -149,7 +172,7 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
         if (!disputeReason.trim()) { toast.error('Vui lòng nhập lý do'); return; }
         setIsDisputing(true);
         try {
-            await api.post(`/rescue-requests/${requestId}/payment/dispute`, { reason: disputeReason });
+            await api.post(`${apiBase}/payment/dispute`, { reason: disputeReason });
             toast.success('Đã báo sự cố. Chúng tôi sẽ xem xét.');
             setShowDispute(false);
         } catch (err: any) {
@@ -206,8 +229,8 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                         </svg>
                     </div>
                     <div>
-                        <p className="text-xs text-white/80">Yêu cầu thanh toán từ</p>
-                        <p className="text-sm font-bold text-white">{providerName ?? 'Provider'}</p>
+                        <p className="text-xs text-white/80">{t('user.tracking.paymentRequest.title')}</p>
+                        <p className="text-sm font-bold text-white">{providerName ?? t('user.tracking.paymentRequest.providerFallback')}</p>
                     </div>
                 </div>
 
@@ -215,13 +238,13 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                 <div className="bg-white px-4 py-4">
                     {/* Total */}
                     <div className="text-center mb-4">
-                        <p className="text-xs mb-1" style={{ color: C.gray }}>Tổng tiền cần thanh toán</p>
+                        <p className="text-xs mb-1" style={{ color: C.gray }}>{t('user.tracking.paymentRequest.totalLabel')}</p>
                         <p className="text-3xl font-bold" style={{ color: C.orange }}>{fmt(payment.totalAmount)}</p>
                         <p className="text-xs mt-1" style={{ color: C.gray }}>
-                            Thanh toán bằng <span className="font-semibold">
-                                {payment.paymentMethod === 'CASH' ? 'Tiền mặt'
-                                    : payment.paymentMethod === 'WALLET' ? 'Ví điện tử RescueMe'
-                                    : 'Chuyển khoản QR'}
+                            {t('user.tracking.paymentRequest.paidWith')} <span className="font-semibold">
+                                {payment.paymentMethod === 'CASH' ? t('user.tracking.paymentRequest.methodCash')
+                                    : payment.paymentMethod === 'WALLET' ? t('user.tracking.paymentRequest.methodWallet')
+                                    : t('user.tracking.paymentRequest.methodQR')}
                             </span>
                         </p>
                     </div>
@@ -234,8 +257,8 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                             style={{ background: C.bg }}
                         >
                             <span className="text-xs font-semibold" style={{ color: C.navy }}>
-                                Xem chi tiết {breakdownItems.length > 0 && `(${breakdownItems.length} mục)`}
-                                {surchargeItems.length > 0 && ` • ${surchargeItems.length} phụ phí`}
+                                {t('user.tracking.paymentRequest.viewDetails')} {breakdownItems.length > 0 && `(${breakdownItems.length} ${t('user.tracking.paymentRequest.itemsCount')})`}
+                                {surchargeItems.length > 0 && ` • ${surchargeItems.length} ${t('user.tracking.paymentRequest.surchargesCount')}`}
                             </span>
                             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={2.5}
                                 className={`transition-transform ${showBreakdown ? 'rotate-180' : ''}`}>
@@ -263,7 +286,7 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
 
                             {breakdownItems.length === 0 && payment.baseFee > 0 && (
                                 <div className="flex justify-between px-3 py-2.5 text-sm" style={{ color: C.navy }}>
-                                    <span style={{ color: C.gray }}>Phí dịch vụ</span>
+                                    <span style={{ color: C.gray }}>{t('user.tracking.paymentRequest.serviceFee')}</span>
                                     <span className="font-semibold">{fmt(payment.baseFee)}</span>
                                 </div>
                             )}
@@ -336,20 +359,22 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                             </svg>
                         </div>
                         <p className="text-sm font-bold mb-1" style={{ color: '#15803d' }}>
-                            Thanh toán thành công! 🎉
+                            {t('user.tracking.paymentRequest.successTitle')}
                         </p>
-                        <p className="text-xs" style={{ color: '#166534' }}>
-                            {payment.paymentMethod === 'WALLET'
-                                ? <><span className="font-medium">Tiền đã được trừ tự động từ ví của bạn.</span> Cảm ơn bạn đã sử dụng dịch vụ!</>
-                                : <>Cảm ơn bạn đã sử dụng dịch vụ.{' '}<span className="font-medium">Đơn hàng đang được hoàn tất.</span></>}
-                        </p>
+                        <p className="text-xs" style={{ color: '#166534' }}
+                            dangerouslySetInnerHTML={{
+                                __html: payment.paymentMethod === 'WALLET'
+                                    ? t('user.tracking.paymentRequest.walletSuccessDesc')
+                                    : t('user.tracking.paymentRequest.cashSuccessDesc')
+                            }}
+                        />
                     </div>
 
                     <div
                         className="flex items-center justify-between px-4 py-3 rounded-xl"
                         style={{ background: C.bg }}
                     >
-                        <span className="text-xs" style={{ color: C.gray }}>Số tiền đã thanh toán</span>
+                        <span className="text-xs" style={{ color: C.gray }}>{t('user.tracking.paymentRequest.paidAmount')}</span>
                         <span className="text-base font-bold" style={{ color: C.orange }}>{fmt(payment.totalAmount)}</span>
                     </div>
                 </div>
@@ -359,7 +384,14 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
             {/* ─── Actions (not yet confirmed) ─── */}
             {!alreadyConfirmed && (
                 <div className="mt-2 space-y-2">
-                    {payment.paymentMethod === 'WALLET' ? (
+                    {payment.paymentMethod === 'WALLET' && paymentScope === 'guest' ? (
+                        <GuestWalletLockedCard
+                            colors={RESCUE_FLOW_COLORS}
+                            title={t('guest.payment.walletLocked')}
+                            description={t('guest.payment.walletLockedDesc')}
+                            ctaLabel={t('guest.payment.registerToUnlock')}
+                        />
+                    ) : payment.paymentMethod === 'WALLET' ? (
                         /* ── Wallet: show balance + confirm button ── */
                         <div className="space-y-3">
                             {/* Wallet balance card */}
@@ -489,16 +521,18 @@ export default function PaymentRequest({ requestId, payment, providerName }: Pay
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             )}
-                            Tôi đã thanh toán tiền mặt
+                            {t('user.tracking.paymentRequest.cashConfirmBtn')}
                         </button>
                     )}
-                    <button
-                        onClick={() => setShowDispute(true)}
-                        className="w-full py-3 rounded-2xl text-sm font-semibold"
-                        style={{ background: '#fef2f2', color: '#dc2626' }}
-                    >
-                        Báo sự cố
-                    </button>
+                    {paymentScope !== 'guest' && (
+                        <button
+                            onClick={() => setShowDispute(true)}
+                            className="w-full py-3 rounded-2xl text-sm font-semibold"
+                            style={{ background: '#fef2f2', color: '#dc2626' }}
+                        >
+                            Báo sự cố
+                        </button>
+                    )}
                 </div>
             )}
 

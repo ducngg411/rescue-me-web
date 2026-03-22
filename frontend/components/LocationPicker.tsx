@@ -18,6 +18,8 @@ interface LocationPickerProps {
     onChange: (location: LocationData) => void;
     placeholder?: string;
     required?: boolean;
+    /** Align focus/selected colors with rescue flow (orange/navy) instead of default blue/green. */
+    variant?: 'default' | 'rescue';
 }
 
 export default function LocationPicker({
@@ -26,6 +28,7 @@ export default function LocationPicker({
     onChange,
     placeholder,
     required = false,
+    variant = 'default',
 }: LocationPickerProps) {
     const { t } = useLanguage();
     const [query, setQuery] = useState('');
@@ -137,6 +140,11 @@ export default function LocationPicker({
         }
     };
 
+    const inputFocusClass =
+        variant === 'rescue'
+            ? 'focus:ring-2 focus:ring-orange-500 focus:border-orange-400'
+            : 'focus:ring-2 focus:ring-blue-500 focus:border-transparent';
+
     return (
         <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
@@ -161,7 +169,7 @@ export default function LocationPicker({
                             }
                         }}
                         placeholder={placeholder || t('common.locationPicker.placeholder')}
-                        className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
+                        className={`w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 ${inputFocusClass}`}
                     />
                     <MagnifyingGlassIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                 </div>
@@ -176,7 +184,9 @@ export default function LocationPicker({
                                 key={index}
                                 type="button"
                                 onClick={() => handleSelectPlace(result)}
-                                className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                                className={`w-full px-4 py-3 text-left border-b border-gray-100 last:border-b-0 ${
+                                    variant === 'rescue' ? 'hover:bg-orange-50' : 'hover:bg-gray-50'
+                                }`}
                             >
                                 <div className="font-medium text-gray-900">{result.displayName}</div>
                                 <div className="text-sm text-gray-500">{result.address}</div>
@@ -194,14 +204,35 @@ export default function LocationPicker({
 
             {/* Selected Location Display */}
             {selectedPlace && (
-                <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div
+                    className={
+                        variant === 'rescue'
+                            ? 'mt-2 p-3 rounded-lg border bg-orange-50 border-orange-200'
+                            : 'mt-2 p-3 bg-green-50 border border-green-200 rounded-lg'
+                    }
+                >
                     <div className="flex items-start gap-2">
-                        <MapPinIcon className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                        <MapPinIcon
+                            className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
+                                variant === 'rescue' ? 'text-orange-600' : 'text-green-600'
+                            }`}
+                        />
                         <div>
-                            <div className="text-sm font-medium text-green-900">{t('common.locationPicker.selected')}</div>
-                            <div className="text-sm text-green-700">{selectedPlace.addressText}</div>
-                            <div className="text-xs text-green-600 mt-1">
-                                {t('common.locationPicker.coordinates', { lat: selectedPlace.lat.toFixed(6), lng: selectedPlace.lng.toFixed(6) })}
+                            <div
+                                className={`text-sm font-medium ${
+                                    variant === 'rescue' ? 'text-orange-950' : 'text-green-900'
+                                }`}
+                            >
+                                {t('common.locationPicker.selected')}
+                            </div>
+                            <div className={`text-sm ${variant === 'rescue' ? 'text-slate-800' : 'text-green-700'}`}>
+                                {selectedPlace.addressText}
+                            </div>
+                            <div className={`text-xs mt-1 ${variant === 'rescue' ? 'text-orange-800' : 'text-green-600'}`}>
+                                {t('common.locationPicker.coordinates', {
+                                    lat: selectedPlace.lat.toFixed(6),
+                                    lng: selectedPlace.lng.toFixed(6),
+                                })}
                             </div>
                         </div>
                     </div>

@@ -451,6 +451,8 @@ const vi = {
                 acceptBtn: 'Chọn ngay',
                 acceptingBtn: 'Đang xác nhận...',
                 acceptFullBtn: 'Chọn báo giá này',
+                rejectBtn: 'Từ chối',
+                rejectSuccessToast: 'Đã từ chối báo giá',
                 successToast: 'Đã chọn báo giá! Provider đang chuẩn bị đến.',
                 errorToast: 'Không thể chọn báo giá. Vui lòng thử lại.',
                 selectionHeader: 'Chọn báo giá phù hợp',
@@ -566,6 +568,7 @@ const vi = {
                 methodCash: 'Tiền mặt',
                 methodWallet: 'Ví điện tử RescueMe',
                 methodQR: 'Chuyển khoản QR',
+                paidWith: 'Thanh toán bằng',
                 viewDetails: 'Xem chi tiết',
                 itemsCount: 'mục',
                 surchargesCount: 'phụ phí',
@@ -1393,6 +1396,8 @@ const vi = {
             quoteSuccess: 'Đã gửi báo giá! Đang chờ khách hàng phản hồi.',
             quoteRejected: 'Báo giá của bạn bị từ chối',
             otherProviderChosen: 'Khách hàng đã chọn cứu hộ viên khác',
+            lostSelectionHint: 'Bạn không cần chờ thêm. Quay lại danh sách để nhận ca mới.',
+            backToActiveList: 'Về danh sách ca',
             loadError: 'Không thể tải thông tin yêu cầu',
             quoteWindowExpired: 'Yêu cầu này đã hết hạn – cửa sổ báo giá đã đóng.',
             declineSuccess: 'Đã từ chối yêu cầu',
@@ -1911,6 +1916,8 @@ const vi = {
             previouslyUploaded: 'Đã tải lên trước đó',
             uploadAnother: 'Tải lên file khác',
             clickToChoose: 'Nhấn để chọn file',
+            clickToSelectImage: 'Nhấn để chọn ảnh',
+            clickToSelectVideo: 'Nhấn để chọn video',
             orDragDrop: 'hoặc kéo thả file vào đây',
             supported: 'Hỗ trợ: JPG, PNG, WEBP (tối đa 5MB)',
             upload: 'Tải lên',
@@ -2046,6 +2053,10 @@ const vi = {
         otp: {
             title: 'Gọi Cứu Hộ Ngay',
             subtitle: 'Xác minh số điện thoại để tạo yêu cầu. Không cần đăng ký.',
+            intro: 'Nhập số điện thoại để nhận mã OTP',
+            sentToPhone: 'Mã OTP đã gửi đến',
+            verifySuccessToast: 'Xác minh thành công!',
+            sendFailed: 'Không thể gửi OTP. Vui lòng thử lại.',
             phoneLabel: 'Số điện thoại',
             phonePlaceholder: 'Ví dụ: 0912 345 678',
             sendOtpBtn: 'Gửi mã OTP',
@@ -2068,6 +2079,9 @@ const vi = {
             submitBtn: 'Gửi yêu cầu',
             submitting: 'Đang gửi...',
         },
+        chat: {
+            senderName: 'Khách · {phone}',
+        },
         status: {
             title: 'Trạng thái yêu cầu',
             guestBadge: 'Yêu cầu khách',
@@ -2076,8 +2090,10 @@ const vi = {
             timeline: {
                 sent: 'Đã gửi',
                 searching: 'Đang tìm',
-                gotQuote: 'Có báo giá',
-                selected: 'Đã chọn',
+                chooseQuote: 'Chọn báo giá',
+                moving: 'Đang di chuyển',
+                working: 'Đang sửa chữa',
+                payment: 'Thanh toán',
                 done: 'Hoàn tất',
             },
             waitingTips: {
@@ -2087,8 +2103,11 @@ const vi = {
                 updateLocation: 'Cập nhật vị trí nếu bạn di chuyển',
             },
             safetyActions: {
-                callHotline: 'Gọi hotline',
-                shareLocation: 'Chia sẻ vị trí',
+                shareLocationForFamily: 'Chia sẻ vị trí cho người thân',
+                shareLocationTitle: 'Vị trí cứu hộ',
+                shareLocationWithCoords: 'Vị trí của tôi: {address} ({url})',
+                shareLocationFallback: 'Tôi đang cần hỗ trợ cứu hộ.',
+                shareLocationCopied: 'Đã sao chép tin nhắn!',
             },
             statusLabels: {
                 CREATED: 'Đã tạo',
@@ -2118,6 +2137,12 @@ const vi = {
             completed: {
                 title: 'Hoàn thành!',
                 subtitle: 'Cảm ơn bạn đã sử dụng dịch vụ',
+                benefitsTitle: 'Đăng ký miễn phí — mở khóa thêm:',
+                benefit1: 'Lưu toàn bộ lịch sử cứu hộ, xem lại chi tiết mọi lúc',
+                benefit2: 'Thanh toán nhanh bằng ví Rescue Me, không cần nhập lại thông tin',
+                benefit3: 'Quản lý xe, địa điểm và số liên hệ — tạo yêu cầu chỉ vài chạm',
+                benefit4: 'Ưu tiên hỗ trợ và ưu đãi cho thành viên (sắp ra mắt)',
+                homeBtn: 'Về trang chủ',
             },
             cancelled: {
                 subtitle: 'Yêu cầu này đã kết thúc',
@@ -2145,6 +2170,8 @@ const vi = {
                 denyBtn: 'Chưa đến',
                 support: 'Nếu cần hỗ trợ, hãy gọi trực tiếp cho provider',
                 confirming: 'Đang xác nhận...',
+                toastConfirmed: 'Đã xác nhận provider đã đến!',
+                toastDenied: 'Đã báo provider chưa đến nơi',
             },
         },
         payment: {
@@ -2195,11 +2222,13 @@ const vi = {
             ctaSubtitle: 'Gọi cứu hộ không cần đăng ký. Xác minh số điện thoại và nhận hỗ trợ trong vài phút.',
             ctaBtn: 'Gọi Cứu Hộ – Không Cần Đăng Ký',
             orLogin: 'hoặc đăng nhập vào tài khoản',
+            loginHint: 'Không cần đăng ký — xác minh SĐT là dùng được',
         },
         errors: {
             sessionExpired: 'Phiên khách đã hết hạn. Vui lòng xác minh lại số điện thoại.',
             notFound: 'Không tìm thấy yêu cầu.',
             walletBlocked: 'Thanh toán ví không khả dụng cho khách.',
+            generic: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
         },
     },
 } as const;

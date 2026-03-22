@@ -3,6 +3,7 @@
 import React, { useRef, useState } from 'react';
 import { Upload, X, Loader2, AlertCircle, Video } from 'lucide-react';
 import api from '@/lib/api';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface VideoUploadProps {
     label?: string;
@@ -38,6 +39,7 @@ export default function VideoUpload({
     disabled = false,
     skipTracking = false,
 }: VideoUploadProps) {
+    const { t } = useLanguage();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -249,7 +251,7 @@ export default function VideoUpload({
                         </div>
                         <div>
                             <p className="text-sm font-semibold" style={{ color: C.navy }}>
-                                Nhấn để chọn video
+                                {t('components.fileUpload.clickToSelectVideo')}
                             </p>
                             <p className="text-xs mt-0.5" style={{ color: C.gray }}>
                                 Hỗ trợ: MP4, MOV, AVI (tối đa 50MB)

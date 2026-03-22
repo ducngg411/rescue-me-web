@@ -93,7 +93,7 @@ export default function WaitingState() {
                             <div className="flex items-start gap-2">
                                 {debugInfo.profile.permanentAddress?.lat && debugInfo.profile.permanentAddress?.lng ? (
                                     <>
-                                        <span className="text-blue-600">📍</span>
+                                        <span className="text-blue-600"></span>
                                         <div className="flex-1">
                                             <div className="font-medium">Địa chỉ mặc định: {debugInfo.profile.permanentAddress.addressText}</div>
                                             <div className="text-gray-600 text-xs">(Dùng nếu không có GPS)</div>
@@ -101,7 +101,7 @@ export default function WaitingState() {
                                     </>
                                 ) : debugInfo.profile.businessAddress?.lat && debugInfo.profile.businessAddress?.lng ? (
                                     <>
-                                        <span className="text-blue-600">📍</span>
+                                        <span className="text-blue-600"></span>
                                         <div className="flex-1">
                                             <div className="font-medium">Địa chỉ doanh nghiệp: {debugInfo.profile.businessAddress.addressText}</div>
                                             <div className="text-gray-600 text-xs">(Dùng nếu không có GPS)</div>
@@ -120,7 +120,7 @@ export default function WaitingState() {
 
                             {/* Service Radius */}
                             <div className="flex items-start gap-2">
-                                <span className="text-blue-600">📍</span>
+                                <span className="text-blue-600"></span>
                                 <div className="flex-1">
                                     <div className="font-medium">Bán kính phục vụ: {debugInfo.settings.serviceRadiusKm || 15} km</div>
                                     <div className="text-gray-600">Chỉ nhận yêu cầu trong bán kính này</div>

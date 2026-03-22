@@ -310,7 +310,7 @@ export class ProviderService {
             },
         });
 
-        console.log(`📍 [Provider ${userId}] Location updated: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+        console.log(` [Provider ${userId}] Location updated: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
 
         return {
             success: true,
@@ -456,6 +456,20 @@ export class ProviderService {
             return [];
         }
 
+        const candidateIds = candidateRequests.map((r) => r.id);
+        const pendingQuoteGroups = await this.prisma.quote.groupBy({
+            by: ['rescueRequestId'],
+            where: {
+                rescueRequestId: { in: candidateIds },
+                status: 'PENDING',
+            },
+            _count: { id: true },
+        });
+        const pendingQuoteCountByRequest: Record<string, number> = {};
+        for (const row of pendingQuoteGroups) {
+            pendingQuoteCountByRequest[row.rescueRequestId] = row._count.id;
+        }
+
         // Step 2: Calculate REAL routes using VietMap API (with ETA!)
         const matchedRequests: any[] = [];
         for (const request of candidateRequests) {
@@ -487,8 +501,9 @@ export class ProviderService {
                     }
                 }
 
-                // Check if slots are full
-                if (request.quoteCount >= request.maxQuotes) {
+                const actualQuoteCount = pendingQuoteCountByRequest[request.id] ?? 0;
+                const maxQuotes = request.maxQuotes ?? 3;
+                if (actualQuoteCount >= maxQuotes) {
                     quoteWindowOpen = false;
                 }
 
@@ -505,11 +520,11 @@ export class ProviderService {
                         ? {
                             name: request.user.fullName || request.user.name,
                             phone: request.user.phoneNumber,
-                          }
+                        }
                         : {
                             name: 'Khách vãng lai',
                             phone: request.contactPhone,
-                          },
+                        },
                     incidentType: request.incidentType,
                     vehicleType: request.vehicleType,
                     description: request.description,
@@ -535,8 +550,8 @@ export class ProviderService {
                     quoteWindowOpen,
                     quoteWindowTimeRemaining,
                     quoteWindowExpiresAt: request.quoteWindowExpiresAt,
-                    quoteCount: request.quoteCount,
-                    maxQuotes: request.maxQuotes,
+                    quoteCount: actualQuoteCount,
+                    maxQuotes,
                     createdAt: request.createdAt,
                 });
             } else if (!routeInfo.success) {
@@ -674,7 +689,7 @@ export class ProviderService {
                     matchedDistance = routeInfo.distance;
                     matchedEta = routeInfo.duration;
                     this.logger.log(
-                        `📍 [Provider ${providerId}] Matched with distance: ${matchedDistance}km, ETA: ${matchedEta} minutes`,
+                        ` [Provider ${providerId}] Matched with distance: ${matchedDistance}km, ETA: ${matchedEta} minutes`,
                     );
                 } else {
                     this.logger.warn(

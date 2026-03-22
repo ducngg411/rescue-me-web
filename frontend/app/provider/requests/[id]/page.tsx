@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -10,6 +10,7 @@ import dynamic from 'next/dynamic';
 import { useChat } from '@/lib/hooks/useChat';
 import VietMap from '@/components/VietMap';
 import AvatarImage from '@/components/AvatarImage';
+import { matchingQuoteWindowSecondsRemaining } from '@/lib/matchingQuoteWindowCountdown';
 
 const ChatModal = lazy(() => import('@/components/ChatModal'));
 
@@ -69,6 +70,7 @@ interface RescueRequest {
     quoteWindowExpiresAt?: string | null;
     quoteCount?: number;
     maxQuotes?: number;
+    expiresAt?: string | null;
 }
 
 /** Plate/color stored on the request (guest) or legacy User profile */
@@ -95,6 +97,8 @@ export default function ProviderRequestDetailPage() {
     const [hasRejectedQuote, setHasRejectedQuote] = useState(false);
     const [myQuoteDetails, setMyQuoteDetails] = useState<any>(null);
     const [quoteAccepted, setQuoteAccepted] = useState(false);
+    /** Customer accepted another provider; this quote was superseded (CANCELLED) */
+    const [lostSelection, setLostSelection] = useState(false);
     const [showNavigationMap, setShowNavigationMap] = useState(false);
     const [isStartingNav, setIsStartingNav] = useState(false);
     const [selectedConfirmImage, setSelectedConfirmImage] = useState<string | null>(null);
@@ -103,6 +107,8 @@ export default function ProviderRequestDetailPage() {
 
     // Quote window timer
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
+    const requestRef = useRef<RescueRequest | null>(null);
+    requestRef.current = request;
     const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
 
     // Chat hook — subscribe for unread count as soon as we have user.id + requestId
@@ -138,7 +144,7 @@ export default function ProviderRequestDetailPage() {
 
         const pollInterval = setInterval(() => {
             checkQuoteStatus();
-        }, 5000); // Check every 5 seconds
+        }, 3000); // Quote slots + customer decision — refresh often enough to stay in sync
 
         return () => clearInterval(pollInterval);
     }, [hasPendingQuote, request]);
@@ -156,32 +162,63 @@ export default function ProviderRequestDetailPage() {
                     // My quote was accepted!
                     setQuoteAccepted(true);
                     setHasPendingQuote(false);
+                    setLostSelection(false);
                     // Refresh request to get ASSIGNED status
                     fetchRequestDetail();
                     // Remove from history
                     removeFromHistoryStorage(requestId);
+                    return;
                 } else if (myQuote.status === 'REJECTED') {
                     // My quote was rejected
                     setHasPendingQuote(false);
                     setHasRejectedQuote(true);
+                    setLostSelection(false);
                     toast.error('❌ ' + t('provider.requestDetail.quoteRejected'), { duration: 3000 });
                     // Remove from history
                     removeFromHistoryStorage(requestId);
+                    return;
+                } else if (myQuote.status === 'CANCELLED' || myQuote.status === 'EXPIRED') {
+                    // Another provider was chosen (or quote expired)
+                    setHasPendingQuote(false);
+                    setLostSelection(true);
+                    toast.error('💔 ' + t('provider.requestDetail.otherProviderChosen'), { duration: 4000 });
+                    removeFromHistoryStorage(requestId);
+                    setTimeout(() => {
+                        router.push('/provider/active');
+                    }, 2500);
+                    return;
                 }
             }
 
-            // Check if request was assigned to someone else
             const requestResponse = await api.get(`/rescue-requests/${requestId}/provider-view`);
-            if (requestResponse.data.status === 'ASSIGNED' && requestResponse.data.assignedProviderId !== user?.id) {
-                // Another provider was chosen
+            const rd = requestResponse.data;
+
+            // While MATCHING: keep "x/y báo giá" in sync when other providers submit
+            if (rd.status === 'MATCHING') {
+                setRequest((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              status: rd.status,
+                              quoteCount: rd.quoteCount,
+                              maxQuotes: rd.maxQuotes ?? prev.maxQuotes,
+                              quoteWindowOpen: rd.quoteWindowOpen,
+                              quoteWindowTimeRemaining: rd.quoteWindowTimeRemaining,
+                              quoteWindowExpiresAt: rd.quoteWindowExpiresAt ?? prev.quoteWindowExpiresAt,
+                          }
+                        : prev
+                );
+            }
+
+            // Backup: assigned to someone else (quotes list may lag)
+            if (rd.status === 'ASSIGNED' && rd.assignedProviderId !== user?.id) {
                 setHasPendingQuote(false);
+                setLostSelection(true);
                 toast.error('💔 ' + t('provider.requestDetail.otherProviderChosen'), { duration: 4000 });
-                // Remove from history
                 removeFromHistoryStorage(requestId);
-                // Redirect after delay
                 setTimeout(() => {
                     router.push('/provider/active');
-                }, 2000);
+                }, 2500);
             }
         } catch (err) {
             console.error('Error checking quote status:', err);
@@ -202,31 +239,91 @@ export default function ProviderRequestDetailPage() {
         }
     };
 
-    // Timer countdown effect
+    // MATCHING + chưa gửi báo giá: vẫn phải đồng bộ x/y báo giá khi provider khác đã gửi (trước đây không poll → kẹt 0/3)
     useEffect(() => {
-        if (request?.quoteWindowTimeRemaining && request?.quoteWindowOpen) {
-            // Initialize timer only if not already set
-            if (timeLeft === null) {
-                setTimeLeft(request.quoteWindowTimeRemaining);
-            }
-        }
+        if (!user || user.role !== 'PROVIDER') return;
+        if (hasPendingQuote || lostSelection || quoteAccepted) return;
+        if (!request || request.status !== 'MATCHING') return;
 
-        if (timeLeft === null || timeLeft <= 0) {
+        const applyMatchingFields = (rd: RescueRequest) => {
+            if (rd.status !== 'MATCHING') return;
+            setRequest((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          status: rd.status,
+                          quoteCount: rd.quoteCount,
+                          maxQuotes: rd.maxQuotes ?? prev.maxQuotes,
+                          quoteWindowOpen: rd.quoteWindowOpen,
+                          quoteWindowTimeRemaining: rd.quoteWindowTimeRemaining,
+                          quoteWindowExpiresAt: rd.quoteWindowExpiresAt ?? prev.quoteWindowExpiresAt,
+                      }
+                    : prev
+            );
+        };
+
+        const syncWhileDeciding = async () => {
+            try {
+                const { data: rd } = await api.get(`/rescue-requests/${requestId}/provider-view`);
+                applyMatchingFields(rd);
+
+                if (rd.status === 'ASSIGNED' && rd.assignedProviderId && rd.assignedProviderId !== user.id) {
+                    setLostSelection(true);
+                    toast.error('💔 ' + t('provider.requestDetail.otherProviderChosen'), { duration: 4000 });
+                    removeFromHistoryStorage(requestId);
+                    setTimeout(() => router.push('/provider/active'), 2500);
+                }
+            } catch (err: any) {
+                const errorMessage = err.response?.data?.message || '';
+                if (errorMessage.includes('QUOTE_WINDOW_CLOSED')) {
+                    toast.error('⏰ Yêu cầu này đã hết hạn nhận báo giá!\n\nCửa sổ nhận báo giá đã đóng. Vui lòng tìm yêu cầu khác.', {
+                        duration: 5000,
+                    });
+                    setTimeout(() => router.push('/provider/active'), 2000);
+                } else if (errorMessage.includes('SLOTS_FULL')) {
+                    toast.error('📋 Đã đủ số lượng báo giá!\n\nYêu cầu này đã nhận đủ 3 báo giá.', {
+                        duration: 4000,
+                    });
+                    setTimeout(() => router.push('/provider/active'), 2000);
+                }
+            }
+        };
+
+        void syncWhileDeciding();
+        const interval = setInterval(syncWhileDeciding, 3000);
+        const onFocus = () => void syncWhileDeciding();
+        window.addEventListener('focus', onFocus);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('focus', onFocus);
+        };
+    }, [requestId, user, request?.status, hasPendingQuote, lostSelection, quoteAccepted]);
+
+    // Timer from server deadline (aligned with guest/customer countdown)
+    useEffect(() => {
+        const r = request;
+        const active =
+            r?.status === 'MATCHING' &&
+            !hasPendingQuote &&
+            r.quoteWindowOpen === true;
+
+        if (!active) {
+            setTimeLeft(null);
             return;
         }
 
-        const interval = setInterval(() => {
-            setTimeLeft((prev) => {
-                if (prev === null || prev <= 1) {
-                    clearInterval(interval);
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
+        const tick = () => matchingQuoteWindowSecondsRemaining(requestRef.current);
 
+        setTimeLeft(tick());
+        const interval = setInterval(() => setTimeLeft(tick()), 1000);
         return () => clearInterval(interval);
-    }, [request?.quoteWindowTimeRemaining, request?.quoteWindowOpen, timeLeft]);
+    }, [
+        request?.status,
+        request?.quoteWindowOpen,
+        request?.quoteWindowExpiresAt,
+        request?.expiresAt,
+        hasPendingQuote,
+    ]);
 
     // Keyboard navigation for image viewer
     useEffect(() => {
@@ -254,6 +351,7 @@ export default function ProviderRequestDetailPage() {
             setHasPendingQuote(false);
             setHasRejectedQuote(false);
             setQuoteAccepted(false);
+            setLostSelection(false);
             setMyQuoteDetails(null);
 
             const response = await api.get(`/rescue-requests/${requestId}/provider-view`);
@@ -286,7 +384,17 @@ export default function ProviderRequestDetailPage() {
                             } else if (myQuote.status === 'ACCEPTED') {
                                 console.log(' Setting quoteAccepted = true');
                                 setQuoteAccepted(true);
+                            } else if (myQuote.status === 'CANCELLED' || myQuote.status === 'EXPIRED') {
+                                setHasPendingQuote(false);
+                                setLostSelection(true);
                             }
+                        } else if (
+                            requestData.assignedProviderId &&
+                            requestData.assignedProviderId !== user?.id &&
+                            (myQuote.status === 'CANCELLED' || myQuote.status === 'EXPIRED')
+                        ) {
+                            setHasPendingQuote(false);
+                            setLostSelection(true);
                         }
                     }
                 } catch (quoteErr) {
@@ -365,8 +473,12 @@ export default function ProviderRequestDetailPage() {
                 status: 'PENDING',
                 providerId: user?.id,
             });
-            // Optimistically increment quoteCount so the slot badge updates immediately
-            setRequest(prev => prev ? { ...prev, quoteCount: (prev.quoteCount ?? 0) + 1 } : prev);
+            try {
+                const refresh = await api.get(`/rescue-requests/${requestId}/provider-view`);
+                setRequest((prev) => (prev ? { ...prev, ...refresh.data } : refresh.data));
+            } catch {
+                /* badge refreshes on next poll */
+            }
             console.log(' Set hasPendingQuote = true, myQuoteDetails updated');
 
             // Reset form
@@ -915,6 +1027,25 @@ export default function ProviderRequestDetailPage() {
 
             {/* Main Content */}
             <div className="max-w-6xl mx-auto px-4 py-6">
+                {lostSelection && (
+                    <div
+                        className="mb-5 rounded-2xl border p-4 md:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                        style={{ background: '#fff7ed', borderColor: '#fed7aa' }}
+                    >
+                        <div>
+                            <p className="font-bold text-[#9a3412] text-sm md:text-base">{t('provider.requestDetail.otherProviderChosen')}</p>
+                            <p className="text-xs md:text-sm text-[#c2410c] mt-1">{t('provider.requestDetail.lostSelectionHint')}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => router.push('/provider/active')}
+                            className="shrink-0 px-4 py-2.5 rounded-xl text-sm font-bold text-white"
+                            style={{ background: '#f97316' }}
+                        >
+                            {t('provider.requestDetail.backToActiveList')}
+                        </button>
+                    </div>
+                )}
                 <div className="flex flex-col lg:flex-row gap-6">
                     {/* Left Column: Details */}
                     <div className="flex-1 space-y-4">

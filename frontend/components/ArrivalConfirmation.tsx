@@ -14,24 +14,37 @@ const C = {
     border: '#f1f5f9',
 };
 
+export type ArrivalRequestScope = 'customer' | 'guest';
+
+function arrivalBasePath(scope: ArrivalRequestScope, requestId: string) {
+    return scope === 'guest' ? `/guest/rescue-requests/${requestId}` : `/rescue-requests/${requestId}`;
+}
+
 interface ArrivalConfirmationProps {
     requestId: string;
     providerName: string;
+    requestScope?: ArrivalRequestScope;
     /** Called after user responds (either way) */
     onResponded: (confirmed: boolean) => void;
 }
 
-export default function ArrivalConfirmation({ requestId, providerName, onResponded }: ArrivalConfirmationProps) {
+export default function ArrivalConfirmation({
+    requestId,
+    providerName,
+    requestScope = 'customer',
+    onResponded,
+}: ArrivalConfirmationProps) {
     const { t } = useLanguage();
     const [isLoading, setIsLoading] = useState(false);
 
     const handleResponse = async (confirmed: boolean) => {
         setIsLoading(true);
+        const base = arrivalBasePath(requestScope, requestId);
         try {
             if (confirmed) {
-                await api.patch(`/rescue-requests/${requestId}/confirm-arrival`);
+                await api.patch(`${base}/confirm-arrival`);
             } else {
-                await api.patch(`/rescue-requests/${requestId}/deny-arrival`);
+                await api.patch(`${base}/deny-arrival`);
             }
             onResponded(confirmed);
         } catch (err: any) {

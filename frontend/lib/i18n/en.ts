@@ -447,6 +447,8 @@ const en = {
                 acceptBtn: 'Select',
                 acceptingBtn: 'Confirming...',
                 acceptFullBtn: 'Select this quote',
+                rejectBtn: 'Decline',
+                rejectSuccessToast: 'Quote declined',
                 successToast: 'Quote selected! Provider is preparing to come.',
                 errorToast: 'Cannot select quote. Please try again.',
                 selectionHeader: 'Select a suitable quote',
@@ -562,6 +564,7 @@ const en = {
                 methodCash: 'Cash',
                 methodWallet: 'RescueMe Wallet',
                 methodQR: 'QR Transfer',
+                paidWith: 'Paid with',
                 viewDetails: 'View details',
                 itemsCount: 'items',
                 surchargesCount: 'surcharges',
@@ -1389,6 +1392,8 @@ const en = {
             quoteSuccess: 'Quote submitted! Waiting for customer response.',
             quoteRejected: 'Your quote was rejected',
             otherProviderChosen: 'Customer chose another rescuer',
+            lostSelectionHint: 'No need to keep waiting — go back to the list for new jobs.',
+            backToActiveList: 'Back to job list',
             loadError: 'Failed to load request details',
             quoteWindowExpired: 'This request has expired – quote window closed.',
             declineSuccess: 'Request declined',
@@ -1891,6 +1896,8 @@ const en = {
             previouslyUploaded: 'Previously uploaded',
             uploadAnother: 'Upload another file',
             clickToChoose: 'Click to choose a file',
+            clickToSelectImage: 'Click to select image',
+            clickToSelectVideo: 'Click to select video',
             orDragDrop: 'or drag and drop file here',
             supported: 'Supported: JPG, PNG, WEBP (max 5MB)',
             upload: 'Upload',
@@ -2026,6 +2033,10 @@ const en = {
         otp: {
             title: 'Call for Rescue Now',
             subtitle: 'Verify your phone number to create a request. No registration required.',
+            intro: 'Enter your phone number to receive an OTP code',
+            sentToPhone: 'OTP sent to',
+            verifySuccessToast: 'Verified successfully!',
+            sendFailed: 'Could not send OTP. Please try again.',
             phoneLabel: 'Phone Number',
             phonePlaceholder: 'e.g. 0912 345 678',
             sendOtpBtn: 'Send OTP',
@@ -2048,6 +2059,9 @@ const en = {
             submitBtn: 'Send Request',
             submitting: 'Sending...',
         },
+        chat: {
+            senderName: 'Guest · {phone}',
+        },
         status: {
             title: 'Request Status',
             guestBadge: 'Guest Request',
@@ -2056,8 +2070,10 @@ const en = {
             timeline: {
                 sent: 'Sent',
                 searching: 'Searching',
-                gotQuote: 'Got quote',
-                selected: 'Selected',
+                chooseQuote: 'Choose quote',
+                moving: 'On the way',
+                working: 'Service in progress',
+                payment: 'Payment',
                 done: 'Done',
             },
             waitingTips: {
@@ -2067,8 +2083,11 @@ const en = {
                 updateLocation: 'Update location if you move',
             },
             safetyActions: {
-                callHotline: 'Call hotline',
-                shareLocation: 'Share location',
+                shareLocationForFamily: 'Share location with family',
+                shareLocationTitle: 'Rescue location',
+                shareLocationWithCoords: 'My location: {address} ({url})',
+                shareLocationFallback: 'I need roadside assistance.',
+                shareLocationCopied: 'Message copied to clipboard.',
             },
             statusLabels: {
                 CREATED: 'Created',
@@ -2098,6 +2117,12 @@ const en = {
             completed: {
                 title: 'Completed!',
                 subtitle: 'Thank you for using our service',
+                benefitsTitle: 'Sign up free — unlock more:',
+                benefit1: 'Save your full rescue history and review details anytime',
+                benefit2: 'Pay faster with your Rescue Me wallet — no re-entering details',
+                benefit3: 'Manage vehicles, locations, and contact info — request help in a few taps',
+                benefit4: 'Member perks and priority support (coming soon)',
+                homeBtn: 'Back to home',
             },
             cancelled: {
                 subtitle: 'This request has ended',
@@ -2125,6 +2150,8 @@ const en = {
                 denyBtn: 'Not yet',
                 support: 'Need help? Call the provider directly',
                 confirming: 'Confirming...',
+                toastConfirmed: 'Confirmed — provider has arrived!',
+                toastDenied: 'Reported that provider has not arrived yet',
             },
         },
         payment: {
@@ -2175,11 +2202,13 @@ const en = {
             ctaSubtitle: 'Call for rescue without registration. Verify your phone and get help in minutes.',
             ctaBtn: 'Call for Rescue – No Registration',
             orLogin: 'or login to your account',
+            loginHint: 'No registration needed — verify your phone to get started',
         },
         errors: {
             sessionExpired: 'Guest session has expired. Please verify your phone again.',
             notFound: 'Request not found.',
             walletBlocked: 'Wallet payment is not available for guest users.',
+            generic: 'Something went wrong. Please try again.',
         },
     },
 } as const;

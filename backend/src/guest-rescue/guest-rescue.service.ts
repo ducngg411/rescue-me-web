@@ -241,6 +241,8 @@ export class GuestRescueService {
                         avatar: true,
                         serviceName: true,
                         phoneNumber: true,
+                        averageRating: true,
+                        reviewCount: true,
                     },
                 },
             },
