@@ -2,6 +2,7 @@ import {
     Controller,
     Get,
     Post,
+    Patch,
     Param,
     Body,
     Query,
@@ -12,7 +13,16 @@ import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { RejectProviderDto, SuspendProviderDto, GetProvidersQueryDto } from './dto/admin.dto';
+import {
+    RejectProviderDto,
+    SuspendProviderDto,
+    GetProvidersQueryDto,
+    GetDisputesQueryDto,
+    UpdateDisputeStatusDto,
+    RequestEvidenceDto,
+    ResolveDisputeDto,
+    AddDisputeEvidenceDto,
+} from './dto/admin.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -32,7 +42,7 @@ export class AdminController {
 
     @Post('providers/:id/approve')
     async approveProvider(@Param('id') id: string, @Request() req) {
-        return this.adminService.approveProvider(id, req.user.userId);
+        return this.adminService.approveProvider(id, req.user.id);
     }
 
     @Post('providers/:id/reject')
@@ -43,7 +53,7 @@ export class AdminController {
     ) {
         return this.adminService.rejectProvider(
             id,
-            req.user.userId,
+            req.user.id,
             dto.rejectReasonCode,
             dto.rejectReasonDetail,
         );
@@ -55,16 +65,70 @@ export class AdminController {
         @Body() dto: SuspendProviderDto,
         @Request() req,
     ) {
-        return this.adminService.suspendProvider(id, req.user.userId, dto.reason);
+        return this.adminService.suspendProvider(id, req.user.id, dto.reason);
     }
 
     @Post('providers/:id/unsuspend')
     async unsuspendProvider(@Param('id') id: string, @Request() req) {
-        return this.adminService.unsuspendProvider(id, req.user.userId);
+        return this.adminService.unsuspendProvider(id, req.user.id);
     }
 
     @Get('providers/:id/history')
     async getProviderHistory(@Param('id') id: string) {
         return this.adminService.getProviderHistory(id);
+    }
+
+    // ── Dispute Center ─────────────────────────────────────────────────────
+
+    @Get('disputes')
+    async getDisputes(@Query() query: GetDisputesQueryDto) {
+        return this.adminService.getDisputes(query);
+    }
+
+    @Get('disputes/:id')
+    async getDisputeDetail(@Param('id') id: string) {
+        return this.adminService.getDisputeDetail(id);
+    }
+
+    @Patch('disputes/:id/status')
+    async updateDisputeStatus(
+        @Param('id') id: string,
+        @Body() dto: UpdateDisputeStatusDto,
+        @Request() req: { user: { userId: string } },
+    ) {
+        return this.adminService.updateDisputeStatus(id, req.user.userId, dto.status);
+    }
+
+    @Post('disputes/:id/request-evidence')
+    async requestDisputeEvidence(
+        @Param('id') id: string,
+        @Body() dto: RequestEvidenceDto,
+        @Request() req,
+    ) {
+        return this.adminService.requestDisputeEvidence(id, req.user.id, dto.message);
+    }
+
+    @Post('disputes/:id/resolve')
+    async resolveDispute(
+        @Param('id') id: string,
+        @Body() dto: ResolveDisputeDto,
+        @Request() req,
+    ) {
+        return this.adminService.resolveDispute(
+            id,
+            req.user.id,
+            dto.resolution,
+            dto.refundAmount,
+            dto.resolutionNote,
+        );
+    }
+
+    @Post('disputes/:id/evidence')
+    async addDisputeEvidence(
+        @Param('id') id: string,
+        @Body() dto: AddDisputeEvidenceDto,
+        @Request() req,
+    ) {
+        return this.adminService.addDisputeEvidence(id, req.user.id, dto.url, dto.note);
     }
 }

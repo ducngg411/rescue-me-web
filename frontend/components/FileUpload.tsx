@@ -42,7 +42,7 @@ export default function FileUpload({
         // Validate file
         const validation = validateFile(file);
         if (!validation.valid) {
-            toast.error(validation.error);
+            toast.error(validation.error ?? 'Invalid file');
             return;
         }
 

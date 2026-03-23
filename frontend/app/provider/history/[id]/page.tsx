@@ -89,6 +89,33 @@ function SectionCard({ title, icon, children }: { title: string; icon: React.Rea
 }
 
 /* ── Status Badge ── */
+/** Header badge when viewer is not the assigned provider — reflects *your* quote, not đơn hàng. */
+function HistoryDetailLoserHeaderBadge({ req, quote, userId }: { req: any; quote: any; userId?: string }) {
+    const { t } = useLanguage();
+    const assignee = req.assignedProviderId ?? null;
+    const qs = quote?.status;
+    const pill = (bg: string, color: string, label: string) => (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
+            style={{ background: bg, color }}>{label}</span>
+    );
+    if (!quote) {
+        return pill('#f3f4f6', C.gray, t('provider.historyDetail.quoteStatusBadge.NOT_SELECTED'));
+    }
+    if (qs === 'REJECTED') {
+        return pill('#fef2f2', '#b91c1c', t('provider.historyDetail.quoteStatusBadge.REJECTED'));
+    }
+    if (qs === 'PENDING' && req.status === 'MATCHING') {
+        return pill('#fefce8', '#ca8a04', t('provider.historyDetail.quoteStatusBadge.AWAITING_CUSTOMER'));
+    }
+    if (qs === 'CANCELLED' || qs === 'EXPIRED') {
+        return pill('#fff7ed', '#9a3412', t('provider.historyDetail.quoteStatusBadge.NOT_SELECTED'));
+    }
+    if (qs === 'PENDING' && assignee && userId && assignee !== userId) {
+        return pill('#fff7ed', '#9a3412', t('provider.historyDetail.quoteStatusBadge.NOT_SELECTED'));
+    }
+    return pill('#fff7ed', '#9a3412', t('provider.historyDetail.quoteStatusBadge.NOT_SELECTED'));
+}
+
 function StatusBadge({ status }: { status: string }) {
     const { t } = useLanguage();
     const cfg: Record<string, { color: string; bg: string }> = {
@@ -135,13 +162,11 @@ export default function HistoryJobDetailPage() {
             const res = await api.get(`/rescue-requests/${requestId}/provider-view`);
             const req = res.data;
 
-            // Accepted quote for this request
             let quote = null;
             try {
                 const quotesRes = await api.get(`/rescue-requests/${requestId}/quotes`);
                 const quotes = quotesRes.data ?? [];
-                // Prefer accepted quote, fall back to any quote from current user
-                quote = quotes.find((q: any) => q.status === 'ACCEPTED') ?? quotes[0] ?? null;
+                quote = quotes.find((q: any) => q.providerId === user?.id) ?? null;
             } catch { /* ignore */ }
 
             // Payment info (GET /rescue-requests/:id/payment)
@@ -161,7 +186,7 @@ export default function HistoryJobDetailPage() {
         } finally {
             setLoading(false);
         }
-    }, [requestId]);
+    }, [requestId, user?.id]);
 
     useEffect(() => {
         if (!authLoading && !user) { router.push('/auth/login'); return; }
@@ -197,12 +222,15 @@ export default function HistoryJobDetailPage() {
     }
 
     const { req, quote, payment, review } = data;
-    const isCompleted = ['COMPLETED', 'PAID'].includes(req.status);
+    const isWinner = !!user?.id && req.assignedProviderId === user?.id;
+    const isCompleted = isWinner && ['COMPLETED', 'PAID'].includes(req.status);
     // Treat COMPLETED + wallet-tx PENDING the same as PAID (waiting for disbursement)
-    const isPendingDisbursement = req.status === 'PAID' ||
-        (req.status === 'COMPLETED' && payment?.walletTxStatus === 'PENDING');
+    const isPendingDisbursement = isWinner && (
+        req.status === 'PAID' ||
+        (req.status === 'COMPLETED' && payment?.walletTxStatus === 'PENDING')
+    );
     // Use actual payment amount (includes surcharges) when available, fall back to quote price
-    const revenueAmount = payment?.totalAmount ?? quote?.price ?? 0;
+    const revenueAmount = isWinner ? (payment?.totalAmount ?? quote?.price ?? 0) : (quote?.price ?? 0);
     const profit = Math.round(revenueAmount * 0.9);
     const quoteProfit = quote ? Math.round(quote.price * 0.9) : 0;
 
@@ -223,13 +251,15 @@ export default function HistoryJobDetailPage() {
 
     // Payment status badge config (separate from job status)
     const paymentStatusBadge: { label: string; color: string; bg: string } | null =
-        payment?.walletTxStatus === 'COMPLETED'
-            ? { label: t('provider.historyDetail.paymentBadge.COMPLETED' as any), color: C.green, bg: C.greenLight }
-            : payment?.walletTxStatus === 'PENDING'
-                ? { label: t('provider.historyDetail.paymentBadge.PENDING' as any), color: '#7c3aed', bg: '#f5f3ff' }
-                : payment?.paymentMethod === 'CASH'
-                    ? { label: t('provider.historyDetail.paymentBadge.CASH' as any), color: '#374151', bg: '#f3f4f6' }
-                    : null;
+        !isWinner
+            ? null
+            : payment?.walletTxStatus === 'COMPLETED'
+                ? { label: t('provider.historyDetail.paymentBadge.COMPLETED' as any), color: C.green, bg: C.greenLight }
+                : payment?.walletTxStatus === 'PENDING'
+                    ? { label: t('provider.historyDetail.paymentBadge.PENDING' as any), color: '#7c3aed', bg: '#f5f3ff' }
+                    : payment?.paymentMethod === 'CASH'
+                        ? { label: t('provider.historyDetail.paymentBadge.CASH' as any), color: '#374151', bg: '#f3f4f6' }
+                        : null;
 
     const images = (req.media ?? []).filter((m: any) => m.mediaType === 'IMAGE').map((m: any) => m.publicUrl);
     const videos = (req.media ?? []).filter((m: any) => m.mediaType === 'VIDEO').map((m: any) => m.publicUrl);
@@ -252,23 +282,29 @@ export default function HistoryJobDetailPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
-                        style={{ background: reqStatus.bg, color: reqStatus.color }}>
-                        {reqStatus.label}
-                    </span>
-                    {paymentStatusBadge && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
-                            style={{ background: paymentStatusBadge.bg, color: paymentStatusBadge.color }}>
-                            {paymentStatusBadge.label}
-                        </span>
+                    {isWinner ? (
+                        <>
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
+                                style={{ background: reqStatus.bg, color: reqStatus.color }}>
+                                {reqStatus.label}
+                            </span>
+                            {paymentStatusBadge && (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
+                                    style={{ background: paymentStatusBadge.bg, color: paymentStatusBadge.color }}>
+                                    {paymentStatusBadge.label}
+                                </span>
+                            )}
+                        </>
+                    ) : (
+                        <HistoryDetailLoserHeaderBadge req={req} quote={quote} userId={user?.id} />
                     )}
                 </div>
             </div>
 
             <div className="max-w-2xl mx-auto px-4 py-5 space-y-4 pb-10">
 
-                {/* ── Summary banner ── */}
-                {isCompleted && quote && (
+                {/* ── Summary banner (chỉ khi bạn là CHV được giao và cuốc đã hoàn tất thanh toán) ── */}
+                {isWinner && isCompleted && quote && (
                     <div className="rounded-2xl p-5 text-white"
                         style={{ background: `linear-gradient(135deg, ${C.navy} 0%, #16213e 60%, #0f3460 100%)` }}>
                         <p className="text-[10px] font-bold uppercase tracking-wider mb-1 opacity-70">{t('provider.historyDetail.banner.revenue')}</p>
@@ -288,6 +324,12 @@ export default function HistoryJobDetailPage() {
                                 : <span className="text-xs opacity-70">{t('provider.historyDetail.banner.completedAt')} {req.completedAt ? fmtDateTime(req.completedAt) : '—'}</span>
                             }
                         </div>
+                    </div>
+                )}
+
+                {!isWinner && quote && (
+                    <div className="rounded-2xl p-4" style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
+                        <p className="text-sm leading-relaxed" style={{ color: '#9a3412' }}>{t('provider.historyDetail.loserNote')}</p>
                     </div>
                 )}
 
@@ -420,7 +462,11 @@ export default function HistoryJobDetailPage() {
                             </div>
                             <div className="rounded-xl p-3" style={{ background: C.bg }}>
                                 <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.quoteInfo.profit')}</p>
-                                <p className="text-lg font-bold" style={{ color: C.green }}>+{fmtVnd(quoteProfit)}</p>
+                                {isWinner ? (
+                                    <p className="text-lg font-bold" style={{ color: C.green }}>+{fmtVnd(quoteProfit)}</p>
+                                ) : (
+                                    <p className="text-sm font-semibold line-through" style={{ color: '#9ca3af' }}>+{fmtVnd(quoteProfit)}</p>
+                                )}
                             </div>
                             {quote.estimatedArrivalMinutes && (
                                 <div className="rounded-xl p-3" style={{ background: C.bg }}>
@@ -442,8 +488,8 @@ export default function HistoryJobDetailPage() {
                     </SectionCard>
                 )}
 
-                {/* ── Payment ── */}
-                {payment && (
+                {/* ── Payment (chỉ CHV được giao — tránh hiểu nhầm thu nhập khi thua báo giá) ── */}
+                {payment && isWinner && (
                     <SectionCard title={t('provider.historyDetail.sections2.payment')} icon={<Banknote size={16} style={{ color: C.orange }} />}>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="rounded-xl p-3 col-span-2" style={{ background: C.bg }}>
@@ -593,8 +639,8 @@ export default function HistoryJobDetailPage() {
                     </SectionCard>
                 )}
 
-                {/* ── Review ── */}
-                {review && (
+                {/* ── Review (đánh giá dành cho CHV làm cuốc) ── */}
+                {review && isWinner && (
                     <SectionCard title={t('provider.historyDetail.sections2.review')} icon={<Star size={16} style={{ color: C.yellow }} />}>
                         <div className="flex items-center gap-3">
                             <Stars rating={review.rating} />
@@ -627,8 +673,8 @@ export default function HistoryJobDetailPage() {
                         {[
                             { label: t('provider.historyDetail.timeline.created'), time: req.createdAt, done: true },
                             { label: t('provider.historyDetail.timeline.assigned'), time: req.assignedAt, done: !!req.assignedAt },
-                            { label: t('provider.historyDetail.timeline.payment'), time: payment?.createdAt, done: !!payment },
-                            { label: t('provider.historyDetail.timeline.completed'), time: req.completedAt, done: isCompleted },
+                            { label: t('provider.historyDetail.timeline.payment'), time: isWinner ? payment?.createdAt : undefined, done: !!payment && isWinner },
+                            { label: t('provider.historyDetail.timeline.completed'), time: req.completedAt, done: isWinner && isCompleted },
                         ].map((step, i, arr) => (
                             <div key={i} className="flex gap-3">
                                 <div className="flex flex-col items-center">

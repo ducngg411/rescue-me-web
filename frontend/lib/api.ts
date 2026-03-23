@@ -123,6 +123,60 @@ export const adminApi = {
         const response = await api.get(`/admin/providers/${providerId}/history`);
         return response.data;
     },
+
+    getDisputes: async (params?: { status?: string; skip?: number; take?: number }) => {
+        const response = await api.get('/admin/disputes', { params });
+        return response.data as {
+            items: unknown[];
+            total: number;
+            skip: number;
+            take: number;
+        };
+    },
+
+    getDisputeDetail: async (caseId: string) => {
+        const response = await api.get(`/admin/disputes/${caseId}`);
+        return response.data;
+    },
+
+    updateDisputeStatus: async (caseId: string, status: string) => {
+        const response = await api.patch(`/admin/disputes/${caseId}/status`, { status });
+        return response.data;
+    },
+
+    requestDisputeEvidence: async (caseId: string, message: string) => {
+        const response = await api.post(`/admin/disputes/${caseId}/request-evidence`, { message });
+        return response.data;
+    },
+
+    resolveDispute: async (
+        caseId: string,
+        body: { resolution: string; refundAmount?: number; resolutionNote?: string },
+    ) => {
+        const response = await api.post(`/admin/disputes/${caseId}/resolve`, body);
+        return response.data;
+    },
+
+    addDisputeEvidence: async (caseId: string, url: string, note?: string) => {
+        const response = await api.post(`/admin/disputes/${caseId}/evidence`, { url, note });
+        return response.data;
+    },
+};
+
+// User-facing dispute API helpers
+export const userDisputeApi = {
+    getMyDisputes: async () => {
+        const response = await api.get('/disputes/my');
+        return response.data as { items: unknown[]; total: number };
+    },
+};
+
+// Provider-facing dispute API helpers
+export const providerDisputeApi = {
+    getMyDisputes: async () => {
+        const response = await api.get('/disputes/provider');
+        return response.data as { items: unknown[]; total: number };
+    },
 };
 
 export default api;

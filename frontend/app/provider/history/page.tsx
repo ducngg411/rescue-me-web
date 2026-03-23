@@ -37,6 +37,8 @@ interface Quote {
     rescueRequest: {
         id: string;
         status: RequestStatus;
+        /** Người được giao cuốc — khác provider hiện tại nếu bạn thua báo giá */
+        assignedProviderId?: string | null;
         incidentType: IncidentType;
         description: string | null;
         pickupAddress: string | null;
@@ -105,6 +107,38 @@ function fmtShortDate(iso: string) {
 }
 
 /* ─────────────────────── Sub-components ────────────── */
+
+/** Trạng thái hiển thị theo báo giá của provider (tránh “Đã phân công” khi khách chọn CHV khác). */
+function HistoryRowStatusBadge({ q, providerId }: { q: Quote; providerId: string | undefined }) {
+    const { t } = useLanguage();
+    const req = q.rescueRequest;
+    const assignee = req.assignedProviderId ?? null;
+    const qs = q.status;
+
+    const pill = (bg: string, color: string, dot: string, label: string) => (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: bg, color }}>
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: dot }} />
+            {label}
+        </span>
+    );
+
+    if (qs === 'REJECTED') {
+        return pill('#fef2f2', '#b91c1c', '#b91c1c', t('provider.history.quoteStatusBadge.REJECTED'));
+    }
+    if (qs === 'PENDING' && req.status === 'MATCHING') {
+        return pill('#fefce8', '#ca8a04', '#ca8a04', t('provider.history.quoteStatusBadge.AWAITING_CUSTOMER'));
+    }
+    if (qs === 'CANCELLED' || qs === 'EXPIRED') {
+        return pill('#fff7ed', '#9a3412', '#ea580c', t('provider.history.quoteStatusBadge.NOT_SELECTED'));
+    }
+    if (qs === 'PENDING' && assignee && providerId && assignee !== providerId) {
+        return pill('#fff7ed', '#9a3412', '#ea580c', t('provider.history.quoteStatusBadge.NOT_SELECTED'));
+    }
+    if (qs === 'ACCEPTED' && assignee === providerId) {
+        return <StatusBadge status={req.status} />;
+    }
+    return <StatusBadge status={req.status} />;
+}
 
 function StatusBadge({ status }: { status: RequestStatus }) {
     const { t } = useLanguage();
@@ -412,6 +446,9 @@ export default function ProviderHistoryPage() {
             const customerName = (req.user?.name ?? 'khách vãng lai').toLowerCase();
             const phone = req.user?.phoneNumber ?? req.contactPhone ?? '';
             const srch = search.toLowerCase();
+            const assignee = req.assignedProviderId ?? null;
+            const isWonJob = q.status === 'ACCEPTED' && assignee === user?.id;
+            const lostQuote = ['CANCELLED', 'EXPIRED', 'REJECTED'].includes(q.status);
 
             if (srch && !customerName.includes(srch) && !phone.includes(srch) && !req.id.toLowerCase().includes(srch)) return false;
             if (filterDate) {
@@ -421,14 +458,23 @@ export default function ProviderHistoryPage() {
             if (filterService !== 'all' && req.incidentType !== filterService) return false;
             if (filterStatus !== 'all') {
                 const rs = req.status;
-                if (filterStatus === 'completed' && rs !== 'COMPLETED' && rs !== 'PAID') return false;
-                if (filterStatus === 'pending' && rs !== 'PAYMENT_PENDING') return false;
-                if (filterStatus === 'active' && !['IN_PROGRESS', 'WORKING', 'ARRIVED', 'ACCEPTED', 'ASSIGNED', 'MATCHING'].includes(rs)) return false;
-                if (filterStatus === 'cancelled' && rs !== 'CANCELLED' && rs !== 'EXPIRED' && rs !== 'FAILED') return false;
+                if (filterStatus === 'completed') {
+                    if (!isWonJob || (rs !== 'COMPLETED' && rs !== 'PAID')) return false;
+                } else if (filterStatus === 'pending') {
+                    if (!isWonJob || rs !== 'PAYMENT_PENDING') return false;
+                } else if (filterStatus === 'active') {
+                    if (q.status === 'PENDING' && rs === 'MATCHING') return true;
+                    if (isWonJob && ['IN_PROGRESS', 'WORKING', 'ARRIVED', 'ASSIGNED'].includes(rs)) return true;
+                    return false;
+                } else if (filterStatus === 'cancelled') {
+                    if (lostQuote) return true;
+                    if (rs === 'CANCELLED' || rs === 'EXPIRED' || rs === 'FAILED') return true;
+                    return false;
+                }
             }
             return true;
         });
-    }, [quotes, search, filterDate, filterService, filterStatus]);
+    }, [quotes, search, filterDate, filterService, filterStatus, user?.id]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -452,9 +498,18 @@ export default function ProviderHistoryPage() {
         const rows = filtered.map((q, idx) => {
             const req = q.rescueRequest;
             const { date, time } = fmtDate(q.createdAt);
-            const isCompleted = req.status === 'COMPLETED' || req.status === 'PAID';
-            const revenueAmount = req.payment?.totalAmount ?? q.price;
-            const profit = isCompleted ? Math.round(revenueAmount * 0.9) : 0;
+            const assignee = req.assignedProviderId ?? null;
+            const isWonJob = q.status === 'ACCEPTED' && assignee === user?.id;
+            const isCompleted = isWonJob && (req.status === 'COMPLETED' || req.status === 'PAID');
+            const revenueAmount = isWonJob ? (req.payment?.totalAmount ?? q.price) : q.price;
+            const profit = isCompleted ? Math.round((req.payment?.totalAmount ?? q.price) * 0.9) : 0;
+            let statusLabel = STATUS_LABELS[req.status] ?? req.status;
+            if (q.status === 'REJECTED') statusLabel = t('provider.history.quoteStatusBadge.REJECTED');
+            else if (q.status === 'PENDING' && req.status === 'MATCHING') statusLabel = t('provider.history.quoteStatusBadge.AWAITING_CUSTOMER');
+            else if (q.status === 'CANCELLED' || q.status === 'EXPIRED') statusLabel = t('provider.history.quoteStatusBadge.NOT_SELECTED');
+            else if (q.status === 'PENDING' && assignee && user?.id && assignee !== user.id) {
+                statusLabel = t('provider.history.quoteStatusBadge.NOT_SELECTED');
+            } else if (isWonJob) statusLabel = STATUS_LABELS[req.status] ?? req.status;
             return [
                 idx + 1,
                 date,
@@ -464,7 +519,7 @@ export default function ProviderHistoryPage() {
                 (t(`provider.incidents.${req.incidentType}`) || req.incidentType),
                 revenueAmount,
                 profit,
-                STATUS_LABELS[req.status] ?? req.status,
+                statusLabel,
             ];
         });
 
@@ -771,13 +826,15 @@ export default function ProviderHistoryPage() {
                                 {pageItems.map((q, idx) => {
                                     const req = q.rescueRequest;
                                     const { date, time } = fmtDate(q.createdAt);
-                                    // Use actual payment amount when available (includes surcharges)
-                                    const revenueAmount = req.payment?.totalAmount ?? q.price;
+                                    const assignee = req.assignedProviderId ?? null;
+                                    const isWonJob = q.status === 'ACCEPTED' && assignee === user?.id;
+                                    const lostQuote = ['CANCELLED', 'EXPIRED', 'REJECTED'].includes(q.status);
+                                    const revenueAmount = isWonJob ? (req.payment?.totalAmount ?? q.price) : q.price;
                                     const profit = Math.round(revenueAmount * 0.9);
                                     const incColor = INCIDENT_COLORS[req.incidentType] ?? { bg: '#f3f4f6', color: C.gray };
-                                    const isCompleted = req.status === 'COMPLETED' || req.status === 'PAID';
-                                    const isPending = req.status === 'PAYMENT_PENDING';
-                                    const isCancelled = ['CANCELLED', 'EXPIRED', 'FAILED'].includes(req.status);
+                                    const isCompleted = isWonJob && (req.status === 'COMPLETED' || req.status === 'PAID');
+                                    const isPending = isWonJob && req.status === 'PAYMENT_PENDING';
+                                    const showStrike = lostQuote || (isWonJob && ['CANCELLED', 'EXPIRED', 'FAILED'].includes(req.status));
 
                                     return (
                                         <div key={q.id} style={{ borderTop: idx > 0 ? `1px solid #f1f5f9` : 'none' }}>
@@ -812,9 +869,9 @@ export default function ProviderHistoryPage() {
                                                     <div>
                                                         {isPending ? (
                                                             <p className="text-sm font-bold" style={{ color: C.orange }}>{t('provider.history.waitingPayment')}</p>
-                                                        ) : isCancelled ? (
+                                                        ) : showStrike ? (
                                                             <p className="text-sm line-through" style={{ color: '#9ca3af' }}>{fmtVnd(q.price)}</p>
-                                                        ) : (
+                                                        ) : isWonJob ? (
                                                             <>
                                                                 <p className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(revenueAmount)}</p>
                                                                 {revenueAmount !== q.price && (
@@ -824,10 +881,21 @@ export default function ProviderHistoryPage() {
                                                                     <p className="text-xs font-semibold mt-0.5" style={{ color: C.green }}>+{fmtVnd(profit)} {t('provider.history.profitLabel')}</p>
                                                                 )}
                                                             </>
+                                                        ) : (
+                                                            <>
+                                                                <p className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(q.price)}</p>
+                                                                {q.status === 'PENDING' && (
+                                                                    <p className="text-[10px]" style={{ color: C.gray }}>{t('provider.history.revenueHint.yourQuoteOnly')}</p>
+                                                                )}
+                                                            </>
                                                         )}
                                                     </div>
-                                                    <StatusBadge status={req.status} />
-                                                    <PaymentBadge walletTxStatus={req.payment?.walletTxStatus} paymentMethod={req.payment?.paymentMethod} />
+                                                    <HistoryRowStatusBadge q={q} providerId={user?.id} />
+                                                    {isWonJob ? (
+                                                        <PaymentBadge walletTxStatus={req.payment?.walletTxStatus} paymentMethod={req.payment?.paymentMethod} />
+                                                    ) : (
+                                                        <span className="text-xs text-center" style={{ color: '#cbd5e1' }}>—</span>
+                                                    )}
                                                     <div className="flex justify-center">
                                                         <ChevronRight size={15} style={{ color: '#cbd5e1' }} />
                                                     </div>
@@ -853,11 +921,13 @@ export default function ProviderHistoryPage() {
                                                             style={{ background: incColor.bg, color: incColor.color }}>
                                                             {t(`provider.incidents.${req.incidentType}`) || req.incidentType}
                                                         </span>
-                                                        <StatusBadge status={req.status} />
-                                                        <PaymentBadge walletTxStatus={req.payment?.walletTxStatus} paymentMethod={req.payment?.paymentMethod} />
+                                                        <HistoryRowStatusBadge q={q} providerId={user?.id} />
+                                                        {isWonJob ? (
+                                                            <PaymentBadge walletTxStatus={req.payment?.walletTxStatus} paymentMethod={req.payment?.paymentMethod} />
+                                                        ) : null}
                                                         <span className="ml-auto text-sm font-bold"
-                                                            style={{ color: isCancelled ? '#9ca3af' : C.navy }}>
-                                                            {fmtVnd(revenueAmount)}
+                                                            style={{ color: showStrike ? '#9ca3af' : C.navy }}>
+                                                            {fmtVnd(isWonJob ? revenueAmount : q.price)}
                                                         </span>
                                                     </div>
                                                 </div>

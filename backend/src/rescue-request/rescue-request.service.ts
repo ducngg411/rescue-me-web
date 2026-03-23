@@ -1379,16 +1379,65 @@ export class RescueRequestService {
 
         const payment = await this.prisma.payment.findUnique({
             where: { requestId },
+            include: { disputeCase: true },
         });
         if (!payment) throw new NotFoundException('Payment not found for this request');
 
-        const updated = await this.prisma.payment.update({
-            where: { requestId },
-            data: {
-                status: 'DISPUTED',
-                disputeReason: reason,
-                disputedAt: new Date(),
-            },
+        if (
+            payment.disputeCase &&
+            (payment.disputeCase.status === 'RESOLVED' || payment.disputeCase.status === 'REJECTED')
+        ) {
+            throw new BadRequestException('This dispute is already closed');
+        }
+
+        const disputedAt = new Date();
+        const slaDueAt = new Date(disputedAt.getTime() + 48 * 60 * 60 * 1000);
+
+        const updated = await this.prisma.$transaction(async (tx) => {
+            const p = await tx.payment.update({
+                where: { requestId },
+                data: {
+                    status: 'DISPUTED',
+                    disputeReason: reason,
+                    disputedAt,
+                },
+            });
+
+            const existingCase = await tx.disputeCase.findUnique({
+                where: { paymentId: payment.id },
+            });
+
+            if (existingCase) {
+                await tx.disputeMessage.create({
+                    data: {
+                        caseId: existingCase.id,
+                        actor: 'USER',
+                        body: reason,
+                        userId,
+                        visibility: 'PUBLIC',
+                    },
+                });
+            } else {
+                await tx.disputeCase.create({
+                    data: {
+                        paymentId: payment.id,
+                        requestId,
+                        openedByUserId: userId,
+                        status: 'NEW',
+                        slaDueAt,
+                        messages: {
+                            create: {
+                                actor: 'USER',
+                                body: reason,
+                                userId,
+                                visibility: 'PUBLIC',
+                            },
+                        },
+                    },
+                });
+            }
+
+            return p;
         });
 
         console.log(`⚠️ [Payment] User ${userId} disputed payment for request ${requestId}: ${reason}`);

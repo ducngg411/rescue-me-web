@@ -63,7 +63,12 @@ model User {
   sessions              Session[]
   uploads               Upload[]
   userWallet            UserWallet?        @relation("UserWallet")
-  passwordResetTokens   PasswordResetToken[]
+  passwordResetTokens        PasswordResetToken[]
+  disputesResolved           DisputeCase[]          @relation("DisputeResolvedBy")
+  disputesAssigned           DisputeCase[]          @relation("DisputeAssignedTo")
+  disputeMessages            DisputeMessage[]       @relation("DisputeMessageAuthor")
+  disputeEvidenceUploaded    DisputeEvidence[]      @relation("DisputeEvidenceUploader")
+  disputesOpened             DisputeCase[]          @relation("DisputeOpenedBy")
 
   @@index([email])
   @@index([googleId])
@@ -153,6 +158,7 @@ model RescueRequest {
   user                 User?          @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
   guestSession         GuestSession?  @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
   review               Review?
+  disputeCases         DisputeCase[]
 
   @@index([userId])
   @@index([guestSessionId, status])
@@ -229,11 +235,75 @@ model Payment {
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
   request             RescueRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  disputeCase         DisputeCase?
 
   @@index([requestId])
   @@index([providerId])
   @@index([userId])
   @@map("payments")
+}
+
+model DisputeCase {
+  id                 String             @id @default(cuid())
+  paymentId          String             @unique
+  requestId          String
+  openedByUserId     String?
+  status             DisputeCaseStatus  @default(NEW)
+  /// Target first response / SLA deadline (e.g. disputedAt + N hours)
+  slaDueAt           DateTime?
+  firstRespondedAt   DateTime?
+  resolution         DisputeResolution?
+  refundAmount       Int?
+  resolutionNote     String?
+  resolvedAt         DateTime?
+  resolvedByUserId   String?
+  assignedToUserId   String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  payment            Payment            @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  request            RescueRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  openedBy           User?              @relation("DisputeOpenedBy", fields: [openedByUserId], references: [id], onDelete: SetNull)
+  resolvedBy         User?              @relation("DisputeResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  assignedTo         User?              @relation("DisputeAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  messages           DisputeMessage[]
+  evidence           DisputeEvidence[]
+
+  @@index([requestId])
+  @@index([status])
+  @@index([slaDueAt])
+  @@index([createdAt])
+  @@map("dispute_cases")
+}
+
+model DisputeMessage {
+  id          String              @id @default(cuid())
+  caseId      String
+  actor       DisputeMessageActor
+  body        String
+  /// INTERNAL = admin-only notes; PUBLIC = visible in customer/provider-facing history when needed
+  visibility  DisputeVisibility   @default(PUBLIC)
+  userId      String?
+  createdAt   DateTime            @default(now())
+  disputeCase DisputeCase         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  author      User?               @relation("DisputeMessageAuthor", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([caseId])
+  @@index([createdAt])
+  @@map("dispute_messages")
+}
+
+model DisputeEvidence {
+  id                 String      @id @default(cuid())
+  caseId             String
+  url                String
+  note               String?
+  uploadedByUserId   String?
+  createdAt          DateTime    @default(now())
+  disputeCase        DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  uploadedBy         User?       @relation("DisputeEvidenceUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([caseId])
+  @@map("dispute_evidence")
 }
 
 model ProviderWallet {
@@ -534,6 +604,32 @@ enum PaymentStatus {
   PROVIDER_CONFIRMED
   COMPLETED
   DISPUTED
+}
+
+enum DisputeCaseStatus {
+  NEW
+  IN_REVIEW
+  AWAITING_EVIDENCE
+  RESOLVED
+  REJECTED
+}
+
+enum DisputeResolution {
+  FULL_REFUND
+  PARTIAL_REFUND
+  NO_CHANGE
+  DISMISSED
+}
+
+enum DisputeMessageActor {
+  SYSTEM
+  ADMIN
+  USER
+}
+
+enum DisputeVisibility {
+  PUBLIC
+  INTERNAL
 }
 
 enum WalletTransactionType {
