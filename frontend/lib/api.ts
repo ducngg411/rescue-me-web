@@ -139,6 +139,11 @@ export const adminApi = {
         return response.data;
     },
 
+    getRequestDetail: async (requestId: string) => {
+        const response = await api.get(`/admin/requests/${requestId}`);
+        return response.data;
+    },
+
     updateDisputeStatus: async (caseId: string, status: string) => {
         const response = await api.patch(`/admin/disputes/${caseId}/status`, { status });
         return response.data;
@@ -151,9 +156,19 @@ export const adminApi = {
 
     resolveDispute: async (
         caseId: string,
-        body: { resolution: string; refundAmount?: number; resolutionNote?: string },
+        body: {
+            resolutionType: string;
+            resolutionAmountCustomer?: number;
+            resolutionAmountProvider?: number;
+            resolutionNote?: string;
+        },
     ) => {
         const response = await api.post(`/admin/disputes/${caseId}/resolve`, body);
+        return response.data;
+    },
+
+    rejectDispute: async (caseId: string, resolutionNote?: string) => {
+        const response = await api.post(`/admin/disputes/${caseId}/reject`, { resolutionNote });
         return response.data;
     },
 
@@ -163,11 +178,32 @@ export const adminApi = {
     },
 };
 
+
 // User-facing dispute API helpers
 export const userDisputeApi = {
     getMyDisputes: async () => {
         const response = await api.get('/disputes/my');
         return response.data as { items: unknown[]; total: number };
+    },
+    getDisputeDetail: async (id: string) => {
+        const response = await api.get(`/disputes/${id}`);
+        return response.data;
+    },
+    openDispute: async (dto: {
+        orderId: string;
+        paymentId: string;
+        targetAmount: number;
+        reason: string;
+        description?: string;
+        expectedOutcome?: string;
+        attachmentUrls?: string[];
+    }) => {
+        const response = await api.post('/disputes', dto);
+        return response.data as { disputeId: string; status: string; firstResponseDueAt: string; resolutionDueAt: string };
+    },
+    sendMessage: async (id: string, body?: string, attachmentUrls?: string[]) => {
+        const response = await api.post(`/disputes/${id}/messages`, { body, attachmentUrls });
+        return response.data;
     },
 };
 
@@ -176,6 +212,26 @@ export const providerDisputeApi = {
     getMyDisputes: async () => {
         const response = await api.get('/disputes/provider');
         return response.data as { items: unknown[]; total: number };
+    },
+    getDisputeDetail: async (id: string) => {
+        const response = await api.get(`/disputes/${id}`);
+        return response.data;
+    },
+    openDispute: async (dto: {
+        orderId: string;
+        paymentId: string;
+        targetAmount: number;
+        reason: string;
+        description?: string;
+        expectedOutcome?: string;
+        attachmentUrls?: string[];
+    }) => {
+        const response = await api.post('/disputes', dto);
+        return response.data as { disputeId: string; status: string; firstResponseDueAt: string; resolutionDueAt: string };
+    },
+    sendMessage: async (id: string, body?: string, attachmentUrls?: string[]) => {
+        const response = await api.post(`/disputes/${id}/messages`, { body, attachmentUrls });
+        return response.data;
     },
 };
 

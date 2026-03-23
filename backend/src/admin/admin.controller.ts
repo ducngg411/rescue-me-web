@@ -21,8 +21,10 @@ import {
     UpdateDisputeStatusDto,
     RequestEvidenceDto,
     ResolveDisputeDto,
+    RejectDisputeDto,
     AddDisputeEvidenceDto,
 } from './dto/admin.dto';
+
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -94,9 +96,9 @@ export class AdminController {
     async updateDisputeStatus(
         @Param('id') id: string,
         @Body() dto: UpdateDisputeStatusDto,
-        @Request() req: { user: { userId: string } },
+        @Request() req: { user: { id: string } },
     ) {
-        return this.adminService.updateDisputeStatus(id, req.user.userId, dto.status);
+        return this.adminService.updateDisputeStatus(id, req.user.id, dto.status);
     }
 
     @Post('disputes/:id/request-evidence')
@@ -105,7 +107,7 @@ export class AdminController {
         @Body() dto: RequestEvidenceDto,
         @Request() req,
     ) {
-        return this.adminService.requestDisputeEvidence(id, req.user.id, dto.message);
+        return this.adminService.requestDisputeEvidence(id, req.user.id, dto.message, dto.targetRole);
     }
 
     @Post('disputes/:id/resolve')
@@ -117,10 +119,20 @@ export class AdminController {
         return this.adminService.resolveDispute(
             id,
             req.user.id,
-            dto.resolution,
-            dto.refundAmount,
+            dto.resolutionType,
+            dto.resolutionAmountCustomer,
+            dto.resolutionAmountProvider,
             dto.resolutionNote,
         );
+    }
+
+    @Post('disputes/:id/reject')
+    async rejectDispute(
+        @Param('id') id: string,
+        @Body() dto: RejectDisputeDto,
+        @Request() req,
+    ) {
+        return this.adminService.rejectDispute(id, req.user.id, dto.resolutionNote);
     }
 
     @Post('disputes/:id/evidence')
@@ -132,3 +144,4 @@ export class AdminController {
         return this.adminService.addDisputeEvidence(id, req.user.id, dto.url, dto.note);
     }
 }
+

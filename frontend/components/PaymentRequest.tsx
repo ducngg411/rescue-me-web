@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import ReactConfetti from 'react-confetti';
-import api from '@/lib/api';
+import api, { userDisputeApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GuestWalletLockedCard } from '@/components/rescue-flow/payment/GuestWalletLockedCard';
 import { RESCUE_FLOW_COLORS } from '@/components/rescue-flow/tokens';
+import CreateDisputeSheet from '@/components/CreateDisputeSheet';
 
 const C = {
     orange: '#f97316',
@@ -55,14 +57,14 @@ export default function PaymentRequest({
     paymentScope = 'customer',
     onPaymentComplete,
 }: PaymentRequestProps) {
+    const router = useRouter();
     const { t } = useLanguage();
     const apiBase =
         paymentScope === 'guest' ? `/guest/rescue-requests/${requestId}` : `/rescue-requests/${requestId}`;
     const [showBreakdown, setShowBreakdown] = useState(false);
     const [isConfirming, setIsConfirming] = useState(false);
     const [showDispute, setShowDispute] = useState(false);
-    const [disputeReason, setDisputeReason] = useState('');
-    const [isDisputing, setIsDisputing] = useState(false);
+    const [existingDispute, setExistingDispute] = useState<{ id: string; status: string } | null>(null);
     const [done, setDone] = useState(false);
     // State for viewing photos in full-screen modal
     const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
@@ -79,6 +81,24 @@ export default function PaymentRequest({
             .catch(() => setWalletBalance(0))
             .finally(() => setWalletLoading(false));
     }, [payment.paymentMethod, paymentScope]);
+
+    useEffect(() => {
+        if (paymentScope === 'guest') return;
+        let active = true;
+        userDisputeApi
+            .getMyDisputes()
+            .then((res) => {
+                if (!active) return;
+                const found = (res.items as any[]).find((it) => it?.payment?.requestId === requestId);
+                setExistingDispute(found ? { id: found.id, status: found.status } : null);
+            })
+            .catch(() => {
+                if (active) setExistingDispute(null);
+            });
+        return () => {
+            active = false;
+        };
+    }, [paymentScope, requestId, showDispute]);
 
     // QR payment state (for QR payment method)
     const [qrData, setQrData] = useState<{
@@ -165,20 +185,6 @@ export default function PaymentRequest({
             toast.error(err.response?.data?.message || 'Thanh toán thất bại');
         } finally {
             setIsConfirming(false);
-        }
-    };
-
-    const handleDispute = async () => {
-        if (!disputeReason.trim()) { toast.error('Vui lòng nhập lý do'); return; }
-        setIsDisputing(true);
-        try {
-            await api.post(`${apiBase}/payment/dispute`, { reason: disputeReason });
-            toast.success('Đã báo sự cố. Chúng tôi sẽ xem xét.');
-            setShowDispute(false);
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Gửi thất bại');
-        } finally {
-            setIsDisputing(false);
         }
     };
 
@@ -524,7 +530,7 @@ export default function PaymentRequest({
                             {t('user.tracking.paymentRequest.cashConfirmBtn')}
                         </button>
                     )}
-                    {paymentScope !== 'guest' && (
+                    {paymentScope !== 'guest' && !existingDispute && (
                         <button
                             onClick={() => setShowDispute(true)}
                             className="w-full py-3 rounded-2xl text-sm font-semibold"
@@ -533,52 +539,30 @@ export default function PaymentRequest({
                             Báo sự cố
                         </button>
                     )}
+                    {paymentScope !== 'guest' && existingDispute && (
+                        <div className="space-y-2">
+                            <div className="w-full py-2 px-3 rounded-2xl text-xs font-semibold text-center" style={{ background: '#fff7ed', color: '#c2410c' }}>
+                                Đơn đang khiếu nại · {existingDispute.status}
+                            </div>
+                            <button
+                                onClick={() => router.push(`/user/disputes/${existingDispute.id}`)}
+                                className="w-full py-3 rounded-2xl text-sm font-semibold"
+                                style={{ background: '#eff6ff', color: '#1d4ed8' }}
+                            >
+                                Xem trạng thái khiếu nại
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
-            {/* Dispute Modal */}
-            {showDispute && (
-                <div
-                    className="fixed inset-0 z-[70] flex items-end"
-                    style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-                    onClick={() => setShowDispute(false)}
-                >
-                    <div
-                        className="w-full px-4 pb-8 pt-5"
-                        style={{ background: 'white', borderRadius: '24px 24px 0 0' }}
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background: C.border }} />
-                        <h3 className="text-sm font-bold mb-1" style={{ color: C.navy }}>Báo sự cố thanh toán</h3>
-                        <p className="text-xs mb-3" style={{ color: C.gray }}>Mô tả vấn đề bạn gặp phải, chúng tôi sẽ xem xét và liên hệ lại.</p>
-                        <textarea
-                            value={disputeReason}
-                            onChange={e => setDisputeReason(e.target.value)}
-                            placeholder="Ví dụ: Số tiền không khớp với thỏa thuận ban đầu..."
-                            rows={3}
-                            className="w-full py-2.5 px-3 rounded-xl text-sm outline-none resize-none mb-3"
-                            style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.navy }}
-                        />
-                        <div className="grid grid-cols-2 gap-3">
-                            <button
-                                onClick={() => setShowDispute(false)}
-                                className="py-3 rounded-2xl text-sm font-semibold"
-                                style={{ background: C.bg, color: C.gray }}
-                            >
-                                Huỷ
-                            </button>
-                            <button
-                                onClick={handleDispute}
-                                disabled={isDisputing}
-                                className="py-3 rounded-2xl text-sm font-bold text-white"
-                                style={{ background: '#dc2626' }}
-                            >
-                                {isDisputing ? 'Đang gửi...' : 'Gửi báo cáo'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <CreateDisputeSheet
+                open={showDispute}
+                onClose={() => setShowDispute(false)}
+                requestId={requestId}
+                paymentId={payment.id}
+                totalAmount={payment.totalAmount}
+            />
 
             {/* Photo Viewer Modal */}
             {selectedPhoto && (

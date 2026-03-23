@@ -1,6 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsInt, Min, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
-import { DisputeCaseStatus, DisputeResolution } from '@prisma/client';
+import { DisputeCaseStatus, DisputeResolutionType, DisputeSenderRole } from '@prisma/client';
+
 
 export class RejectProviderDto {
     @IsString()
@@ -61,22 +62,39 @@ export class RequestEvidenceDto {
     @IsString()
     @IsNotEmpty()
     message: string;
+
+    @IsOptional()
+    @IsEnum(DisputeSenderRole)
+    targetRole?: DisputeSenderRole;
 }
 
 export class ResolveDisputeDto {
-    @IsEnum(DisputeResolution)
-    resolution: DisputeResolution;
+    @IsEnum(DisputeResolutionType)
+    resolutionType: DisputeResolutionType;
 
     @IsOptional()
     @Type(() => Number)
     @IsInt()
     @Min(0)
-    refundAmount?: number;
+    resolutionAmountCustomer?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(0)
+    resolutionAmountProvider?: number;
 
     @IsOptional()
     @IsString()
     resolutionNote?: string;
 }
+
+export class RejectDisputeDto {
+    @IsOptional()
+    @IsString()
+    resolutionNote?: string;
+}
+
 
 export class AddDisputeEvidenceDto {
     @IsString()

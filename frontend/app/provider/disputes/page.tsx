@@ -48,14 +48,15 @@ interface DisputeItem {
 
 function statusStyle(status: string): { bg: string; color: string } {
     switch (status) {
-        case 'NEW': return { bg: C.blueLight, color: C.blue };
-        case 'IN_REVIEW': return { bg: C.yellowLight, color: C.yellow };
-        case 'AWAITING_EVIDENCE': return { bg: C.orangeLight, color: C.orange };
+        case 'WAITING_FOR_PROVIDER': return { bg: C.yellowLight, color: C.yellow };
+        case 'WAITING_FOR_CUSTOMER': return { bg: C.blueLight,   color: C.blue   };
+        case 'INVESTIGATING':        return { bg: C.purpleLight,  color: C.purple };
         case 'RESOLVED': return { bg: C.greenLight, color: C.green };
         case 'REJECTED': return { bg: C.redLight, color: C.red };
         default: return { bg: '#f8fafc', color: C.gray };
     }
 }
+
 
 export default function ProviderDisputesPage() {
     const router = useRouter();
@@ -105,14 +106,15 @@ export default function ProviderDisputesPage() {
 
     const statusLabel = (status: string) => {
         const map: Record<string, string> = {
-            NEW: t('provider.disputes.status.NEW'),
-            IN_REVIEW: t('provider.disputes.status.IN_REVIEW'),
-            AWAITING_EVIDENCE: t('provider.disputes.status.AWAITING_EVIDENCE'),
-            RESOLVED: t('provider.disputes.status.RESOLVED'),
-            REJECTED: t('provider.disputes.status.REJECTED'),
+            WAITING_FOR_PROVIDER:  t('provider.disputes.status.WAITING_FOR_PROVIDER'),
+            WAITING_FOR_CUSTOMER:  t('provider.disputes.status.WAITING_FOR_CUSTOMER'),
+            INVESTIGATING:         t('provider.disputes.status.INVESTIGATING'),
+            RESOLVED:              t('provider.disputes.status.RESOLVED'),
+            REJECTED:              t('provider.disputes.status.REJECTED'),
         };
         return map[status] ?? status;
     };
+
 
     if (!isReady) {
         return (
@@ -238,7 +240,7 @@ export default function ProviderDisputesPage() {
                                         <li
                                             key={d.id}
                                             className="flex items-start gap-4 px-5 py-4 cursor-pointer hover:bg-slate-50 transition-colors"
-                                            onClick={() => router.push(`/provider/requests/${requestId}`)}
+                                            onClick={() => router.push(`/provider/disputes/${d.id}`)}
                                         >
                                             <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: C.purpleLight }}>
                                                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke={C.purple} strokeWidth={2}>

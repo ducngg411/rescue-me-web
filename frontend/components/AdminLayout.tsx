@@ -1,9 +1,10 @@
 'use client';
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import RescueMeLogo from '@/components/RescueMeLogo';
+import api from '@/lib/api';
 
 const C = {
     orange: '#f97316',
@@ -105,6 +106,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
     const router = useRouter();
     const pathname = usePathname();
     const { user, logout } = useAuth();
+    const [disputeBadge, setDisputeBadge] = useState(0);
 
     const currentActiveTab = activeTab || pathname;
 
@@ -114,6 +116,23 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
 
     const displayName = user?.name || user?.email?.split('@')[0] || 'Admin';
     const initials = displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+
+    useEffect(() => {
+        let active = true;
+        api.get('/admin/disputes', { params: { take: 100 } })
+            .then((res) => {
+                if (!active) return;
+                const items: any[] = res.data?.items ?? [];
+                const openCount = items.filter((x) => x.status !== 'RESOLVED' && x.status !== 'REJECTED').length;
+                setDisputeBadge(openCount);
+            })
+            .catch(() => {
+                if (active) setDisputeBadge(0);
+            });
+        return () => {
+            active = false;
+        };
+    }, [pathname]);
 
     return (
         <div className="h-screen overflow-hidden flex" style={{ fontFamily: 'Lexend, sans-serif', background: C.bg }}>
@@ -162,6 +181,11 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
                                             >
                                                 {item.icon}
                                                 {item.label}
+                                                {item.href === '/admin/disputes' && disputeBadge > 0 && (
+                                                    <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>
+                                                        {disputeBadge}
+                                                    </span>
+                                                )}
                                             </button>
                                         );
                                     })}

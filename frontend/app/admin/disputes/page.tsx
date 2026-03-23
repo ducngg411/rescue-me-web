@@ -29,16 +29,18 @@ const C = {
 
 type DisputeStatus =
     | 'ALL'
-    | 'NEW'
-    | 'IN_REVIEW'
-    | 'AWAITING_EVIDENCE'
+    | 'WAITING_FOR_PROVIDER'
+    | 'WAITING_FOR_CUSTOMER'
+    | 'INVESTIGATING'
     | 'RESOLVED'
     | 'REJECTED';
 
 interface DisputeListItem {
     id: string;
     status: string;
-    slaDueAt: string | null;
+    isOverdue: boolean;
+    firstResponseDueAt: string | null;
+    resolutionDueAt: string | null;
     createdAt: string;
     payment: {
         requestId: string;
@@ -48,18 +50,17 @@ interface DisputeListItem {
         disputedAt: string | null;
     };
     request: { id: string; status: string; incidentType: string };
+    openedBy: { id: string; fullName: string; email: string } | null;
 }
 
 const PAGE_SIZE = 20;
 
 function statusStyle(status: string): { bg: string; color: string } {
     switch (status) {
-        case 'NEW':
-            return { bg: C.blueLight, color: C.blue };
-        case 'IN_REVIEW':
-            return { bg: C.yellowLight, color: C.yellow };
-        case 'AWAITING_EVIDENCE':
-            return { bg: C.orangeLight, color: C.orange };
+        case 'WAITING_FOR_PROVIDER': return { bg: C.blueLight,   color: C.blue   };
+        case 'WAITING_FOR_CUSTOMER': return { bg: C.yellowLight, color: C.yellow };
+        case 'INVESTIGATING':        return { bg: C.purpleLight, color: C.purple };
+
         case 'RESOLVED':
             return { bg: C.greenLight, color: C.green };
         case 'REJECTED':
@@ -74,12 +75,12 @@ function disputeStatusLabel(
     status: string,
 ): string {
     switch (status) {
-        case 'NEW':
-            return t('admin.disputes.tabNew');
-        case 'IN_REVIEW':
+        case 'WAITING_FOR_PROVIDER':
             return t('admin.disputes.tabInReview');
-        case 'AWAITING_EVIDENCE':
+        case 'WAITING_FOR_CUSTOMER':
             return t('admin.disputes.tabAwaiting');
+        case 'INVESTIGATING':
+            return t('admin.disputes.tabInReview');
         case 'RESOLVED':
             return t('admin.disputes.tabResolved');
         case 'REJECTED':
@@ -93,7 +94,7 @@ export default function AdminDisputesPage() {
     const router = useRouter();
     const { t, locale } = useLanguage();
     const { isReady } = useAdminGuard();
-    const [tab, setTab] = useState<DisputeStatus>('IN_REVIEW');
+    const [tab, setTab] = useState<DisputeStatus>('WAITING_FOR_PROVIDER');
     const [items, setItems] = useState<DisputeListItem[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -123,9 +124,9 @@ export default function AdminDisputesPage() {
 
     const tabs: { key: DisputeStatus; labelKey: string }[] = [
         { key: 'ALL', labelKey: 'tabAll' },
-        { key: 'NEW', labelKey: 'tabNew' },
-        { key: 'IN_REVIEW', labelKey: 'tabInReview' },
-        { key: 'AWAITING_EVIDENCE', labelKey: 'tabAwaiting' },
+        { key: 'WAITING_FOR_PROVIDER', labelKey: 'tabInReview' },
+        { key: 'WAITING_FOR_CUSTOMER', labelKey: 'tabAwaiting' },
+        { key: 'INVESTIGATING', labelKey: 'tabNew' },
         { key: 'RESOLVED', labelKey: 'tabResolved' },
         { key: 'REJECTED', labelKey: 'tabRejected' },
     ];
@@ -212,7 +213,8 @@ export default function AdminDisputesPage() {
                                     <tbody>
                                         {items.map((row) => {
                                             const st = statusStyle(row.status);
-                                            const sla = row.slaDueAt ? new Date(row.slaDueAt) : null;
+                                            const dueAt = row.firstResponseDueAt ?? row.resolutionDueAt;
+                                            const sla = dueAt ? new Date(dueAt) : null;
                                             const overdue = sla && sla < new Date();
                                             return (
                                                 <tr

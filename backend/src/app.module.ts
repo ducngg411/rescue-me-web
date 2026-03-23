@@ -17,6 +17,7 @@ import { UserWalletModule } from './user-wallet/user-wallet.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { GuestAuthModule } from './guest-auth/guest-auth.module';
 import { GuestRescueModule } from './guest-rescue/guest-rescue.module';
+import { DisputeModule } from './dispute/dispute.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { GuestRescueModule } from './guest-rescue/guest-rescue.module';
     UserWalletModule,
     GuestAuthModule,
     GuestRescueModule,
+    DisputeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

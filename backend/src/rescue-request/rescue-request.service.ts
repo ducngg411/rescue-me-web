@@ -8,6 +8,7 @@ import { CommissionService } from '../wallet/commission.service';
 import { UserWalletService } from '../user-wallet/user-wallet.service';
 import { Prisma, UserWalletReferenceType, WalletTransactionStatus, WalletTransactionType, WalletReferenceType } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
+import { DisputeService } from '../dispute/dispute.service';
 
 
 @Injectable()
@@ -17,6 +18,7 @@ export class RescueRequestService {
         private commissionService: CommissionService,
         private userWalletService: UserWalletService,
         private mailService: MailService,
+        private disputeService: DisputeService,
     ) { }
 
     // Auto-expire MATCHING requests every minute
@@ -1376,110 +1378,7 @@ export class RescueRequestService {
         });
         if (!request) throw new NotFoundException('Rescue request not found');
         if (request.userId !== userId) throw new ForbiddenException('Not your request');
-
-        const payment = await this.prisma.payment.findUnique({
-            where: { requestId },
-            include: { disputeCase: true },
-        });
-        if (!payment) throw new NotFoundException('Payment not found for this request');
-
-        if (
-            payment.disputeCase &&
-            (payment.disputeCase.status === 'RESOLVED' || payment.disputeCase.status === 'REJECTED')
-        ) {
-            throw new BadRequestException('This dispute is already closed');
-        }
-
-        const disputedAt = new Date();
-        const slaDueAt = new Date(disputedAt.getTime() + 48 * 60 * 60 * 1000);
-
-        const updated = await this.prisma.$transaction(async (tx) => {
-            const p = await tx.payment.update({
-                where: { requestId },
-                data: {
-                    status: 'DISPUTED',
-                    disputeReason: reason,
-                    disputedAt,
-                },
-            });
-
-            const existingCase = await tx.disputeCase.findUnique({
-                where: { paymentId: payment.id },
-            });
-
-            if (existingCase) {
-                await tx.disputeMessage.create({
-                    data: {
-                        caseId: existingCase.id,
-                        actor: 'USER',
-                        body: reason,
-                        userId,
-                        visibility: 'PUBLIC',
-                    },
-                });
-            } else {
-                await tx.disputeCase.create({
-                    data: {
-                        paymentId: payment.id,
-                        requestId,
-                        openedByUserId: userId,
-                        status: 'NEW',
-                        slaDueAt,
-                        messages: {
-                            create: {
-                                actor: 'USER',
-                                body: reason,
-                                userId,
-                                visibility: 'PUBLIC',
-                            },
-                        },
-                    },
-                });
-            }
-
-            return p;
-        });
-
-        console.log(`⚠️ [Payment] User ${userId} disputed payment for request ${requestId}: ${reason}`);
-
-        // Notify provider and admin (fire-and-forget)
-        setImmediate(async () => {
-            try {
-                const adminEmail = process.env.ADMIN_EMAIL;
-                const req = await this.prisma.rescueRequest.findUnique({
-                    where: { id: requestId },
-                    include: {
-                        user: { select: { fullName: true, email: true } },
-                        assignedProvider: { select: { email: true, fullName: true } },
-                    },
-                });
-                const disputedBy = req?.user?.fullName || req?.user?.email || userId;
-                // Notify provider
-                if (req?.assignedProvider) {
-                    await this.mailService.sendPaymentDispute({
-                        email: req.assignedProvider.email,
-                        name: req.assignedProvider.fullName || req.assignedProvider.email,
-                        isAdmin: false,
-                        requestId,
-                        reason,
-                        disputedBy,
-                    });
-                }
-                // Notify admin
-                if (adminEmail) {
-                    await this.mailService.sendPaymentDispute({
-                        email: adminEmail,
-                        name: 'Admin',
-                        isAdmin: true,
-                        requestId,
-                        reason,
-                        disputedBy,
-                    });
-                }
-            } catch { /* silent */ }
-        });
-
-        return updated;
+        return this.disputeService.openCustomerDisputeFromPayment(requestId, userId, reason);
     }
 
     /**

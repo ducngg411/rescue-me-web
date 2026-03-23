@@ -51,14 +51,15 @@ interface DisputeItem {
 
 function statusStyle(status: string): { bg: string; color: string } {
     switch (status) {
-        case 'NEW': return { bg: C.blueLight, color: C.blue };
-        case 'IN_REVIEW': return { bg: C.yellowLight, color: C.yellow };
-        case 'AWAITING_EVIDENCE': return { bg: C.orangeLight, color: C.orange };
-        case 'RESOLVED': return { bg: C.greenLight, color: C.green };
-        case 'REJECTED': return { bg: C.redLight, color: C.red };
+        case 'WAITING_FOR_PROVIDER': return { bg: '#eff6ff', color: '#2563eb' };
+        case 'WAITING_FOR_CUSTOMER': return { bg: '#fefce8', color: '#ca8a04' };
+        case 'INVESTIGATING':        return { bg: '#faf5ff', color: '#7c3aed' };
+        case 'RESOLVED':             return { bg: C.greenLight, color: C.green };
+        case 'REJECTED':             return { bg: C.redLight, color: C.red };
         default: return { bg: '#f8fafc', color: C.gray };
     }
 }
+
 
 export default function UserDisputesPage() {
     const router = useRouter();
@@ -125,14 +126,15 @@ export default function UserDisputesPage() {
 
     const statusLabel = (status: string) => {
         const map: Record<string, string> = {
-            NEW: t('user.disputes.status.NEW'),
-            IN_REVIEW: t('user.disputes.status.IN_REVIEW'),
-            AWAITING_EVIDENCE: t('user.disputes.status.AWAITING_EVIDENCE'),
-            RESOLVED: t('user.disputes.status.RESOLVED'),
-            REJECTED: t('user.disputes.status.REJECTED'),
+            WAITING_FOR_PROVIDER:  t('user.disputes.status.WAITING_FOR_PROVIDER'),
+            WAITING_FOR_CUSTOMER:  t('user.disputes.status.WAITING_FOR_CUSTOMER'),
+            INVESTIGATING:         t('user.disputes.status.INVESTIGATING'),
+            RESOLVED:              t('user.disputes.status.RESOLVED'),
+            REJECTED:              t('user.disputes.status.REJECTED'),
         };
         return map[status] ?? status;
     };
+
 
     if (!isReady) {
         return (
@@ -301,7 +303,7 @@ export default function UserDisputesPage() {
                                             <li
                                                 key={d.id}
                                                 className="flex items-start gap-4 px-5 py-4 cursor-pointer hover:bg-slate-50 transition-colors"
-                                                onClick={() => router.push(`/user/requests/${requestId}`)}
+                                                onClick={() => router.push(`/user/disputes/${d.id}`)}
                                             >
                                                 {/* Icon */}
                                                 <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: C.purpleLight }}>

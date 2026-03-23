@@ -7,7 +7,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import {
     DisputeCaseStatus,
-    DisputeResolution,
+    DisputeResolutionType,
+    DisputeSenderRole,
+    DisputeMessageType,
+    DisputeVisibility,
     Prisma,
     VerificationStatus,
     WalletTransactionStatus,
@@ -16,6 +19,7 @@ import {
     WalletReferenceType,
 } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
+
 
 @Injectable()
 export class AdminService {
@@ -266,10 +270,11 @@ export class AdminService {
         const take = Math.min(query?.take ?? 20, 100);
         const where = query?.status ? { status: query.status } : {};
 
+        const now = new Date();
         const [items, total] = await this.prisma.$transaction([
             this.prisma.disputeCase.findMany({
                 where,
-                orderBy: [{ slaDueAt: 'asc' }, { createdAt: 'desc' }],
+                orderBy: [{ firstResponseDueAt: 'asc' }, { createdAt: 'desc' }],
                 skip,
                 take,
                 include: {
@@ -298,8 +303,18 @@ export class AdminService {
             this.prisma.disputeCase.count({ where }),
         ]);
 
-        return { items, total, skip, take };
+        // Annotate overdue flag
+        const annotated = items.map((item) => ({
+            ...item,
+            isOverdue:
+                item.firstResponseDueAt != null &&
+                !item.firstRespondedAt &&
+                item.firstResponseDueAt < now,
+        }));
+
+        return { items: annotated, total, skip, take };
     }
+
 
     async getDisputeDetail(caseId: string) {
         const row = await this.prisma.disputeCase.findUnique({
@@ -331,31 +346,37 @@ export class AdminService {
         if (c.status === 'RESOLVED' || c.status === 'REJECTED') {
             throw new BadRequestException('Cannot change status of a closed dispute');
         }
+        // Admins can move to INVESTIGATING from any open state
+        const allowedTargets: DisputeCaseStatus[] = [
+            DisputeCaseStatus.WAITING_FOR_CUSTOMER,
+            DisputeCaseStatus.WAITING_FOR_PROVIDER,
+            DisputeCaseStatus.INVESTIGATING,
+        ];
+        if (!allowedTargets.includes(status)) {
+            throw new BadRequestException(
+                `Use /resolve or /reject to close a dispute. Allowed: ${allowedTargets.join(', ')}`,
+            );
+        }
 
         return this.prisma.$transaction(async (tx) => {
-            const data: Prisma.DisputeCaseUpdateInput = {
-                status,
-            };
-            if (
-                !c.firstRespondedAt &&
-                status !== 'NEW' &&
-                (status === 'IN_REVIEW' || status === 'AWAITING_EVIDENCE')
-            ) {
-                data.firstRespondedAt = new Date();
+            const updatedData: Prisma.DisputeCaseUpdateInput = { status };
+            if (!c.firstRespondedAt && status === DisputeCaseStatus.INVESTIGATING) {
+                updatedData.firstRespondedAt = new Date();
             }
 
             const updated = await tx.disputeCase.update({
                 where: { id: caseId },
-                data,
+                data: updatedData,
             });
 
             await tx.disputeMessage.create({
                 data: {
                     caseId,
-                    actor: 'ADMIN',
+                    senderRole: DisputeSenderRole.ADMIN,
+                    messageType: DisputeMessageType.SYSTEM,
                     body: `Status changed to ${status}`,
                     userId: adminId,
-                    visibility: 'PUBLIC',
+                    visibility: DisputeVisibility.PUBLIC,
                 },
             });
 
@@ -363,18 +384,35 @@ export class AdminService {
         });
     }
 
-    async requestDisputeEvidence(caseId: string, adminId: string, message: string) {
+
+    async requestDisputeEvidence(
+        caseId: string,
+        adminId: string,
+        message: string,
+        targetRole?: DisputeSenderRole,
+    ) {
         const c = await this.prisma.disputeCase.findUnique({ where: { id: caseId } });
         if (!c) throw new NotFoundException('Dispute case not found');
         if (c.status === 'RESOLVED' || c.status === 'REJECTED') {
             throw new BadRequestException('Dispute is already closed');
         }
 
+        const normalizedTarget =
+            targetRole === DisputeSenderRole.PROVIDER || targetRole === DisputeSenderRole.CUSTOMER
+                ? targetRole
+                : DisputeSenderRole.PROVIDER;
+
         return this.prisma.$transaction(async (tx) => {
             const updated = await tx.disputeCase.update({
                 where: { id: caseId },
                 data: {
-                    status: 'AWAITING_EVIDENCE',
+                    status:
+                        normalizedTarget === DisputeSenderRole.PROVIDER
+                            ? DisputeCaseStatus.WAITING_FOR_PROVIDER
+                            : DisputeCaseStatus.WAITING_FOR_CUSTOMER,
+                    providerReplyAllowed: normalizedTarget === DisputeSenderRole.PROVIDER,
+                    customerReplyAllowed: normalizedTarget === DisputeSenderRole.CUSTOMER,
+                    lastCoordinatorNote: message,
                     firstRespondedAt: c.firstRespondedAt ?? new Date(),
                 },
             });
@@ -382,10 +420,11 @@ export class AdminService {
             await tx.disputeMessage.create({
                 data: {
                     caseId,
-                    actor: 'ADMIN',
-                    body: message,
+                    senderRole: DisputeSenderRole.ADMIN,
+                    messageType: DisputeMessageType.SYSTEM,
+                    body: `Admin yêu cầu ${normalizedTarget === DisputeSenderRole.PROVIDER ? 'cứu hộ viên' : 'khách hàng'} bổ sung bằng chứng: ${message}`,
                     userId: adminId,
-                    visibility: 'PUBLIC',
+                    visibility: DisputeVisibility.PUBLIC,
                 },
             });
 
@@ -410,11 +449,13 @@ export class AdminService {
         });
     }
 
+
     async resolveDispute(
         caseId: string,
         adminId: string,
-        resolution: DisputeResolution,
-        refundAmount?: number,
+        resolutionType: DisputeResolutionType,
+        resolutionAmountCustomer?: number,
+        resolutionAmountProvider?: number,
         resolutionNote?: string,
     ) {
         const c = await this.prisma.disputeCase.findUnique({
@@ -426,60 +467,31 @@ export class AdminService {
             throw new BadRequestException('Dispute is already closed');
         }
 
-        if (resolution === 'PARTIAL_REFUND') {
-            if (refundAmount == null || refundAmount <= 0) {
-                throw new BadRequestException('refundAmount is required for partial refund');
+        if (resolutionType === 'PARTIAL_REFUND' || resolutionType === 'SPLIT') {
+            if (resolutionAmountCustomer == null || resolutionAmountCustomer < 0) {
+                throw new BadRequestException('resolutionAmountCustomer is required for PARTIAL_REFUND/SPLIT');
             }
-            if (refundAmount > c.payment.totalAmount) {
-                throw new BadRequestException('refundAmount cannot exceed payment total');
+            if (resolutionAmountCustomer > c.payment.totalAmount) {
+                throw new BadRequestException('resolutionAmountCustomer cannot exceed payment total');
             }
         }
 
-        if (resolution === 'FULL_REFUND') {
-            // explicit full amount for clarity in DB
-            refundAmount = c.payment.totalAmount;
+        if (resolutionType === 'FULL_REFUND') {
+            resolutionAmountCustomer = c.payment.totalAmount;
+            resolutionAmountProvider = 0;
+        } else if (resolutionType === 'NO_REFUND') {
+            resolutionAmountCustomer = 0;
+            resolutionAmountProvider = c.payment.totalAmount;
         }
 
         await this.prisma.$transaction(async (tx) => {
-            if (resolution === 'DISMISSED') {
-                await tx.disputeCase.update({
-                    where: { id: caseId },
-                    data: {
-                        status: 'REJECTED',
-                        resolution: 'DISMISSED',
-                        refundAmount: null,
-                        resolutionNote: resolutionNote ?? null,
-                        resolvedAt: new Date(),
-                        resolvedByUserId: adminId,
-                    },
-                });
-                await tx.payment.update({
-                    where: { id: c.paymentId },
-                    data: { status: 'COMPLETED' },
-                });
-                await tx.disputeMessage.create({
-                    data: {
-                        caseId,
-                        actor: 'ADMIN',
-                        body:
-                            resolutionNote?.trim() ||
-                            'Complaint dismissed. No refund. Payment stands.',
-                        userId: adminId,
-                        visibility: 'PUBLIC',
-                    },
-                });
-                return;
-            }
-
-            // Wallet adjustments for WALLET payments (only if money actually moved)
+            // Wallet adjustments for WALLET payments
             if (
                 c.payment.paymentMethod === 'WALLET' &&
                 c.payment.userId &&
-                (resolution === 'FULL_REFUND' || resolution === 'PARTIAL_REFUND')
+                resolutionAmountCustomer != null &&
+                resolutionAmountCustomer > 0
             ) {
-                const payToUser =
-                    resolution === 'FULL_REFUND' ? c.payment.totalAmount : (refundAmount as number);
-
                 const userDebit = await tx.userWalletTransaction.findFirst({
                     where: {
                         referenceType: UserWalletReferenceType.JOB_PAYMENT,
@@ -495,6 +507,8 @@ export class AdminService {
                         type: WalletTransactionType.CREDIT,
                     },
                 });
+
+                const payToUser = resolutionAmountCustomer;
 
                 if (userDebit && payToUser > 0) {
                     const ratio = payToUser / c.payment.totalAmount;
@@ -512,7 +526,7 @@ export class AdminService {
                         });
                         if (!pw || pw.availableBalance < debitProvider) {
                             throw new BadRequestException(
-                                'Provider wallet has insufficient balance to process this refund. Top up or handle manually.',
+                                'Provider wallet has insufficient balance to process this refund.',
                             );
                         }
                         await tx.walletTransaction.create({
@@ -555,20 +569,13 @@ export class AdminService {
                 }
             }
 
-            const finalStatus: DisputeCaseStatus = 'RESOLVED';
             await tx.disputeCase.update({
                 where: { id: caseId },
                 data: {
-                    status: finalStatus,
-                    resolution,
-                    refundAmount:
-                        resolution === 'NO_CHANGE'
-                            ? null
-                            : resolution === 'PARTIAL_REFUND'
-                              ? (refundAmount as number)
-                              : resolution === 'FULL_REFUND'
-                                ? c.payment.totalAmount
-                                : null,
+                    status: DisputeCaseStatus.RESOLVED,
+                    resolutionType,
+                    resolutionAmountCustomer: resolutionAmountCustomer ?? null,
+                    resolutionAmountProvider: resolutionAmountProvider ?? null,
                     resolutionNote: resolutionNote ?? null,
                     resolvedAt: new Date(),
                     resolvedByUserId: adminId,
@@ -582,19 +589,58 @@ export class AdminService {
             });
 
             const summary =
-                resolution === 'NO_CHANGE'
-                    ? resolutionNote?.trim() || 'No refund. Payment upheld.'
-                    : resolutionNote?.trim() ||
-                      `Resolution: ${resolution}` +
-                          (refundAmount != null ? ` — ${refundAmount.toLocaleString('vi-VN')}₫` : '');
+                resolutionNote?.trim() ||
+                `Resolution: ${resolutionType}` +
+                    (resolutionAmountCustomer != null
+                        ? ` — Customer: ${resolutionAmountCustomer.toLocaleString('vi-VN')}₫`
+                        : '');
 
             await tx.disputeMessage.create({
                 data: {
                     caseId,
-                    actor: 'ADMIN',
+                    senderRole: DisputeSenderRole.ADMIN,
+                    messageType: DisputeMessageType.SYSTEM,
                     body: summary,
                     userId: adminId,
-                    visibility: 'PUBLIC',
+                    visibility: DisputeVisibility.PUBLIC,
+                },
+            });
+        });
+
+        return this.getDisputeDetail(caseId);
+    }
+
+    async rejectDispute(caseId: string, adminId: string, resolutionNote?: string) {
+        const c = await this.prisma.disputeCase.findUnique({ where: { id: caseId } });
+        if (!c) throw new NotFoundException('Dispute case not found');
+        if (c.status === 'RESOLVED' || c.status === 'REJECTED') {
+            throw new BadRequestException('Dispute is already closed');
+        }
+
+        await this.prisma.$transaction(async (tx) => {
+            await tx.disputeCase.update({
+                where: { id: caseId },
+                data: {
+                    status: DisputeCaseStatus.REJECTED,
+                    resolutionNote: resolutionNote ?? null,
+                    resolvedAt: new Date(),
+                    resolvedByUserId: adminId,
+                },
+            });
+
+            await tx.payment.update({
+                where: { id: c.paymentId },
+                data: { status: 'COMPLETED' },
+            });
+
+            await tx.disputeMessage.create({
+                data: {
+                    caseId,
+                    senderRole: DisputeSenderRole.ADMIN,
+                    messageType: DisputeMessageType.SYSTEM,
+                    body: resolutionNote?.trim() || 'Dispute rejected. Payment stands.',
+                    userId: adminId,
+                    visibility: DisputeVisibility.PUBLIC,
                 },
             });
         });
@@ -602,3 +648,4 @@ export class AdminService {
         return this.getDisputeDetail(caseId);
     }
 }
+
