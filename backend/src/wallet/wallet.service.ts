@@ -1272,4 +1272,31 @@ export class WalletService {
             this.logger.log(`🔧 [AutoRelease] Reconciled wallet=${walletId} pendingBalance=${correctPending}`);
         });
     }
+
+    /**
+     * QR top-up rows are created with expireAt = now + 5m. Previously they only flipped
+     * PENDING → EXPIRED when the client polled getTopupStatus (lazy), so admin lists
+     * could show stale PENDING forever. This job aligns DB with reality without waiting on polls.
+     *
+     * Note: "Hết hạn" = EXPIRED. "Huỷ" (CANCELLED) is reserved for user replacing the session
+     * (e.g. đổi số tiền / tạo QR mới), not for time-out.
+     */
+    @Cron(CronExpression.EVERY_MINUTE)
+    async expireStaleTopupSessions() {
+        const now = new Date();
+        const [prov, usr] = await Promise.all([
+            this.prisma.topupTransaction.updateMany({
+                where: { status: 'PENDING', expireAt: { lt: now } },
+                data: { status: 'EXPIRED' },
+            }),
+            this.prisma.userTopupTransaction.updateMany({
+                where: { status: 'PENDING', expireAt: { lt: now } },
+                data: { status: 'EXPIRED' },
+            }),
+        ]);
+        const n = prov.count + usr.count;
+        if (n > 0) {
+            this.logger.log(`[TopupExpire] provider=${prov.count} user=${usr.count} → EXPIRED`);
+        }
+    }
 }

@@ -92,7 +92,9 @@ export default function ProviderApprovalPage() {
     const [activeTab, setActiveTab] = useState<TabType>('PENDING');
     const [search, setSearch] = useState('');
     const [providerTypeFilter, setProviderTypeFilter] = useState('ALL');
+    const [dateFilter, setDateFilter] = useState('');
     const [providers, setProviders] = useState<Provider[]>([]);
+    const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0, suspended: 0 });
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
 
@@ -105,8 +107,13 @@ export default function ProviderApprovalPage() {
             setLoading(true);
             const params: any = {};
             if (activeTab !== 'ALL') params.status = activeTab;
-            const data = await adminApi.getProviders(params);
+            
+            const [data, statsData] = await Promise.all([
+                adminApi.getProviders(params),
+                adminApi.getProviderStats()
+            ]);
             setProviders(data);
+            setStats(statsData);
         } catch (err) {
             console.error('Failed to load providers:', err);
         } finally {
@@ -115,6 +122,12 @@ export default function ProviderApprovalPage() {
     };
 
     const filtered = providers.filter(p => {
+        if (dateFilter && p.submittedAt) {
+            const dDate = new Date(p.submittedAt);
+            const dStr = `${dDate.getFullYear()}-${String(dDate.getMonth() + 1).padStart(2, '0')}-${String(dDate.getDate()).padStart(2, '0')}`;
+            if (dStr !== dateFilter) return false;
+        }
+
         const q = search.toLowerCase();
         const matchSearch = !q ||
             p.fullName?.toLowerCase().includes(q) ||
@@ -129,12 +142,7 @@ export default function ProviderApprovalPage() {
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     // Stats
-    const pending = providers.filter(p => p.verificationStatus === 'PENDING').length;
-    const approved = providers.filter(p => p.verificationStatus === 'APPROVED').length;
-    // Fake stats for now
-    const weeklyGrowth = '+12%';
-    const avgApprovalTime = '4.2h';
-    const autoRejected = 8;
+    const { total, pending, approved, rejected } = stats;
 
     if (!isReady) {
         return (
@@ -152,6 +160,21 @@ export default function ProviderApprovalPage() {
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>Provider Approval</h1>
                     <p className="text-sm" style={{ color: C.gray }}>Review and manage rescue provider applications across all regions.</p>
+                </div>
+
+                {/* ─── Stats Cards Row ─── */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+                    {[
+                        { label: 'TỔNG YÊU CẦU', value: total, color: C.navy, accent: false },
+                        { label: 'CHỜ DUYỆT', value: pending, color: C.orange, accent: false },
+                        { label: 'ĐÃ DUYỆT', value: approved, color: C.green, accent: false },
+                        { label: 'TỪ CHỐI', value: rejected, color: C.red, accent: false },
+                    ].map(stat => (
+                        <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
+                            <p className="text-[10px] font-semibold tracking-wider mb-2" style={{ color: C.gray }}>{stat.label}</p>
+                            <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
+                        </div>
+                    ))}
                 </div>
 
                 {/* Main Card */}
@@ -206,9 +229,30 @@ export default function ProviderApprovalPage() {
                         </div>
 
                         {/* Date Range */}
-                        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm" style={{ borderColor: C.border, color: C.gray }}>
-                            <Calendar className="w-3.5 h-3.5" />
-                            <span>Date Range</span>
+                        <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm relative" style={{ borderColor: C.border }}>
+                            <Calendar className="w-3.5 h-3.5" style={{ color: C.gray }} />
+                            <input
+                                type="date"
+                                value={dateFilter}
+                                onClick={(e) => {
+                                    try {
+                                        if ('showPicker' in HTMLInputElement.prototype) {
+                                            (e.target as HTMLInputElement).showPicker();
+                                        }
+                                    } catch (err) {}
+                                }}
+                                onChange={e => { setDateFilter(e.target.value); setPage(1); }}
+                                className="bg-transparent text-sm focus:outline-none cursor-pointer"
+                                style={{ color: dateFilter ? C.navy : C.gray, fontFamily: 'Lexend, sans-serif' }}
+                            />
+                            {dateFilter && (
+                                <button
+                                    onClick={() => { setDateFilter(''); setPage(1); }}
+                                    className="absolute -right-1.5 -top-1.5 bg-gray-200 hover:bg-gray-300 rounded-full p-0.5"
+                                >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -382,21 +426,6 @@ export default function ProviderApprovalPage() {
                             </button>
                         </div>
                     </div>
-                </div>
-
-                {/* ─── Stats Cards Row ─── */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {[
-                        { label: 'TOTAL PENDING', value: pending, color: C.orange, accent: false },
-                        { label: 'WEEKLY GROWTH', value: weeklyGrowth, color: C.green, accent: false },
-                        { label: 'AVG. APPROVAL TIME', value: avgApprovalTime, color: C.navy, accent: false },
-                        { label: 'AUTO-REJECTED', value: autoRejected, color: C.red, accent: false },
-                    ].map(stat => (
-                        <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
-                            <p className="text-[10px] font-semibold tracking-wider mb-2" style={{ color: C.gray }}>{stat.label}</p>
-                            <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
-                        </div>
-                    ))}
                 </div>
 
             </div>

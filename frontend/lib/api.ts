@@ -85,6 +85,12 @@ export const adminApi = {
         return response.data;
     },
 
+    // Get provider stats
+    getProviderStats: async () => {
+        const response = await api.get('/admin/providers/stats');
+        return response.data;
+    },
+
     // Get provider detail
     getProviderDetail: async (providerId: string) => {
         const response = await api.get(`/admin/providers/${providerId}`);
@@ -191,6 +197,55 @@ export const adminApi = {
 
     addDisputeEvidence: async (caseId: string, url: string, note?: string) => {
         const response = await api.post(`/admin/disputes/${caseId}/evidence`, { url, note });
+        return response.data;
+    },
+
+    // ── Transactions ────────────────────────────────────────────────────────
+
+    getTransactionSummary: async () => {
+        const response = await api.get('/admin/transactions/summary');
+        return response.data;
+    },
+
+    // ── Wallets ─────────────────────────────────────────────────────────────
+
+    getProviderWallets: async (params?: any) => {
+        const response = await api.get('/admin/wallets/provider', { params });
+        return response.data;
+    },
+
+    getProviderWallet: async (id: string) => {
+        const response = await api.get(`/admin/wallets/provider/${id}`);
+        return response.data;
+    },
+
+    getUserWallets: async (params?: any) => {
+        const response = await api.get('/admin/wallets/user', { params });
+        return response.data;
+    },
+
+    getUserWallet: async (id: string) => {
+        const response = await api.get(`/admin/wallets/user/${id}`);
+        return response.data;
+    },
+
+    getWalletTransactions: async (params?: any) => {
+        const response = await api.get('/admin/transactions/wallet', { params });
+        return response.data;
+    },
+
+    getTopupTransactions: async (params?: any) => {
+        const response = await api.get('/admin/transactions/topup', { params });
+        return response.data;
+    },
+
+    getJobPaymentTransactions: async (params?: any) => {
+        const response = await api.get('/admin/transactions/job-payment', { params });
+        return response.data;
+    },
+
+    getPayments: async (params?: any) => {
+        const response = await api.get('/admin/payments', { params });
         return response.data;
     },
 };

@@ -23,6 +23,7 @@ import {
     ResolveDisputeDto,
     RejectDisputeDto,
     AddDisputeEvidenceDto,
+    GetTransactionsQueryDto,
 } from './dto/admin.dto';
 
 
@@ -35,6 +36,11 @@ export class AdminController {
     @Get('providers')
     async getProviders(@Query() query: GetProvidersQueryDto) {
         return this.adminService.getProviders(query);
+    }
+
+    @Get('providers/stats')
+    async getProviderStats() {
+        return this.adminService.getProviderStats();
     }
 
     @Get('providers/:id')
@@ -154,6 +160,55 @@ export class AdminController {
     @Get('requests/:id')
     async getRequestDetail(@Param('id') id: string) {
         return this.adminService.getRequestDetail(id);
+    }
+
+    // ── Wallets ─────────────────────────────────────────────────────────────
+
+    @Get('wallets/provider')
+    async getProviderWallets(@Query() query: GetTransactionsQueryDto) {
+        return this.adminService.getProviderWallets(query);
+    }
+
+    @Get('wallets/provider/:id')
+    async getProviderWallet(@Param('id') id: string) {
+        return this.adminService.getProviderWalletByProviderId(id);
+    }
+
+    @Get('wallets/user')
+    async getUserWallets(@Query() query: GetTransactionsQueryDto) {
+        return this.adminService.getUserWallets(query);
+    }
+
+    @Get('wallets/user/:id')
+    async getUserWallet(@Param('id') id: string) {
+        return this.adminService.getUserWalletByUserId(id);
+    }
+
+    // ── Transactions ────────────────────────────────────────────────────────
+
+    @Get('transactions/summary')
+    async getTransactionSummary() {
+        return this.adminService.getTransactionSummary();
+    }
+
+    @Get('transactions/wallet')
+    async getWalletTransactions(@Query() query: GetTransactionsQueryDto) {
+        return this.adminService.getWalletTransactions(query.userType || 'PROVIDER', query);
+    }
+
+    @Get('transactions/topup')
+    async getTopupTransactions(@Query() query: GetTransactionsQueryDto) {
+        return this.adminService.getTopupTransactions(query.userType || 'PROVIDER', query);
+    }
+
+    @Get('transactions/job-payment')
+    async getJobPaymentTransactions(@Query() query: GetTransactionsQueryDto) {
+        return this.adminService.getJobPaymentTransactions(query);
+    }
+
+    @Get('payments')
+    async getPayments(@Query() query: GetTransactionsQueryDto) {
+        return this.adminService.getPayments(query);
     }
 }
 

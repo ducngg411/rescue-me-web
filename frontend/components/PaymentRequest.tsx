@@ -8,7 +8,14 @@ import toast from 'react-hot-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GuestWalletLockedCard } from '@/components/rescue-flow/payment/GuestWalletLockedCard';
 import { RESCUE_FLOW_COLORS } from '@/components/rescue-flow/tokens';
-import CreateDisputeSheet from '@/components/CreateDisputeSheet';
+import { Phone } from 'lucide-react';
+
+/** E.g. `1900 1234` or `0901234567` — set in `.env` as `NEXT_PUBLIC_SUPPORT_HOTLINE` */
+function getSupportHotline() {
+    const raw = (process.env.NEXT_PUBLIC_SUPPORT_HOTLINE || '1900 1234').trim();
+    const digits = raw.replace(/\D/g, '');
+    return { display: raw, telHref: digits ? `tel:${digits}` : '#' as const };
+}
 
 const C = {
     orange: '#f97316',
@@ -63,7 +70,6 @@ export default function PaymentRequest({
         paymentScope === 'guest' ? `/guest/rescue-requests/${requestId}` : `/rescue-requests/${requestId}`;
     const [showBreakdown, setShowBreakdown] = useState(false);
     const [isConfirming, setIsConfirming] = useState(false);
-    const [showDispute, setShowDispute] = useState(false);
     const [existingDispute, setExistingDispute] = useState<{ id: string; status: string } | null>(null);
     const [done, setDone] = useState(false);
     // State for viewing photos in full-screen modal
@@ -98,7 +104,7 @@ export default function PaymentRequest({
         return () => {
             active = false;
         };
-    }, [paymentScope, requestId, showDispute]);
+    }, [paymentScope, requestId]);
 
     // QR payment state (for QR payment method)
     const [qrData, setQrData] = useState<{
@@ -159,6 +165,7 @@ export default function PaymentRequest({
     }, [requestId, payment.paymentMethod, apiBase]);
 
     const alreadyConfirmed = !!payment.userConfirmedAt || done;
+    const supportHotline = getSupportHotline();
 
     const handleConfirm = async () => {
         setIsConfirming(true);
@@ -531,13 +538,26 @@ export default function PaymentRequest({
                         </button>
                     )}
                     {paymentScope !== 'guest' && !existingDispute && (
-                        <button
-                            onClick={() => setShowDispute(true)}
-                            className="w-full py-3 rounded-2xl text-sm font-semibold"
-                            style={{ background: '#fef2f2', color: '#dc2626' }}
-                        >
-                            Báo sự cố
-                        </button>
+                        <div className="w-full">
+                            <a
+                                href={supportHotline.telHref}
+                                className="w-full py-3 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 transition-opacity active:opacity-90"
+                                style={{
+                                    background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
+                                    color: '#fff',
+                                    boxShadow: `0 4px 14px ${C.orange}40`,
+                                }}
+                            >
+                                <Phone size={18} strokeWidth={2.5} className="shrink-0" />
+                                <span className="flex flex-col items-start min-w-0 leading-tight">
+                                    <span className="text-[13px] font-bold">{t('user.tracking.paymentRequest.hotlineLabel')}</span>
+                                    <span className="text-xs font-bold tabular-nums opacity-95">{supportHotline.display}</span>
+                                </span>
+                            </a>
+                            <p className="text-center text-[11px] mt-2" style={{ color: C.gray }}>
+                                {t('user.tracking.paymentRequest.hotlineHint')}
+                            </p>
+                        </div>
                     )}
                     {paymentScope !== 'guest' && existingDispute && (
                         <div className="space-y-2">
@@ -555,14 +575,6 @@ export default function PaymentRequest({
                     )}
                 </div>
             )}
-
-            <CreateDisputeSheet
-                open={showDispute}
-                onClose={() => setShowDispute(false)}
-                requestId={requestId}
-                paymentId={payment.id}
-                totalAmount={payment.totalAmount}
-            />
 
             {/* Photo Viewer Modal */}
             {selectedPhoto && (

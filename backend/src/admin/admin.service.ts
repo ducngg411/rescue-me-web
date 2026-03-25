@@ -83,6 +83,39 @@ export class AdminService {
         return providers;
     }
 
+    async getProviderStats() {
+        const statuses = await this.prisma.user.groupBy({
+            where: { role: 'PROVIDER' },
+            by: ['verificationStatus'],
+            _count: {
+                _all: true,
+            },
+        });
+
+        let pending = 0;
+        let approved = 0;
+        let rejected = 0;
+        let suspended = 0;
+        let total = 0;
+
+        for (const s of statuses) {
+            const count = s._count._all;
+            total += count;
+            if (s.verificationStatus === 'PENDING') pending += count;
+            else if (s.verificationStatus === 'APPROVED') approved += count;
+            else if (s.verificationStatus === 'REJECTED') rejected += count;
+            else if (s.verificationStatus === 'SUSPENDED') suspended += count;
+        }
+
+        return {
+            total,
+            pending,
+            approved,
+            rejected,
+            suspended
+        };
+    }
+
     async getProviderDetail(providerId: string) {
         const provider = await this.prisma.user.findUnique({
             where: { id: providerId },
@@ -862,6 +895,316 @@ export class AdminService {
             payment,
             review: req.review,
         };
+    }
+
+    // ── Wallets ─────────────────────────────────────────────────────────────
+
+    async getProviderWallets(query: any) {
+        const where: any = {};
+        if (query.search) {
+            where.provider = {
+                OR: [
+                    { email: { contains: query.search, mode: 'insensitive' } },
+                    { fullName: { contains: query.search, mode: 'insensitive' } },
+                ]
+            };
+        }
+
+        const skip = query.skip || 0;
+        const take = Math.min(query.take || 20, 100);
+
+        let orderBy: any = { availableBalance: 'desc' };
+        if (query.sort === 'balance_asc') orderBy = { availableBalance: 'asc' };
+        else if (query.sort === 'updated_desc') orderBy = { updatedAt: 'desc' };
+
+        const [items, total] = await this.prisma.$transaction([
+            this.prisma.providerWallet.findMany({
+                where,
+                skip,
+                take,
+                orderBy,
+                include: {
+                    provider: { select: { id: true, email: true, fullName: true, avatar: true, phoneNumber: true } },
+                    _count: { select: { transactions: true, topupTransactions: true } }
+                }
+            }),
+            this.prisma.providerWallet.count({ where })
+        ]);
+
+        return { items, total, skip, take };
+    }
+
+    async getUserWallets(query: any) {
+        const where: any = {};
+        if (query.search) {
+            where.user = {
+                OR: [
+                    { email: { contains: query.search, mode: 'insensitive' } },
+                    { fullName: { contains: query.search, mode: 'insensitive' } },
+                ]
+            };
+        }
+
+        const skip = query.skip || 0;
+        const take = Math.min(query.take || 20, 100);
+
+        let orderBy: any = { availableBalance: 'desc' };
+        if (query.sort === 'balance_asc') orderBy = { availableBalance: 'asc' };
+        else if (query.sort === 'updated_desc') orderBy = { updatedAt: 'desc' };
+
+        const [items, total] = await this.prisma.$transaction([
+            this.prisma.userWallet.findMany({
+                where,
+                skip,
+                take,
+                orderBy,
+                include: {
+                    user: { select: { id: true, email: true, fullName: true, avatar: true, phoneNumber: true } },
+                    _count: { select: { transactions: true, topupTxs: true } }
+                }
+            }),
+            this.prisma.userWallet.count({ where })
+        ]);
+
+        return { items, total, skip, take };
+    }
+
+    async getProviderWalletByProviderId(providerId: string) {
+        return this.prisma.providerWallet.findUnique({
+            where: { providerId },
+            include: { provider: { select: { id: true, email: true, fullName: true, avatar: true, phoneNumber: true } } }
+        });
+    }
+
+    async getUserWalletByUserId(userId: string) {
+        return this.prisma.userWallet.findUnique({
+            where: { userId },
+            include: { user: { select: { id: true, email: true, fullName: true, avatar: true, phoneNumber: true } } }
+        });
+    }
+
+    // ── Transactions ─────────────────────────────────────────────────────────
+
+    private buildTransactionWhere(query: any) {
+        const where: any = {};
+        if (query.startDate || query.endDate) {
+            where.createdAt = {};
+            if (query.startDate) where.createdAt.gte = new Date(query.startDate);
+            if (query.endDate) where.createdAt.lte = new Date(query.endDate);
+        }
+        if (query.status) {
+            if (query.status === 'EXPIRED_OR_CANCELLED') {
+                where.status = { in: ['EXPIRED', 'CANCELLED'] };
+            } else {
+                where.status = query.status;
+            }
+        }
+        return where;
+    }
+
+    async getTransactionSummary() {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        const completedPayments = await this.prisma.payment.aggregate({
+            where: { status: 'COMPLETED' },
+            _sum: { totalAmount: true },
+        });
+
+        const commissions = await this.prisma.walletTransaction.aggregate({
+            where: { referenceType: 'COMMISSION', status: 'COMPLETED' },
+            _sum: { amount: true },
+        });
+
+        const providerTopups = await this.prisma.topupTransaction.aggregate({
+            where: { status: 'COMPLETED', completedAt: { gte: startOfToday } },
+            _sum: { amount: true },
+        });
+        const userTopups = await this.prisma.userTopupTransaction.aggregate({
+            where: { status: 'COMPLETED', completedAt: { gte: startOfToday } },
+            _sum: { amount: true },
+        });
+
+        const pendingWallets = await this.prisma.walletTransaction.count({ where: { status: 'PENDING' } });
+        const pendingUserWallets = await this.prisma.userWalletTransaction.count({ where: { status: 'PENDING' } });
+        const pendingWithdraws = await this.prisma.walletTransaction.count({ where: { status: 'PENDING', referenceType: 'WITHDRAW' } });
+        const pendingUserWithdraws = await this.prisma.userWalletTransaction.count({ where: { status: 'PENDING', referenceType: 'WITHDRAW' } });
+
+        return {
+            totalRevenue: completedPayments._sum.totalAmount || 0,
+            totalCommission: commissions._sum.amount || 0,
+            totalTopupToday: (providerTopups._sum.amount || 0) + (userTopups._sum.amount || 0),
+            pendingTransactions: pendingWallets + pendingUserWallets,
+            pendingWithdrawals: pendingWithdraws + pendingUserWithdraws,
+        };
+    }
+
+    async getWalletTransactions(userType: 'PROVIDER' | 'USER', query: any) {
+        const where = this.buildTransactionWhere(query);
+        if (query.referenceType) where.referenceType = query.referenceType;
+        if (query.type) where.type = query.type;
+        
+        let userFilter: any = {};
+        if (query.userId) {
+            userFilter.id = query.userId;
+        } else if (query.search) {
+            userFilter.OR = [
+                { email: { contains: query.search, mode: 'insensitive' } },
+                { fullName: { contains: query.search, mode: 'insensitive' } },
+            ];
+        }
+
+        const skip = query.skip || 0;
+        const take = Math.min(query.take || 20, 100);
+
+        if (userType === 'PROVIDER') {
+            if (Object.keys(userFilter).length > 0) where.wallet = { provider: userFilter };
+            const [items, total] = await this.prisma.$transaction([
+                this.prisma.walletTransaction.findMany({
+                    where,
+                    skip,
+                    take,
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                        wallet: {
+                            include: { provider: { select: { id: true, email: true, fullName: true, avatar: true } } }
+                        }
+                    }
+                }),
+                this.prisma.walletTransaction.count({ where })
+            ]);
+            return { items, total, skip, take };
+        } else {
+            if (Object.keys(userFilter).length > 0) where.wallet = { user: userFilter };
+            const [items, total] = await this.prisma.$transaction([
+                this.prisma.userWalletTransaction.findMany({
+                    where,
+                    skip,
+                    take,
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                        wallet: {
+                            include: { user: { select: { id: true, email: true, fullName: true, avatar: true } } }
+                        }
+                    }
+                }),
+                this.prisma.userWalletTransaction.count({ where })
+            ]);
+            return { items, total, skip, take };
+        }
+    }
+
+    async getTopupTransactions(userType: 'PROVIDER' | 'USER', query: any) {
+        const where = this.buildTransactionWhere(query);
+        let userFilter: any = {};
+        if (query.userId) {
+            userFilter.id = query.userId;
+        } else if (query.search) {
+            userFilter.OR = [
+                { email: { contains: query.search, mode: 'insensitive' } },
+                { fullName: { contains: query.search, mode: 'insensitive' } },
+            ];
+        }
+
+        const skip = query.skip || 0;
+        const take = Math.min(query.take || 20, 100);
+
+        if (userType === 'PROVIDER') {
+            if (Object.keys(userFilter).length > 0) where.wallet = { provider: userFilter };
+            const [items, total] = await this.prisma.$transaction([
+                this.prisma.topupTransaction.findMany({
+                    where,
+                    skip,
+                    take,
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                        wallet: {
+                            include: { provider: { select: { id: true, email: true, fullName: true, avatar: true } } }
+                        }
+                    }
+                }),
+                this.prisma.topupTransaction.count({ where })
+            ]);
+            return { items, total, skip, take };
+        } else {
+            if (Object.keys(userFilter).length > 0) where.wallet = { user: userFilter };
+            const [items, total] = await this.prisma.$transaction([
+                this.prisma.userTopupTransaction.findMany({
+                    where,
+                    skip,
+                    take,
+                    orderBy: { createdAt: 'desc' },
+                    include: {
+                        wallet: {
+                            include: { user: { select: { id: true, email: true, fullName: true, avatar: true } } }
+                        }
+                    }
+                }),
+                this.prisma.userTopupTransaction.count({ where })
+            ]);
+            return { items, total, skip, take };
+        }
+    }
+
+    async getJobPaymentTransactions(query: any) {
+        const where = this.buildTransactionWhere(query);
+        const skip = query.skip || 0;
+        const take = Math.min(query.take || 20, 100);
+
+        if (query.search) {
+            where.OR = [
+                { requestId: { contains: query.search } },
+                { transferCode: { contains: query.search, mode: 'insensitive' } },
+            ];
+        }
+
+        const [items, total] = await this.prisma.$transaction([
+            this.prisma.jobPaymentTransaction.findMany({
+                where,
+                skip,
+                take,
+                orderBy: { createdAt: 'desc' }
+            }),
+            this.prisma.jobPaymentTransaction.count({ where })
+        ]);
+        return { items, total, skip, take };
+    }
+
+    async getPayments(query: any) {
+        const where = this.buildTransactionWhere(query);
+        if (query.paymentMethod) where.paymentMethod = query.paymentMethod;
+
+        if (query.search) {
+            where.OR = [
+                { requestId: { contains: query.search } },
+            ];
+        }
+
+        const skip = query.skip || 0;
+        const take = Math.min(query.take || 20, 100);
+
+        const [items, total] = await this.prisma.$transaction([
+            this.prisma.payment.findMany({
+                where,
+                skip,
+                take,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    request: {
+                        select: { 
+                            id: true, 
+                            status: true, 
+                            incidentType: true, 
+                            user: { select: { id: true, fullName: true, email: true, avatar: true } }, 
+                            assignedProvider: { select: { id: true, fullName: true, email: true, avatar: true } } 
+                        }
+                    }
+                }
+            }),
+            this.prisma.payment.count({ where })
+        ]);
+
+        return { items, total, skip, take };
     }
 }
 

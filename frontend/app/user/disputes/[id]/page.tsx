@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { userDisputeApi } from '@/lib/api';
 import { uploadFile, UploadPurpose } from '@/lib/upload';
+import { DisputeSLACountdown } from '@/components/DisputeSLACountdown';
 import { CheckCircle2, Clock, ShieldAlert, Receipt, MessageSquare, Image as ImageIcon, Film, AlertCircle } from 'lucide-react';
 
 const C = {
@@ -44,35 +45,6 @@ const STATUS_META: Record<string, { label: string; bg: string; color: string }> 
     RESOLVED: { label: 'Đã giải quyết', bg: C.greenLight, color: C.green },
     REJECTED: { label: 'Bị từ chối', bg: C.redLight, color: C.red },
 };
-
-function SLACountdown({ dueAt }: { dueAt: string | null }) {
-    const [remaining, setRemaining] = useState('');
-    const [overdue, setOverdue] = useState(false);
-    useEffect(() => {
-        if (!dueAt) return;
-        const tick = () => {
-            const diff = new Date(dueAt).getTime() - Date.now();
-            if (diff <= 0) {
-                setOverdue(true);
-                setRemaining('Quá hạn');
-                return;
-            }
-            const h = Math.floor(diff / 3600000);
-            const m = Math.floor((diff % 3600000) / 60000);
-            const s = Math.floor((diff % 60000) / 1000);
-            setRemaining(`${h}g ${m}p ${s}s`);
-        };
-        tick();
-        const id = setInterval(tick, 1000);
-        return () => clearInterval(id);
-    }, [dueAt]);
-    if (!dueAt) return null;
-    return (
-        <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: overdue ? C.redLight : C.yellowLight, color: overdue ? C.red : C.yellow }}>
-            ⏱ {remaining}
-        </span>
-    );
-}
 
 function ProgressTimeline({ status }: { status: string }) {
     const steps = [
@@ -414,7 +386,7 @@ export default function UserDisputeDetailPage() {
                 <div className="flex-1 overflow-y-auto p-4 max-w-2xl mx-auto w-full pb-8">
                     {!isClosed && dispute.firstResponseDueAt && (
                         <div className="mb-4 text-center">
-                           <SLACountdown dueAt={dispute.firstResponseDueAt} />
+                           <DisputeSLACountdown dueAt={dispute.firstResponseDueAt} />
                         </div>
                     )}
 

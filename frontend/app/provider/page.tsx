@@ -14,15 +14,22 @@ export default function ProviderPage() {
                 router.push('/auth/login');
             } else if (user.role !== 'PROVIDER') {
                 router.push('/');
+            } else if (!user.profileCompleted) {
+                // Chưa xong bước chọn role / hồ sơ cơ bản → cùng luồng với useProviderGuard
+                router.push('/onboarding/role');
             } else if (user.verificationStatus === 'APPROVED') {
                 // Provider đã verified → Active mode
                 router.push('/provider/active');
-            } else if (user.verificationStatus === 'PENDING') {
-                // Đang chờ duyệt → Dashboard
+            } else if (
+                user.verificationStatus === 'PENDING' ||
+                user.verificationStatus === 'REJECTED' ||
+                user.verificationStatus === 'SUSPENDED'
+            ) {
+                // Chờ duyệt, bị từ chối, hoặc tạm khóa → Dashboard (cùng guard với useProviderGuard)
                 router.push('/provider/dashboard');
             } else {
-                // DRAFT/REJECTED → Verification page
-                router.push('/provider/verification');
+                // DRAFT hoặc chưa gửi xác minh: wizard onboarding (khớp useProviderGuard; có thể tiếp tục từ dữ liệu đã lưu bước 1)
+                router.push('/provider/onboarding');
             }
         }
     }, [user, loading, router]);

@@ -105,3 +105,57 @@ export class AddDisputeEvidenceDto {
     @IsString()
     note?: string;
 }
+
+export class GetTransactionsQueryDto {
+    @IsOptional()
+    @IsString()
+    startDate?: string;
+
+    @IsOptional()
+    @IsString()
+    endDate?: string;
+
+    @IsOptional()
+    @IsString()
+    referenceType?: string;
+
+    @IsOptional()
+    @IsString()
+    type?: string;
+
+    @IsOptional()
+    @IsString()
+    status?: string;
+
+    @IsOptional()
+    @IsString()
+    search?: string;
+
+    @IsOptional()
+    @IsString()
+    paymentMethod?: string;
+
+    @IsOptional()
+    @IsString()
+    userId?: string;
+
+    @IsOptional()
+    @IsString()
+    userType?: 'PROVIDER' | 'USER';
+
+    @IsOptional()
+    @IsString()
+    sort?: string;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(0)
+    skip?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    take?: number;
+}

@@ -9,6 +9,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import toast from 'react-hot-toast';
 import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, ShieldAlert, Receipt, MessageSquare, Image as ImageIcon, Film, AlertCircle, X, MapPin, Phone, Banknote, Star, FileText, Wrench, Car, Calendar, User, ExternalLink, Wallet } from 'lucide-react';
 import AvatarImage from '@/components/AvatarImage';
+import { DisputeSLACountdown } from '@/components/DisputeSLACountdown';
 
 function fmtVnd(n: number) {
     if (n == null) return '0đ';
@@ -80,13 +81,83 @@ const C = {
     purpleLight: '#faf5ff',
 };
 
+/** Khớp `DisputeCaseStatus` trong Prisma — tránh hiển thị raw enum trên UI */
 const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
-    NEW: { label: 'Mới', bg: C.blueLight, color: C.blue },
-    IN_REVIEW: { label: 'Đang xem xét', bg: C.purpleLight, color: C.purple },
-    AWAITING_EVIDENCE: { label: 'Chờ bằng chứng', bg: C.yellowLight, color: C.yellow },
+    WAITING_FOR_PROVIDER: { label: 'Chờ Provider phản hồi', bg: C.yellowLight, color: C.yellow },
+    WAITING_FOR_CUSTOMER: { label: 'Chờ khách phản hồi', bg: C.blueLight, color: C.blue },
+    INVESTIGATING: { label: 'Đang điều tra', bg: C.purpleLight, color: C.purple },
     RESOLVED: { label: 'Đã giải quyết', bg: C.greenLight, color: C.green },
     REJECTED: { label: 'Đã từ chối', bg: C.redLight, color: C.red },
 };
+
+function ProgressTimeline({ status }: { status: string }) {
+    const steps = [
+        { id: 'created', label: 'Đã gửi khiếu nại', active: false, done: true },
+        {
+            id: 'processing',
+            label: 'Đang xử lý',
+            active: ['WAITING_FOR_PROVIDER', 'WAITING_FOR_CUSTOMER', 'INVESTIGATING'].includes(status),
+            done: ['RESOLVED', 'REJECTED'].includes(status),
+        },
+        {
+            id: 'closed',
+            label: status === 'REJECTED' ? 'Bị từ chối' : 'Có kết quả',
+            active: ['RESOLVED', 'REJECTED'].includes(status),
+            done: ['RESOLVED', 'REJECTED'].includes(status),
+            isReject: status === 'REJECTED',
+        },
+    ];
+
+    if (['WAITING_FOR_PROVIDER', 'WAITING_FOR_CUSTOMER', 'INVESTIGATING'].includes(status)) {
+        steps[0].active = false;
+        steps[0].done = true;
+    }
+
+    return (
+        <div className="flex items-center justify-between px-6 py-8 bg-white rounded-2xl border mb-6" style={{ borderColor: C.border }}>
+            {steps.map((step, i) => (
+                <React.Fragment key={step.id}>
+                    <div className="flex flex-col items-center gap-2 relative z-10 w-24">
+                        <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 relative z-20"
+                            style={{
+                                background:
+                                    step.done || step.active ? (step.isReject ? C.red : C.orange) : '#f1f5f9',
+                                boxShadow: step.active ? `0 0 0 4px ${step.isReject ? C.redLight : C.orangeLight}` : 'none',
+                            }}
+                        >
+                            {step.done ? (
+                                <CheckCircle2 size={16} className="text-white" />
+                            ) : step.active ? (
+                                <Clock size={16} className="text-white animate-pulse" />
+                            ) : (
+                                <div className="w-2.5 h-2.5 rounded-full" style={{ background: '#cbd5e1' }} />
+                            )}
+                        </div>
+                        <span
+                            className="text-[10px] font-bold text-center absolute top-10 w-28 whitespace-nowrap"
+                            style={{ color: step.active || step.done ? C.navy : C.gray }}
+                        >
+                            {step.label}
+                        </span>
+                    </div>
+                    {i < steps.length - 1 && (
+                        <div className="flex-1 h-1 relative mx-2 rounded-full overflow-hidden">
+                            <div className="absolute inset-0" style={{ background: '#e2e8f0' }} />
+                            <div
+                                className="absolute inset-y-0 left-0 transition-all duration-500"
+                                style={{
+                                    width: steps[i + 1].active || steps[i + 1].done ? '100%' : '0%',
+                                    background: steps[i + 1].isReject ? C.red : C.orange,
+                                }}
+                            />
+                        </div>
+                    )}
+                </React.Fragment>
+            ))}
+        </div>
+    );
+}
 
 type UploadState = {
     id: string;
@@ -455,6 +526,13 @@ export default function AdminDisputeDetailPage() {
                     <div className="flex-1 lg:min-h-0 min-w-0 flex flex-col lg:overflow-y-auto no-scrollbar pr-1 pb-6 lg:pr-2">
                         {activeTab === 'overview' && (
                             <div className="w-full">
+                                {!isClosed && detail.firstResponseDueAt && (
+                                    <div className="mb-4 flex justify-center">
+                                        <DisputeSLACountdown dueAt={detail.firstResponseDueAt} />
+                                    </div>
+                                )}
+                                <ProgressTimeline status={status} />
+
                                 {isClosed && (
                                     <div className="rounded-xl p-4 mb-6 border" style={{ background: '#f8fafc', borderColor: C.border }}>
                                         <div className="flex items-center gap-2 mb-3">
