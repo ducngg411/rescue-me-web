@@ -117,6 +117,9 @@ export default function AdminTransactionsPage() {
                 case 'payment':
                     res = await adminApi.getPayments(query);
                     break;
+                case 'withdrawals':
+                    res = await adminApi.getWithdrawals({ ...query, userType: 'ALL' });
+                    break;
                 default:
                     res = { items: [], total: 0 };
             }
@@ -192,6 +195,7 @@ export default function AdminTransactionsPage() {
         { id: 'userWallets', label: 'Ví Khách Hàng (User)' },
         { id: 'providerTopup', label: 'Lịch sử nạp tiền (Provider)' },
         { id: 'userTopup', label: 'Lịch sử nạp tiền (User)' },
+        { id: 'withdrawals', label: 'Lịch sử Rút tiền' },
         { id: 'jobPayment', label: 'Thanh toán Job' },
         { id: 'payment', label: 'Giao dịch hệ thống' },
     ];
@@ -301,7 +305,7 @@ export default function AdminTransactionsPage() {
                                     <option value="COMPLETED">{tp('status.COMPLETED')}</option>
                                     <option value="PENDING">{tp('status.PENDING')}</option>
                                     <option value="FAILED">{tp('status.FAILED')}</option>
-                                    {['providerTopup', 'userTopup', 'jobPayment'].includes(activeTab) ? (
+                                    {['providerTopup', 'userTopup', 'jobPayment', 'withdrawals'].includes(activeTab) ? (
                                         <option value="EXPIRED_OR_CANCELLED">{tp('status.cancelledGroup')}</option>
                                     ) : (
                                         <option value="CANCELLED">{tp('status.CANCELLED')}</option>
@@ -361,7 +365,7 @@ export default function AdminTransactionsPage() {
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                                 {tp('columns.transactionId')}
                                             </th>
-                                            {['payment', 'providerTopup', 'userTopup'].includes(activeTab) && (
+                                            {['payment', 'providerTopup', 'userTopup', 'withdrawals'].includes(activeTab) && (
                                                 <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                                     {tp('columns.user')}
                                                 </th>
@@ -377,6 +381,11 @@ export default function AdminTransactionsPage() {
                                             {['payment'].includes(activeTab) && (
                                                 <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                                     Hoa hồng
+                                                </th>
+                                            )}
+                                            {['withdrawals'].includes(activeTab) && (
+                                                <th className="text-center text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
+                                                    Đối soát ví
                                                 </th>
                                             )}
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
@@ -468,10 +477,10 @@ export default function AdminTransactionsPage() {
                                                         <div className="font-semibold">
                                                             {item.txnCode || (item.id ? item.id.slice(-8).toUpperCase() : '—')}
                                                         </div>
-                                                        {['providerTopup', 'userTopup'].includes(activeTab) && item.transferCode && (
+                                                        {['providerTopup', 'userTopup', 'withdrawals'].includes(activeTab) && item.transferCode && (
                                                             <div className="text-[10px] font-normal mt-0.5" style={{ color: C.gray }}>CK: {item.transferCode}</div>
                                                         )}
-                                                        {['providerTopup', 'userTopup'].includes(activeTab) && item.sepayReferenceCode && (
+                                                        {['providerTopup', 'userTopup', 'withdrawals'].includes(activeTab) && item.sepayReferenceCode && (
                                                             <div className="text-[10px] font-normal mt-0.5" style={{ color: C.gray }}>Bank: {item.sepayReferenceCode}</div>
                                                         )}
                                                         {activeTab === 'jobPayment' && item.transferCode && (
@@ -479,13 +488,13 @@ export default function AdminTransactionsPage() {
                                                         )}
                                                     </td>
 
-                                                    {['providerTopup', 'userTopup'].includes(activeTab) && (
+                                                    {['providerTopup', 'userTopup', 'withdrawals'].includes(activeTab) && (
                                                         <td className="px-4 py-3">
                                                             <div className="font-semibold text-sm" style={{ color: C.navy }}>
-                                                                {item.wallet?.provider?.fullName || item.wallet?.user?.fullName || 'Unknown'}
+                                                                {item.wallet?.provider?.fullName || item.wallet?.user?.fullName || item.user?.fullName || 'Unknown'}
                                                             </div>
                                                             <div className="text-xs" style={{ color: C.gray }}>
-                                                                {item.wallet?.provider?.email || item.wallet?.user?.email || ''}
+                                                                {item.wallet?.provider?.email || item.wallet?.user?.email || item.user?.email || ''}
                                                             </div>
                                                         </td>
                                                     )}
@@ -564,6 +573,30 @@ export default function AdminTransactionsPage() {
                                                         </td>
                                                     )}
 
+                                                    {['withdrawals'].includes(activeTab) && (
+                                                        <td className="px-4 py-3 text-center">
+                                                            {(item.wallet?.providerId || item.wallet?.userId || item.user?.id) ? (
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        let r = 'user';
+                                                                        let uid = item.user?.id;
+                                                                        if (item.wallet?.providerId) { r = 'provider'; uid = item.wallet.providerId; }
+                                                                        else if (item.wallet?.userId) { r = 'user'; uid = item.wallet.userId; }
+                                                                        else if (item.userType === 'PROVIDER') { r = 'provider'; }
+                                                                        
+                                                                        if (uid) router.push(`/admin/transactions/${r}/${uid}`);
+                                                                    }}
+                                                                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-[10px] font-medium transition-colors border border-blue-100"
+                                                                    title="Kiểm tra dòng tiền trong ví"
+                                                                >
+                                                                    <ExternalLink className="w-3 h-3" /> Lịch sử Ví
+                                                                </button>
+                                                            ) : (
+                                                                <span className="text-xs text-gray-400 italic">---</span>
+                                                            )}
+                                                        </td>
+                                                    )}
                                                     <td className="px-4 py-3">{renderStatusBadge(item.status || item.paymentStatus)}</td>
 
 {['payment'].includes(activeTab) && (

@@ -345,8 +345,15 @@ function TopupModal({ initialQrData, onClose, onSuccess, t }: {
 }
 
 // ─── Withdraw Modal ───────────────────────────────────────────────────────────
-function WithdrawModal({ availableBalance, onClose, onSuccess, t }: {
+function WithdrawModal({ availableBalance, withdrawalAccounts, onClose, onSuccess, t }: {
     availableBalance: number;
+    withdrawalAccounts: Array<{
+        id: string;
+        accountNumber: string;
+        bankName: string;
+        accountHolderName: string;
+        branchName?: string | null;
+    }>;
     onClose: () => void;
     onSuccess: () => void;
     t: any;
@@ -354,6 +361,7 @@ function WithdrawModal({ availableBalance, onClose, onSuccess, t }: {
     const [rawAmount, setRawAmount] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [withdrawalAccountId, setWithdrawalAccountId] = useState<string>(withdrawalAccounts?.[0]?.id ?? '');
     const amount = parseInt(rawAmount.replace(/\D/g, ''), 10) || 0;
     const isBelowMin = amount > 0 && amount < MIN_WITHDRAWAL;
     const isOverBalance = amount > availableBalance;
@@ -365,7 +373,10 @@ function WithdrawModal({ availableBalance, onClose, onSuccess, t }: {
         if (isDisabled) return;
         setLoading(true); setError('');
         try {
-            await api.post('/user-wallet/withdraw', { amount });
+            await api.post('/user-wallet/withdraw', {
+                amount,
+                withdrawalAccountId: withdrawalAccountId || undefined,
+            });
             onSuccess();
         } catch (err: any) {
             setError(err?.response?.data?.message || t('user.wallet.withdrawModal.errors.withdrawFailed'));
@@ -393,6 +404,31 @@ function WithdrawModal({ availableBalance, onClose, onSuccess, t }: {
                 </div>
 
                 <form onSubmit={handleWithdraw} className="px-6 py-5 space-y-4">
+                    {withdrawalAccounts?.length ? (
+                        <div>
+                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.gray }}>
+                                Tài khoản nhận tiền
+                            </label>
+                            <select
+                                value={withdrawalAccountId}
+                                onChange={e => setWithdrawalAccountId(e.target.value)}
+                                className="w-full px-3 py-3 rounded-xl border text-sm font-medium"
+                                style={{ borderColor: C.border, outline: 'none', background: 'white', color: C.navy }}
+                            >
+                                <option value="">Chọn tài khoản</option>
+                                {withdrawalAccounts.map(acc => (
+                                    <option key={acc.id} value={acc.id}>
+                                        {acc.bankName} · {acc.accountNumber}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    ) : (
+                        <div className="text-xs" style={{ color: C.gray }}>
+                            Bạn chưa cấu hình tài khoản rút tiền trong `Settings`.
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-xs font-semibold mb-1.5" style={{ color: C.gray }}>{t('user.wallet.withdrawModal.amountLabel')}</label>
                         <div className="relative">
@@ -602,6 +638,13 @@ export default function UserWalletPage() {
     const [showWithdraw, setShowWithdraw] = useState(false);
     const [page, setPage] = useState(0);
     const [showAll, setShowAll] = useState(false);
+    const [withdrawalAccounts, setWithdrawalAccounts] = useState<Array<{
+        id: string;
+        accountNumber: string;
+        bankName: string;
+        accountHolderName: string;
+        branchName?: string | null;
+    }>>([]);
     type PendingTopupData = {
         topupTxId: string; topupTxnCode?: string; transferCode: string; qrUrl: string;
         bankAccount: string; bankCode: string; amount: number; expireAt: string;
@@ -618,12 +661,15 @@ export default function UserWalletPage() {
 
     const loadWallet = useCallback(async () => {
         try {
-            const [walletRes, pendingRes] = await Promise.all([
+            const [walletRes, pendingRes, accountsRes] = await Promise.all([
                 api.get('/user-wallet/me'),
                 api.get('/user-wallet/topup/pending').catch(() => ({ data: null })),
+                api.get('/me/withdrawal-accounts').catch(() => ({ data: [] })),
             ]);
             setWallet(walletRes.data);
             setPendingTopup(pendingRes.data);
+            const list = accountsRes?.data?.data ?? accountsRes?.data;
+            setWithdrawalAccounts(Array.isArray(list) ? list : []);
         } catch {
             setWallet(null);
         } finally {
@@ -978,6 +1024,7 @@ export default function UserWalletPage() {
             {showWithdraw && wallet && (
                 <WithdrawModal
                     availableBalance={available}
+                    withdrawalAccounts={withdrawalAccounts}
                     onClose={() => setShowWithdraw(false)}
                     onSuccess={() => { setShowWithdraw(false); loadWallet(); loadTransactions(0); }}
                     t={t}

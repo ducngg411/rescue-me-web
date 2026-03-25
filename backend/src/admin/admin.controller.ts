@@ -260,5 +260,31 @@ export class AdminController {
     async getUsers(@Query() query: GetUsersQueryDto) {
         return this.adminService.getUsers(query);
     }
-}
 
+    // ── Withdrawals ─────────────────────────────────────────────────────────
+
+    @Get('withdrawals')
+    async getWithdrawals(@Query() query: any) {
+        return this.adminService.getWithdrawals({
+            status: query.status,
+            userType: query.userType,
+            skip: query.skip ? parseInt(query.skip, 10) : 0,
+            take: query.take ? parseInt(query.take, 10) : 20,
+        });
+    }
+
+    @Get('withdrawals/stats')
+    async getWithdrawalStats() {
+        return this.adminService.getWithdrawalStats();
+    }
+
+    @Post('withdrawals/:id/approve')
+    async approveWithdrawal(@Param('id') id: string, @Body() body: { userType: string }) {
+        return this.adminService.approveWithdrawal(id, body.userType);
+    }
+
+    @Post('withdrawals/:id/reject')
+    async rejectWithdrawal(@Param('id') id: string, @Body() body: { userType: string; reason?: string }) {
+        return this.adminService.rejectWithdrawal(id, body.userType, body.reason);
+    }
+}

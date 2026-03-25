@@ -249,6 +249,28 @@ export const adminApi = {
         return response.data;
     },
 
+    // ── Withdrawals ─────────────────────────────────────────────────────────
+
+    getWithdrawals: async (params?: any) => {
+        const response = await api.get('/admin/withdrawals', { params });
+        return response.data;
+    },
+
+    getWithdrawalStats: async () => {
+        const response = await api.get('/admin/withdrawals/stats');
+        return response.data;
+    },
+
+    approveWithdrawal: async (id: string, userType: string) => {
+        const response = await api.post(`/admin/withdrawals/${id}/approve`, { userType });
+        return response.data;
+    },
+
+    rejectWithdrawal: async (id: string, userType: string, reason?: string) => {
+        const response = await api.post(`/admin/withdrawals/${id}/reject`, { userType, reason });
+        return response.data;
+    },
+
     getUsers: async (params?: {
         search?: string;
         role?: string;

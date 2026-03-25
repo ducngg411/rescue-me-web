@@ -1688,4 +1688,251 @@ export class AdminService {
 
         return deleted;
     }
+
+    // ── Withdrawals ─────────────────────────────────────────────────────────
+
+    async getWithdrawals(query: { status?: string; userType?: string; skip?: number; take?: number }) {
+        const skip = query?.skip ?? 0;
+        const take = Math.min(query?.take ?? 1000, 1000);
+        const { status, userType } = query;
+
+        const parseBankInfo = (description?: string) => {
+            const d = String(description ?? '');
+            const bankCodeMatch = d.match(/\[BANK_CODE:([^\]]+)\]/);
+            const bankNameMatch = d.match(/Ngân hàng:\s*([^·]+)/);
+            const accNumberMatch = d.match(/Số TK:\s*([^·]+)/);
+            const accHolderMatch = d.match(/Chủ TK:\s*([^·]+)/);
+            return {
+                bankCode: bankCodeMatch ? bankCodeMatch[1].trim() : '',
+                bankName: bankNameMatch ? bankNameMatch[1].trim() : '',
+                accountNumber: accNumberMatch ? accNumberMatch[1].trim() : '',
+                accountHolderName: accHolderMatch ? accHolderMatch[1].trim() : '',
+            };
+        };
+
+        const digitsOnly = (s: string) => String(s ?? '').replace(/\D/g, '');
+
+        const fetchProvider = async () => {
+            let where: any = { referenceType: WalletReferenceType.WITHDRAW };
+            if (status && status !== 'ALL') where.status = status;
+            
+            const [items, total] = await this.prisma.$transaction([
+                this.prisma.walletTransaction.findMany({
+                    where,
+                    orderBy: { createdAt: 'desc' },
+                    skip,
+                    take,
+                    include: {
+                        wallet: {
+                            include: { provider: { select: { id: true, fullName: true, email: true, phoneNumber: true } } }
+                        }
+                    }
+                }),
+                this.prisma.walletTransaction.count({ where })
+            ]);
+
+            const providerIds = Array.from(new Set(items.map((i: any) => i.wallet?.provider?.id).filter(Boolean)));
+            const accounts = providerIds.length
+                ? await this.prisma.providerWithdrawalAccount.findMany({
+                      where: { providerId: { in: providerIds } },
+                      select: { providerId: true, bankName: true, accountHolderName: true, accountNumber: true },
+                  })
+                : [];
+            const byProvider = new Map<string, typeof accounts>();
+            for (const a of accounts) {
+                const arr = byProvider.get(a.providerId) ?? [];
+                arr.push(a);
+                byProvider.set(a.providerId, arr);
+            }
+
+            const enriched = items.map((i: any) => {
+                const b = parseBankInfo(i.description);
+                const providerId = i.wallet?.provider?.id;
+                let resolvedAccountNumber: string | null = null;
+                if (providerId && b.accountNumber.includes('*')) {
+                    const last4 = digitsOnly(b.accountNumber).slice(-4);
+                    const candidates = byProvider.get(providerId) ?? [];
+                    const match = candidates.find((acc) => {
+                        const accDigits = digitsOnly(acc.accountNumber);
+                        const holderOk = (acc.accountHolderName ?? '').trim().toLowerCase() === (b.accountHolderName ?? '').trim().toLowerCase();
+                        const bankOk = (acc.bankName ?? '').trim().toLowerCase() === (b.bankName ?? '').trim().toLowerCase();
+                        const last4Ok = last4 && accDigits.endsWith(last4);
+                        return last4Ok && (holderOk || bankOk);
+                    });
+                    if (match) resolvedAccountNumber = match.accountNumber;
+                }
+                return { ...i, userType: 'PROVIDER', user: i.wallet.provider, resolvedAccountNumber };
+            });
+
+            return { items: enriched, total };
+        };
+
+        const fetchUser = async () => {
+            let where: any = { referenceType: UserWalletReferenceType.WITHDRAW };
+            if (status && status !== 'ALL') where.status = status;
+
+            const [items, total] = await this.prisma.$transaction([
+                this.prisma.userWalletTransaction.findMany({
+                    where,
+                    orderBy: { createdAt: 'desc' },
+                    skip,
+                    take,
+                    include: {
+                        wallet: {
+                            include: { user: { select: { id: true, fullName: true, email: true, phoneNumber: true } } }
+                        }
+                    }
+                }),
+                this.prisma.userWalletTransaction.count({ where })
+            ]);
+
+            const userIds = Array.from(new Set(items.map((i: any) => i.wallet?.user?.id).filter(Boolean)));
+            const accounts = userIds.length
+                ? await this.prisma.customerWithdrawalAccount.findMany({
+                      where: { userId: { in: userIds } },
+                      select: { userId: true, bankName: true, accountHolderName: true, accountNumber: true },
+                  })
+                : [];
+            const byUser = new Map<string, typeof accounts>();
+            for (const a of accounts) {
+                const arr = byUser.get(a.userId) ?? [];
+                arr.push(a);
+                byUser.set(a.userId, arr);
+            }
+
+            const enriched = items.map((i: any) => {
+                const b = parseBankInfo(i.description);
+                const userId = i.wallet?.user?.id;
+                let resolvedAccountNumber: string | null = null;
+                if (userId && b.accountNumber.includes('*')) {
+                    const last4 = digitsOnly(b.accountNumber).slice(-4);
+                    const candidates = byUser.get(userId) ?? [];
+                    const match = candidates.find((acc) => {
+                        const accDigits = digitsOnly(acc.accountNumber);
+                        const holderOk = (acc.accountHolderName ?? '').trim().toLowerCase() === (b.accountHolderName ?? '').trim().toLowerCase();
+                        const bankOk = (acc.bankName ?? '').trim().toLowerCase() === (b.bankName ?? '').trim().toLowerCase();
+                        const last4Ok = last4 && accDigits.endsWith(last4);
+                        return last4Ok && (holderOk || bankOk);
+                    });
+                    if (match) resolvedAccountNumber = match.accountNumber;
+                }
+                return { ...i, userType: 'USER', user: i.wallet.user, resolvedAccountNumber };
+            });
+
+            return { items: enriched, total };
+        };
+
+        if (userType === 'PROVIDER') {
+            const res = await fetchProvider();
+            return { items: res.items, total: res.total, skip, take };
+        } else if (userType === 'USER' || userType === 'CUSTOMER') {
+            const res = await fetchUser();
+            return { items: res.items, total: res.total, skip, take };
+        } else {
+            // ALL
+            const p = await fetchProvider();
+            const u = await fetchUser();
+            const allItems = [...p.items, ...u.items].sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
+            return { items: allItems.slice(0, take), total: p.total + u.total, skip, take };
+        }
+    }
+
+    async getWithdrawalStats() {
+        const fetchStats = async (model: any, refType: any) => {
+            const stats = await model.groupBy({
+                by: ['status'],
+                where: { referenceType: refType },
+                _count: { _all: true },
+            });
+            let pending = 0, completed = 0, failed = 0;
+            for (const s of stats) {
+                if (s.status === 'PENDING') pending += s._count._all;
+                else if (s.status === 'COMPLETED') completed += s._count._all;
+                else if (s.status === 'FAILED') failed += s._count._all;
+            }
+            return { pending, completed, failed, total: pending + completed + failed };
+        };
+
+        const providerStats = await fetchStats(this.prisma.walletTransaction, WalletReferenceType.WITHDRAW);
+        const userStats = await fetchStats(this.prisma.userWalletTransaction, UserWalletReferenceType.WITHDRAW);
+
+        return {
+            provider: providerStats,
+            user: userStats,
+            total: {
+                pending: providerStats.pending + userStats.pending,
+                completed: providerStats.completed + userStats.completed,
+                failed: providerStats.failed + userStats.failed,
+                total: providerStats.total + userStats.total,
+            }
+        };
+    }
+
+    async approveWithdrawal(transactionId: string, userType: string = 'PROVIDER') {
+        return this.prisma.$transaction(async (tx) => {
+            if (userType === 'PROVIDER') {
+                const walletTx = await tx.walletTransaction.findUnique({ where: { id: transactionId } });
+                if (!walletTx) throw new NotFoundException('Transaction not found');
+                if (walletTx.status !== 'PENDING') throw new BadRequestException(`Transaction is not PENDING (status=${walletTx.status})`);
+                
+                return tx.walletTransaction.update({
+                    where: { id: transactionId },
+                    data: { status: 'COMPLETED' },
+                });
+            } else {
+                const walletTx = await tx.userWalletTransaction.findUnique({ where: { id: transactionId } });
+                if (!walletTx) throw new NotFoundException('Transaction not found');
+                if (walletTx.status !== 'PENDING') throw new BadRequestException(`Transaction is not PENDING (status=${walletTx.status})`);
+                
+                return tx.userWalletTransaction.update({
+                    where: { id: transactionId },
+                    data: { status: 'COMPLETED' },
+                });
+            }
+        });
+    }
+
+    async rejectWithdrawal(transactionId: string, userType: string = 'PROVIDER', reason?: string) {
+        return this.prisma.$transaction(async (tx) => {
+            if (userType === 'PROVIDER') {
+                const walletTx = await tx.walletTransaction.findUnique({ where: { id: transactionId } });
+                if (!walletTx) throw new NotFoundException('Transaction not found');
+                if (walletTx.status !== 'PENDING') throw new BadRequestException(`Transaction is not PENDING`);
+
+                const updatedTx = await tx.walletTransaction.update({
+                    where: { id: transactionId },
+                    data: { 
+                        status: 'FAILED',
+                        description: reason ? `[TỪ CHỐI] ${reason} | ${walletTx.description ?? ''}` : walletTx.description,
+                    },
+                });
+
+                await tx.providerWallet.update({
+                    where: { id: walletTx.walletId },
+                    data: { availableBalance: { increment: walletTx.amount } },
+                });
+
+                return updatedTx;
+            } else {
+                const walletTx = await tx.userWalletTransaction.findUnique({ where: { id: transactionId } });
+                if (!walletTx) throw new NotFoundException('Transaction not found');
+                if (walletTx.status !== 'PENDING') throw new BadRequestException(`Transaction is not PENDING`);
+
+                const updatedTx = await tx.userWalletTransaction.update({
+                    where: { id: transactionId },
+                    data: { 
+                        status: 'FAILED',
+                        description: reason ? `[TỪ CHỐI] ${reason} | ${walletTx.description ?? ''}` : walletTx.description,
+                    },
+                });
+
+                await tx.userWallet.update({
+                    where: { id: walletTx.walletId },
+                    data: { availableBalance: { increment: walletTx.amount } },
+                });
+
+                return updatedTx;
+            }
+        });
+    }
 }

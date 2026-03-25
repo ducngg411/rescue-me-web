@@ -1,16 +1,18 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUserGuard } from '@/lib/guards';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { User, Phone, Mail, Globe, Lock, LogOut, X, Camera } from 'lucide-react';
+import { User, Phone, Mail, Globe, Lock, LogOut, X, Camera, Banknote, Plus, Edit3, Trash2 } from 'lucide-react';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import RescueMeLogo from '@/components/RescueMeLogo';
 import { useUserDisputeNavBadge } from '@/contexts/UserDisputeNavBadgeContext';
+import { BANK_CUSTOM_CODE, getBankOptions } from '@/lib/banks';
+import BankSelect from '@/components/BankSelect';
 
 const C = {
     orange: '#f97316',
@@ -80,6 +82,129 @@ export default function UserSettingsPage() {
     const [newVehicleColor, setNewVehicleColor] = useState('');
     const [newVehicleBrand, setNewVehicleBrand] = useState('');
     const [newVehicleType, setNewVehicleType] = useState<'MOTORCYCLE' | 'CAR'>('MOTORCYCLE');
+
+    // --- Withdrawal accounts (customer) ---
+    type WithdrawalAccount = {
+        id: string;
+        accountNumber: string;
+        bankCode?: string | null;
+        bankName: string;
+        branchName?: string | null;
+        accountHolderName: string;
+        createdAt?: string;
+        updatedAt?: string;
+    };
+
+    const [withdrawalAccounts, setWithdrawalAccounts] = useState<WithdrawalAccount[]>([]);
+    const [withdrawalAccountsLoading, setWithdrawalAccountsLoading] = useState(false);
+    const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+    const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+    const [isAccountSaving, setIsAccountSaving] = useState(false);
+    const [accountForm, setAccountForm] = useState<{
+        accountNumber: string;
+        bankCode?: string;
+        bankName: string;
+        branchName: string;
+        accountHolderName: string;
+    }>({
+        accountNumber: '',
+        bankCode: undefined,
+        bankName: '',
+        branchName: '',
+        accountHolderName: '',
+    });
+
+    const displayAccountNumber = (accNum: string) => String(accNum ?? '').trim();
+
+    const fetchWithdrawalAccounts = async () => {
+        setWithdrawalAccountsLoading(true);
+        try {
+            const res = await api.get('/me/withdrawal-accounts');
+            const list = res.data?.data ?? res.data;
+            setWithdrawalAccounts(Array.isArray(list) ? list : []);
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || 'Không thể tải danh sách tài khoản rút tiền');
+        } finally {
+            setWithdrawalAccountsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isReady && user) {
+            fetchWithdrawalAccounts();
+        }
+    }, [isReady, user?.id]);
+
+    const openAddAccountModal = () => {
+        setEditingAccountId(null);
+        setAccountForm({
+            accountNumber: '',
+            bankCode: undefined,
+            bankName: '',
+            branchName: '',
+            accountHolderName: '',
+        });
+        setIsAccountModalOpen(true);
+    };
+
+    const openEditAccountModal = (acc: WithdrawalAccount) => {
+        setEditingAccountId(acc.id);
+        setAccountForm({
+            accountNumber: acc.accountNumber ?? '',
+            bankCode: acc.bankCode ?? undefined,
+            bankName: acc.bankName ?? '',
+            branchName: acc.branchName ?? '',
+            accountHolderName: acc.accountHolderName ?? '',
+        });
+        setIsAccountModalOpen(true);
+    };
+
+    const handleDeleteAccount = async (accountId: string) => {
+        if (!confirm('Bạn có chắc muốn xóa tài khoản rút tiền này không?')) return;
+        try {
+            await api.delete(`/me/withdrawal-accounts/${accountId}`);
+            toast.success('Đã xóa tài khoản rút tiền');
+            await fetchWithdrawalAccounts();
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || 'Không thể xóa tài khoản');
+        }
+    };
+
+    const handleSubmitAccount = async (e: any) => {
+        e.preventDefault();
+        if (isAccountSaving) return;
+
+        const payload = {
+            accountNumber: accountForm.accountNumber.trim(),
+            bankCode: accountForm.bankCode,
+            bankName: accountForm.bankName.trim(),
+            branchName: accountForm.branchName.trim() ? accountForm.branchName.trim() : undefined,
+            accountHolderName: accountForm.accountHolderName.trim(),
+        };
+
+        if (!payload.accountNumber || !payload.bankName || !payload.accountHolderName) {
+            toast.error('Vui lòng điền đầy đủ: Số tài khoản, Ngân hàng, Chủ tài khoản');
+            return;
+        }
+
+        setIsAccountSaving(true);
+        try {
+            if (editingAccountId) {
+                await api.patch(`/me/withdrawal-accounts/${editingAccountId}`, payload);
+                toast.success('Đã cập nhật tài khoản rút tiền');
+            } else {
+                await api.post('/me/withdrawal-accounts', payload);
+                toast.success('Đã thêm tài khoản rút tiền');
+            }
+            setIsAccountModalOpen(false);
+            setEditingAccountId(null);
+            await fetchWithdrawalAccounts();
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || 'Không thể lưu tài khoản rút tiền');
+        } finally {
+            setIsAccountSaving(false);
+        }
+    };
 
     const displayName = user?.fullName || user?.name || user?.email?.split('@')[0] || t('common.unknown');
 
@@ -514,6 +639,70 @@ export default function UserSettingsPage() {
                             </div>
                         </section>
 
+                        {/* Withdrawal Accounts Section */}
+                        <section>
+                            <div className="flex items-center justify-between mb-3 px-1">
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Tài khoản rút tiền</h2>
+                                <button
+                                    type="button"
+                                    onClick={openAddAccountModal}
+                                    className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80 flex items-center gap-1"
+                                    style={{ color: C.orange, background: C.orangeLight }}
+                                >
+                                    <Plus size={14} />
+                                    Thêm
+                                </button>
+                            </div>
+
+                            <div className="bg-white rounded-2xl p-2 space-y-2 border" style={{ borderColor: C.border, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+                                {withdrawalAccountsLoading ? (
+                                    <div className="p-4 text-center text-xs text-gray-500">Đang tải...</div>
+                                ) : withdrawalAccounts.length === 0 ? (
+                                    <div className="p-4 text-center text-xs text-gray-500">Chưa có tài khoản rút tiền.</div>
+                                ) : (
+                                    withdrawalAccounts.map(acc => (
+                                        <div
+                                            key={acc.id}
+                                            className="flex items-start justify-between gap-3 p-3 rounded-xl border"
+                                            style={{ borderColor: C.border, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-bold truncate" style={{ color: C.navy }}>{acc.bankName}</p>
+                                                <p className="text-xs mt-1" style={{ color: C.gray }}>
+                                                    STK: {displayAccountNumber(acc.accountNumber)} · Chủ TK: {acc.accountHolderName}
+                                                </p>
+                                                {acc.branchName && (
+                                                    <p className="text-xs mt-1" style={{ color: C.gray }}>
+                                                        Chi nhánh: {acc.branchName}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openEditAccountModal(acc)}
+                                                    className="p-2 rounded-lg hover:bg-slate-50 transition-colors"
+                                                    style={{ color: C.orange, border: `1.5px solid ${C.border}` }}
+                                                    aria-label="Chỉnh sửa"
+                                                >
+                                                    <Edit3 size={16} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteAccount(acc.id)}
+                                                    className="p-2 rounded-lg hover:bg-slate-50 transition-colors"
+                                                    style={{ color: C.danger, border: `1.5px solid ${C.border}` }}
+                                                    aria-label="Xóa"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </section>
+
                         {/* System Preferences Section */}
                         <section>
                             <h2 className="text-sm font-bold mb-3 px-1" style={{ color: C.navy }}>{t('user.settings.preferences.title')}</h2>
@@ -603,6 +792,107 @@ export default function UserSettingsPage() {
             </nav>
 
             {/* ═══ Modals ═══ */}
+
+            {/* Withdrawal Accounts Modal */}
+            <SettingsModal
+                isOpen={isAccountModalOpen}
+                onClose={() => setIsAccountModalOpen(false)}
+                title={editingAccountId ? 'Chỉnh sửa tài khoản rút tiền' : 'Thêm tài khoản rút tiền'}
+            >
+                <form onSubmit={handleSubmitAccount} className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Số tài khoản</label>
+                        <input
+                            type="text"
+                            value={accountForm.accountNumber}
+                            onChange={e => setAccountForm(s => ({ ...s, accountNumber: e.target.value.replace(/\D/g, '') }))}
+                            className="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-orange-500"
+                            style={{ borderColor: C.border, color: C.navy }}
+                            placeholder="Ví dụ: 123456789"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Ngân hàng</label>
+                        <BankSelect
+                            value={accountForm.bankCode ?? ''}
+                            onChange={(nextCode, option) => {
+                                if (nextCode === BANK_CUSTOM_CODE) {
+                                    setAccountForm(s => ({ ...s, bankCode: undefined, bankName: '' }));
+                                    return;
+                                }
+                                const labelFromOption = option?.label ?? '';
+                                if (labelFromOption) {
+                                    setAccountForm(s => ({ ...s, bankCode: nextCode, bankName: labelFromOption }));
+                                    return;
+                                }
+                                getBankOptions().then(list => {
+                                    const label = list.find(b => b.code === nextCode)?.label ?? '';
+                                    setAccountForm(s => ({ ...s, bankCode: nextCode, bankName: label }));
+                                });
+                            }}
+                            className="w-full"
+                            style={{}}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Tên ngân hàng</label>
+                        <input
+                            type="text"
+                            value={accountForm.bankName}
+                            onChange={e => setAccountForm(s => ({ ...s, bankName: e.target.value }))}
+                            className="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-orange-500"
+                            style={{ borderColor: C.border, color: C.navy }}
+                            placeholder="Nhập tên ngân hàng"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Chi nhánh (optional)</label>
+                        <input
+                            type="text"
+                            value={accountForm.branchName}
+                            onChange={e => setAccountForm(s => ({ ...s, branchName: e.target.value }))}
+                            className="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-orange-500"
+                            style={{ borderColor: C.border, color: C.navy }}
+                            placeholder="Ví dụ: Chi nhánh HCM"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Chủ tài khoản</label>
+                        <input
+                            type="text"
+                            value={accountForm.accountHolderName}
+                            onChange={e => setAccountForm(s => ({ ...s, accountHolderName: e.target.value }))}
+                            className="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-orange-500"
+                            style={{ borderColor: C.border, color: C.navy }}
+                            placeholder="Nhập tên chủ tài khoản"
+                        />
+                    </div>
+
+                    <div className="flex gap-2 justify-end pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsAccountModalOpen(false)}
+                            className="px-4 py-2 rounded-xl text-sm font-semibold transition-colors hover:bg-slate-100"
+                            style={{ color: C.gray }}
+                            disabled={isAccountSaving}
+                        >
+                            Hủy
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isAccountSaving}
+                            className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-opacity disabled:opacity-50"
+                            style={{ backgroundColor: C.orange }}
+                        >
+                            {isAccountSaving ? 'Đang lưu...' : 'Lưu'}
+                        </button>
+                    </div>
+                </form>
+            </SettingsModal>
 
             {/* Edit Name Modal */}
             <SettingsModal

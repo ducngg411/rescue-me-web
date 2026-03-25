@@ -445,15 +445,30 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
 
 
 // ─── Withdraw Modal ───────────────────────────────────────────────────────────
-function WithdrawModal({ availableBalance, onClose, onSuccess }: {
+function WithdrawModal({ availableBalance, withdrawalAccounts = [], onClose, onSuccess }: {
     availableBalance: number;
+    withdrawalAccounts?: Array<{
+        id: string;
+        accountNumber: string;
+        bankName: string;
+        accountHolderName: string;
+        branchName?: string | null;
+    }>;
     onClose: () => void;
     onSuccess: () => void;
 }) {
     const { t } = useLanguage();
     const [amount, setAmount] = useState('');
+    const [withdrawalAccountId, setWithdrawalAccountId] = useState<string>(withdrawalAccounts?.[0]?.id ?? '');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (!withdrawalAccountId && withdrawalAccounts?.[0]?.id) {
+            setWithdrawalAccountId(withdrawalAccounts[0].id);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [withdrawalAccounts]);
 
     const numeric = parseInt(amount.replace(/\D/g, ''), 10) || 0;
     const isInsufficient = numeric > availableBalance;
@@ -471,7 +486,10 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
         setLoading(true);
         setError('');
         try {
-            await api.post('/wallet/withdraw', { amount: numeric });
+            await api.post('/wallet/withdraw', {
+                amount: numeric,
+                withdrawalAccountId: withdrawalAccountId || undefined,
+            });
             onSuccess();
         } catch (err: any) {
             setError(err?.response?.data?.message || t('provider.wallet.withdrawModal.errorDefault'));
@@ -505,6 +523,29 @@ function WithdrawModal({ availableBalance, onClose, onSuccess }: {
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    {withdrawalAccounts?.length ? (
+                        <div>
+                            <label className="block text-sm font-medium mb-1.5" style={{ color: C.navy }}>Tài khoản nhận tiền</label>
+                            <select
+                                value={withdrawalAccountId}
+                                onChange={e => setWithdrawalAccountId(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
+                                style={{ border: `1.5px solid ${C.border}`, color: C.navy, background: 'white' }}
+                            >
+                                <option value="">Chọn tài khoản</option>
+                                {withdrawalAccounts.map(acc => (
+                                    <option key={acc.id} value={acc.id}>
+                                        {acc.bankName} · {acc.accountNumber}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    ) : (
+                        <div className="text-xs" style={{ color: C.gray }}>
+                            Bạn chưa cấu hình tài khoản rút tiền trong `Settings`.
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-sm font-medium mb-1.5" style={{ color: C.navy }}>{t('provider.wallet.withdrawModal.amountLabel')}</label>
                         <div className="relative">
@@ -895,6 +936,14 @@ export default function ProviderWalletPage() {
     const [loading, setLoading] = useState(true);
     const [txLoading, setTxLoading] = useState(false);
     const [showModal, setShowModal] = useState(false);
+    const [withdrawalAccounts, setWithdrawalAccounts] = useState<Array<{
+        id: string;
+        accountNumber: string;
+        bankCode?: string | null;
+        bankName: string;
+        branchName?: string | null;
+        accountHolderName: string;
+    }>>([]);
     const [showTopup, setShowTopup] = useState(false);
     const [page, setPage] = useState(0);
     const [showAll, setShowAll] = useState(false);
@@ -906,12 +955,15 @@ export default function ProviderWalletPage() {
 
     const loadWallet = useCallback(async () => {
         try {
-            const [walletRes, pendingRes] = await Promise.all([
+            const [walletRes, pendingRes, accountsRes] = await Promise.all([
                 api.get('/wallet/me'),
                 api.get('/wallet/topup/pending').catch(() => ({ data: null })),
+                api.get('/me/provider/withdrawal-accounts').catch(() => ({ data: [] })),
             ]);
             setWallet(walletRes.data);
             setPendingTopup(pendingRes.data);
+            const list = accountsRes?.data?.data ?? accountsRes?.data;
+            setWithdrawalAccounts(Array.isArray(list) ? list : []);
         } catch {
             setWallet(null);
         } finally {
@@ -1188,6 +1240,7 @@ export default function ProviderWalletPage() {
             {showModal && wallet && (
                 <WithdrawModal
                     availableBalance={available}
+                    withdrawalAccounts={withdrawalAccounts}
                     onClose={() => setShowModal(false)}
                     onSuccess={() => { setShowModal(false); loadWallet(); loadTransactions(0); }}
                 />

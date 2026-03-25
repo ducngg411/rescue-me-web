@@ -13,6 +13,13 @@ const formatDate = (date: Date) =>
         hour: '2-digit', minute: '2-digit',
     });
 
+const maskAccountNumber = (accountNumber?: string | null) => {
+    const digits = String(accountNumber ?? '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.length <= 4) return digits;
+    return `${'*'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+};
+
 const paymentMethodLabel: Record<string, string> = {
     CASH: 'Tiền mặt',
     QR: 'Chuyển khoản QR',
@@ -330,6 +337,154 @@ export class MailService {
             this.logger.log(`Topup receipt sent to ${email} amount=${amount} code=${transferCode}`);
         } catch (error) {
             this.logger.error(`Failed to send topup receipt to ${email}`, error);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GROUP 5 — WITHDRAWALS (USER / PROVIDER)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /** Gửi khi người dùng tạo yêu cầu rút tiền (status=PENDING) */
+    async sendWithdrawalRequested(params: {
+        email: string;
+        name: string;
+        amount: number;
+        txnCode?: string | null;
+        referenceId?: string | null;
+        createdAt: Date;
+        bankName?: string | null;
+        accountHolderName?: string | null;
+        accountNumber?: string | null;
+    }) {
+        const {
+            email,
+            name,
+            amount,
+            txnCode,
+            referenceId,
+            createdAt,
+            bankName,
+            accountHolderName,
+            accountNumber,
+        } = params;
+        try {
+            await this.mailerService.sendMail({
+                to: email,
+                subject: `[RescueMe] Đã nhận yêu cầu rút tiền — ${formatVND(amount)}`,
+                template: 'withdrawal-requested',
+                context: {
+                    name: name || 'bạn',
+                    amount: formatVND(amount),
+                    txnCode: txnCode || '',
+                    referenceId: referenceId || '',
+                    createdAt: formatDate(createdAt),
+                    bankName: bankName || '',
+                    accountHolderName: accountHolderName || '',
+                    accountNumberMasked: maskAccountNumber(accountNumber),
+                    appUrl: APP_URL,
+                    year: new Date().getFullYear(),
+                },
+            });
+            this.logger.log(`Withdrawal requested email sent to ${email}`);
+        } catch (error) {
+            this.logger.error(`Failed to send withdrawal requested email to ${email}`, error);
+        }
+    }
+
+    /** Gửi khi admin chuyển tiền thành công (status=COMPLETED) */
+    async sendWithdrawalApproved(params: {
+        email: string;
+        name: string;
+        amount: number;
+        txnCode?: string | null;
+        referenceId?: string | null;
+        completedAt: Date;
+        bankName?: string | null;
+        accountHolderName?: string | null;
+        accountNumber?: string | null;
+    }) {
+        const {
+            email,
+            name,
+            amount,
+            txnCode,
+            referenceId,
+            completedAt,
+            bankName,
+            accountHolderName,
+            accountNumber,
+        } = params;
+        try {
+            await this.mailerService.sendMail({
+                to: email,
+                subject: `[RescueMe] Chuyển tiền rút thành công — ${formatVND(amount)}`,
+                template: 'withdrawal-approved',
+                context: {
+                    name: name || 'bạn',
+                    amount: formatVND(amount),
+                    txnCode: txnCode || '',
+                    referenceId: referenceId || '',
+                    completedAt: formatDate(completedAt),
+                    bankName: bankName || '',
+                    accountHolderName: accountHolderName || '',
+                    accountNumberMasked: maskAccountNumber(accountNumber),
+                    appUrl: APP_URL,
+                    year: new Date().getFullYear(),
+                },
+            });
+            this.logger.log(`Withdrawal approved email sent to ${email}`);
+        } catch (error) {
+            this.logger.error(`Failed to send withdrawal approved email to ${email}`, error);
+        }
+    }
+
+    /** Gửi khi admin từ chối yêu cầu rút (status=FAILED) */
+    async sendWithdrawalRejected(params: {
+        email: string;
+        name: string;
+        amount: number;
+        txnCode?: string | null;
+        referenceId?: string | null;
+        rejectedAt: Date;
+        reason?: string | null;
+        bankName?: string | null;
+        accountHolderName?: string | null;
+        accountNumber?: string | null;
+    }) {
+        const {
+            email,
+            name,
+            amount,
+            txnCode,
+            referenceId,
+            rejectedAt,
+            reason,
+            bankName,
+            accountHolderName,
+            accountNumber,
+        } = params;
+        try {
+            await this.mailerService.sendMail({
+                to: email,
+                subject: `[RescueMe] Yêu cầu rút tiền bị từ chối`,
+                template: 'withdrawal-rejected',
+                context: {
+                    name: name || 'bạn',
+                    amount: formatVND(amount),
+                    txnCode: txnCode || '',
+                    referenceId: referenceId || '',
+                    rejectedAt: formatDate(rejectedAt),
+                    reason: reason || '',
+                    bankName: bankName || '',
+                    accountHolderName: accountHolderName || '',
+                    accountNumberMasked: maskAccountNumber(accountNumber),
+                    appUrl: APP_URL,
+                    year: new Date().getFullYear(),
+                },
+            });
+            this.logger.log(`Withdrawal rejected email sent to ${email}`);
+        } catch (error) {
+            this.logger.error(`Failed to send withdrawal rejected email to ${email}`, error);
         }
     }
 }

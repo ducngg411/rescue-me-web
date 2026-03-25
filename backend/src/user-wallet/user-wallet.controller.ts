@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserWalletService } from './user-wallet.service';
-import { IsNumber, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class WithdrawDto {
@@ -24,6 +24,10 @@ class WithdrawDto {
     @IsNumber()
     @Min(1)
     amount: number;
+
+    @IsOptional()
+    @IsString()
+    withdrawalAccountId?: string;
 }
 
 class TopupInitDto {
@@ -69,7 +73,7 @@ export class UserWalletController {
     async withdraw(@Request() req, @Body() dto: WithdrawDto) {
         const wallet = await this.userWalletService.ensureWallet(req.user.id);
         const referenceId = `user-withdraw-${req.user.id}-${Date.now()}`;
-        return this.userWalletService.withdraw(wallet.id, dto.amount, referenceId);
+        return this.userWalletService.withdraw(wallet.id, dto.amount, referenceId, dto.withdrawalAccountId);
     }
 
     /**

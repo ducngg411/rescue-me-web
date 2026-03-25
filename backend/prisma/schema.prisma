@@ -73,6 +73,9 @@ model User {
   disputesOpened             DisputeCase[]          @relation("DisputeOpenedBy")
   disputeReadStates          DisputeReadState[]
 
+  providerWithdrawalAccounts ProviderWithdrawalAccount[] @relation("ProviderWithdrawalAccounts")
+  customerWithdrawalAccounts CustomerWithdrawalAccount[] @relation("CustomerWithdrawalAccounts")
+
   @@index([email])
   @@index([googleId])
   @@map("users")
@@ -372,6 +375,8 @@ model WalletTransaction {
   referenceType WalletReferenceType
   referenceId   String
   description   String?
+  sepayId       Int?                    @unique
+  sepayReferenceCode String?
   createdAt     DateTime                @default(now())
   holdReleaseAt DateTime?
   wallet        ProviderWallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
@@ -382,6 +387,44 @@ model WalletTransaction {
   @@index([referenceType, referenceId])
   @@index([createdAt])
   @@map("wallet_transactions")
+}
+
+model ProviderWithdrawalAccount {
+  id                 String   @id @default(cuid())
+  providerId        String
+  provider          User     @relation("ProviderWithdrawalAccounts", fields: [providerId], references: [id], onDelete: Cascade)
+
+  accountNumber      String
+  bankCode           BankCode?
+  bankName           String
+  branchName         String?
+  accountHolderName  String
+
+  isDefault         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([providerId])
+  @@map("provider_withdrawal_accounts")
+}
+
+model CustomerWithdrawalAccount {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation("CustomerWithdrawalAccounts", fields: [userId], references: [id], onDelete: Cascade)
+
+  accountNumber     String
+  bankCode          BankCode?
+  bankName          String
+  branchName        String?
+  accountHolderName String
+
+  isDefault         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+  @@map("customer_withdrawal_accounts")
 }
 
 model TopupTransaction {
@@ -470,6 +513,8 @@ model UserWalletTransaction {
   referenceType UserWalletReferenceType
   referenceId   String
   description   String?
+  sepayId       Int?                    @unique
+  sepayReferenceCode String?
   holdReleaseAt DateTime?
   createdAt     DateTime                @default(now())
   wallet        UserWallet              @relation(fields: [walletId], references: [id], onDelete: Cascade)
@@ -713,6 +758,28 @@ enum WalletReferenceType {
   ADJUSTMENT
   TOPUP
   JOB_PAYMENT
+}
+
+// Bank codes that appear in the withdrawal account dropdown.
+// Users can also enter a custom bank name (bankCode can be null).
+enum BankCode {
+  VCB
+  BIDV
+  TCB
+  MB
+  ACB
+  VPB
+  CTG
+  TPB
+  STB
+  OCB
+  HDB
+  VIB
+  NAB
+  SCB
+  BAB
+  PGB
+  AGR
 }
 
 enum UserWalletReferenceType {

@@ -18,6 +18,7 @@ import { FirebaseModule } from './firebase/firebase.module';
 import { GuestAuthModule } from './guest-auth/guest-auth.module';
 import { GuestRescueModule } from './guest-rescue/guest-rescue.module';
 import { DisputeModule } from './dispute/dispute.module';
+import { WithdrawalAccountsModule } from './withdrawal-accounts/withdrawal-accounts.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { DisputeModule } from './dispute/dispute.module';
     GuestAuthModule,
     GuestRescueModule,
     DisputeModule,
+    WithdrawalAccountsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

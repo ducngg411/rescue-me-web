@@ -512,7 +512,7 @@ export class WalletService {
         walletId: string,
         amount: number,
         referenceId: string,   // e.g. a WithdrawRequest.id from your system
-        description?: string,
+        withdrawalAccountId?: string,
     ) {
         if (amount <= 0) {
             throw new BadRequestException('Withdrawal amount must be positive');
@@ -535,6 +535,31 @@ export class WalletService {
                 );
             }
 
+            const withdrawalAccount = withdrawalAccountId
+                ? await tx.providerWithdrawalAccount.findFirst({
+                    where: { id: withdrawalAccountId, providerId: wallet.providerId },
+                })
+                : null;
+
+            if (withdrawalAccountId && !withdrawalAccount) {
+                throw new BadRequestException('Withdrawal account not found');
+            }
+
+            const baseDescription = `Yêu cầu rút tiền #${referenceId}`;
+            const bankSnapshot = withdrawalAccount
+                ? [
+                    withdrawalAccount.bankCode ? `[BANK_CODE:${withdrawalAccount.bankCode}]` : null,
+                    withdrawalAccount.bankName ? `Ngân hàng: ${withdrawalAccount.bankName}` : null,
+                    withdrawalAccount.branchName ? `Chi nhánh: ${withdrawalAccount.branchName}` : null,
+                    `Số TK: ${withdrawalAccount.accountNumber}`,
+                    `Chủ TK: ${withdrawalAccount.accountHolderName}`,
+                ].filter(Boolean).join(' · ')
+                : null;
+
+            const finalDescription = bankSnapshot
+                ? `${baseDescription} · ${bankSnapshot}`
+                : baseDescription;
+
             // 3. Create PENDING DEBIT transaction (bank transfer not yet done)
             const txnCode = await allocateUniqueProviderWalletTxnCode(tx);
             const walletTx = await tx.walletTransaction.create({
@@ -546,7 +571,7 @@ export class WalletService {
                     status: WalletTransactionStatus.PENDING,
                     referenceType: WalletReferenceType.WITHDRAW,
                     referenceId,
-                    description: description ?? `Yêu cầu rút tiền #${referenceId}`,
+                    description: finalDescription,
                 },
             });
 
@@ -785,12 +810,17 @@ export class WalletService {
             `amount=${transferAmount} content="${content}"`,
         );
 
-        // 2. Only handle incoming transfers
-        if (transferType !== 'in') {
-            return { success: true, message: 'Skipped outgoing transfer' };
+        // 2. Only handle 'in' and 'out' transfers
+        if (transferType !== 'in' && transferType !== 'out') {
+            return { success: true, message: `Skipped transfer type: ${transferType}` };
         }
 
-        // 3. Dedup: check both topup and job payment tables
+        // 3. Delegate withdrawal processing for 'out'
+        if (transferType === 'out') {
+            return this.processWithdrawalWebhook(content, Number(sepayId), sepayReferenceCode, Number(transferAmount));
+        }
+
+        // 4. Dedup for 'in' transfers: check both topup and job payment tables
         const existingTopup = await this.prisma.topupTransaction.findUnique({
             where: { sepayId: Number(sepayId) },
         });
@@ -1036,6 +1066,80 @@ export class WalletService {
                 }
             } catch { /* silent */ }
         });
+
+        return { success: true };
+    }
+
+    /**
+     * Handle provider and user withdrawal webhook (transferType: 'out').
+     * Matches the transfer code (TXP... or TXU...) to complete a PENDING withdrawal.
+     */
+    private async processWithdrawalWebhook(
+        content: string,
+        sepayId: number,
+        sepayReferenceCode: string | undefined,
+        transferAmount: number,
+    ) {
+        // Find matching transfer code
+        const providerMatch = String(content || '').match(/TXP[A-Z0-9]{7}/i);
+        const userMatch = !providerMatch && String(content || '').match(/TXU[A-Z0-9]{7}/i);
+        const match = providerMatch || userMatch;
+
+        if (!match) {
+            this.logger.warn(`WITHDRAW_WEBHOOK no matching txnCode in content: "${content}"`);
+            return { success: true, message: 'No matching transaction code' };
+        }
+
+        const txnCode = match[0].toUpperCase();
+
+        if (providerMatch) {
+            const pendingTx = await this.prisma.walletTransaction.findUnique({
+                where: { txnCode },
+            });
+
+            if (!pendingTx || pendingTx.referenceType !== 'WITHDRAW' || pendingTx.status !== 'PENDING') {
+                this.logger.warn(`WITHDRAW_WEBHOOK pending provider withdraw not found or already processed for code=${txnCode}`);
+                return { success: true, message: 'Pending withdrawal not found or processed' };
+            }
+
+            // Mark as COMPLETED and update sepay info
+            await this.prisma.walletTransaction.update({
+                where: { id: pendingTx.id },
+                data: {
+                    status: 'COMPLETED',
+                    // NOTE: walletTransaction table does not store sepayId/sepayReferenceCode.
+                    // SePay linkage is stored on Topup/JobPayment tables; for withdrawals we keep it in logs/description only.
+                    description:
+                        (pendingTx.description ? `${pendingTx.description} | ` : '') +
+                        `SePay: ${sepayId}${sepayReferenceCode ? ` (${sepayReferenceCode})` : ''}`,
+                },
+            });
+
+            this.logger.log(`WITHDRAW_COMPLETED walletId=${pendingTx.walletId} amount=${pendingTx.amount} txnCode=${txnCode} sepayId=${sepayId}`);
+        } else if (userMatch) {
+            const pendingTx = await this.prisma.userWalletTransaction.findUnique({
+                where: { txnCode },
+            });
+
+            if (!pendingTx || pendingTx.referenceType !== 'WITHDRAW' || pendingTx.status !== 'PENDING') {
+                this.logger.warn(`WITHDRAW_WEBHOOK pending user withdraw not found or already processed for code=${txnCode}`);
+                return { success: true, message: 'Pending user withdrawal not found or processed' };
+            }
+
+            // Mark as COMPLETED and update sepay info
+            await this.prisma.userWalletTransaction.update({
+                where: { id: pendingTx.id },
+                data: {
+                    status: 'COMPLETED',
+                    // NOTE: userWalletTransaction table does not store sepayId/sepayReferenceCode.
+                    description:
+                        (pendingTx.description ? `${pendingTx.description} | ` : '') +
+                        `SePay: ${sepayId}${sepayReferenceCode ? ` (${sepayReferenceCode})` : ''}`,
+                },
+            });
+
+            this.logger.log(`USER_WITHDRAW_COMPLETED walletId=${pendingTx.walletId} amount=${pendingTx.amount} txnCode=${txnCode} sepayId=${sepayId}`);
+        }
 
         return { success: true };
     }

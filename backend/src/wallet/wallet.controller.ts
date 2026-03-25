@@ -18,7 +18,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { WalletService } from './wallet.service';
-import { IsNumber, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class WithdrawDto {
@@ -26,6 +26,10 @@ class WithdrawDto {
     @IsNumber()
     @Min(1)
     amount: number;
+
+    @IsOptional()
+    @IsString()
+    withdrawalAccountId?: string;
 }
 
 class TopupInitDto {
@@ -95,7 +99,7 @@ export class WalletController {
     async withdraw(@Request() req, @Body() dto: WithdrawDto) {
         const wallet = await this.walletService.ensureWallet(req.user.id);
         const referenceId = `withdraw-${req.user.id}-${Date.now()}`;
-        return this.walletService.withdraw(wallet.id, dto.amount, referenceId);
+        return this.walletService.withdraw(wallet.id, dto.amount, referenceId, dto.withdrawalAccountId);
     }
 
     // ─── Top-up (SePay) ───────────────────────────────────────────────────────

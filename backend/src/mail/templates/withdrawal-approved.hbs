@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chuyển tiền rút thành công</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f4f5; font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a2e; }
+    .wrapper { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%); padding: 40px; text-align: center; }
+    .header h1 { margin: 0; color: #fff; font-size: 26px; font-weight: 700; }
+    .header p { margin: 8px 0 0; color: rgba(255,255,255,0.9); font-size: 15px; }
+    .badge { font-size: 48px; margin-bottom: 12px; }
+    .body { padding: 40px; }
+    .greeting { font-size: 20px; font-weight: 600; color: #1a1a2e; margin-bottom: 16px; }
+    .text { font-size: 15px; line-height: 1.7; color: #4a4a6a; margin-bottom: 16px; }
+    .amount-highlight { text-align: center; padding: 28px; background: linear-gradient(135deg, #f0fdf4, #fff); border: 2px solid #16a34a; border-radius: 16px; margin: 24px 0; }
+    .amount-highlight .label { font-size: 14px; color: #9ca3af; margin-bottom: 8px; }
+    .amount-highlight .amount { font-size: 36px; font-weight: 800; color: #16a34a; letter-spacing: -1px; }
+    .receipt { background: #f9f9fb; border-radius: 12px; padding: 20px 24px; margin: 20px 0; }
+    .receipt-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid #e5e7eb; }
+    .receipt-row:last-child { border-bottom: none; }
+    .receipt-row .label { font-size: 14px; color: #6b7280; }
+    .receipt-row .value { font-size: 14px; font-weight: 600; color: #1a1a2e; }
+    .receipt-row .mono { font-family: monospace; font-size: 13px; color: #374151; background: #e5e7eb; padding: 2px 8px; border-radius: 4px; }
+    .cta { text-align: center; margin: 32px 0 8px; }
+    .cta a { background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%); color: #fff; text-decoration: none; padding: 14px 36px; border-radius: 50px; font-size: 15px; font-weight: 600; display: inline-block; }
+    .footer { background: #f4f4f5; padding: 24px 40px; text-align: center; }
+    .footer p { margin: 0; font-size: 13px; color: #9999aa; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <div class="badge">✅</div>
+      <h1>Chuyển tiền rút thành công</h1>
+      <p>RescueMe — Ví điện tử</p>
+    </div>
+    <div class="body">
+      <p class="greeting">Xin chào {{name}},</p>
+      <p class="text">Yêu cầu rút tiền của bạn đã được xử lý và chuyển khoản thành công.</p>
+      <div class="amount-highlight">
+        <div class="label">Số tiền đã chuyển</div>
+        <div class="amount">{{amount}}</div>
+      </div>
+      <div class="receipt">
+        {{#if txnCode}}
+        <div class="receipt-row">
+          <span class="label">Mã giao dịch</span>
+          <span class="mono">{{txnCode}}</span>
+        </div>
+        {{/if}}
+        {{#if referenceId}}
+        <div class="receipt-row">
+          <span class="label">Mã tham chiếu</span>
+          <span class="mono">{{referenceId}}</span>
+        </div>
+        {{/if}}
+        <div class="receipt-row">
+          <span class="label">Thời gian</span>
+          <span class="value">{{completedAt}}</span>
+        </div>
+        <div class="receipt-row">
+          <span class="label">Trạng thái</span>
+          <span class="value" style="color: #16a34a; font-weight: 700;">✓ Thành công</span>
+        </div>
+      </div>
+      {{#if bankName}}
+      <div class="receipt">
+        <div class="receipt-row">
+          <span class="label">Ngân hàng</span>
+          <span class="value">{{bankName}}</span>
+        </div>
+        {{#if accountHolderName}}
+        <div class="receipt-row">
+          <span class="label">Chủ tài khoản</span>
+          <span class="value">{{accountHolderName}}</span>
+        </div>
+        {{/if}}
+        {{#if accountNumberMasked}}
+        <div class="receipt-row">
+          <span class="label">Số tài khoản</span>
+          <span class="mono">{{accountNumberMasked}}</span>
+        </div>
+        {{/if}}
+      </div>
+      {{/if}}
+      <div class="cta">
+        <a href="{{appUrl}}/wallet">Xem ví của tôi</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>© {{year}} RescueMe. Mọi quyền được bảo lưu.<br/>Email tự động — vui lòng không trả lời.</p>
+    </div>
+  </div>
+</body>
+</html>

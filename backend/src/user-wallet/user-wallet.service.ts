@@ -17,6 +17,7 @@ import {
     allocateUniqueUserTopupTransferCode,
     allocateUniqueUserTopupTxnCode,
 } from '../common/business-codes';
+import { MailService } from '../mail/mail.service';
 
 const MIN_WITHDRAWAL = 50_000;
 
@@ -27,6 +28,7 @@ export class UserWalletService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly config: ConfigService,
+        private readonly mailService: MailService,
     ) { }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -123,17 +125,58 @@ export class UserWalletService {
 
     // ── Withdrawal ─────────────────────────────────────────────────────────────
 
-    async withdraw(walletId: string, amount: number, referenceId: string) {
+    async withdraw(walletId: string, amount: number, referenceId: string, withdrawalAccountId?: string) {
         if (amount < MIN_WITHDRAWAL) {
             throw new BadRequestException(`Số tiền rút tối thiểu là ${MIN_WITHDRAWAL.toLocaleString('vi-VN')}₫`);
         }
 
-        return this.prisma.$transaction(async (tx) => {
+        let mailCtx: null | {
+            email: string;
+            name: string;
+            amount: number;
+            txnCode?: string | null;
+            referenceId?: string | null;
+            createdAt: Date;
+            bankName?: string | null;
+            accountHolderName?: string | null;
+            accountNumber?: string | null;
+        } = null;
+
+        const result = await this.prisma.$transaction(async (tx) => {
             const wallet = await tx.userWallet.findUnique({ where: { id: walletId } });
             if (!wallet) throw new NotFoundException(`Wallet ${walletId} not found`);
             if (wallet.availableBalance < amount) {
                 throw new BadRequestException(`Insufficient balance for withdrawal`);
             }
+
+            const user = await tx.user.findUnique({
+                where: { id: wallet.userId },
+                select: { email: true, fullName: true },
+            });
+            if (!user) throw new NotFoundException('User not found');
+
+            const withdrawalAccount = withdrawalAccountId
+                ? await tx.customerWithdrawalAccount.findFirst({
+                    where: { id: withdrawalAccountId, userId: wallet.userId },
+                })
+                : null;
+
+            if (withdrawalAccountId && !withdrawalAccount) {
+                throw new BadRequestException('Withdrawal account not found');
+            }
+
+            const baseDescription = `Yêu cầu rút tiền #${referenceId}`;
+            const bankSnapshot = withdrawalAccount
+                ? [
+                    withdrawalAccount.bankCode ? `[BANK_CODE:${withdrawalAccount.bankCode}]` : null,
+                    `Ngân hàng: ${withdrawalAccount.bankName}`,
+                    withdrawalAccount.branchName ? `Chi nhánh: ${withdrawalAccount.branchName}` : null,
+                    `Số TK: ${withdrawalAccount.accountNumber}`,
+                    `Chủ TK: ${withdrawalAccount.accountHolderName}`,
+                ].filter(Boolean).join(' · ')
+                : null;
+
+            const finalDescription = bankSnapshot ? `${baseDescription} · ${bankSnapshot}` : baseDescription;
 
             const txnCode = await allocateUniqueUserWalletTxnCode(tx);
             const walletTx = await tx.userWalletTransaction.create({
@@ -145,7 +188,7 @@ export class UserWalletService {
                     status: WalletTransactionStatus.PENDING,
                     referenceType: UserWalletReferenceType.WITHDRAW,
                     referenceId,
-                    description: `Yêu cầu rút tiền #${referenceId}`,
+                    description: finalDescription,
                 },
             });
 
@@ -154,9 +197,29 @@ export class UserWalletService {
                 data: { availableBalance: { decrement: amount } },
             });
 
+            mailCtx = {
+                email: user.email,
+                name: user.fullName || user.email,
+                amount,
+                txnCode: walletTx.txnCode,
+                referenceId: walletTx.referenceId,
+                createdAt: walletTx.createdAt,
+                bankName: withdrawalAccount?.bankName ?? null,
+                accountHolderName: withdrawalAccount?.accountHolderName ?? null,
+                accountNumber: withdrawalAccount?.accountNumber ?? null,
+            };
+
             this.logger.log(`WITHDRAW_INITIATED user_wallet=${walletId} amount=${amount}`);
             return { transaction: walletTx, wallet: updatedWallet };
         });
+
+        if (mailCtx?.email) {
+            setImmediate(() => {
+                this.mailService.sendWithdrawalRequested(mailCtx!).catch(() => { });
+            });
+        }
+
+        return result;
     }
 
     // ── Top-up (SePay VietQR) ──────────────────────────────────────────────────
