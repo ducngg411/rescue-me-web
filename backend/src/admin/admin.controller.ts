@@ -40,6 +40,22 @@ export class AdminController {
         return this.adminService.getProviders(query);
     }
 
+    // ── Rescue Requests ────────────────────────────────────────────────────────
+    @Get('requests')
+    async getRescueRequests(@Query() query: any) {
+        return this.adminService.getRescueRequests(query);
+    }
+
+    @Get('requests/stats')
+    async getRescueRequestStats() {
+        return this.adminService.getRescueRequestStats();
+    }
+
+    @Get('requests/:id')
+    async getRescueRequestDetail(@Param('id') id: string) {
+        return this.adminService.getRescueRequestDetail(id);
+    }
+
     @Get('providers/stats')
     async getProviderStats() {
         return this.adminService.getProviderStats();

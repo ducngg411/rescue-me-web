@@ -6,10 +6,11 @@ import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import AvatarImage from '@/components/AvatarImage';
+import { displayOrderCode } from '@/lib/reconciliation';
 import {
     Search, ChevronLeft, ChevronRight, Filter, Calendar, Eye,
     X, Mail, Phone, Wallet, Car, Star, Clock, ShieldOff, ShieldCheck,
-    AlertTriangle, Loader2, Trash2, ExternalLink,
+    AlertTriangle, Loader2, Trash2, ExternalLink, Users, CheckCircle, Lock
 } from 'lucide-react';
 
 const C = {
@@ -435,7 +436,11 @@ function UserDetailPanel({
                                                     <div className="min-w-0">
                                                         <p className="text-xs font-semibold truncate" style={{ color: C.navy }}>
                                                             {INCIDENT_LABELS[r.incidentType] || r.incidentType}
-                                                            {r.orderCode && <span className="ml-1 font-mono font-normal" style={{ color: C.gray }}>#{r.orderCode.slice(-6)}</span>}
+                                                            {r.orderCode && (
+                                                                <span className="ml-1 font-mono font-normal" style={{ color: C.gray }}>
+                                                                    #{displayOrderCode(r.orderCode, r.id)}
+                                                                </span>
+                                                            )}
                                                         </p>
                                                         <p className="text-[10px]" style={{ color: C.gray }}>
                                                             {new Date(r.createdAt).toLocaleDateString('vi-VN')}
@@ -728,13 +733,16 @@ export default function AdminUsersPage() {
                 {/* Stats Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     {[
-                        { label: 'TỔNG NGƯỜI DÙNG', value: stats.total, sub: null, color: C.navy },
-                        { label: 'ĐÃ HOÀN THIỆN', value: stats.active, sub: `${verificationRate}% tổng số`, color: C.green },
-                        { label: 'CHƯA HOÀN THIỆN', value: stats.inactive, sub: `${100 - verificationRate}% tổng số`, color: C.yellow },
-                        { label: 'THÁNG NÀY', value: stats.newThisMonth, sub: `+${growthPct}% tăng trưởng`, color: C.blue },
+                        { label: 'TỔNG NGƯỜI DÙNG', value: stats.total, sub: null, color: C.navy, icon: <Users className="w-4 h-4" /> },
+                        { label: 'ĐÃ HOÀN THIỆN', value: stats.active, sub: `${verificationRate}% tổng số`, color: C.green, icon: <CheckCircle className="w-4 h-4" /> },
+                        { label: 'CHƯA HOÀN THIỆN', value: stats.inactive, sub: `${100 - verificationRate}% tổng số`, color: C.yellow, icon: <AlertTriangle className="w-4 h-4" /> },
+                        { label: 'THÁNG NÀY', value: stats.newThisMonth, sub: `+${growthPct}% tăng trưởng`, color: C.blue, icon: <Clock className="w-4 h-4" /> },
                     ].map(stat => (
                         <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
-                            <p className="text-[10px] font-semibold tracking-wider mb-2 uppercase" style={{ color: C.gray }}>{stat.label}</p>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>{stat.label}</p>
+                                <span style={{ color: stat.color, opacity: 0.6 }}>{stat.icon}</span>
+                            </div>
                             <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
                             {stat.sub && <p className="text-[10px] mt-1 font-medium" style={{ color: C.gray }}>{stat.sub}</p>}
                         </div>

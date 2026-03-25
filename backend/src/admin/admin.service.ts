@@ -1370,7 +1370,130 @@ export class AdminService {
         return { items: itemsWithComm, total, skip, take };
     }
 
+    // ── Rescue Requests ──────────────────────────────────────────────────────
+
+    async getRescueRequests(query: {
+        search?: string;
+        status?: string;
+        incidentType?: string;
+        dateFrom?: string;
+        dateTo?: string;
+        hasDispute?: string;
+        skip?: number;
+        take?: number;
+    }) {
+        // Query params come in as strings from the client; coerce to numbers
+        // to avoid Prisma "Expected Int, provided String" errors.
+        const skip = Number(query.skip ?? 0);
+        const take = Math.min(Number(query.take ?? 20), 100);
+
+        const where: any = {};
+
+        if (query.status) {
+            if (query.status.includes(',')) {
+                where.status = { in: query.status.split(',') };
+            } else {
+                where.status = query.status;
+            }
+        }
+        if (query.incidentType) where.incidentType = query.incidentType;
+
+        if (query.dateFrom || query.dateTo) {
+            where.createdAt = {};
+            if (query.dateFrom) where.createdAt.gte = new Date(query.dateFrom);
+            if (query.dateTo) {
+                const to = new Date(query.dateTo);
+                to.setHours(23, 59, 59, 999);
+                where.createdAt.lte = to;
+            }
+        }
+
+        if (query.hasDispute === 'true') {
+            where.disputeCases = { some: {} };
+        }
+
+        if (query.search) {
+            const q = query.search;
+            where.OR = [
+                { orderCode: { contains: q, mode: 'insensitive' } },
+                { user: { fullName: { contains: q, mode: 'insensitive' } } },
+                { user: { email: { contains: q, mode: 'insensitive' } } },
+                { user: { phoneNumber: { contains: q } } },
+                { assignedProvider: { fullName: { contains: q, mode: 'insensitive' } } },
+                { licensePlate: { contains: q, mode: 'insensitive' } },
+            ];
+        }
+
+        const [items, total] = await Promise.all([
+            this.prisma.rescueRequest.findMany({
+                where,
+                skip,
+                take,
+                orderBy: { createdAt: 'desc' },
+                select: {
+                    id: true,
+                    orderCode: true,
+                    status: true,
+                    incidentType: true,
+                    vehicleType: true,
+                    licensePlate: true,
+                    createdAt: true,
+                    completedAt: true,
+                    requesterType: true,
+                    pickupLocation: true,
+                    user: { select: { id: true, fullName: true, email: true, avatar: true, phoneNumber: true } },
+                    assignedProvider: { select: { id: true, fullName: true, avatar: true, phoneNumber: true } },
+                    payment: { select: { id: true, totalAmount: true, paymentMethod: true, status: true } },
+                    _count: { select: { quotes: true, disputeCases: true } },
+                },
+            }),
+            this.prisma.rescueRequest.count({ where }),
+        ]);
+
+        return { items, total, skip, take };
+    }
+
+    async getRescueRequestStats() {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        const [total, completed, cancelled, newThisMonth, disputed] = await Promise.all([
+            this.prisma.rescueRequest.count(),
+            this.prisma.rescueRequest.count({ where: { status: { in: ['COMPLETED', 'PAID'] } } }),
+            this.prisma.rescueRequest.count({ where: { status: 'CANCELLED' } }),
+            this.prisma.rescueRequest.count({ where: { createdAt: { gte: startOfMonth } } }),
+            // Count rescue requests that have at least one dispute case
+            this.prisma.rescueRequest.count({ where: { disputeCases: { some: {} } } }),
+        ]);
+
+        return { total, completed, cancelled, newThisMonth, disputed };
+    }
+
+    async getRescueRequestDetail(id: string) {
+        const req = await this.prisma.rescueRequest.findUnique({
+            where: { id },
+            include: {
+                user: { select: { id: true, fullName: true, email: true, avatar: true, phoneNumber: true, licensePlate: true, vehicleColor: true } },
+                assignedProvider: { select: { id: true, fullName: true, email: true, phoneNumber: true, avatar: true, businessName: true } },
+                payment: true,
+                quotes: {
+                    orderBy: { createdAt: 'desc' },
+                    include: { provider: { select: { id: true, fullName: true, avatar: true } } },
+                },
+                media: { select: { id: true, publicUrl: true, mediaType: true } },
+                review: true,
+                disputeCases: {
+                    select: { id: true, status: true, reason: true, targetAmount: true, createdAt: true },
+                },
+            },
+        });
+
+        if (!req) throw new NotFoundException('Request not found');
+        return { req, quotes: req.quotes, payment: req.payment };
+    }
+
     // ── Users ────────────────────────────────────────────────────────────────
+
 
     async getUsers(query: {
         search?: string;

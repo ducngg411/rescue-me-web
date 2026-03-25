@@ -6,7 +6,7 @@ import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import AvatarImage from '@/components/AvatarImage';
-import { Search, ChevronLeft, ChevronRight, Eye, CheckCircle, Filter, Calendar } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Eye, CheckCircle, Filter, Calendar, Users, Clock, XCircle } from 'lucide-react';
 
 const C = {
     orange: '#f97316',
@@ -165,13 +165,16 @@ export default function ProviderApprovalPage() {
                 {/* ─── Stats Cards Row ─── */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
                     {[
-                        { label: 'TỔNG YÊU CẦU', value: total, color: C.navy, accent: false },
-                        { label: 'CHỜ DUYỆT', value: pending, color: C.orange, accent: false },
-                        { label: 'ĐÃ DUYỆT', value: approved, color: C.green, accent: false },
-                        { label: 'TỪ CHỐI', value: rejected, color: C.red, accent: false },
+                        { label: 'TỔNG YÊU CẦU', value: total, color: C.navy, accent: false, icon: <Users className="w-4 h-4" /> },
+                        { label: 'CHỜ DUYỆT', value: pending, color: C.orange, accent: false, icon: <Clock className="w-4 h-4" /> },
+                        { label: 'ĐÃ DUYỆT', value: approved, color: C.green, accent: false, icon: <CheckCircle className="w-4 h-4" /> },
+                        { label: 'TỪ CHỐI', value: rejected, color: C.red, accent: false, icon: <XCircle className="w-4 h-4" /> },
                     ].map(stat => (
                         <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
-                            <p className="text-[10px] font-semibold tracking-wider mb-2" style={{ color: C.gray }}>{stat.label}</p>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>{stat.label}</p>
+                                <span style={{ color: stat.color, opacity: 0.6 }}>{stat.icon}</span>
+                            </div>
                             <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
                         </div>
                     ))}

@@ -6,7 +6,7 @@ import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { ChevronRight, ChevronLeft, Search, Filter, Calendar } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Search, Filter, Calendar, AlertTriangle, Clock, CheckCircle, ShieldAlert } from 'lucide-react';
 import { displayOrderCode, displayDisputeCaseRef } from '@/lib/reconciliation';
 
 const C = {
@@ -226,13 +226,16 @@ export default function AdminDisputesPage() {
                 {/* ─── Stats Cards Row ─── */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     {[
-                        { label: 'MỚI', value: stats.new, color: C.blue },
-                        { label: 'ĐANG XỬ LÝ', value: stats.inProgress, color: C.orange },
-                        { label: 'ĐÃ XỬ LÝ', value: stats.resolved, color: C.green },
-                        { label: 'THỐNG KÊ TỔNG', value: stats.total, color: C.navy },
+                        { label: 'MỚI', value: stats.new, color: C.blue, icon: <AlertTriangle className="w-4 h-4" /> },
+                        { label: 'ĐANG XỬ LÝ', value: stats.inProgress, color: C.orange, icon: <Clock className="w-4 h-4" /> },
+                        { label: 'ĐÃ XỬ LÝ', value: stats.resolved, color: C.green, icon: <CheckCircle className="w-4 h-4" /> },
+                        { label: 'THỐNG KÊ TỔNG', value: stats.total, color: C.navy, icon: <ShieldAlert className="w-4 h-4" /> },
                     ].map(stat => (
                         <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
-                            <p className="text-[10px] font-semibold tracking-wider mb-2 uppercase" style={{ color: C.gray }}>{stat.label}</p>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>{stat.label}</p>
+                                <span style={{ color: stat.color, opacity: 0.6 }}>{stat.icon}</span>
+                            </div>
                             <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
                         </div>
                     ))}

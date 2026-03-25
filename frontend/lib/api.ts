@@ -296,6 +296,30 @@ export const adminApi = {
         const response = await api.delete(`/admin/users/${id}`);
         return response.data;
     },
+
+    getRescueRequests: async (params?: {
+        search?: string;
+        status?: string;
+        incidentType?: string;
+        dateFrom?: string;
+        dateTo?: string;
+        hasDispute?: boolean;
+        skip?: number;
+        take?: number;
+    }) => {
+        const response = await api.get('/admin/requests', { params });
+        return response.data as { items: unknown[]; total: number; skip: number; take: number };
+    },
+
+    getRescueRequestStats: async () => {
+        const response = await api.get('/admin/requests/stats');
+        return response.data as { total: number; completed: number; cancelled: number; newThisMonth: number; disputed: number };
+    },
+
+    getRescueRequestDetail: async (id: string) => {
+        const response = await api.get(`/admin/requests/${id}`);
+        return response.data;
+    },
 };
 
 

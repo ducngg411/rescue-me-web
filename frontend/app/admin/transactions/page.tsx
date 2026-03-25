@@ -220,12 +220,15 @@ export default function AdminTransactionsPage() {
                 {/* Stats Cards Row */}
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
                     {[
-                        { label: tp('summary.totalRevenue'), value: summary ? formatCurrency(summary.totalRevenue) : '...', color: C.navy },
-                        { label: tp('summary.totalCommission'), value: summary ? formatCurrency(summary.totalCommission) : '...', color: C.green },
-                        { label: tp('summary.totalTopupToday'), value: summary ? formatCurrency(summary.totalTopupToday) : '...', color: C.blue },
+                        { label: tp('summary.totalRevenue'), value: summary ? formatCurrency(summary.totalRevenue) : '...', color: C.navy, icon: <DollarSign className="w-4 h-4" /> },
+                        { label: tp('summary.totalCommission'), value: summary ? formatCurrency(summary.totalCommission) : '...', color: C.green, icon: <TrendingUp className="w-4 h-4" /> },
+                        { label: tp('summary.totalTopupToday'), value: summary ? formatCurrency(summary.totalTopupToday) : '...', color: C.blue, icon: <Wallet className="w-4 h-4" /> },
                     ].map(stat => (
                         <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
-                            <p className="text-[10px] font-semibold tracking-wider mb-2 uppercase" style={{ color: C.gray }}>{stat.label}</p>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>{stat.label}</p>
+                                <span style={{ color: stat.color, opacity: 0.6 }}>{stat.icon}</span>
+                            </div>
                             <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
                         </div>
                     ))}
