@@ -39,6 +39,9 @@ export default function CreateDisputeSheet({
 }: CreateDisputeSheetProps) {
     const { t, locale } = useLanguage();
     const router = useRouter();
+    const commissionRate = Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.1;
+    const maxAmount = Math.max(0, Math.floor(totalAmount - (totalAmount * commissionRate)));
+
     const [reason, setReason] = useState('');
     const [description, setDescription] = useState('');
     const [expectedOutcome, setExpectedOutcome] = useState('');
@@ -64,12 +67,12 @@ export default function CreateDisputeSheet({
             toast.error(t('user.disputes.create.errorReason'));
             return;
         }
-        const target = Math.floor(Number(totalAmount));
+        const target = maxAmount;
         if (!Number.isFinite(target) || target < 1) {
             toast.error(t('user.disputes.create.errorTarget'));
             return;
         }
-        if (target > totalAmount) {
+        if (target > maxAmount) {
             toast.error(t('user.disputes.create.errorTargetMax'));
             return;
         }
@@ -160,15 +163,15 @@ export default function CreateDisputeSheet({
                     <input
                         type="number"
                         min={1}
-                        max={totalAmount}
-                        value={totalAmount}
+                        max={maxAmount}
+                        value={maxAmount}
                         readOnly
                         className="w-full py-2.5 px-3 rounded-xl text-sm outline-none mb-1 tabular-nums border cursor-not-allowed"
                         style={{ background: '#f1f5f9', borderColor: C.border, color: C.gray }}
                     />
                     <p className="text-[10px] mb-3" style={{ color: C.gray }}>
                         {t('user.disputes.create.targetAmountHint', {
-                            amount: totalAmount.toLocaleString(loc),
+                            amount: maxAmount.toLocaleString(loc),
                         })}
                     </p>
 

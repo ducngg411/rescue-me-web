@@ -339,16 +339,29 @@ export default function UserDisputeDetailPage() {
     const senderLabel = (msg: any) => {
         if (msg.senderRole === 'ADMIN') return 'ADMIN';
         if (msg.senderRole === 'CUSTOMER') {
-            return `${msg.author?.fullName || 'User'} (User)`;
+            const name = msg.author?.fullName || request?.user?.fullName || 'User';
+            return `${name} (User)`;
         }
         if (msg.senderRole === 'PROVIDER') {
-            return `${msg.author?.fullName || 'Provider'} (Provider)`;
+            const name = msg.author?.fullName || request?.assignedProvider?.fullName || 'Provider';
+            return `${name} (Provider)`;
         }
         return msg.senderRole;
     };
+    const formatSystemMessage = (body: string) => {
+        if (!body) return body;
+        const match = body.match(/^Admin vừa yêu cầu (Provider|Customer) cung cấp thêm chứng cứ:\s*(.+)$/i);
+        if (!match) return body;
+        const target = match[1]?.toUpperCase();
+        const content = match[2]?.trim();
+        if (target === 'CUSTOMER') {
+            return `Bạn được Admin yêu cầu cung cấp thêm chứng cứ: ${content}`;
+        }
+        return `Admin vừa yêu cầu ${target === 'PROVIDER' ? 'Provider' : 'Customer'} cung cấp thêm chứng cứ: ${content}`;
+    };
 
     return (
-        <div className="min-h-screen flex flex-col" style={{ background: C.bg }}>
+        <div className="h-[100dvh] flex flex-col overflow-hidden" style={{ background: C.bg }}>
             <div className="sticky top-0 z-20 bg-white" style={{ borderColor: C.border }}>
                 <header className="px-4 py-3 border-b flex items-center justify-between gap-3" style={{ borderColor: C.border }}>
                     <div className="flex items-center gap-3 min-w-0">
@@ -398,7 +411,7 @@ export default function UserDisputeDetailPage() {
             </div>
 
             {activeTab === 'overview' && (
-                <div className="p-4 max-w-2xl mx-auto w-full pb-8">
+                <div className="flex-1 overflow-y-auto p-4 max-w-2xl mx-auto w-full pb-8">
                     {!isClosed && dispute.firstResponseDueAt && (
                         <div className="mb-4 text-center">
                            <SLACountdown dueAt={dispute.firstResponseDueAt} />
@@ -434,6 +447,8 @@ export default function UserDisputeDetailPage() {
                             } />
                             <InfoRow label="Loại sự cố" value={request.incidentType || 'Cứu hộ'} />
                             <InfoRow label="Đối tác cung cấp" value={provider?.fullName || 'N/A'} />
+                            <InfoRow label="SĐT cứu hộ viên" value={provider?.phoneNumber || 'N/A'} />
+                            <InfoRow label="Email cứu hộ viên" value={provider?.email || 'N/A'} />
                             <InfoRow label="Tổng thanh toán dịch vụ" value={`${(dispute.payment?.totalAmount ?? 0).toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US')}₫`} />
                             {request.createdAt && <InfoRow label="Ngày sử dụng" value={new Date(request.createdAt).toLocaleDateString('vi-VN')} />}
                         </SectionCard>
@@ -469,8 +484,8 @@ export default function UserDisputeDetailPage() {
             )}
 
             {activeTab === 'messages' && (
-                <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full relative lg:pt-4 lg:pb-32 bg-white border-l border-r lg:border lg:rounded-2xl lg:my-4 shadow-sm" style={{ borderColor: C.border }}>
-                    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-32 lg:pb-4">
+                <div className="flex-1 flex flex-col min-h-0 max-w-2xl mx-auto w-full relative lg:pt-4 lg:pb-32 bg-white border-l border-r lg:border lg:rounded-2xl shadow-sm" style={{ borderColor: C.border }}>
+                    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-6">
                         {(!dispute.messages || dispute.messages.length === 0) && (
                             <div className="text-center mt-10">
                                 <MessageSquare size={32} className="mx-auto mb-3" style={{ color: '#cbd5e1' }} />
@@ -486,7 +501,7 @@ export default function UserDisputeDetailPage() {
                                 return (
                                     <div key={msg.id} className="flex justify-center my-4">
                                         <div className="max-w-sm rounded-xl px-4 py-2 text-[11px] font-semibold text-center border" style={{ background: '#f8fafc', color: C.gray, borderColor: C.border }}>
-                                            {msg.body}
+                                            {formatSystemMessage(msg.body)}
                                         </div>
                                     </div>
                                 );
@@ -550,7 +565,7 @@ export default function UserDisputeDetailPage() {
                     </div>
 
                     {canSend && (
-                        <div className="fixed lg:absolute bottom-0 left-0 right-0 px-4 py-3 bg-white border-t rounded-b-2xl" style={{ borderColor: C.border }}>
+                        <div className="sticky bottom-0 left-0 right-0 px-4 py-3 bg-white border-t rounded-b-2xl z-10" style={{ borderColor: C.border }}>
                             <div className="max-w-2xl mx-auto">
                                 <div className="mb-2 bg-orange-50 px-3 py-2 rounded-xl flex items-center justify-between border" style={{ borderColor: '#fed7aa', color: '#c2410c' }}>
                                     <div className="flex items-center gap-2">
@@ -563,6 +578,7 @@ export default function UserDisputeDetailPage() {
                                         <textarea 
                                             value={msgBody} 
                                             onChange={(e) => setMsgBody(e.target.value)} 
+                                            onFocus={() => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 300)}
                                             placeholder="Bạn chỉ có 1 lần phản hồi. Hãy mô tả đầy đủ và upload bằng chứng..." 
                                             className="w-full bg-transparent px-3 py-2 text-[13px] outline-none resize-none max-h-32 min-h-[44px]" 
                                             rows={Math.min(4, msgBody.split('\n').length || 1)}
@@ -582,7 +598,7 @@ export default function UserDisputeDetailPage() {
                                     <button 
                                         onClick={sendMsg} 
                                         disabled={sending || (!msgBody.trim() && uploads.length === 0)} 
-                                        className="h-[44px] px-5 rounded-2xl text-sm font-bold text-white transition-opacity active:scale-95 flex-shrink-0 disabled:opacity-50 disabled:scale-100" 
+                                        className="h-[44px] px-5 rounded-2xl text-sm font-bold text-white transition-opacity flex-shrink-0 disabled:opacity-50" 
                                         style={{ background: C.orange, boxShadow: `0 4px 12px ${C.orange}40` }}
                                     >
                                         {sending ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Gửi'}
@@ -616,8 +632,13 @@ export default function UserDisputeDetailPage() {
                         </div>
                     )}
                     {!canSend && !isClosed && (
-                        <div className="fixed lg:absolute bottom-0 left-0 right-0 px-4 py-4 bg-white border-t text-center text-xs lg:rounded-b-2xl" style={{ borderColor: C.border, color: C.gray }}>
+                        <div className="sticky bottom-0 left-0 right-0 px-4 py-4 bg-white border-t text-center text-xs lg:rounded-b-2xl z-10" style={{ borderColor: C.border, color: C.gray }}>
                             Cảm ơn bạn đã cung cấp thông tin. Hệ thống đã nhận đủ phản hồi từ bạn. Admin đang kiểm tra dữ liệu và sẽ liên hệ lại nếu cần thêm thông tin xác thực.
+                        </div>
+                    )}
+                    {isClosed && (
+                        <div className="sticky bottom-0 left-0 right-0 px-4 py-4 bg-white border-t text-center text-xs lg:rounded-b-2xl z-10" style={{ borderColor: C.border, color: C.gray }}>
+                            Cuộc hội thoại này đã kết thúc vì khiếu nại đã được giải quyết.
                         </div>
                     )}
                 </div>

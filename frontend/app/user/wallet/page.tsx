@@ -14,6 +14,7 @@ import AvatarImage from '@/components/AvatarImage';
 import api from '@/lib/api';
 import RescueMeLogo from '@/components/RescueMeLogo';
 import { useRouter } from 'next/navigation';
+import { useUserDisputeNavBadge } from '@/contexts/UserDisputeNavBadgeContext';
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 const C = {
@@ -583,6 +584,7 @@ export default function UserWalletPage() {
     const { user, logout } = useAuth();
     const router = useRouter();
     const { t } = useLanguage();
+    const { disputeNavBadge, resetDisputeNavBadge } = useUserDisputeNavBadge();
 
     const [wallet, setWallet] = useState<UserWalletData | null>(null);
     const [txData, setTxData] = useState<TransactionsResponse | null>(null);
@@ -673,13 +675,21 @@ export default function UserWalletPage() {
                             return (
                                 <button
                                     key={item.label}
-                                    onClick={() => { if (item.href !== '#') router.push(item.href); }}
+                                    onClick={() => {
+                                        if (item.href === '/user/disputes') resetDisputeNavBadge();
+                                        if (item.href !== '#') router.push(item.href);
+                                    }}
                                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
                                     style={{ background: active ? C.orangeLight : 'transparent', color: active ? C.orange : '#64748b' }}
                                     onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = C.bg; }}
                                     onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                 >
                                     {item.icon}{item.label}
+                                    {item.href === '/user/disputes' && disputeNavBadge > 0 && !active && (
+                                        <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>
+                                            {disputeNavBadge > 99 ? '99+' : disputeNavBadge}
+                                        </span>
+                                    )}
                                 </button>
                             );
                         })}
@@ -924,12 +934,20 @@ export default function UserWalletPage() {
                     return (
                         <button
                             key={item.label}
-                            onClick={() => { if (item.href !== '#') router.push(item.href); }}
-                            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+                            onClick={() => {
+                                if (item.href === '/user/disputes') resetDisputeNavBadge();
+                                if (item.href !== '#') router.push(item.href);
+                            }}
+                            className="relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
                             style={{ color: active ? C.orange : '#94a3b8' }}
                         >
                             <span style={{ color: active ? C.orange : '#94a3b8' }}>{item.icon}</span>
                             <span className="text-[9px] font-medium">{item.label}</span>
+                            {item.href === '/user/disputes' && disputeNavBadge > 0 && !active && (
+                                <span className="absolute top-1 right-2 min-w-[16px] h-4 px-0.5 text-[9px] font-bold text-white rounded-full flex items-center justify-center" style={{ background: '#ef4444' }}>
+                                    {disputeNavBadge > 99 ? '99+' : disputeNavBadge}
+                                </span>
+                            )}
                         </button>
                     );
                 })}

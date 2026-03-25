@@ -10,6 +10,7 @@ import RescueMeLogo from '@/components/RescueMeLogo';
 import AvatarImage from '@/components/AvatarImage';
 import { userDisputeApi } from '@/lib/api';
 import api from '@/lib/api';
+import { useUserDisputeNavBadge } from '@/contexts/UserDisputeNavBadgeContext';
 
 const C = {
     orange: '#f97316',
@@ -37,6 +38,7 @@ interface DisputeItem {
     createdAt: string;
     slaDueAt: string | null;
     userReason?: string;
+    targetAmount?: number;
     payment: {
         requestId: string;
         totalAmount: number;
@@ -66,6 +68,7 @@ export default function UserDisputesPage() {
     const { isReady, user } = useUserGuard();
     const { logout } = useAuth();
     const { t, locale } = useLanguage();
+    const { disputeNavBadge, resetDisputeNavBadge } = useUserDisputeNavBadge();
     const [disputes, setDisputes] = useState<DisputeItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
@@ -92,6 +95,7 @@ export default function UserDisputesPage() {
                         createdAt: r.payment.disputedAt ?? r.createdAt,
                         slaDueAt: null,
                         userReason: r.payment.disputeReason ?? '',
+                        targetAmount: r.payment.totalAmount, // Fallback purely
                         payment: {
                             requestId: r.id,
                             totalAmount: r.payment.totalAmount ?? 0,
@@ -162,13 +166,21 @@ export default function UserDisputesPage() {
                             return (
                                 <button
                                     key={item.href}
-                                    onClick={() => router.push(item.href)}
+                                    onClick={() => {
+                                        if (item.href === '/user/disputes') resetDisputeNavBadge();
+                                        router.push(item.href);
+                                    }}
                                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
                                     style={{ background: active ? C.orangeLight : 'transparent', color: active ? C.orange : '#64748b' }}
                                     onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = C.bg; }}
                                     onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                 >
                                     {item.icon}{item.label}
+                                    {item.href === '/user/disputes' && disputeNavBadge > 0 && !active && (
+                                        <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>
+                                            {disputeNavBadge > 99 ? '99+' : disputeNavBadge}
+                                        </span>
+                                    )}
                                 </button>
                             );
                         })}
@@ -293,7 +305,7 @@ export default function UserDisputesPage() {
                                     </button>
                                 </div>
                             ) : (
-                                <ul className="divide-y" style={{ borderColor: C.border }}>
+                                <ul className="divide-y divide-slate-100" style={{ borderColor: C.border }}>
                                     {disputes.map((d) => {
                                         const st = statusStyle(d.status);
                                         const date = new Date(d.createdAt);
@@ -333,7 +345,11 @@ export default function UserDisputesPage() {
                                                         <span className="text-xs" style={{ color: C.gray }}>
                                                             {t('user.disputes.filedAt')}: {dateStr}
                                                         </span>
-                                                        {d.payment?.totalAmount > 0 && (
+                                                        {d.targetAmount !== undefined && d.targetAmount > 0 ? (
+                                                            <span className="text-xs font-semibold" style={{ color: C.orange }}>
+                                                                {d.targetAmount.toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US')}₫
+                                                            </span>
+                                                        ) : d.payment?.totalAmount > 0 && (
                                                             <span className="text-xs font-semibold" style={{ color: C.navy }}>
                                                                 {d.payment.totalAmount.toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US')}₫
                                                             </span>
@@ -364,12 +380,20 @@ export default function UserDisputesPage() {
                     return (
                         <button
                             key={item.href}
-                            onClick={() => router.push(item.href)}
-                            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+                            onClick={() => {
+                                if (item.href === '/user/disputes') resetDisputeNavBadge();
+                                router.push(item.href);
+                            }}
+                            className="relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
                             style={{ color: active ? C.orange : '#94a3b8' }}
                         >
                             <span style={{ color: active ? C.orange : '#94a3b8' }}>{item.icon}</span>
                             <span className="text-[9px] font-medium">{item.label}</span>
+                            {item.href === '/user/disputes' && disputeNavBadge > 0 && !active && (
+                                <span className="absolute top-1 right-2 min-w-[16px] h-4 px-0.5 text-[9px] font-bold text-white rounded-full flex items-center justify-center" style={{ background: '#ef4444' }}>
+                                    {disputeNavBadge > 99 ? '99+' : disputeNavBadge}
+                                </span>
+                            )}
                         </button>
                     );
                 })}

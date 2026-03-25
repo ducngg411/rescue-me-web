@@ -1427,6 +1427,8 @@ const vi = {
                 ACCEPTED: 'Đã chấp nhận',
                 ASSIGNED: 'Đã phân công',
                 MATCHING: 'Đang tìm',
+                DISPUTED: 'Đang khiếu nại',
+                REFUNDED: 'Đã hoàn tiền',
             },
             quoteStatusBadge: {
                 AWAITING_CUSTOMER: 'Chờ khách chọn',
@@ -1742,6 +1744,8 @@ const vi = {
                 ACCEPTED: 'Đã chấp nhận',
                 ASSIGNED: 'Đã phân công',
                 MATCHING: 'Đang tìm',
+                DISPUTED: 'Đang khiếu nại',
+                REFUNDED: 'Đã hoàn tiền',
             },
             quoteStatusBadge: {
                 AWAITING_CUSTOMER: 'Chờ khách chọn',

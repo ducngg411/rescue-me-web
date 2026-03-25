@@ -119,6 +119,11 @@ export class DisputeService {
             throw new BadRequestException('A dispute already exists for this payment');
         }
 
+        const commissionRateStr = process.env.COMMISSION_RATE;
+        const commissionRate = commissionRateStr ? parseFloat(commissionRateStr) : 0.1;
+        const maxTargetAmount = payment.totalAmount - Math.round(payment.totalAmount * commissionRate);
+        const finalTargetAmount = Math.min(dto.targetAmount, maxTargetAmount);
+
         const now = new Date();
         const firstResponseDueAt = new Date(now.getTime() + FIRST_RESPONSE_SLA_HOURS * 3600_000);
         const resolutionDueAt = new Date(now.getTime() + RESOLUTION_SLA_HOURS * 3600_000);
@@ -141,7 +146,7 @@ export class DisputeService {
                     requestId: dto.orderId,
                     openedByUserId: userId,
                     openedByRole: role as DisputeOpenedByRole,
-                    targetAmount: dto.targetAmount,
+                    targetAmount: finalTargetAmount,
                     reason: dto.reason,
                     description: dto.description,
                     expectedOutcome: dto.expectedOutcome,
@@ -507,10 +512,14 @@ export class DisputeService {
             throw new BadRequestException('A dispute already exists for this payment');
         }
 
+        const commissionRateStr = process.env.COMMISSION_RATE;
+        const commissionRate = commissionRateStr ? parseFloat(commissionRateStr) : 0.1;
+        const netAmount = payment.totalAmount - Math.round(payment.totalAmount * commissionRate);
+
         return this.openDispute(userId, 'CUSTOMER', {
             orderId: requestId,
             paymentId: payment.id,
-            targetAmount: payment.totalAmount,
+            targetAmount: netAmount,
             reason,
         });
     }

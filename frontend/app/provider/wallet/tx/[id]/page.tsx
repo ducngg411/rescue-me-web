@@ -142,7 +142,8 @@ export default function TxDetailPage() {
 
     const images = (job?.media ?? []).filter((m: any) => m.mediaType === 'IMAGE');
     const videos = (job?.media ?? []).filter((m: any) => m.mediaType === 'VIDEO');
-    const allVideos = [...videos, ...(job?.videoUrls ?? []).map((url: string) => ({ publicUrl: url, mediaType: 'VIDEO' }))];
+    const allVideosRaw = [...videos, ...(job?.videoUrls ?? []).map((url: string) => ({ publicUrl: url, mediaType: 'VIDEO' }))];
+    const allVideos = Array.from(new Map(allVideosRaw.map((v: any) => [v.publicUrl || v.url, v])).values());
 
     // Parse surchargeNote for breakdown
     let breakdown: { label: string; amount: number }[] = [];

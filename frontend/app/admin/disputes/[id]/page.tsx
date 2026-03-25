@@ -3,12 +3,63 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAdminGuard } from '@/lib/guards';
-import { adminApi, uploadFile, UploadPurpose, uploadVideoFile } from '@/lib/api'; // Notice: We need to ensure uploadVideoFile is exported or we inline it. Actually, uploadVideoFile is in Provider/User page, let's inline it to be safe.
+import { adminApi, userDisputeApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import toast from 'react-hot-toast';
-import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, ShieldAlert, Receipt, MessageSquare, Image as ImageIcon, Film, AlertCircle, X } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, ShieldAlert, Receipt, MessageSquare, Image as ImageIcon, Film, AlertCircle, X, MapPin, Phone, Banknote, Star, FileText, Wrench, Car, Calendar, User, ExternalLink, Wallet } from 'lucide-react';
+import AvatarImage from '@/components/AvatarImage';
 
+function fmtVnd(n: number) {
+    if (n == null) return '0đ';
+    return new Intl.NumberFormat('vi-VN').format(n) + 'đ';
+}
+
+function fmtDateTime(iso: string) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString('vi-VN', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+    });
+}
+
+function Stars({ rating }: { rating: number }) {
+    if (!rating) return null;
+    return (
+        <div className="flex gap-0.5">
+            {[1, 2, 3, 4, 5].map(i => (
+                <Star key={i} className="w-4 h-4"
+                    fill={i <= rating ? '#ca8a04' : 'none'}
+                    stroke={i <= rating ? '#ca8a04' : '#d1d5db'} />
+            ))}
+        </div>
+    );
+}
+
+function StatusBadge({ status, t }: { status: string, t: any }) {
+    const cfg: Record<string, { color: string; bg: string }> = {
+        COMPLETED: { color: '#16a34a', bg: '#f0fdf4' },
+        PAID: { color: '#7c3aed', bg: '#faf5ff' },
+        PAYMENT_PENDING: { color: '#ca8a04', bg: '#fefce8' },
+        PROVIDER_CONFIRMED: { color: '#16a34a', bg: '#f0fdf4' },
+        REFUNDED: { color: '#16a34a', bg: '#f0fdf4' },
+        USER_CONFIRMED: { color: '#2563eb', bg: '#eff6ff' },
+        PENDING: { color: '#ca8a04', bg: '#fefce8' },
+        DISPUTED: { color: '#ef4444', bg: '#fef2f2' },
+        IN_PROGRESS: { color: '#ca8a04', bg: '#fefce8' },
+        WORKING: { color: '#ca8a04', bg: '#fefce8' },
+        CANCELLED: { color: '#6b7280', bg: '#f3f4f6' },
+        EXPIRED: { color: '#6b7280', bg: '#f3f4f6' },
+    };
+    const s = cfg[status] ?? { color: '#6b7280', bg: '#f3f4f6' };
+    const label = t(`provider.historyDetail.statusBadge.${status}` as any) || status;
+    return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
+            style={{ background: s.bg, color: s.color }}>
+            {label}
+        </span>
+    );
+}
 const C = {
     orange: '#f97316',
     orangeDark: '#ea6c0a',
@@ -92,9 +143,9 @@ export default function AdminDisputeDetailPage() {
     const uploadedVideoCount = uploads.filter((u) => u.kind === 'video').length;
 
     // Admin Action States
-    const [statusNext, setStatusNext] = useState('IN_REVIEW');
     const [evidenceMsg, setEvidenceMsg] = useState('');
-    const [resolveResolution, setResolveResolution] = useState('NO_CHANGE');
+    const [evidenceTargetRole, setEvidenceTargetRole] = useState<'PROVIDER' | 'CUSTOMER'>('PROVIDER');
+    const [resolveResolution, setResolveResolution] = useState('NO_REFUND');
     const [refundAmount, setRefundAmount] = useState('');
     const [resolutionNote, setResolutionNote] = useState('');
     const [busy, setBusy] = useState(false);
@@ -104,8 +155,6 @@ export default function AdminDisputeDetailPage() {
         try {
             const data = await adminApi.getDisputeDetail(id);
             setDetail(data);
-            setStatusNext(data.status === 'NEW' ? 'IN_REVIEW' : data.status);
-            
             // Try fetching full order details
             const reqId = data?.payment?.requestId || data?.request?.id;
             if (reqId) {
@@ -180,6 +229,9 @@ export default function AdminDisputeDetailPage() {
     const status = detail.status ?? '';
     const sm = STATUS_META[status] ?? { label: status, bg: '#f1f5f9', color: C.gray };
     const isClosed = status === 'RESOLVED' || status === 'REJECTED';
+    const refundableCap = Number(detail?.refundableCap ?? detail?.payment?.totalAmount ?? 0);
+    const safeRefundInput = Math.max(0, parseInt(refundAmount.replace(/\D/g, ''), 10) || 0);
+    const providerReceiveAmount = Math.max(0, refundableCap - safeRefundInput);
     
     // File uploads logic
     const isVideo = (url: string) => /\.(mp4|webm|mkv|mov)(\?.*)?$/i.test(url) || url.includes('/video/upload/');
@@ -258,13 +310,11 @@ export default function AdminDisputeDetailPage() {
         
         setSending(true);
         try {
-            await adminApi.addDisputeEvidence(id, urls.join(','), msgBody.trim());
-            // Admin sending message currently seems tricky. In User/Provider it's `sendMessage`. 
-            // Admin might use `requestDisputeEvidence` to send a message to user. Wait!
-            // The API for admin adding message doesn't formally exist as `sendMessage` in `lib/api.ts`!
-            // I should use `adminApi.requestDisputeEvidence(id, msg)` and append URLs if possible, or add a proper message integration.
-            // Let's use `requestDisputeEvidence` for admin chat message for now if `sendMessage` is missing.
-            await adminApi.requestDisputeEvidence(id, `${msgBody}\n${urls.join('\n')}`);
+            await userDisputeApi.sendMessage(
+                detail.id,
+                msgBody.trim() ? msgBody.trim() : undefined,
+                urls.length ? urls : undefined,
+            );
             setMsgBody('');
             setUploads([]);
             await refreshDetail();
@@ -277,25 +327,11 @@ export default function AdminDisputeDetailPage() {
     };
 
     // Admin Sidebar Actions
-    const onStatusUpdate = async () => {
-        if (!detail || isClosed) return;
-        setBusy(true);
-        try {
-            await adminApi.updateDisputeStatus(detail.id, statusNext);
-            toast.success(t('admin.disputes.success'));
-            await refreshDetail();
-        } catch {
-            toast.error(t('admin.disputes.error'));
-        } finally {
-            setBusy(false);
-        }
-    };
-
     const onRequestEvidence = async () => {
         if (!detail || isClosed || !evidenceMsg.trim()) return;
         setBusy(true);
         try {
-            await adminApi.requestDisputeEvidence(detail.id, evidenceMsg.trim());
+            await adminApi.requestDisputeEvidence(detail.id, evidenceMsg.trim(), evidenceTargetRole);
             toast.success(t('admin.disputes.success'));
             setEvidenceMsg('');
             // Switch to chat tab to see the message injected
@@ -320,6 +356,10 @@ export default function AdminDisputeDetailPage() {
                 toast.error(t('admin.disputes.refundAmountLabel'));
                 return;
             }
+            if (n > refundableCap) {
+                toast.error(`Số tiền hoàn không được vượt quá ${refundableCap.toLocaleString('vi-VN')}đ`);
+                return;
+            }
             body.resolutionAmountCustomer = n;
         }
         setBusy(true);
@@ -338,40 +378,51 @@ export default function AdminDisputeDetailPage() {
     const senderLabel = (msg: any) => {
         if (msg.senderRole === 'ADMIN' || msg.actor === 'ADMIN') return 'ADMIN';
         if (msg.senderRole === 'CUSTOMER' || msg.actor === 'USER') {
-            return `${msg.author?.fullName || 'User'} (User)`;
+            const name = msg.author?.fullName || detail?.payment?.request?.user?.fullName || detail?.request?.user?.fullName || 'User';
+            return `${name} (User)`;
         }
-        if (msg.senderRole === 'PROVIDER' || msg.actor === 'SYSTEM') {
-            return `${msg.author?.fullName || 'Provider'} (Provider)`;
+        if (msg.senderRole === 'PROVIDER' || msg.actor === 'PROVIDER') {
+            const name =
+                msg.author?.fullName ||
+                detail?.payment?.request?.assignedProvider?.fullName ||
+                detail?.request?.assignedProvider?.fullName ||
+                'Provider';
+            return `${name} (Provider)`;
         }
         return msg.senderRole || msg.actor || 'SYSTEM';
     };
 
     return (
         <AdminLayout activeTab="/admin/disputes">
-            <div className="min-h-[calc(100vh-64px)] flex flex-col" style={{ background: C.bg }}>
-                {/* Header */}
-                <div className="sticky top-0 z-20 bg-white" style={{ borderColor: C.border }}>
-                    <header className="px-4 py-3 border-b flex items-center justify-between gap-3" style={{ borderColor: C.border }}>
-                        <div className="flex items-center gap-3 min-w-0">
-                            <button onClick={() => router.push('/admin/disputes')} className="w-9 h-9 flex-shrink-0 rounded-xl hover:bg-slate-100 flex items-center justify-center transition-colors" style={{ color: C.navy, background: C.bg }}>
-                                <ArrowLeft size={20} strokeWidth={2.5} />
-                            </button>
-                            <div className="min-w-0">
-                                <h1 className="font-bold text-base" style={{ color: C.navy }}>Chi tiết khiếu nại</h1>
-                                <p className="text-xs font-semibold mt-0.5" style={{ color: C.gray }}>
+            <div className="min-h-[calc(100vh-64px)] lg:h-full lg:min-h-0 flex flex-col lg:overflow-hidden" style={{ background: C.bg }}>
+                <div className="max-w-7xl mx-auto px-4 lg:px-6 w-full pt-6">
+                    {/* Header */}
+                    <div className="mb-6">
+                        <button
+                            onClick={() => router.push('/admin/disputes')}
+                            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Quay lại danh sách
+                        </button>
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h1 className="text-3xl font-semibold text-gray-900">Chi tiết khiếu nại</h1>
+                                <p className="text-lg text-gray-600 mt-1">
                                     Đơn #{String(detail?.payment?.requestId ?? detail?.request?.id ?? detail.id).slice(0, 8).toUpperCase()}
                                 </p>
-                                <p className="text-[10px]" style={{ color: '#94a3b8' }}>
-                                    Case #{String(detail.id).slice(0, 8).toUpperCase()}
-                                </p>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                                <span className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium" style={{ background: sm.bg, color: sm.color }}>
+                                    <div className="w-2 h-2 rounded-full" style={{ background: sm.color }} />
+                                    {sm.label}
+                                </span>
                             </div>
                         </div>
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap flex-shrink-0" style={{ background: sm.bg, color: sm.color }}>
-                            <div className="w-1.5 h-1.5 rounded-full" style={{ background: sm.color }} />
-                            {sm.label}
-                        </div>
-                    </header>
+                    </div>
+                </div>
 
+                <div className="flex-shrink-0 z-20 bg-white" style={{ borderColor: C.border }}>
                     {/* Tabs */}
                     <div className="flex px-4 border-b overflow-x-auto no-scrollbar" style={{ borderColor: C.border }}>
                         <button
@@ -379,7 +430,7 @@ export default function AdminDisputeDetailPage() {
                             className={`flex-1 min-w-[100px] py-3 text-sm font-bold text-center border-b-2 transition-colors relative ${activeTab === 'overview' ? 'border-orange-500' : 'border-transparent'}`}
                             style={{ color: activeTab === 'overview' ? C.orange : C.gray, borderColor: activeTab === 'overview' ? C.orange : 'transparent' }}
                         >
-                            Tổng quan
+                            Thông tin chi tiết
                         </button>
                         <button
                             onClick={() => setActiveTab('order')}
@@ -399,25 +450,53 @@ export default function AdminDisputeDetailPage() {
                 </div>
 
                 {/* Main Content & Sidebar */}
-                <div className="flex-1 flex flex-col lg:flex-row max-w-7xl mx-auto w-full px-4 lg:px-6 gap-6 py-6">
+                <div className="flex-1 lg:min-h-0 flex flex-col lg:flex-row max-w-7xl mx-auto w-full px-4 lg:px-6 gap-6 py-4 lg:py-6">
                     {/* Main Content Area */}
-                    <div className="flex-1 min-w-0 flex flex-col">
+                    <div className="flex-1 lg:min-h-0 min-w-0 flex flex-col lg:overflow-y-auto no-scrollbar pr-1 pb-6 lg:pr-2">
                         {activeTab === 'overview' && (
-                            <div className="pb-8 w-full">
+                            <div className="w-full">
                                 {isClosed && (
                                     <div className="rounded-xl p-4 mb-6 border" style={{ background: '#f8fafc', borderColor: C.border }}>
-                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>
-                                            {detail.status === 'REJECTED' ? t('admin.disputes.tabRejected') : t('admin.disputes.tabResolved')}
-                                        </p>
-                                        {detail.resolution && (
-                                            <p className="text-sm mt-1" style={{ color: C.gray }}>
-                                                {detail.resolution}
-                                                {detail.refundAmount != null ? ` · ${(detail.refundAmount || detail.resolutionAmountCustomer || 0).toLocaleString()}₫` : ''}
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: detail.status === 'REJECTED' ? C.redLight : C.greenLight }}>
+                                                {detail.status === 'REJECTED' ? <X size={16} style={{ color: C.red }} /> : <CheckCircle2 size={16} style={{ color: C.green }} />}
+                                            </div>
+                                            <p className="text-sm font-bold uppercase tracking-wide" style={{ color: detail.status === 'REJECTED' ? C.red : C.green }}>
+                                                {detail.status === 'REJECTED' ? t('admin.disputes.tabRejected') : t('admin.disputes.tabResolved')}
                                             </p>
-                                        )}
-                                        {detail.resolutionNote && (
-                                            <p className="text-sm mt-2 whitespace-pre-wrap" style={{ color: C.navy }}>{detail.resolutionNote}</p>
-                                        )}
+                                        </div>
+                                        <div className="space-y-2 bg-white p-3 rounded-lg border" style={{ borderColor: C.border }}>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs" style={{ color: C.gray }}>Quyết định:</span>
+                                                <span className="text-sm font-semibold" style={{ color: C.navy }}>
+                                                    {detail.resolutionType === 'NO_REFUND' ? 'Không hoàn tiền' :
+                                                     detail.resolutionType === 'FULL_REFUND' ? 'Hoàn tiền 100%' :
+                                                     detail.resolutionType === 'PARTIAL_REFUND' ? 'Hoàn tiền một phần' : 'Không xác định'}
+                                                </span>
+                                            </div>
+                                            {detail.resolutionType !== 'NO_REFUND' && (
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-xs" style={{ color: C.gray }}>Khách hàng nhận lại:</span>
+                                                    <span className="text-sm font-bold" style={{ color: C.orange }}>
+                                                        {(detail.resolutionAmountCustomer ?? detail.refundAmount ?? 0).toLocaleString()}₫
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {detail.resolutionType !== 'FULL_REFUND' && (
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-xs" style={{ color: C.gray }}>Cứu hộ viên nhận:</span>
+                                                    <span className="text-sm font-bold" style={{ color: C.blue }}>
+                                                        {(detail.resolutionAmountProvider ?? 0).toLocaleString()}₫
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {detail.resolutionNote && (
+                                                <div className="pt-2 mt-2 border-t" style={{ borderColor: C.border }}>
+                                                    <span className="text-xs block mb-1" style={{ color: C.gray }}>Ghi chú xử lý:</span>
+                                                    <p className="text-sm whitespace-pre-wrap" style={{ color: C.navy }}>{detail.resolutionNote}</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
 
@@ -468,30 +547,337 @@ export default function AdminDisputeDetailPage() {
                         )}
 
                         {activeTab === 'order' && (
-                            <div className="pb-8 w-full">
-                                <SectionCard title="Chi tiết dịch vụ gốc" icon={<Clock size={16} style={{ color: C.blue }} />}>
-                                    {orderDetail ? (
-                                        <>
-                                            <InfoRow label="Trạng thái đơn" value={orderDetail.status || detail?.request?.status || 'N/A'} />
-                                            <InfoRow label="Loại sự cố" value={orderDetail.incidentType || detail?.request?.incidentType || 'N/A'} />
-                                            <InfoRow label="Địa điểm" value={orderDetail.locationLine1 || 'N/A'} />
-                                            <InfoRow label="Nền tảng" value={orderDetail.platform || 'System'} />
-                                            <InfoRow label="Khách hàng" value={orderDetail.user?.fullName || detail?.request?.user?.fullName || 'N/A'} />
-                                            <InfoRow label="Nhà cung cấp" value={orderDetail.assignedProvider?.fullName || detail?.request?.assignedProvider?.fullName || 'N/A'} />
-                                            {orderDetail.createdAt && <InfoRow label="Ngày tạo đơn" value={new Date(orderDetail.createdAt).toLocaleString()} />}
-                                        </>
-                                    ) : (
+                            <div className="w-full space-y-4">
+                                {orderDetail && orderDetail.req ? (
+                                    <>
+                                        {/* Customer Info */}
+                                        <SectionCard title={t('provider.historyDetail.sections.customerInfo')} icon={<User size={16} style={{ color: C.blue }} />}>
+                                            <div className="flex items-center gap-3">
+                                                <AvatarImage
+                                                    name={orderDetail.req.user?.fullName || t('provider.historyDetail.customer.fallback')}
+                                                    avatar={orderDetail.req.user?.avatar}
+                                                    className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
+                                                    fallbackBackground={`linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`}
+                                                    initialsCount={1}
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-bold" style={{ color: C.navy }}>{orderDetail.req.user?.fullName || t('provider.historyDetail.customer.fallback')}</p>
+                                                    <p className="text-xs mt-0.5" style={{ color: C.gray }}>{orderDetail.req.contactPhone || orderDetail.req.user?.phoneNumber}</p>
+                                                    <p className="text-xs mt-0.5" style={{ color: C.gray }}>{orderDetail.req.user?.email}</p>
+                                                </div>
+                                            </div>
+                                        </SectionCard>
+
+                                        {/* Provider Info */}
+                                        {orderDetail.req.assignedProvider && (
+                                            <SectionCard title="Thông tin Cứu hộ viên" icon={<Wrench size={16} style={{ color: C.blue }} />}>
+                                                <div className="flex items-center gap-3">
+                                                    <AvatarImage
+                                                        name={orderDetail.req.assignedProvider.fullName || 'Provider'}
+                                                        avatar={orderDetail.req.assignedProvider.avatar}
+                                                        className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0"
+                                                        fallbackBackground={`linear-gradient(135deg, ${C.blue}, #1e40af)`}
+                                                        initialsCount={1}
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-bold" style={{ color: C.navy }}>{orderDetail.req.assignedProvider.fullName}</p>
+                                                        {orderDetail.req.assignedProvider.businessName && <p className="text-xs mt-0.5" style={{ color: C.navy }}>{orderDetail.req.assignedProvider.businessName}</p>}
+                                                        <p className="text-xs mt-0.5" style={{ color: C.gray }}>{orderDetail.req.assignedProvider.phoneNumber}</p>
+                                                        <p className="text-xs mt-0.5" style={{ color: C.gray }}>{orderDetail.req.assignedProvider.email || 'N/A'}</p>
+                                                    </div>
+                                                </div>
+                                            </SectionCard>
+                                        )}
+
+                                        {/* Rescue details */}
+                                        <SectionCard title={t('provider.historyDetail.sections2.rescueDetails')} icon={<Wrench size={16} style={{ color: C.orange }} />}>
+                                            <InfoRow label="Trạng thái đơn gốc" value={<StatusBadge status={orderDetail.req.status} t={t} />} />
+                                            {orderDetail.req.incidentType && (
+                                                <InfoRow
+                                                    label={t('provider.historyDetail.labels.incidentType')}
+                                                    value={t(`provider.historyDetail.incidentLabels.${orderDetail.req.incidentType}` as any) ?? orderDetail.req.incidentType}
+                                                />
+                                            )}
+                                            {orderDetail.req.vehicleType && (
+                                                <InfoRow
+                                                    label={t('provider.historyDetail.labels.vehicleType')}
+                                                    value={t(`provider.historyDetail.vehicleLabels.${orderDetail.req.vehicleType}` as any) ?? orderDetail.req.vehicleType}
+                                                />
+                                            )}
+                                            {(orderDetail.req.licensePlate?.trim() || orderDetail.req.user?.licensePlate) && (
+                                                <InfoRow
+                                                    label={t('provider.historyDetail.infoLabels2.licensePlate')}
+                                                    value={orderDetail.req.licensePlate?.trim() || orderDetail.req.user?.licensePlate}
+                                                />
+                                            )}
+                                            {(orderDetail.req.vehicleColor?.trim() || orderDetail.req.user?.vehicleColor) && (
+                                                <InfoRow
+                                                    label={t('provider.historyDetail.infoLabels2.vehicleColor')}
+                                                    value={orderDetail.req.vehicleColor?.trim() || orderDetail.req.user?.vehicleColor}
+                                                />
+                                            )}
+                                            {orderDetail.req.pickupLocation?.addressText && (
+                                                <InfoRow
+                                                    label={t('provider.historyDetail.labels.pickupLocation')}
+                                                    value={orderDetail.req.pickupLocation.addressText}
+                                                />
+                                            )}
+                                            {orderDetail.req.dropoffLocation?.addressText && (
+                                                <InfoRow
+                                                    label={t('provider.historyDetail.infoLabels2.dropoffLocation')}
+                                                    value={orderDetail.req.dropoffLocation.addressText}
+                                                />
+                                            )}
+                                            {orderDetail.req.description && (
+                                                <InfoRow
+                                                    label={t('provider.historyDetail.labels.description')}
+                                                    value={orderDetail.req.description}
+                                                />
+                                            )}
+                                            <InfoRow
+                                                label={t('provider.historyDetail.labels.createdAt')}
+                                                value={fmtDateTime(orderDetail.req.createdAt)}
+                                            />
+                                        </SectionCard>
+
+                                        {/* Media from original rescue request */}
+                                        {Array.isArray(orderDetail.req.media) && orderDetail.req.media.length > 0 && (
+                                            <SectionCard title="Hình ảnh/Video lúc tạo đơn" icon={<ImageIcon size={16} style={{ color: C.blue }} />}>
+                                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                                    {orderDetail.req.media.map((e: any) => {
+                                                        const isVid = e.mediaType === 'VIDEO' || isVideo(e.publicUrl || e.url);
+                                                        const src = e.publicUrl || e.url;
+                                                        return (
+                                                            <button 
+                                                                key={e.id} 
+                                                                onClick={() => setEvidencePreview({ url: src, type: isVid ? 'video' : 'image' })} 
+                                                                className="aspect-square overflow-hidden rounded-xl border relative group" 
+                                                                style={{ borderColor: C.border, background: '#f1f5f9' }}
+                                                            >
+                                                                {isVid ? (
+                                                                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
+                                                                        <Film size={24} className="mb-1" />
+                                                                        <span className="text-[10px] uppercase font-bold">Video</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <img src={src} alt="media" className="w-full h-full object-cover group-active:opacity-80 transition-opacity" />
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </SectionCard>
+                                        )}
+
+                                        {/* Quotes Data if available */}
+                                        {Array.isArray(orderDetail.quotes) && orderDetail.quotes.length > 0 && (
+                                            <SectionCard title="Các báo giá đã tham gia" icon={<Banknote size={16} style={{ color: C.green }} />}>
+                                                <div className="space-y-3">
+                                                    {orderDetail.quotes.map((q: any) => (
+                                                        <div key={q.id} className="rounded-xl p-3 border" style={{ borderColor: q.id === orderDetail.req.acceptedQuoteId ? C.green : C.border, background: q.id === orderDetail.req.acceptedQuoteId ? C.greenLight : C.bg }}>
+                                                            <div className="flex justify-between items-center mb-1">
+                                                                <span className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(q.price)}</span>
+                                                                <StatusBadge status={q.status} t={t} />
+                                                            </div>
+                                                            <p className="text-xs" style={{ color: C.gray }}>ETA: {q.estimatedArrivalMinutes} phút</p>
+                                                            {q.message && <p className="text-xs mt-1 italic" style={{ color: C.navy }}>"{q.message}"</p>}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </SectionCard>
+                                        )}
+
+                                        {/* Payment Block */}
+                                        {orderDetail.payment && (
+                                            <SectionCard title={t('provider.historyDetail.sections2.payment')} icon={<Banknote size={16} style={{ color: C.orange }} />}>
+                                                <div className="grid grid-cols-2 gap-3 mb-4">
+                                                    <div className="rounded-xl p-3 col-span-2" style={{ background: C.bg }}>
+                                                        <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: C.gray }}>Tiền vào ví Cứu hộ viên</p>
+                                                        {orderDetail.payment.walletTxStatus === 'COMPLETED'
+                                                            ? (
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold" style={{ background: C.greenLight, color: C.green }}>
+                                                                    <CheckCircle2 size={12} /> Đã nhận tiền vào ví
+                                                                </span>
+                                                            )
+                                                            : orderDetail.payment.walletTxStatus === 'PENDING'
+                                                                ? (
+                                                                    <div className="rounded-xl p-3" style={{ background: '#f5f3ff', border: '1.5px solid #ddd6fe' }}>
+                                                                        <div className="flex items-center gap-2 mb-1">
+                                                                            <Clock size={13} style={{ color: '#7c3aed' }} />
+                                                                            <span className="text-xs font-bold" style={{ color: '#7c3aed' }}>Hệ thống đang giải ngân</span>
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                                : <StatusBadge status={orderDetail.payment.status} t={t} />
+                                                        }
+                                                    </div>
+                                                    <div className="rounded-xl p-3" style={{ background: C.bg }}>
+                                                        <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.payment.method')}</p>
+                                                        <p className="text-sm font-bold" style={{ color: C.navy }}>
+                                                            {orderDetail.payment.paymentMethod === 'CASH'
+                                                                ? t('provider.historyDetail.labels.cash')
+                                                                : orderDetail.payment.paymentMethod === 'WALLET'
+                                                                    ? 'Ví điện tử RescueMe'
+                                                                    : t('provider.historyDetail.labels.transfer')}
+                                                        </p>
+                                                    </div>
+                                                    <div className="rounded-xl p-3" style={{ background: C.bg }}>
+                                                        <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.payment.total')}</p>
+                                                        <p className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(orderDetail.payment.totalAmount)}</p>
+                                                    </div>
+                                                </div>
+                                                {/* Fee breakdown */}
+                                                <div className="rounded-xl overflow-hidden border mb-4" style={{ borderColor: C.border }}>
+                                                    {[
+                                                        { label: t('provider.historyDetail.feeItems.base'), val: orderDetail.payment.baseFee },
+                                                        { label: t('provider.historyDetail.feeItems.distance'), val: orderDetail.payment.distanceFee },
+                                                        orderDetail.payment.overtimeFee > 0 && { label: t('provider.historyDetail.feeItems.overtime'), val: orderDetail.payment.overtimeFee },
+                                                        orderDetail.payment.otherFee > 0 && { label: t('provider.historyDetail.feeItems.other'), val: orderDetail.payment.otherFee },
+                                                    ].filter(Boolean).map((row: any, i: number, arr) => (
+                                                        <div key={i} className="flex items-center justify-between px-4 py-2.5"
+                                                            style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                                                            <span className="text-xs" style={{ color: C.gray }}>{row.label}</span>
+                                                            <span className="text-xs font-semibold" style={{ color: C.navy }}>{fmtVnd(row.val)}</span>
+                                                        </div>
+                                                    ))}
+                                                    <div className="flex items-center justify-between px-4 py-3"
+                                                        style={{ background: '#f8fafc', borderTop: `1px solid ${C.border}` }}>
+                                                        <span className="text-sm font-bold" style={{ color: C.navy }}>{t('provider.historyDetail.feeItems.total')}</span>
+                                                        <span className="text-sm font-bold" style={{ color: C.orange }}>{fmtVnd(orderDetail.payment.totalAmount)}</span>
+                                                    </div>
+                                                </div>
+
+                                                {orderDetail.payment.note && (
+                                                    <p className="text-xs mt-1 mb-4" style={{ color: C.gray }}>{t('provider.historyDetail.payment.notes')} {orderDetail.payment.note}</p>
+                                                )}
+
+                                                {/* Surcharges Breakdown */}
+                                                {(() => {
+                                                    if (!orderDetail.payment.surchargeNote) return null;
+                                                    let breakdown: { label: string; amount: number }[] = [];
+                                                    let surcharges: { label: string; amount: number }[] = [];
+                                                    let rawText: string | null = null;
+                                                    try {
+                                                        const parsed = JSON.parse(orderDetail.payment.surchargeNote);
+                                                        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                                                            breakdown = parsed.breakdown ?? [];
+                                                            surcharges = parsed.surcharges ?? [];
+                                                        } else if (Array.isArray(parsed)) {
+                                                            breakdown = parsed;
+                                                        } else {
+                                                            rawText = orderDetail.payment.surchargeNote;
+                                                        }
+                                                    } catch {
+                                                        rawText = orderDetail.payment.surchargeNote;
+                                                    }
+                                                    const items = [...breakdown, ...surcharges].filter(i => i.label || i.amount > 0);
+                                                    if (items.length === 0 && !rawText) return null;
+                                                    return (
+                                                        <div className="rounded-xl overflow-hidden border mb-4" style={{ borderColor: C.border }}>
+                                                            <div className="px-3 py-1.5" style={{ background: '#fff7ed', borderBottom: `1px solid ${C.border}` }}>
+                                                                <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: C.orange }}>{t('provider.historyDetail.payment.surcharges')}</p>
+                                                            </div>
+                                                            {rawText ? (
+                                                                <p className="px-3 py-2 text-xs" style={{ color: C.gray }}>{rawText}</p>
+                                                            ) : items.map((item, i) => (
+                                                                <div key={i} className="flex items-center justify-between px-3 py-2"
+                                                                    style={{ borderTop: i > 0 ? `1px solid ${C.border}` : 'none' }}>
+                                                                    <span className="text-xs" style={{ color: C.gray }}>{item.label || '—'}</span>
+                                                                    <span className="text-xs font-semibold" style={{ color: C.navy }}>{fmtVnd(item.amount)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
+
+                                                {/* Payment photos */}
+                                                {orderDetail.payment.photoUrls && orderDetail.payment.photoUrls.length > 0 && (
+                                                    <div>
+                                                        <p className="text-[10px] font-bold uppercase tracking-wide mb-2" style={{ color: C.gray }}>
+                                                            {t('provider.historyDetail.payment.photos').replace('{count}', String(orderDetail.payment.photoUrls.length))}
+                                                        </p>
+                                                        <div className="grid grid-cols-3 gap-2">
+                                                            {orderDetail.payment.photoUrls.map((src: string, i: number) => (
+                                                                <button key={i} onClick={() => setEvidencePreview({ url: src, type: 'image' })}
+                                                                    className="aspect-square rounded-xl overflow-hidden"
+                                                                    style={{ background: '#f1f5f9' }}>
+                                                                    <img src={src} alt={`Ảnh thanh toán ${i + 1}`} className="w-full h-full object-cover" />
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </SectionCard>
+                                        )}
+
+                                        {/* Review Block */}
+                                        {orderDetail.req.review && (
+                                            <SectionCard title={t('provider.historyDetail.sections2.review')} icon={<Star size={16} style={{ color: C.yellow }} />}>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <Stars rating={orderDetail.req.review.rating} />
+                                                            <span className="text-xs font-bold" style={{ color: C.navy }}>{orderDetail.req.review.rating}/5</span>
+                                                        </div>
+                                                        <p className="text-sm mt-1.5" style={{ color: C.navy }}>{orderDetail.req.review.comment || t('provider.historyDetail.review.noComment')}</p>
+                                                    </div>
+                                                </div>
+                                            </SectionCard>
+                                        )}
+
+                                        {/* Timeline */}
+                                        <SectionCard title={t('provider.historyDetail.sections2.timeline')} icon={<Clock size={16} style={{ color: C.blue }} />}>
+                                            <div className="space-y-0">
+                                                {[
+                                                    { label: t('provider.historyDetail.timeline.created'), time: orderDetail.req.createdAt, done: true },
+                                                    { label: t('provider.historyDetail.timeline.assigned'), time: orderDetail.req.assignedAt, done: !!orderDetail.req.assignedAt },
+                                                    { label: t('provider.historyDetail.timeline.payment'), time: orderDetail.payment?.createdAt, done: !!orderDetail.payment },
+                                                    { label: t('provider.historyDetail.timeline.completed'), time: orderDetail.req.completedAt, done: ['COMPLETED', 'PAID'].includes(orderDetail.req.status) },
+                                                ].map((step, i, arr) => (
+                                                    <div key={i} className="flex gap-3">
+                                                        <div className="flex flex-col items-center">
+                                                            <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                                                                style={{
+                                                                    background: step.done ? C.orange : '#f1f5f9',
+                                                                    border: `2px solid ${step.done ? C.orange : C.border}`,
+                                                                }}>
+                                                                {step.done
+                                                                    ? <CheckCircle2 size={13} className="text-white" />
+                                                                    : <Clock size={11} style={{ color: C.gray }} />
+                                                                }
+                                                            </div>
+                                                            {i < arr.length - 1 && (
+                                                                <div className="w-0.5 h-8 mt-0.5"
+                                                                    style={{ background: step.done ? `${C.orange}40` : '#f1f5f9' }} />
+                                                            )}
+                                                        </div>
+                                                        <div className="pb-4">
+                                                            <p className="text-sm font-semibold" style={{ color: step.done ? C.navy : '#9ca3af' }}>
+                                                                {step.label}
+                                                            </p>
+                                                            {step.time ? (
+                                                                <p className="text-xs mt-0.5" style={{ color: C.gray }}>{fmtDateTime(step.time)}</p>
+                                                            ) : (
+                                                                <p className="text-xs mt-0.5" style={{ color: '#d1d5db' }}>{t('provider.historyDetail.timeline.notDone')}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </SectionCard>
+                                    </>
+                                ) : (
+                                    <SectionCard title="Chi tiết dịch vụ gốc" icon={<Clock size={16} style={{ color: C.blue }} />}>
                                         <div className="text-center py-6">
                                             <p className="text-sm font-medium" style={{ color: C.gray }}>Đang tải hoặc không có sẵn chi tiết đơn...</p>
                                         </div>
-                                    )}
-                                </SectionCard>
+                                    </SectionCard>
+                                )}
                             </div>
                         )}
-
                         {activeTab === 'messages' && (
-                            <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full relative sm:min-h-[500px] h-[70vh] lg:h-auto bg-white border lg:rounded-2xl shadow-sm" style={{ borderColor: C.border }}>
-                                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-32 lg:pb-4 lg:px-6">
+                            <div className="flex-1 lg:min-h-0 flex flex-col max-w-2xl mx-auto w-full relative sm:min-h-[500px] h-[calc(100dvh-200px)] lg:h-auto bg-white border lg:rounded-2xl shadow-sm" style={{ borderColor: C.border }}>
+                                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 lg:px-6">
                                     {(!detail.messages || detail.messages.length === 0) && (
                                         <div className="text-center mt-10">
                                             <MessageSquare size={32} className="mx-auto mb-3" style={{ color: '#cbd5e1' }} />
@@ -550,10 +936,10 @@ export default function AdminDisputeDetailPage() {
                                 </div>
 
                                 {!isClosed && (
-                                    <div className="absolute bottom-0 left-0 right-0 px-4 py-3 bg-white border-t rounded-b-2xl" style={{ borderColor: C.border }}>
+                                    <div className="sticky bottom-0 left-0 right-0 px-4 py-3 bg-white border-t rounded-b-2xl z-10" style={{ borderColor: C.border }}>
                                         <div className="flex items-end gap-2">
                                             <div className="flex-1 bg-gray-50 rounded-2xl border flex flex-col pt-1 overflow-hidden focus-within:bg-white focus-within:border-orange-500 transition-colors" style={{ borderColor: C.border }}>
-                                                <textarea value={msgBody} onChange={e => setMsgBody(e.target.value)} placeholder="Nhập tin nhắn với tư cách Admin..." className="w-full bg-transparent px-3 py-2 text-[13px] outline-none resize-none max-h-32 min-h-[44px]" rows={Math.min(4, msgBody.split('\n').length || 1)} />
+                                                <textarea onFocus={() => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 300)} value={msgBody} onChange={e => setMsgBody(e.target.value)} placeholder="Nhập tin nhắn với tư cách Admin..." className="w-full bg-transparent px-3 py-2 text-[13px] outline-none resize-none max-h-32 min-h-[44px]" rows={Math.min(4, msgBody.split('\n').length || 1)} />
                                                 <div className="flex items-center px-2 pb-2 gap-2">
                                                     <button type="button" onClick={() => fileRef.current?.click()} className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors" style={{ color: C.gray }}><ImageIcon size={18} /></button>
                                                     <button type="button" onClick={() => videoRef.current?.click()} disabled={uploadedVideoCount >= 2} className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-40" style={{ color: C.gray }}><Film size={18} /></button>
@@ -568,8 +954,8 @@ export default function AdminDisputeDetailPage() {
                                     </div>
                                 )}
                                 {isClosed && (
-                                     <div className="absolute bottom-0 left-0 right-0 px-4 py-4 bg-white border-t text-center text-xs lg:rounded-b-2xl" style={{ borderColor: C.border, color: C.gray }}>
-                                         Đơn khiếu nại này đã đóng. Không thể gửi thêm tin nhắn.
+                                     <div className="sticky bottom-0 left-0 right-0 px-4 py-4 bg-white border-t text-center text-xs lg:rounded-b-2xl z-10" style={{ borderColor: C.border, color: C.gray }}>
+                                         Cuộc hội thoại này đã kết thúc vì khiếu nại đã được giải quyết.
                                      </div>
                                 )}
                             </div>
@@ -577,31 +963,25 @@ export default function AdminDisputeDetailPage() {
                     </div>
 
                     {/* Right Admin Sidebar */}
-                    <div className="w-full lg:w-96 flex-shrink-0 flex flex-col gap-6">
+                    <div className="w-full lg:w-96 flex-shrink-0 flex flex-col gap-6 lg:overflow-y-auto no-scrollbar pb-6 pr-1 lg:pr-2">
                         {!isClosed && (
                             <>
-                                {/* Status Changer */}
-                                <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: C.border }}>
-                                    <h3 className="text-sm font-bold mb-3 uppercase tracking-wide" style={{ color: C.navy }}>{t('admin.disputes.setStatus')}</h3>
-                                    <div className="flex gap-2">
-                                        <select
-                                            className="flex-1 rounded-xl border px-3 py-2 text-sm font-semibold outline-none focus:border-orange-500"
-                                            style={{ borderColor: C.border, color: C.navy }}
-                                            value={statusNext}
-                                            onChange={(e) => setStatusNext(e.target.value)}
-                                        >
-                                            <option value="NEW">MỚI (NEW)</option>
-                                            <option value="IN_REVIEW">ĐANG XEM XÉT</option>
-                                            <option value="AWAITING_EVIDENCE">CHỜ BẰNG CHỨNG</option>
-                                        </select>
-                                        <button disabled={busy || statusNext === detail.status} onClick={onStatusUpdate} className="px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-50" style={{ background: C.navy }}>Cập nhật</button>
-                                    </div>
-                                </div>
-
                                 {/* Request Evidence from User/Provider */}
                                 <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: C.border }}>
                                     <h3 className="text-sm font-bold mb-3 uppercase tracking-wide" style={{ color: C.navy }}>{t('admin.disputes.requestEvidenceBtn')}</h3>
                                     <p className="text-[11px] mb-3" style={{ color: C.gray }}>Gửi yêu cầu cung cấp thêm thông tin tới Khách hoặc Đối tác.</p>
+                                    <div className="mb-3">
+                                        <label className="block text-xs font-bold mb-1.5" style={{ color: C.gray }}>Yêu cầu gửi đến</label>
+                                        <select
+                                            className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none focus:border-orange-500"
+                                            style={{ borderColor: C.border, color: C.navy }}
+                                            value={evidenceTargetRole}
+                                            onChange={(e) => setEvidenceTargetRole(e.target.value as 'PROVIDER' | 'CUSTOMER')}
+                                        >
+                                            <option value="PROVIDER">Provider</option>
+                                            <option value="CUSTOMER">Customer</option>
+                                        </select>
+                                    </div>
                                     <textarea
                                         className="w-full rounded-xl border px-3 py-2 text-sm min-h-[80px] outline-none focus:border-orange-500"
                                         style={{ borderColor: C.border, color: C.navy }}
@@ -625,24 +1005,29 @@ export default function AdminDisputeDetailPage() {
                                                 value={resolveResolution}
                                                 onChange={(e) => setResolveResolution(e.target.value)}
                                             >
-                                                <option value="NO_CHANGE">{t('admin.disputes.resolutionNoChange')} (Không hoàn tiền)</option>
+                                                <option value="NO_REFUND">{t('admin.disputes.resolutionNoChange')} (Không hoàn tiền)</option>
                                                 <option value="FULL_REFUND">{t('admin.disputes.resolutionFullRefund')} (Hoàn 100%)</option>
                                                 <option value="PARTIAL_REFUND">{t('admin.disputes.resolutionPartialRefund')} (Hoàn 1 phần)</option>
-                                                <option value="DISMISSED">{t('admin.disputes.resolutionDismissed')} (Từ chối xử lý)</option>
                                             </select>
+                                            <p className="text-[11px] mt-1.5" style={{ color: C.gray }}>
+                                                Mức hoàn tối đa theo tiền net của provider: {refundableCap.toLocaleString('vi-VN')}đ
+                                            </p>
                                         </div>
 
                                         {resolveResolution === 'PARTIAL_REFUND' && (
                                             <div>
-                                                <label className="block text-xs font-bold mb-1.5" style={{ color: C.gray }}>Số tiền bồi thường (VNĐ)</label>
+                                                <label className="block text-xs font-bold mb-1.5" style={{ color: C.gray }}>Số tiền hoàn cho User (VNĐ)</label>
                                                 <input
                                                     type="text"
                                                     className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-orange-500"
                                                     style={{ borderColor: C.border, color: C.navy }}
-                                                    placeholder="VD: 50000"
+                                                    placeholder={`Tối đa ${refundableCap.toLocaleString('vi-VN')}`}
                                                     value={refundAmount}
                                                     onChange={(e) => setRefundAmount(e.target.value.replace(/\D/g, ''))}
                                                 />
+                                                <p className="text-[11px] mt-1.5" style={{ color: C.gray }}>
+                                                    Provider nhận: {providerReceiveAmount.toLocaleString('vi-VN')}đ
+                                                </p>
                                             </div>
                                         )}
 

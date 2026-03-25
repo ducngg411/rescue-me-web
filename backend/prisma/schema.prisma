@@ -638,6 +638,7 @@ enum PaymentStatus {
   PROVIDER_CONFIRMED
   COMPLETED
   DISPUTED
+  REFUNDED
 }
 
 enum DisputeCaseStatus {

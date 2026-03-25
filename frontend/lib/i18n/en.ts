@@ -1423,6 +1423,8 @@ const en = {
                 ACCEPTED: 'Accepted',
                 ASSIGNED: 'Assigned',
                 MATCHING: 'Matching',
+                DISPUTED: 'Disputed',
+                REFUNDED: 'Refunded',
             },
             quoteStatusBadge: {
                 AWAITING_CUSTOMER: 'Awaiting customer',
@@ -1722,6 +1724,8 @@ const en = {
                 ACCEPTED: 'Accepted',
                 ASSIGNED: 'Assigned',
                 MATCHING: 'Matching',
+                DISPUTED: 'Disputed',
+                REFUNDED: 'Refunded',
             },
             quoteStatusBadge: {
                 AWAITING_CUSTOMER: 'Awaiting customer',

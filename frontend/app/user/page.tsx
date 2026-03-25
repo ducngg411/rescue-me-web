@@ -10,6 +10,7 @@ import AvatarImage from '@/components/AvatarImage';
 import dynamic from 'next/dynamic';
 import api from '@/lib/api';
 import RescueMeLogo from '@/components/RescueMeLogo';
+import { useUserDisputeNavBadge } from '@/contexts/UserDisputeNavBadgeContext';
 
 const VietMap = dynamic(() => import('@/components/VietMap'), {
     ssr: false,
@@ -63,6 +64,7 @@ export default function UserDashboard() {
     const { isReady, user } = useUserGuard();
     const { logout } = useAuth();
     const { t } = useLanguage();
+    const { disputeNavBadge, resetDisputeNavBadge } = useUserDisputeNavBadge();
     const [activeNav, setActiveNav] = useState('Home');
     const [currentLocation, setCurrentLocation] = useState<LocationData | null>(null);
     const [isLoadingLocation, setIsLoadingLocation] = useState(true);
@@ -165,7 +167,10 @@ export default function UserDashboard() {
 
     const nav = (label: string, href: string) => {
         setActiveNav(label);
-        if (href !== '#') router.push(href);
+        if (href !== '#') {
+            if (href === '/user/disputes') resetDisputeNavBadge();
+            router.push(href);
+        }
     };
 
     const MapSection = ({ height }: { height: string }) => (
@@ -242,6 +247,11 @@ export default function UserDashboard() {
                                     onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                 >
                                     {item.icon}{item.label}
+                                    {item.href === '/user/disputes' && disputeNavBadge > 0 && !active && (
+                                        <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>
+                                            {disputeNavBadge > 99 ? '99+' : disputeNavBadge}
+                                        </span>
+                                    )}
                                 </button>
                             );
                         })}
@@ -599,11 +609,16 @@ export default function UserDashboard() {
                         <button
                             key={item.label}
                             onClick={() => nav(item.label, item.href)}
-                            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+                            className="relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
                             style={{ color: active ? C.orange : '#94a3b8' }}
                         >
                             <span style={{ color: active ? C.orange : '#94a3b8' }}>{item.icon}</span>
                             <span className="text-[9px] font-medium">{item.label}</span>
+                            {item.href === '/user/disputes' && disputeNavBadge > 0 && !active && (
+                                <span className="absolute top-1 right-2 min-w-[16px] h-4 px-0.5 text-[9px] font-bold text-white rounded-full flex items-center justify-center" style={{ background: '#ef4444' }}>
+                                    {disputeNavBadge > 99 ? '99+' : disputeNavBadge}
+                                </span>
+                            )}
                         </button>
                     );
                 })}

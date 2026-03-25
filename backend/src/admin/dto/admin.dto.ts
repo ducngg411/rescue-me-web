@@ -37,8 +37,8 @@ export class GetProvidersQueryDto {
 
 export class GetDisputesQueryDto {
     @IsOptional()
-    @IsEnum(DisputeCaseStatus)
-    status?: DisputeCaseStatus;
+    @IsString()
+    status?: string;
 
     @IsOptional()
     @Type(() => Number)

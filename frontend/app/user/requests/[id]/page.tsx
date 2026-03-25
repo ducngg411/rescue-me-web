@@ -741,7 +741,16 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                 className="w-full py-2 px-3 rounded-2xl text-xs font-semibold text-center"
                                 style={{ background: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa' }}
                             >
-                                Đơn đang khiếu nại · {existingDispute.status}
+                                Đơn đang khiếu nại · {(() => {
+                                    switch (existingDispute.status) {
+                                        case 'WAITING_FOR_PROVIDER': return 'Chờ Provider phản hồi';
+                                        case 'WAITING_FOR_CUSTOMER': return 'Cần bạn phản hồi';
+                                        case 'INVESTIGATING': return 'Admin đang xử lý';
+                                        case 'RESOLVED': return 'Đã giải quyết';
+                                        case 'REJECTED': return 'Đã từ chối';
+                                        default: return existingDispute.status;
+                                    }
+                                })()}
                             </div>
                             <button
                                 type="button"

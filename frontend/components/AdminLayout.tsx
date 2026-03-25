@@ -107,6 +107,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
     const pathname = usePathname();
     const { user, logout } = useAuth();
     const [disputeBadge, setDisputeBadge] = useState(0);
+    const [latestDisputeTotal, setLatestDisputeTotal] = useState(0);
 
     const currentActiveTab = activeTab || pathname;
 
@@ -119,18 +120,58 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
 
     useEffect(() => {
         let active = true;
-        api.get('/admin/disputes', { params: { take: 100 } })
-            .then((res) => {
+
+        const LS_SEEN_TOTAL_KEY = 'admin.disputes.seenTotal';
+        const LS_BADGE_KEY = 'admin.disputes.badgeCount';
+
+        const toInt = (value: string | null, fallback = 0) => {
+            const parsed = Number.parseInt(value ?? '', 10);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        };
+
+        const checkDisputeTotal = async () => {
+            try {
+                const res = await api.get('/admin/disputes', { params: { take: 1, skip: 0 } });
                 if (!active) return;
-                const items: any[] = res.data?.items ?? [];
-                const openCount = items.filter((x) => x.status !== 'RESOLVED' && x.status !== 'REJECTED').length;
-                setDisputeBadge(openCount);
-            })
-            .catch(() => {
+                const totalFromApi = Number(res.data?.total ?? 0);
+                setLatestDisputeTotal(totalFromApi);
+
+                const onDisputesPage = pathname.startsWith('/admin/disputes');
+                const seenTotal = toInt(localStorage.getItem(LS_SEEN_TOTAL_KEY), totalFromApi);
+                const currentBadge = toInt(localStorage.getItem(LS_BADGE_KEY), 0);
+
+                if (onDisputesPage) {
+                    localStorage.setItem(LS_SEEN_TOTAL_KEY, String(totalFromApi));
+                    localStorage.setItem(LS_BADGE_KEY, '0');
+                    setDisputeBadge(0);
+                    return;
+                }
+
+                if (totalFromApi < seenTotal) {
+                    // Keep values sane when old cases are archived/deleted.
+                    localStorage.setItem(LS_SEEN_TOTAL_KEY, String(totalFromApi));
+                    setDisputeBadge(currentBadge);
+                    return;
+                }
+
+                const delta = Math.max(0, totalFromApi - seenTotal);
+                const nextBadge = currentBadge + delta;
+                localStorage.setItem(LS_BADGE_KEY, String(nextBadge));
+                localStorage.setItem(LS_SEEN_TOTAL_KEY, String(totalFromApi));
+                setDisputeBadge(nextBadge);
+            } catch {
                 if (active) setDisputeBadge(0);
-            });
+            }
+        };
+
+        void checkDisputeTotal();
+        const id = window.setInterval(() => {
+            void checkDisputeTotal();
+        }, 30000);
+
         return () => {
             active = false;
+            window.clearInterval(id);
         };
     }, [pathname]);
 
@@ -166,7 +207,14 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
                                         return (
                                             <button
                                                 key={item.href}
-                                                onClick={() => router.push(item.href)}
+                                                onClick={() => {
+                                                    if (item.href === '/admin/disputes') {
+                                                        localStorage.setItem('admin.disputes.badgeCount', '0');
+                                                        localStorage.setItem('admin.disputes.seenTotal', String(latestDisputeTotal));
+                                                        setDisputeBadge(0);
+                                                    }
+                                                    router.push(item.href);
+                                                }}
                                                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
                                                 style={{
                                                     background: active ? C.orangeLight : 'transparent',
@@ -181,7 +229,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
                                             >
                                                 {item.icon}
                                                 {item.label}
-                                                {item.href === '/admin/disputes' && disputeBadge > 0 && (
+                                                {item.href === '/admin/disputes' && disputeBadge > 0 && !active && (
                                                     <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>
                                                         {disputeBadge}
                                                     </span>

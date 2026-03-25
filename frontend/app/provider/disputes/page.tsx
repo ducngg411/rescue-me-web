@@ -36,6 +36,7 @@ interface DisputeItem {
     status: string;
     createdAt: string;
     userReason?: string;
+    targetAmount?: number;
     payment: {
         requestId: string;
         totalAmount: number;
@@ -85,6 +86,7 @@ export default function ProviderDisputesPage() {
                         status: r.payment.disputeStatus ?? 'IN_REVIEW',
                         createdAt: r.payment.disputedAt ?? r.createdAt,
                         userReason: r.payment.disputeReason ?? '',
+                        targetAmount: r.payment.totalAmount,
                         payment: {
                             requestId: r.id,
                             totalAmount: r.payment.totalAmount ?? 0,
@@ -230,7 +232,7 @@ export default function ProviderDisputesPage() {
                                 </div>
                             </div>
                         ) : (
-                            <ul className="divide-y" style={{ borderColor: C.border }}>
+                            <ul className="divide-y divide-slate-200" style={{ borderColor: C.border }}>
                                 {disputes.map((d) => {
                                     const st = statusStyle(d.status);
                                     const date = new Date(d.createdAt);
@@ -268,7 +270,11 @@ export default function ProviderDisputesPage() {
                                                     <span className="text-xs" style={{ color: C.gray }}>
                                                         {t('provider.disputes.filedAt')}: {dateStr}
                                                     </span>
-                                                    {d.payment?.totalAmount > 0 && (
+                                                    {d.targetAmount !== undefined && d.targetAmount > 0 ? (
+                                                        <span className="text-xs font-semibold" style={{ color: C.orange }}>
+                                                            {d.targetAmount.toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US')}₫
+                                                        </span>
+                                                    ) : d.payment?.totalAmount > 0 && (
                                                         <span className="text-xs font-semibold" style={{ color: C.navy }}>
                                                             {d.payment.totalAmount.toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US')}₫
                                                         </span>

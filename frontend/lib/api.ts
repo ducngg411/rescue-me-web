@@ -134,6 +134,16 @@ export const adminApi = {
         };
     },
 
+    getDisputeStats: async () => {
+        const response = await api.get('/admin/disputes/stats');
+        return response.data as {
+            new: number;
+            inProgress: number;
+            resolved: number;
+            total: number;
+        };
+    },
+
     getDisputeDetail: async (caseId: string) => {
         const response = await api.get(`/admin/disputes/${caseId}`);
         return response.data;
@@ -149,8 +159,15 @@ export const adminApi = {
         return response.data;
     },
 
-    requestDisputeEvidence: async (caseId: string, message: string) => {
-        const response = await api.post(`/admin/disputes/${caseId}/request-evidence`, { message });
+    requestDisputeEvidence: async (
+        caseId: string,
+        message: string,
+        targetRole: 'PROVIDER' | 'CUSTOMER',
+    ) => {
+        const response = await api.post(`/admin/disputes/${caseId}/request-evidence`, {
+            message,
+            targetRole,
+        });
         return response.data;
     },
 

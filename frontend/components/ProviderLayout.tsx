@@ -6,7 +6,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProviderStatus } from '@/lib/hooks/useProviderStatus';
 import RescueMeLogo from '@/components/RescueMeLogo';
-import api from '@/lib/api';
+import { useDisputeNavBadge } from '@/lib/hooks/useDisputeNavBadge';
 
 const C = {
     orange: '#f97316',
@@ -31,28 +31,15 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
     const { t } = useLanguage();
     const { user, setUser, logout } = useAuth();
     const { isOnline, isLoading: statusLoading, toggleOnlineStatus, setIsOnline } = useProviderStatus();
-    const [disputeBadge, setDisputeBadge] = React.useState(0);
-
     useEffect(() => {
         if (user?.isOnline !== undefined) setIsOnline(user.isOnline);
     }, [user?.isOnline]);
 
-    useEffect(() => {
-        let active = true;
-        api.get('/disputes/provider')
-            .then((res) => {
-                if (!active) return;
-                const items: any[] = res.data?.items ?? [];
-                const count = items.reduce((acc, x) => acc + (x.unreadCount ?? 0), 0);
-                setDisputeBadge(count);
-            })
-            .catch(() => {
-                if (active) setDisputeBadge(0);
-            });
-        return () => {
-            active = false;
-        };
-    }, [pathname]);
+    const { badge: disputeBadge, resetOnNavigate: resetDisputeNavBadge } = useDisputeNavBadge({
+            fetchPath: '/disputes/provider',
+            listPath: '/provider/disputes',
+            storagePrefix: 'provider.disputes',
+        });
 
     const handleToggle = async () => {
         if (statusLoading) return;
@@ -114,14 +101,19 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
                             return (
                                 <button
                                     key={item.label}
-                                    onClick={() => router.push(item.href)}
+                                    onClick={() => {
+                                        if (item.href === '/provider/disputes') {
+                                            resetDisputeNavBadge();
+                                        }
+                                        router.push(item.href);
+                                    }}
                                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
                                     style={{ background: active ? C.orangeLight : 'transparent', color: active ? C.orange : '#64748b' }}
                                     onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = C.bg; }}
                                     onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                 >
                                     {item.icon}{item.label}
-                                    {item.href === '/provider/disputes' && disputeBadge > 0 && (
+                                    {item.href === '/provider/disputes' && disputeBadge > 0 && !active && (
                                         <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>
                                             {disputeBadge}
                                         </span>
@@ -208,15 +200,20 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
                     return (
                         <button
                             key={item.label}
-                            onClick={() => router.push(item.href)}
+                            onClick={() => {
+                                if (item.href === '/provider/disputes') {
+                                    resetDisputeNavBadge();
+                                }
+                                router.push(item.href);
+                            }}
                             className="relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
                             style={{ color: active ? C.orange : '#94a3b8' }}
                         >
                             <span style={{ color: active ? C.orange : '#94a3b8' }}>{item.icon}</span>
                             <span className="text-[9px] font-medium">{item.label}</span>
-                            {item.href === '/provider/disputes' && disputeBadge > 0 && (
+                            {item.href === '/provider/disputes' && disputeBadge > 0 && !active && (
                                 <span className="absolute top-1 right-5 w-4 h-4 text-[9px] font-bold text-white rounded-full flex items-center justify-center" style={{ background: '#ef4444' }}>
-                                    {Math.min(disputeBadge, 9)}
+                                    {disputeBadge > 99 ? '99+' : disputeBadge}
                                 </span>
                             )}
                         </button>

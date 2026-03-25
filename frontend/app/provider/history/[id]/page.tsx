@@ -261,8 +261,8 @@ export default function HistoryJobDetailPage() {
                         ? { label: t('provider.historyDetail.paymentBadge.CASH' as any), color: '#374151', bg: '#f3f4f6' }
                         : null;
 
-    const images = (req.media ?? []).filter((m: any) => m.mediaType === 'IMAGE').map((m: any) => m.publicUrl);
-    const videos = (req.media ?? []).filter((m: any) => m.mediaType === 'VIDEO').map((m: any) => m.publicUrl);
+    const images = Array.from(new Set((req.media ?? []).filter((m: any) => m.mediaType === 'IMAGE').map((m: any) => m.publicUrl as string))) as string[];
+    const videos = Array.from(new Set((req.media ?? []).filter((m: any) => m.mediaType === 'VIDEO').map((m: any) => m.publicUrl as string))) as string[];
 
     return (
         <div className="min-h-screen" style={{ background: C.bg, fontFamily: "'Inter', 'Lexend', sans-serif" }}>

@@ -83,13 +83,18 @@ export class AdminController {
     // ── Dispute Center ─────────────────────────────────────────────────────
 
     @Get('disputes')
-    async getDisputes(@Query() query: GetDisputesQueryDto) {
-        return this.adminService.getDisputes(query);
+    async getDisputes(@Query() query: GetDisputesQueryDto, @Request() req) {
+        return this.adminService.getDisputes(query, req.user.id);
+    }
+
+    @Get('disputes/stats')
+    async getDisputeStats() {
+        return this.adminService.getDisputeStats();
     }
 
     @Get('disputes/:id')
-    async getDisputeDetail(@Param('id') id: string) {
-        return this.adminService.getDisputeDetail(id);
+    async getDisputeDetail(@Param('id') id: string, @Request() req) {
+        return this.adminService.getDisputeDetail(id, req.user.id);
     }
 
     @Patch('disputes/:id/status')
@@ -142,6 +147,13 @@ export class AdminController {
         @Request() req,
     ) {
         return this.adminService.addDisputeEvidence(id, req.user.id, dto.url, dto.note);
+    }
+
+    // ── Request Center ──────────────────────────────────────────────────────
+
+    @Get('requests/:id')
+    async getRequestDetail(@Param('id') id: string) {
+        return this.adminService.getRequestDetail(id);
     }
 }
 
