@@ -7,6 +7,7 @@ import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ChevronRight, ChevronLeft, Search, Filter, Calendar } from 'lucide-react';
+import { displayOrderCode, displayDisputeCaseRef } from '@/lib/reconciliation';
 
 const C = {
     orange: '#f97316',
@@ -51,7 +52,7 @@ interface DisputeListItem {
         paymentMethod: string;
         disputedAt: string | null;
     };
-    request: { id: string; status: string; incidentType: string };
+    request: { id: string; orderCode?: string | null; status: string; incidentType: string };
     openedBy: { id: string; fullName: string; email: string } | null;
 }
 
@@ -357,10 +358,10 @@ export default function AdminDisputesPage() {
                                                 onClick={() => router.push(`/admin/disputes/${row.id}`)}
                                             >
                                                 <td className="px-4 py-3 font-mono text-xs" style={{ color: C.navy }}>
-                                                    {row.id.slice(0, 10)}…
+                                                    {displayDisputeCaseRef(row.id)}…
                                                 </td>
                                                 <td className="px-4 py-3 font-mono text-xs" style={{ color: C.gray }}>
-                                                    #{row.payment.requestId.slice(0, 8).toUpperCase()}
+                                                    #{displayOrderCode(row.request?.orderCode, row.payment.requestId)}
                                                 </td>
                                                 <td className="px-4 py-3 font-semibold" style={{ color: C.navy }}>
                                                     {(row.targetAmount ?? row.payment.totalAmount).toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US')}

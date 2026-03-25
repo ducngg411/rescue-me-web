@@ -12,6 +12,11 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import {
+    allocateUniqueUserWalletTxnCode,
+    allocateUniqueUserTopupTransferCode,
+    allocateUniqueUserTopupTxnCode,
+} from '../common/business-codes';
 
 const MIN_WITHDRAWAL = 50_000;
 
@@ -34,34 +39,6 @@ export class UserWalletService {
         });
     }
 
-    private generateTopupCode(): string {
-        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        const rand = Array.from({ length: 7 }, () =>
-            chars[Math.floor(Math.random() * chars.length)]
-        ).join('');
-        return `RU${rand}`;
-    }
-
-    private async ensureTopupCode(walletId: string): Promise<string> {
-        const wallet = await this.prisma.userWallet.findUnique({ where: { id: walletId } });
-        if (!wallet) throw new NotFoundException(`Wallet ${walletId} not found`);
-        if (wallet.topupCode) return wallet.topupCode;
-
-        for (let i = 0; i < 10; i++) {
-            const code = this.generateTopupCode();
-            try {
-                const updated = await this.prisma.userWallet.update({
-                    where: { id: walletId },
-                    data: { topupCode: code },
-                });
-                return updated.topupCode!;
-            } catch {
-                // unique constraint — retry
-            }
-        }
-        throw new Error('Could not generate unique topup code');
-    }
-
     // ── Credit ─────────────────────────────────────────────────────────────────
 
     async credit(
@@ -80,8 +57,9 @@ export class UserWalletService {
 
             const balanceField = status === WalletTransactionStatus.COMPLETED ? 'availableBalance' : 'pendingBalance';
 
+            const txnCode = await allocateUniqueUserWalletTxnCode(tx);
             const txRecord = await tx.userWalletTransaction.create({
-                data: { walletId, type: WalletTransactionType.CREDIT, amount, status, referenceType, referenceId, description, holdReleaseAt: opts.holdReleaseAt },
+                data: { walletId, txnCode, type: WalletTransactionType.CREDIT, amount, status, referenceType, referenceId, description, holdReleaseAt: opts.holdReleaseAt },
             });
 
             const updatedWallet = await tx.userWallet.update({
@@ -112,8 +90,9 @@ export class UserWalletService {
                 throw new BadRequestException(`Insufficient balance: available=${wallet.availableBalance}, requested=${amount}`);
             }
 
+            const txnCode = await allocateUniqueUserWalletTxnCode(tx);
             const txRecord = await tx.userWalletTransaction.create({
-                data: { walletId, type: WalletTransactionType.DEBIT, amount, status: WalletTransactionStatus.COMPLETED, referenceType, referenceId, description: opts.description },
+                data: { walletId, txnCode, type: WalletTransactionType.DEBIT, amount, status: WalletTransactionStatus.COMPLETED, referenceType, referenceId, description: opts.description },
             });
 
             const updatedWallet = await tx.userWallet.update({
@@ -156,9 +135,11 @@ export class UserWalletService {
                 throw new BadRequestException(`Insufficient balance for withdrawal`);
             }
 
+            const txnCode = await allocateUniqueUserWalletTxnCode(tx);
             const walletTx = await tx.userWalletTransaction.create({
                 data: {
                     walletId,
+                    txnCode,
                     type: WalletTransactionType.DEBIT,
                     amount,
                     status: WalletTransactionStatus.PENDING,
@@ -186,7 +167,6 @@ export class UserWalletService {
         }
 
         const wallet = await this.ensureWallet(userId);
-        const transferCode = await this.ensureTopupCode(wallet.id);
 
         const bankAccount = this.config.get('SEPAY_BANK_ACCOUNT', '07729096901');
         const bankCode = this.config.get('SEPAY_BANK_CODE', 'TPBank');
@@ -206,6 +186,7 @@ export class UserWalletService {
             if (existing.amount === amount) {
                 return {
                     topupTxId: existing.id,
+                    topupTxnCode: existing.txnCode ?? undefined,
                     transferCode: existing.transferCode,
                     amount: existing.amount,
                     expireAt: existing.expireAt,
@@ -218,15 +199,18 @@ export class UserWalletService {
             await this.prisma.userTopupTransaction.update({ where: { id: existing.id }, data: { status: 'CANCELLED' } });
         }
 
+        const transferCode = await allocateUniqueUserTopupTransferCode(this.prisma);
+        const topupTxnCode = await allocateUniqueUserTopupTxnCode(this.prisma);
         const expireAt = new Date(now.getTime() + 5 * 60 * 1000);
         const topupTx = await this.prisma.userTopupTransaction.create({
-            data: { walletId: wallet.id, amount, transferCode, expireAt },
+            data: { walletId: wallet.id, amount, transferCode, txnCode: topupTxnCode, expireAt },
         });
 
-        this.logger.log(`USER_TOPUP_INIT userId=${userId} amount=${amount} code=${transferCode}`);
+        this.logger.log(`USER_TOPUP_INIT userId=${userId} amount=${amount} code=${transferCode} topupTxnCode=${topupTxnCode}`);
 
         return {
             topupTxId: topupTx.id,
+            topupTxnCode,
             transferCode,
             amount,
             expireAt,
@@ -267,6 +251,7 @@ export class UserWalletService {
 
         return {
             topupTxId: tx.id,
+            topupTxnCode: tx.txnCode ?? undefined,
             transferCode: tx.transferCode,
             amount: tx.amount,
             expireAt: tx.expireAt,

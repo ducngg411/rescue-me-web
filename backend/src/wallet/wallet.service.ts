@@ -14,6 +14,12 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { MailService } from '../mail/mail.service';
+import {
+    allocateUniqueProviderWalletTxnCode,
+    allocateUniqueProviderTopupTransferCode,
+    allocateUniqueProviderTopupTxnCode,
+    allocateUniqueUserTopupTxnCode,
+} from '../common/business-codes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Option types
@@ -163,9 +169,11 @@ export class WalletService {
                     : 'pendingBalance';
 
             // 3. Create the transaction record
+            const txnCode = await allocateUniqueProviderWalletTxnCode(tx);
             const txRecord = await tx.walletTransaction.create({
                 data: {
                     walletId,
+                    txnCode,
                     type: WalletTransactionType.CREDIT,
                     amount,
                     status,
@@ -231,9 +239,11 @@ export class WalletService {
             }
 
             // 3. Create the transaction record
+            const txnCode = await allocateUniqueProviderWalletTxnCode(tx);
             const txRecord = await tx.walletTransaction.create({
                 data: {
                     walletId,
+                    txnCode,
                     type: WalletTransactionType.DEBIT,
                     amount,
                     status: WalletTransactionStatus.COMPLETED,
@@ -290,9 +300,11 @@ export class WalletService {
             }
 
             // Create the DEBIT / COMMISSION transaction record
+            const txnCode = await allocateUniqueProviderWalletTxnCode(tx);
             const txRecord = await tx.walletTransaction.create({
                 data: {
                     walletId,
+                    txnCode,
                     type: WalletTransactionType.DEBIT,
                     amount,
                     status: WalletTransactionStatus.COMPLETED,
@@ -442,6 +454,7 @@ export class WalletService {
             if (request) {
                 jobDetail = {
                     id: request.id,
+                    orderCode: request.orderCode,
                     incidentType: request.incidentType,
                     vehicleType: request.vehicleType,
                     description: request.description,
@@ -523,9 +536,11 @@ export class WalletService {
             }
 
             // 3. Create PENDING DEBIT transaction (bank transfer not yet done)
+            const txnCode = await allocateUniqueProviderWalletTxnCode(tx);
             const walletTx = await tx.walletTransaction.create({
                 data: {
                     walletId,
+                    txnCode,
                     type: WalletTransactionType.DEBIT,
                     amount,
                     status: WalletTransactionStatus.PENDING,
@@ -649,45 +664,6 @@ export class WalletService {
     // ── Top-up (SePay VietQR) ──────────────────────────────────────────────────
 
     /**
-     * Generate a unique transfer code for the provider (idempotent).
-     * Format: RM + 7 uppercase alphanumeric chars, e.g. RM-A3B7C2D
-     */
-    private generateTopupCode(): string {
-        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        const rand = Array.from({ length: 7 }, () =>
-            chars[Math.floor(Math.random() * chars.length)]
-        ).join('');
-        return `RM${rand}`;
-    }
-
-    /**
-     * Ensure the provider's wallet has a topupCode, generate one if missing.
-     */
-    private async ensureTopupCode(walletId: string): Promise<string> {
-        const wallet = await this.prisma.providerWallet.findUnique({
-            where: { id: walletId },
-        });
-        if (!wallet) throw new NotFoundException(`Wallet ${walletId} not found`);
-
-        if (wallet.topupCode) return wallet.topupCode;
-
-        // Try generating a unique code (retry if collision)
-        for (let i = 0; i < 10; i++) {
-            const code = this.generateTopupCode();
-            try {
-                const updated = await this.prisma.providerWallet.update({
-                    where: { id: walletId },
-                    data: { topupCode: code },
-                });
-                return updated.topupCode!;
-            } catch {
-                // unique constraint violation – retry
-            }
-        }
-        throw new Error('Could not generate unique topup code');
-    }
-
-    /**
      * Provider calls this when they tap "Nạp tiền".
      * Idempotent: returns existing PENDING non-expired tx if one exists.
      * Creates a new one with expireAt = now + 5min otherwise.
@@ -700,7 +676,6 @@ export class WalletService {
         }
 
         const wallet = await this.ensureWallet(providerId);
-        const transferCode = await this.ensureTopupCode(wallet.id);
 
         const bankAccount = this.config.get('SEPAY_BANK_ACCOUNT', '07729096901');
         const bankCode = this.config.get('SEPAY_BANK_CODE', 'TPBank');
@@ -730,6 +705,7 @@ export class WalletService {
                 );
                 return {
                     topupTxId: existing.id,
+                    topupTxnCode: existing.txnCode ?? undefined,
                     transferCode: existing.transferCode,
                     amount: existing.amount,
                     expireAt: existing.expireAt,
@@ -749,24 +725,28 @@ export class WalletService {
             });
         }
 
-        // 2. Create new PENDING tx with 5-minute expiry
+        // 2. Create new PENDING tx with 5-minute expiry (new bank transfer content every init)
+        const transferCode = await allocateUniqueProviderTopupTransferCode(this.prisma);
+        const topupTxnCode = await allocateUniqueProviderTopupTxnCode(this.prisma);
         const expireAt = new Date(now.getTime() + 5 * 60 * 1000);
         const topupTx = await this.prisma.topupTransaction.create({
             data: {
                 walletId: wallet.id,
                 amount,
                 transferCode,
+                txnCode: topupTxnCode,
                 expireAt,
             },
         });
 
         this.logger.log(
             `TOPUP_INIT providerId=${providerId} wallet=${wallet.id} ` +
-            `amount=${amount} code=${transferCode} txId=${topupTx.id} expireAt=${expireAt.toISOString()}`,
+            `amount=${amount} code=${transferCode} topupTxnCode=${topupTxnCode} txId=${topupTx.id} expireAt=${expireAt.toISOString()}`,
         );
 
         return {
             topupTxId: topupTx.id,
+            topupTxnCode,
             transferCode,
             amount,
             expireAt,
@@ -844,53 +824,94 @@ export class WalletService {
         if (userMatch) {
             return this.processUserTopupWebhook(transferCode, Number(sepayId), sepayReferenceCode, Number(transferAmount));
         }
-        // 5. Find the wallet by topupCode
-        const wallet = await this.prisma.providerWallet.findUnique({
-            where: { topupCode: transferCode },
+
+        const now = new Date();
+        // 5c. Provider topup: prefer PENDING row with this exact transferCode; else legacy wallet.topupCode + newest PENDING
+        let pendingTx = await this.prisma.topupTransaction.findFirst({
+            where: {
+                transferCode,
+                status: 'PENDING',
+                OR: [{ expireAt: null }, { expireAt: { gt: now } }],
+            },
+            orderBy: { createdAt: 'desc' },
         });
+
+        let wallet = pendingTx
+            ? await this.prisma.providerWallet.findUnique({ where: { id: pendingTx.walletId } })
+            : null;
+
+        if (!wallet) {
+            wallet = await this.prisma.providerWallet.findUnique({
+                where: { topupCode: transferCode },
+            });
+        }
         if (!wallet) {
             this.logger.warn(`SEPAY_WEBHOOK no wallet for code=${transferCode}`);
             return { success: true, message: 'No wallet found for transfer code' };
         }
 
-        // 6. Find the most-recent, non-expired PENDING topup transaction for this wallet.
-        //    Match by amount first; fall back to any PENDING if amount differs.
-        //    IMPORTANT: use 'desc' so we update the newest tx (what the frontend is polling),
-        //    not an old stale PENDING tx left over from before expiry was added.
-        const now = new Date();
-        const pendingTx =
-            // Best match: right amount, not yet expired
-            await this.prisma.topupTransaction.findFirst({
-                where: {
-                    walletId: wallet.id,
-                    status: 'PENDING',
-                    amount: Number(transferAmount),
-                    OR: [{ expireAt: null }, { expireAt: { gt: now } }],
-                },
-                orderBy: { createdAt: 'desc' },
-            }) ??
-            // Fallback: any amount, not yet expired
-            await this.prisma.topupTransaction.findFirst({
-                where: {
-                    walletId: wallet.id,
-                    status: 'PENDING',
-                    OR: [{ expireAt: null }, { expireAt: { gt: now } }],
-                },
-                orderBy: { createdAt: 'desc' },
-            });
+        if (!pendingTx) {
+            pendingTx =
+                (await this.prisma.topupTransaction.findFirst({
+                    where: {
+                        walletId: wallet.id,
+                        status: 'PENDING',
+                        amount: Number(transferAmount),
+                        OR: [{ expireAt: null }, { expireAt: { gt: now } }],
+                    },
+                    orderBy: { createdAt: 'desc' },
+                })) ??
+                (await this.prisma.topupTransaction.findFirst({
+                    where: {
+                        walletId: wallet.id,
+                        status: 'PENDING',
+                        OR: [{ expireAt: null }, { expireAt: { gt: now } }],
+                    },
+                    orderBy: { createdAt: 'desc' },
+                }));
+        }
 
-        // 7. Atomic: credit wallet + mark topup tx COMPLETED
+        // Ledger line uses same txnCode as TopupTransaction (TNP…) so admin topups ↔ provider wallet match.
         await this.prisma.$transaction(async (tx) => {
-            // Credit availableBalance
             await tx.providerWallet.update({
-                where: { id: wallet.id },
+                where: { id: wallet!.id },
                 data: { availableBalance: { increment: Number(transferAmount) } },
             });
 
-            // Create WalletTransaction record (CREDIT / TOPUP)
+            let sharedTopupTxnCode: string;
+            if (pendingTx) {
+                sharedTopupTxnCode =
+                    pendingTx.txnCode ?? (await allocateUniqueProviderTopupTxnCode(tx));
+                await tx.topupTransaction.update({
+                    where: { id: pendingTx.id },
+                    data: {
+                        status: 'COMPLETED',
+                        sepayId: Number(sepayId),
+                        sepayReferenceCode,
+                        completedAt: new Date(),
+                        ...(pendingTx.txnCode ? {} : { txnCode: sharedTopupTxnCode }),
+                    },
+                });
+            } else {
+                sharedTopupTxnCode = await allocateUniqueProviderTopupTxnCode(tx);
+                await tx.topupTransaction.create({
+                    data: {
+                        walletId: wallet!.id,
+                        amount: Number(transferAmount),
+                        status: 'COMPLETED',
+                        transferCode,
+                        txnCode: sharedTopupTxnCode,
+                        sepayId: Number(sepayId),
+                        sepayReferenceCode,
+                        completedAt: new Date(),
+                    },
+                });
+            }
+
             await tx.walletTransaction.create({
                 data: {
-                    walletId: wallet.id,
+                    walletId: wallet!.id,
+                    txnCode: sharedTopupTxnCode,
                     type: WalletTransactionType.CREDIT,
                     amount: Number(transferAmount),
                     status: WalletTransactionStatus.COMPLETED,
@@ -899,32 +920,6 @@ export class WalletService {
                     description: `Nạp tiền qua SePay · ${transferCode}`,
                 },
             });
-
-            // Update or create TopupTransaction
-            if (pendingTx) {
-                await tx.topupTransaction.update({
-                    where: { id: pendingTx.id },
-                    data: {
-                        status: 'COMPLETED',
-                        sepayId: Number(sepayId),
-                        sepayReferenceCode,
-                        completedAt: new Date(),
-                    },
-                });
-            } else {
-                // Webhook arrived without a matching pending tx (e.g. direct transfer)
-                await tx.topupTransaction.create({
-                    data: {
-                        walletId: wallet.id,
-                        amount: Number(transferAmount),
-                        status: 'COMPLETED',
-                        transferCode,
-                        sepayId: Number(sepayId),
-                        sepayReferenceCode,
-                        completedAt: new Date(),
-                    },
-                });
-            }
         });
 
         this.logger.log(
@@ -987,10 +982,19 @@ export class WalletService {
         }
 
         // Atomic: mark topup COMPLETED + credit UserWallet
+        // Use the same txnCode as UserTopupTransaction (TNU…) so user wallet matches admin "lần nạp".
         await this.prisma.$transaction(async (tx) => {
+            const sharedTxnCode =
+                pendingTx.txnCode ?? (await allocateUniqueUserTopupTxnCode(tx));
             await tx.userTopupTransaction.update({
                 where: { id: pendingTx.id },
-                data: { status: 'COMPLETED', completedAt: now, sepayId, sepayReferenceCode },
+                data: {
+                    status: 'COMPLETED',
+                    completedAt: now,
+                    sepayId,
+                    sepayReferenceCode,
+                    ...(pendingTx.txnCode ? {} : { txnCode: sharedTxnCode }),
+                },
             });
 
             await tx.userWallet.update({
@@ -1001,6 +1005,7 @@ export class WalletService {
             await tx.userWalletTransaction.create({
                 data: {
                     walletId: pendingTx.walletId,
+                    txnCode: sharedTxnCode,
                     type: WalletTransactionType.CREDIT,
                     amount: pendingTx.amount,
                     status: WalletTransactionStatus.COMPLETED,
@@ -1102,6 +1107,7 @@ export class WalletService {
 
         return {
             topupTxId: tx.id,
+            topupTxnCode: tx.txnCode ?? undefined,
             transferCode: tx.transferCode,
             amount: tx.amount,
             expireAt: tx.expireAt,
@@ -1144,9 +1150,11 @@ export class WalletService {
                 where: { id: jobTx.id },
                 data: { status: 'COMPLETED', sepayId, completedAt: new Date() },
             });
+            const jobWTxn = await allocateUniqueProviderWalletTxnCode(tx);
             await tx.walletTransaction.create({
                 data: {
                     walletId: wallet.id,
+                    txnCode: jobWTxn,
                     type: WalletTransactionType.CREDIT,
                     amount: netAmount,
                     status: WalletTransactionStatus.PENDING,

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { CheckCircle, XCircle, Clock, Edit, Wallet, Send } from 'lucide-react';
 import api from '@/lib/api';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -52,7 +52,7 @@ function Row({ label, value }: { label: string; value: string }) {
     );
 }
 
-export default function ProviderDashboard() {
+function ProviderDashboardContent() {
     const router = useRouter();
     const { t, locale } = useLanguage();
     const searchParams = useSearchParams();
@@ -317,5 +317,19 @@ export default function ProviderDashboard() {
                 </div>
             </div>
         </ProviderLayout>
+    );
+}
+
+export default function ProviderDashboard() {
+    return (
+        <Suspense
+            fallback={
+                <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
+                    <div className="w-9 h-9 rounded-full border-[3px] border-t-transparent animate-spin" style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
+                </div>
+            }
+        >
+            <ProviderDashboardContent />
+        </Suspense>
     );
 }

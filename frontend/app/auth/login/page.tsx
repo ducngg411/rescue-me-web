@@ -23,6 +23,7 @@ export default function LoginPage() {
     const { t, locale } = useLanguage();
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [bannedInfo, setBannedInfo] = useState<string | null>(null);
 
     const {
         register,
@@ -32,6 +33,7 @@ export default function LoginPage() {
 
     const onSubmitEmail = async (data: LoginFormData) => {
         setLoading(true);
+        setBannedInfo(null);
         try {
             const response = await loginWithEmail(data.email, data.password);
             setUser(response.user);
@@ -46,7 +48,12 @@ export default function LoginPage() {
                 router.push('/user');
             }
         } catch (err: any) {
-            toast.error(resolveAuthErrorMessage(err.response?.data?.message, t, 'auth.login.loginFailed'));
+            const msg: string = err.response?.data?.message || '';
+            if (msg.startsWith('ACCOUNT_BANNED::')) {
+                setBannedInfo(msg.replace('ACCOUNT_BANNED::', ''));
+            } else {
+                toast.error(resolveAuthErrorMessage(msg, t, 'auth.login.loginFailed'));
+            }
         } finally {
             setLoading(false);
         }
@@ -54,6 +61,7 @@ export default function LoginPage() {
 
     const handleGoogleSuccess = async (credentialResponse: any) => {
         setLoading(true);
+        setBannedInfo(null);
         try {
             const response = await loginWithGoogle(credentialResponse.credential);
             setUser(response.user);
@@ -68,7 +76,12 @@ export default function LoginPage() {
                 router.push('/user');
             }
         } catch (err: any) {
-            toast.error(resolveAuthErrorMessage(err.response?.data?.message, t, 'auth.login.googleLoginFailed'));
+            const msg: string = err.response?.data?.message || '';
+            if (msg.startsWith('ACCOUNT_BANNED::')) {
+                setBannedInfo(msg.replace('ACCOUNT_BANNED::', ''));
+            } else {
+                toast.error(resolveAuthErrorMessage(msg, t, 'auth.login.googleLoginFailed'));
+            }
         } finally {
             setLoading(false);
         }
@@ -122,6 +135,21 @@ export default function LoginPage() {
                                 {t('auth.login.createAccount')}
                             </a>
                         </p>
+
+                        {/* Banned account notice */}
+                        {bannedInfo && (
+                            <div className="mb-5 p-4 rounded-xl border-l-4 flex items-start gap-3"
+                                style={{ background: '#fef2f2', borderColor: '#ef4444' }}>
+                                <svg className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#ef4444' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                </svg>
+                                <div>
+                                    <p className="text-sm font-bold" style={{ color: '#991b1b' }}>Tài khoản bị khóa</p>
+                                    <p className="text-sm mt-0.5" style={{ color: '#b91c1c' }}>Lý do: {bannedInfo}</p>
+                                    <p className="text-xs mt-1.5" style={{ color: '#b91c1c', opacity: 0.8 }}>Vui lòng liên hệ admin để được hỗ trợ.</p>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Form */}
                         <form onSubmit={handleSubmit(onSubmitEmail)} className="space-y-4" noValidate>

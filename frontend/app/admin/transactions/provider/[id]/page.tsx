@@ -16,6 +16,7 @@ import {
     ChevronRight,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { displayWalletTxnCode } from '@/lib/reconciliation';
 
 const C = {
     orange: '#f97316',
@@ -183,14 +184,22 @@ export default function ProviderWalletDetailPage() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-                        <div className="bg-gray-50 rounded-xl p-4 border min-w-[160px]" style={{ borderColor: C.border }}>
-                            <p className="text-xs uppercase font-semibold tracking-wider mb-1" style={{ color: C.gray }}>Khả dụng</p>
-                            <p className="text-2xl font-bold" style={{ color: C.navy }}>{formatCurrency(wallet.availableBalance)}</p>
+                    <div className="flex flex-wrap gap-4 w-full md:w-auto">
+                        <div className="bg-green-50 rounded-xl p-4 border min-w-[140px]" style={{ borderColor: C.border }}>
+                            <p className="text-[11px] uppercase font-bold tracking-wider mb-1" style={{ color: C.green }}>Tổng thu</p>
+                            <p className="text-xl font-bold" style={{ color: C.green }}>{formatCurrency(wallet.totalIncome || 0)}</p>
                         </div>
-                        <div className="bg-orange-50 rounded-xl p-4 border min-w-[160px]" style={{ borderColor: C.border }}>
-                            <p className="text-xs uppercase font-semibold tracking-wider mb-1" style={{ color: C.orangeDark }}>Đóng băng</p>
-                            <p className="text-2xl font-bold" style={{ color: C.orange }}>{formatCurrency(wallet.pendingBalance)}</p>
+                        <div className="bg-red-50 rounded-xl p-4 border min-w-[140px]" style={{ borderColor: C.border }}>
+                            <p className="text-[11px] uppercase font-bold tracking-wider mb-1" style={{ color: C.red }}>Tổng chi</p>
+                            <p className="text-xl font-bold" style={{ color: C.red }}>{formatCurrency(wallet.totalExpense || 0)}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-4 border min-w-[140px]" style={{ borderColor: C.border }}>
+                            <p className="text-[11px] uppercase font-bold tracking-wider mb-1" style={{ color: C.gray }}>Khả dụng</p>
+                            <p className="text-xl font-bold" style={{ color: C.navy }}>{formatCurrency(wallet.availableBalance)}</p>
+                        </div>
+                        <div className="bg-orange-50 rounded-xl p-4 border min-w-[140px]" style={{ borderColor: C.border }}>
+                            <p className="text-[11px] uppercase font-bold tracking-wider mb-1" style={{ color: C.orangeDark }}>Đóng băng</p>
+                            <p className="text-xl font-bold" style={{ color: C.orange }}>{formatCurrency(wallet.pendingBalance)}</p>
                         </div>
                     </div>
                 </div>
@@ -305,7 +314,7 @@ export default function ProviderWalletDetailPage() {
                                 ) : (
                                     data.map((item) => (
                                         <tr key={item.id} className="border-t hover:bg-gray-50 transition-colors" style={{ borderColor: C.border }}>
-                                            <td className="px-4 py-3 font-mono text-xs" style={{ color: C.navy }}>{item.id.slice(-8).toUpperCase()}</td>
+                                            <td className="px-4 py-3 font-mono text-xs" style={{ color: C.navy }}>{displayWalletTxnCode(item.txnCode, item.id)}</td>
                                             {activeTab === 'transactions' && (
                                                 <td className="px-4 py-3 text-sm">{renderTypeBadge(item.type)}</td>
                                             )}

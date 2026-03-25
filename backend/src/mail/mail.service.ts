@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { formatOrderLabelForSupport } from '../common/business-codes';
 import { MailerService } from '@nestjs-modules/mailer';
 
 const APP_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -147,6 +148,60 @@ export class MailService {
         }
     }
 
+    /** Gửi khi admin khóa tạm ngưng tài khoản người dùng */
+    async sendUserSuspended(email: string, name: string, reason?: string) {
+        try {
+            await this.mailerService.sendMail({
+                to: email,
+                subject: '[RescueMe] Tài khoản của bạn đã bị tạm ngưng',
+                template: 'user-suspended',
+                context: {
+                    name: name || 'bạn',
+                    reason: reason || null,
+                    appUrl: APP_URL,
+                    year: new Date().getFullYear(),
+                },
+            });
+            this.logger.log(`User suspended email sent to ${email}`);
+        } catch (error) {
+            this.logger.error(`Failed to send user suspended email to ${email}`, error);
+        }
+    }
+
+    /** Gửi khi admin mở lại tài khoản người dùng */
+    async sendUserUnsuspended(email: string, name: string) {
+        try {
+            await this.mailerService.sendMail({
+                to: email,
+                subject: '[RescueMe] Tài khoản của bạn đã được mở lại',
+                template: 'user-unsuspended',
+                context: {
+                    name: name || 'bạn',
+                    appUrl: APP_URL,
+                    year: new Date().getFullYear(),
+                },
+            });
+            this.logger.log(`User unsuspended email sent to ${email}`);
+        } catch (error) {
+            this.logger.error(`Failed to send user unsuspended email to ${email}`, error);
+        }
+    }
+
+    /** Gửi khi admin xóa vĩnh viễn tài khoản người dùng */
+    async sendUserDeleted(email: string, name: string) {
+        try {
+            await this.mailerService.sendMail({
+                to: email,
+                subject: '[RescueMe] Tài khoản của bạn đã bị xóa',
+                template: 'user-deleted',
+                context: { name: name || 'bạn', appUrl: APP_URL, year: new Date().getFullYear() },
+            });
+            this.logger.log(`User deleted email sent to ${email}`);
+        } catch (error) {
+            this.logger.error(`Failed to send user deleted email to ${email}`, error);
+        }
+    }
+
     /** Gửi khi admin mở lại tài khoản provider */
     async sendProviderUnsuspended(email: string, name: string) {
         try {
@@ -175,22 +230,25 @@ export class MailService {
         name: string;
         isProvider: boolean;
         requestId: string;
+        orderCode?: string | null;
         amount: number;
         paymentMethod: string;
         completedAt: Date;
     }) {
-        const { email, name, isProvider, requestId, amount, paymentMethod, completedAt } = params;
+        const { email, name, isProvider, requestId, orderCode, amount, paymentMethod, completedAt } = params;
+        const orderLabel = formatOrderLabelForSupport(orderCode, requestId);
         try {
             await this.mailerService.sendMail({
                 to: email,
                 subject: isProvider
-                    ? `[RescueMe] Biên nhận thu nhập job #${requestId.slice(0, 8).toUpperCase()}`
+                    ? `[RescueMe] Biên nhận thu nhập job ${orderLabel}`
                     : `[RescueMe] Biên nhận thanh toán dịch vụ cứu hộ 🧾`,
                 template: 'payment-receipt',
                 context: {
                     name: name || 'bạn',
                     isProvider,
-                    requestId: requestId.slice(0, 8).toUpperCase(),
+                    orderLabel,
+                    requestId,
                     amount: formatVND(amount),
                     paymentMethodLabel: paymentMethodLabel[paymentMethod] ?? paymentMethod,
                     completedAt: formatDate(completedAt),
@@ -213,19 +271,22 @@ export class MailService {
         name: string;
         isAdmin: boolean;
         requestId: string;
+        orderCode?: string | null;
         reason: string;
         disputedBy: string;
     }) {
-        const { email, name, isAdmin, requestId, reason, disputedBy } = params;
+        const { email, name, isAdmin, requestId, orderCode, reason, disputedBy } = params;
+        const orderLabel = formatOrderLabelForSupport(orderCode, requestId);
         try {
             await this.mailerService.sendMail({
                 to: email,
-                subject: `[RescueMe] ⚖️ Tranh chấp thanh toán — Yêu cầu #${requestId.slice(0, 8).toUpperCase()}`,
+                subject: `[RescueMe] ⚖️ Tranh chấp thanh toán — ${orderLabel}`,
                 template: 'payment-dispute',
                 context: {
                     name: name || 'bạn',
                     isAdmin,
-                    requestId: requestId.slice(0, 8).toUpperCase(),
+                    orderLabel,
+                    requestId,
                     reason,
                     disputedBy,
                     appUrl: APP_URL,

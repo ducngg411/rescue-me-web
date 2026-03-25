@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useGuestGuard } from '@/lib/guards';
 import { useLanguage } from '@/contexts/LanguageContext';
 import api from '@/lib/api';
+import { displayOrderCode } from '@/lib/reconciliation';
 import toast from 'react-hot-toast';
 import GuestRegisterModal from '@/components/GuestRegisterModal';
 import MatchingStatus from '@/components/MatchingStatus';
@@ -28,6 +29,7 @@ const C = {
 
 interface RequestStatus {
     id: string;
+    orderCode?: string | null;
     status: string;
     incidentType: string;
     pickupLocation: { addressText: string; lat: number; lng: number };
@@ -350,7 +352,7 @@ export default function GuestStatusPage() {
                 {/* ── Status Card ── */}
                 <div className="bg-white rounded-2xl p-5" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                     <div className="flex items-center justify-between mb-4">
-                        <span className="text-xs font-mono" style={{ color: C.gray }}>#{id.slice(-8).toUpperCase()}</span>
+                        <span className="text-xs font-mono" style={{ color: C.gray }}>#{displayOrderCode(statusData.orderCode, id ?? '')}</span>
                         <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: statusBadge.bg, color: statusBadge.color }}>
                             {statusLabels[statusData.status] || statusData.status}
                         </span>

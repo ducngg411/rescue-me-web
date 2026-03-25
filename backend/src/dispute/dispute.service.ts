@@ -15,6 +15,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { formatOrderLabelForSupport } from '../common/business-codes';
 
 const FIRST_RESPONSE_SLA_HOURS = 24;
 const RESOLUTION_SLA_HOURS = 72;
@@ -134,10 +135,15 @@ export class DisputeService {
                 ? DisputeCaseStatus.WAITING_FOR_PROVIDER
                 : DisputeCaseStatus.WAITING_FOR_CUSTOMER;
 
+        const reqLabelRow = await this.prisma.rescueRequest.findUnique({
+            where: { id: dto.orderId },
+            select: { orderCode: true },
+        });
+        const orderLabel = formatOrderLabelForSupport(reqLabelRow?.orderCode, dto.orderId);
         const openingBody =
             role === 'CUSTOMER'
-                ? `Khách hàng khiếu nại đơn hàng ${dto.orderId.slice(0, 8).toUpperCase()} với lý do: ${dto.reason}. Cứu hộ viên vui lòng phản hồi sớm.`
-                : `Cứu hộ viên khiếu nại đơn hàng ${dto.orderId.slice(0, 8).toUpperCase()} với lý do: ${dto.reason}. Khách hàng vui lòng phản hồi sớm.`;
+                ? `Khách hàng khiếu nại đơn hàng ${orderLabel} với lý do: ${dto.reason}. Cứu hộ viên vui lòng phản hồi sớm.`
+                : `Cứu hộ viên khiếu nại đơn hàng ${orderLabel} với lý do: ${dto.reason}. Khách hàng vui lòng phản hồi sớm.`;
 
         const disputeCase = await this.prisma.$transaction(async (tx) => {
             const dc = await tx.disputeCase.create({
@@ -221,6 +227,7 @@ export class DisputeService {
                         name: req.assignedProvider.fullName || req.assignedProvider.email,
                         isAdmin: false,
                         requestId: dto.orderId,
+                        orderCode: req?.orderCode,
                         reason: dto.reason,
                         disputedBy,
                     });
@@ -231,6 +238,7 @@ export class DisputeService {
                         name: 'Admin',
                         isAdmin: true,
                         requestId: dto.orderId,
+                        orderCode: req?.orderCode,
                         reason: dto.reason,
                         disputedBy,
                     });
@@ -281,7 +289,7 @@ export class DisputeService {
                         },
                     },
                     request: {
-                        select: { id: true, incidentType: true, status: true },
+                        select: { id: true, orderCode: true, incidentType: true, status: true },
                     },
                 },
             }),

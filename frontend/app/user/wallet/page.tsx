@@ -12,6 +12,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import AvatarImage from '@/components/AvatarImage';
 import api from '@/lib/api';
+import { displayWalletTxnCode } from '@/lib/reconciliation';
 import RescueMeLogo from '@/components/RescueMeLogo';
 import { useRouter } from 'next/navigation';
 import { useUserDisputeNavBadge } from '@/contexts/UserDisputeNavBadgeContext';
@@ -58,6 +59,7 @@ interface UserWalletData {
 
 interface UserTransaction {
     id: string;
+    txnCode?: string | null;
     type: 'CREDIT' | 'DEBIT';
     amount: number;
     status: 'PENDING' | 'COMPLETED' | 'FAILED';
@@ -77,7 +79,7 @@ interface TransactionsResponse {
 // ─── Topup Modal ─────────────────────────────────────────────────────────────
 function TopupModal({ initialQrData, onClose, onSuccess, t }: {
     initialQrData?: {
-        topupTxId: string; transferCode: string; qrUrl: string;
+        topupTxId: string; topupTxnCode?: string; transferCode: string; qrUrl: string;
         bankAccount: string; bankCode: string; amount: number; expireAt: string;
     };
     onClose: () => void;
@@ -275,6 +277,12 @@ function TopupModal({ initialQrData, onClose, onSuccess, t }: {
                                         <span style={{ color: C.gray }}>{t('user.wallet.topupModal.transferContent')}</span>
                                         <span className="font-bold uppercase text-sm tracking-wider" style={{ color: C.orange }}>{qrData.transferCode}</span>
                                     </div>
+                                    {qrData.topupTxnCode && (
+                                        <div className="flex justify-between items-center">
+                                            <span style={{ color: C.gray }}>Mã lệnh nạp</span>
+                                            <span className="font-mono font-semibold text-xs" style={{ color: C.navy }}>{qrData.topupTxnCode}</span>
+                                        </div>
+                                    )}
                                 </div>
                                 <p className="text-xs text-center" style={{ color: '#ef4444' }}>
                                     {t('user.wallet.topupModal.warningNote')}
@@ -547,7 +555,7 @@ function TxRow({ tx, t }: { tx: UserTransaction, t: any }) {
                     </div>
                     <div className="flex justify-between items-center">
                         <span style={{ color: C.gray }}>{t('user.wallet.txRow.txCode')}</span>
-                        <span className="font-mono text-[10px]" style={{ color: '#94a3b8' }}>#{tx.id.slice(0, 12).toUpperCase()}</span>
+                        <span className="font-mono text-[10px]" style={{ color: '#94a3b8' }}>{displayWalletTxnCode(tx.txnCode, tx.id)}</span>
                     </div>
                     {tx.referenceType === 'JOB_PAYMENT' && (
                         <div className="pt-2 mt-2" style={{ borderTop: `1px dashed ${C.border}` }}>
@@ -595,7 +603,7 @@ export default function UserWalletPage() {
     const [page, setPage] = useState(0);
     const [showAll, setShowAll] = useState(false);
     type PendingTopupData = {
-        topupTxId: string; transferCode: string; qrUrl: string;
+        topupTxId: string; topupTxnCode?: string; transferCode: string; qrUrl: string;
         bankAccount: string; bankCode: string; amount: number; expireAt: string;
     };
     const [pendingTopup, setPendingTopup] = useState<PendingTopupData | null>(null);

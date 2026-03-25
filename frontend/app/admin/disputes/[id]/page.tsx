@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, ShieldAlert, Receipt, MessageSquare, Image as ImageIcon, Film, AlertCircle, X, MapPin, Phone, Banknote, Star, FileText, Wrench, Car, Calendar, User, ExternalLink, Wallet } from 'lucide-react';
 import AvatarImage from '@/components/AvatarImage';
 import { DisputeSLACountdown } from '@/components/DisputeSLACountdown';
+import { displayOrderCode } from '@/lib/reconciliation';
 
 function fmtVnd(n: number) {
     if (n == null) return '0đ';
@@ -480,7 +481,7 @@ export default function AdminDisputeDetailPage() {
                             <div>
                                 <h1 className="text-3xl font-semibold text-gray-900">Chi tiết khiếu nại</h1>
                                 <p className="text-lg text-gray-600 mt-1">
-                                    Đơn #{String(detail?.payment?.requestId ?? detail?.request?.id ?? detail.id).slice(0, 8).toUpperCase()}
+                                    Đơn #{displayOrderCode(detail?.request?.orderCode, detail?.payment?.requestId ?? detail?.request?.id ?? detail.id)}
                                 </p>
                             </div>
                             <div className="flex flex-col items-end gap-2">

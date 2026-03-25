@@ -19,6 +19,11 @@ import {
     WalletReferenceType,
 } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
+import {
+    allocateUniqueProviderWalletTxnCode,
+    allocateUniqueUserWalletTxnCode,
+    formatOrderLabelForSupport,
+} from '../common/business-codes';
 
 
 @Injectable()
@@ -329,6 +334,7 @@ export class AdminService {
                     request: {
                         select: {
                             id: true,
+                            orderCode: true,
                             status: true,
                             incidentType: true,
                             createdAt: true,
@@ -669,7 +675,7 @@ export class AdminService {
         } else if (resolutionType === 'NO_REFUND') {
             resolutionAmountCustomer = 0;
             resolutionAmountProvider = refundableCap;
-        } else if (resolutionType === 'PARTIAL_REFUND') {
+        } else         if (resolutionType === 'PARTIAL_REFUND') {
             if (resolutionAmountCustomer == null || resolutionAmountCustomer < 0) {
                 throw new BadRequestException('resolutionAmountCustomer is required for PARTIAL_REFUND');
             }
@@ -680,6 +686,12 @@ export class AdminService {
             }
             resolutionAmountProvider = refundableCap - resolutionAmountCustomer;
         }
+
+        const refundReqMeta = await this.prisma.rescueRequest.findUnique({
+            where: { id: c.payment.requestId },
+            select: { orderCode: true },
+        });
+        const refundOrderLabel = formatOrderLabelForSupport(refundReqMeta?.orderCode, c.payment.requestId);
 
         await this.prisma.$transaction(async (tx) => {
             // Wallet adjustments for refund cases
@@ -708,16 +720,18 @@ export class AdminService {
                 }
                 const remainingFromAvailable = Math.max(0, payToUser - fromPending);
 
+                const adjProvTxn = await allocateUniqueProviderWalletTxnCode(tx);
                 await tx.walletTransaction.create({
                     data: {
                         walletId: pw.id,
+                        txnCode: adjProvTxn,
                         type: WalletTransactionType.DEBIT,
                         amount: payToUser,
                         status: WalletTransactionStatus.COMPLETED,
                         referenceType: WalletReferenceType.ADJUSTMENT,
                         referenceId: caseId,
                         description:
-                            `Điều chỉnh hoàn tiền tranh chấp — job #${c.payment.requestId.slice(0, 8).toUpperCase()}` +
+                            `Điều chỉnh hoàn tiền tranh chấp — đơn ${refundOrderLabel}` +
                             (fromPending > 0 ? ` (pending: ${fromPending.toLocaleString('vi-VN')} VND)` : ''),
                     },
                 });
@@ -739,15 +753,17 @@ export class AdminService {
                     create: { userId: c.payment.userId, availableBalance: 0, pendingBalance: 0 },
                     update: {},
                 });
+                const adjUserTxn = await allocateUniqueUserWalletTxnCode(tx);
                 await tx.userWalletTransaction.create({
                     data: {
                         walletId: uw.id,
+                        txnCode: adjUserTxn,
                         type: WalletTransactionType.CREDIT,
                         amount: payToUser,
                         status: WalletTransactionStatus.COMPLETED,
                         referenceType: UserWalletReferenceType.REFUND,
                         referenceId: caseId,
-                        description: `Hoàn tiền tranh chấp — yêu cầu #${c.payment.requestId.slice(0, 8).toUpperCase()}`,
+                        description: `Hoàn tiền tranh chấp — đơn ${refundOrderLabel}`,
                     },
                 });
                 await tx.userWallet.update({
@@ -931,7 +947,19 @@ export class AdminService {
             this.prisma.providerWallet.count({ where })
         ]);
 
-        return { items, total, skip, take };
+        // Aggregate total commission per wallet in a single batch query
+        const walletIds = items.map((w: any) => w.id);
+        const commAgg = walletIds.length > 0
+            ? await this.prisma.walletTransaction.groupBy({
+                by: ['walletId'],
+                where: { walletId: { in: walletIds }, referenceType: 'COMMISSION' as any, type: 'DEBIT' },
+                _sum: { amount: true },
+              })
+            : [];
+        const commMap = new Map(commAgg.map((r: any) => [r.walletId, r._sum.amount ?? 0]));
+        const itemsWithComm = items.map((w: any) => ({ ...w, totalCommission: commMap.get(w.id) ?? 0 }));
+
+        return { items: itemsWithComm, total, skip, take };
     }
 
     async getUserWallets(query: any) {
@@ -970,10 +998,26 @@ export class AdminService {
     }
 
     async getProviderWalletByProviderId(providerId: string) {
-        return this.prisma.providerWallet.findUnique({
+        const wallet = await this.prisma.providerWallet.findUnique({
             where: { providerId },
             include: { provider: { select: { id: true, email: true, fullName: true, avatar: true, phoneNumber: true } } }
         });
+        if (!wallet) return null;
+
+        const agg = await this.prisma.walletTransaction.groupBy({
+            by: ['type'],
+            where: { walletId: wallet.id, status: 'COMPLETED' },
+            _sum: { amount: true },
+        });
+
+        let totalIncome = 0;
+        let totalExpense = 0;
+        for (const a of agg) {
+            if (a.type === 'CREDIT') totalIncome = a._sum.amount || 0;
+            if (a.type === 'DEBIT') totalExpense = a._sum.amount || 0;
+        }
+
+        return { ...wallet, totalIncome, totalExpense };
     }
 
     async getUserWalletByUserId(userId: string) {
@@ -1016,6 +1060,13 @@ export class AdminService {
             _sum: { amount: true },
         });
 
+        const qrwPayments = await this.prisma.payment.aggregate({
+            where: { status: 'COMPLETED', paymentMethod: { in: ['QR', 'WALLET'] } },
+            _sum: { totalAmount: true },
+        });
+        const qrwCommission = Math.round((qrwPayments._sum.totalAmount || 0) * this.getCommissionRate());
+        const totalCommission = (commissions._sum.amount || 0) + qrwCommission;
+
         const providerTopups = await this.prisma.topupTransaction.aggregate({
             where: { status: 'COMPLETED', completedAt: { gte: startOfToday } },
             _sum: { amount: true },
@@ -1032,7 +1083,7 @@ export class AdminService {
 
         return {
             totalRevenue: completedPayments._sum.totalAmount || 0,
-            totalCommission: commissions._sum.amount || 0,
+            totalCommission: totalCommission,
             totalTopupToday: (providerTopups._sum.amount || 0) + (userTopups._sum.amount || 0),
             pendingTransactions: pendingWallets + pendingUserWallets,
             pendingWithdrawals: pendingWithdraws + pendingUserWithdraws,
@@ -1040,25 +1091,58 @@ export class AdminService {
     }
 
     async getWalletTransactions(userType: 'PROVIDER' | 'USER', query: any) {
-        const where = this.buildTransactionWhere(query);
+        const where: any = this.buildTransactionWhere(query);
         if (query.referenceType) where.referenceType = query.referenceType;
         if (query.type) where.type = query.type;
-        
-        let userFilter: any = {};
-        if (query.userId) {
-            userFilter.id = query.userId;
-        } else if (query.search) {
-            userFilter.OR = [
-                { email: { contains: query.search, mode: 'insensitive' } },
-                { fullName: { contains: query.search, mode: 'insensitive' } },
-            ];
-        }
 
         const skip = query.skip || 0;
         const take = Math.min(query.take || 20, 100);
 
+        const s = typeof query.search === 'string' ? query.search.trim() : '';
+        if (s) {
+            const codeOr = [
+                { txnCode: { contains: s, mode: 'insensitive' } },
+                { referenceId: { contains: s, mode: 'insensitive' } },
+                { id: { contains: s, mode: 'insensitive' } },
+                { description: { contains: s, mode: 'insensitive' } },
+            ];
+            if (query.userId) {
+                if (userType === 'PROVIDER') {
+                    where.wallet = { provider: { id: query.userId } };
+                } else {
+                    where.wallet = { user: { id: query.userId } };
+                }
+                where.OR = codeOr;
+            } else {
+                const walletUserOr =
+                    userType === 'PROVIDER'
+                        ? {
+                              provider: {
+                                  OR: [
+                                      { email: { contains: s, mode: 'insensitive' } },
+                                      { fullName: { contains: s, mode: 'insensitive' } },
+                                  ],
+                              },
+                          }
+                        : {
+                              user: {
+                                  OR: [
+                                      { email: { contains: s, mode: 'insensitive' } },
+                                      { fullName: { contains: s, mode: 'insensitive' } },
+                                  ],
+                              },
+                          };
+                where.OR = [...codeOr, { wallet: walletUserOr }];
+            }
+        } else if (query.userId) {
+            if (userType === 'PROVIDER') {
+                where.wallet = { provider: { id: query.userId } };
+            } else {
+                where.wallet = { user: { id: query.userId } };
+            }
+        }
+
         if (userType === 'PROVIDER') {
-            if (Object.keys(userFilter).length > 0) where.wallet = { provider: userFilter };
             const [items, total] = await this.prisma.$transaction([
                 this.prisma.walletTransaction.findMany({
                     where,
@@ -1075,7 +1159,6 @@ export class AdminService {
             ]);
             return { items, total, skip, take };
         } else {
-            if (Object.keys(userFilter).length > 0) where.wallet = { user: userFilter };
             const [items, total] = await this.prisma.$transaction([
                 this.prisma.userWalletTransaction.findMany({
                     where,
@@ -1095,22 +1178,56 @@ export class AdminService {
     }
 
     async getTopupTransactions(userType: 'PROVIDER' | 'USER', query: any) {
-        const where = this.buildTransactionWhere(query);
-        let userFilter: any = {};
-        if (query.userId) {
-            userFilter.id = query.userId;
-        } else if (query.search) {
-            userFilter.OR = [
-                { email: { contains: query.search, mode: 'insensitive' } },
-                { fullName: { contains: query.search, mode: 'insensitive' } },
-            ];
-        }
+        const where: any = this.buildTransactionWhere(query);
 
         const skip = query.skip || 0;
         const take = Math.min(query.take || 20, 100);
 
+        const s = typeof query.search === 'string' ? query.search.trim() : '';
+        if (s) {
+            const codeOr = [
+                { transferCode: { contains: s, mode: 'insensitive' } },
+                { txnCode: { contains: s, mode: 'insensitive' } },
+                { sepayReferenceCode: { contains: s, mode: 'insensitive' } },
+                { id: { contains: s, mode: 'insensitive' } },
+            ];
+            if (query.userId) {
+                if (userType === 'PROVIDER') {
+                    where.wallet = { provider: { id: query.userId } };
+                } else {
+                    where.wallet = { user: { id: query.userId } };
+                }
+                where.OR = codeOr;
+            } else {
+                const walletUserOr =
+                    userType === 'PROVIDER'
+                        ? {
+                              provider: {
+                                  OR: [
+                                      { email: { contains: s, mode: 'insensitive' } },
+                                      { fullName: { contains: s, mode: 'insensitive' } },
+                                  ],
+                              },
+                          }
+                        : {
+                              user: {
+                                  OR: [
+                                      { email: { contains: s, mode: 'insensitive' } },
+                                      { fullName: { contains: s, mode: 'insensitive' } },
+                                  ],
+                              },
+                          };
+                where.OR = [...codeOr, { wallet: walletUserOr }];
+            }
+        } else if (query.userId) {
+            if (userType === 'PROVIDER') {
+                where.wallet = { provider: { id: query.userId } };
+            } else {
+                where.wallet = { user: { id: query.userId } };
+            }
+        }
+
         if (userType === 'PROVIDER') {
-            if (Object.keys(userFilter).length > 0) where.wallet = { provider: userFilter };
             const [items, total] = await this.prisma.$transaction([
                 this.prisma.topupTransaction.findMany({
                     where,
@@ -1127,7 +1244,6 @@ export class AdminService {
             ]);
             return { items, total, skip, take };
         } else {
-            if (Object.keys(userFilter).length > 0) where.wallet = { user: userFilter };
             const [items, total] = await this.prisma.$transaction([
                 this.prisma.userTopupTransaction.findMany({
                     where,
@@ -1152,9 +1268,12 @@ export class AdminService {
         const take = Math.min(query.take || 20, 100);
 
         if (query.search) {
+            const s = query.search.trim();
             where.OR = [
-                { requestId: { contains: query.search } },
-                { transferCode: { contains: query.search, mode: 'insensitive' } },
+                { requestId: { contains: s } },
+                { transferCode: { contains: s, mode: 'insensitive' } },
+                { txnCode: { contains: s, mode: 'insensitive' } },
+                { id: { contains: s, mode: 'insensitive' } },
             ];
         }
 
@@ -1163,7 +1282,10 @@ export class AdminService {
                 where,
                 skip,
                 take,
-                orderBy: { createdAt: 'desc' }
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    request: { select: { id: true, orderCode: true } },
+                },
             }),
             this.prisma.jobPaymentTransaction.count({ where })
         ]);
@@ -1175,8 +1297,11 @@ export class AdminService {
         if (query.paymentMethod) where.paymentMethod = query.paymentMethod;
 
         if (query.search) {
+            const s = query.search.trim();
             where.OR = [
-                { requestId: { contains: query.search } },
+                { requestId: { contains: s } },
+                { id: { contains: s, mode: 'insensitive' } },
+                { request: { orderCode: { contains: s, mode: 'insensitive' } } },
             ];
         }
 
@@ -1193,10 +1318,20 @@ export class AdminService {
                     request: {
                         select: { 
                             id: true, 
+                            orderCode: true,
                             status: true, 
                             incidentType: true, 
                             user: { select: { id: true, fullName: true, email: true, avatar: true } }, 
                             assignedProvider: { select: { id: true, fullName: true, email: true, avatar: true } } 
+                        }
+                    },
+                    disputeCase: {
+                        select: {
+                            id: true,
+                            status: true,
+                            resolutionType: true,
+                            openedByRole: true,
+                            createdAt: true,
                         }
                     }
                 }
@@ -1204,7 +1339,230 @@ export class AdminService {
             this.prisma.payment.count({ where })
         ]);
 
+        // Attach commission amount per payment (COMMISSION DEBIT on provider wallet, referenceId = requestId)
+        const requestIds = items.map((p: any) => p.requestId);
+        const commTxs = requestIds.length > 0
+            ? await this.prisma.walletTransaction.findMany({
+                where: { referenceId: { in: requestIds }, referenceType: 'COMMISSION' as any, type: 'DEBIT' },
+                select: { referenceId: true, amount: true },
+              })
+            : [];
+        const commByRequest = new Map(commTxs.map((t: any) => [t.referenceId, t.amount]));
+        const commissionRate = this.getCommissionRate();
+        const itemsWithComm = items.map((p: any) => {
+            // Current system:
+            // - CASH: commission is actually debited from provider wallet -> read from COMMISSION DEBIT tx
+            // - QR/WALLET: commission is withheld when crediting provider payout (net credit), but no COMMISSION DEBIT tx is created
+            // => fallback for QR/WALLET to keep admin UI consistent.
+            const commissionFromTx = commByRequest.get(p.requestId);
+            const commissionFallback =
+                ['QR', 'WALLET'].includes(p.paymentMethod)
+                    ? Math.round((p.totalAmount ?? 0) * commissionRate)
+                    : null;
+
+            return {
+                ...p,
+                commissionAmount: commissionFromTx ?? commissionFallback,
+                commissionRate,
+            };
+        });
+
+        return { items: itemsWithComm, total, skip, take };
+    }
+
+    // ── Users ────────────────────────────────────────────────────────────────
+
+    async getUsers(query: {
+        search?: string;
+        role?: string;
+        status?: string;
+        dateFrom?: string;
+        dateTo?: string;
+        skip?: number;
+        take?: number;
+    }) {
+        const skip = query.skip ?? 0;
+        const take = Math.min(query.take ?? 20, 100);
+
+        const where: any = {};
+        // Default: show all account roles in Users list (USER + PROVIDER + ADMIN)
+        if (query.role) {
+            where.role = query.role;
+        } else {
+            where.role = { in: ['USER', 'PROVIDER', 'ADMIN'] as any };
+        }
+
+        if (query.search) {
+            const q = query.search;
+            where.OR = [
+                { fullName: { contains: q, mode: 'insensitive' } },
+                { email: { contains: q, mode: 'insensitive' } },
+                { phoneNumber: { contains: q } },
+            ];
+        }
+
+        if (query.status === 'ACTIVE') {
+            where.profileCompleted = true;
+        } else if (query.status === 'INACTIVE') {
+            where.profileCompleted = false;
+        }
+
+        if (query.dateFrom || query.dateTo) {
+            where.createdAt = {};
+            if (query.dateFrom) where.createdAt.gte = new Date(query.dateFrom);
+            if (query.dateTo) {
+                const to = new Date(query.dateTo);
+                to.setHours(23, 59, 59, 999);
+                where.createdAt.lte = to;
+            }
+        }
+
+        const [items, total] = await this.prisma.$transaction([
+            this.prisma.user.findMany({
+                where,
+                skip,
+                take,
+                orderBy: { createdAt: 'desc' },
+                select: {
+                    id: true,
+                    fullName: true,
+                    email: true,
+                    avatar: true,
+                    phoneNumber: true,
+                    authProvider: true,
+                    profileCompleted: true,
+                    role: true,
+                    bannedAt: true,
+                    banReason: true,
+                    createdAt: true,
+                    lastLogin: true,
+                    _count: {
+                        select: { rescueRequests: true },
+                    },
+                    userWallet: {
+                        select: { availableBalance: true },
+                    },
+                    providerWallet: {
+                        select: { availableBalance: true },
+                    },
+                },
+            }),
+            this.prisma.user.count({ where }),
+        ]);
+
         return { items, total, skip, take };
     }
-}
 
+    async getUserStats() {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        const [total, active, inactive, newThisMonth] = await this.prisma.$transaction([
+            this.prisma.user.count({ where: { role: 'USER' } }),
+            this.prisma.user.count({ where: { role: 'USER', profileCompleted: true } }),
+            this.prisma.user.count({ where: { role: 'USER', profileCompleted: false } }),
+            this.prisma.user.count({ where: { role: 'USER', createdAt: { gte: startOfMonth } } }),
+        ]);
+
+        return { total, active, inactive, newThisMonth };
+    }
+
+    async getUserDetail(userId: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                role: true,
+                fullName: true,
+                email: true,
+                avatar: true,
+                phoneNumber: true,
+                authProvider: true,
+                profileCompleted: true,
+                createdAt: true,
+                lastLogin: true,
+                defaultAddress: true,
+                licensePlate: true,
+                vehicleColor: true,
+                vehicleType: true,
+                bannedAt: true,
+                banReason: true,
+                userWallet: {
+                    select: { availableBalance: true, pendingBalance: true },
+                },
+                providerWallet: {
+                    select: { availableBalance: true, pendingBalance: true },
+                },
+                _count: { select: { rescueRequests: true, reviewsGiven: true } },
+                rescueRequests: {
+                    take: 5,
+                    orderBy: { createdAt: 'desc' },
+                    select: {
+                        id: true,
+                        orderCode: true,
+                        incidentType: true,
+                        status: true,
+                        createdAt: true,
+                        payment: { select: { totalAmount: true } },
+                    },
+                },
+            },
+        });
+        if (!user) throw new NotFoundException('User not found');
+        return user;
+    }
+
+    async suspendUser(userId: string, banReason: string) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) throw new NotFoundException('User not found');
+        const updated = await this.prisma.user.update({
+            where: { id: userId },
+            data: { bannedAt: new Date(), banReason },
+        });
+        // Fire-and-forget notification email
+        setImmediate(() => {
+            this.mailService.sendUserSuspended(
+                updated.email,
+                updated.fullName || updated.email,
+                banReason,
+            );
+        });
+        return updated;
+    }
+
+    async activateUser(userId: string) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) throw new NotFoundException('User not found');
+        const updated = await this.prisma.user.update({
+            where: { id: userId },
+            data: { bannedAt: null, banReason: null },
+        });
+        setImmediate(() => {
+            this.mailService.sendUserUnsuspended(
+                updated.email,
+                updated.fullName || updated.email,
+            );
+        });
+        return updated;
+    }
+
+    async deleteUser(userId: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, email: true, fullName: true, role: true },
+        });
+        if (!user) throw new NotFoundException('User not found');
+
+        const deleted = await this.prisma.user.delete({ where: { id: userId } });
+
+        // Fire-and-forget notification email
+        setImmediate(() => {
+            this.mailService.sendUserDeleted(
+                user.email,
+                user.fullName || user.email,
+            );
+        });
+
+        return deleted;
+    }
+}

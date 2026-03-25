@@ -49,6 +49,8 @@ model User {
   serviceName           String?
   suspendedAt           DateTime?
   suspensionReason      String?
+  bannedAt              DateTime?
+  banReason             String?
   rescueVehicles        Json?
   currentLocation       Json?
   lastLocationUpdate    DateTime?
@@ -119,6 +121,8 @@ model Upload {
 
 model RescueRequest {
   id                   String         @id @default(cuid())
+  /// Human-friendly id for support: RMO-YYMMDD-XXXX (same in user/provider/admin UIs)
+  orderCode            String?        @unique
   userId               String?
   guestSessionId       String?
   requesterType        RequesterType  @default(USER)
@@ -160,6 +164,7 @@ model RescueRequest {
   guestSession         GuestSession?  @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
   review               Review?
   disputeCases         DisputeCase[]
+  jobPaymentTransaction JobPaymentTransaction?
 
   @@index([userId])
   @@index([guestSessionId, status])
@@ -358,6 +363,8 @@ model ProviderWallet {
 
 model WalletTransaction {
   id            String                  @id @default(cuid())
+  /// Public reconciliation code for this wallet line (provider)
+  txnCode       String?                 @unique
   walletId      String
   type          WalletTransactionType
   amount        Int
@@ -379,6 +386,8 @@ model WalletTransaction {
 
 model TopupTransaction {
   id                 String         @id @default(cuid())
+  /// Internal topup batch id (not the bank transfer content)
+  txnCode            String?        @unique
   walletId           String
   amount             Int
   status             String         @default("PENDING")
@@ -397,16 +406,19 @@ model TopupTransaction {
 }
 
 model JobPaymentTransaction {
-  id           String    @id @default(cuid())
-  requestId    String    @unique
-  paymentId    String    @unique
-  transferCode String    @unique
+  id           String          @id @default(cuid())
+  /// Public reconciliation code for this job QR payment row
+  txnCode      String?         @unique
+  requestId    String          @unique
+  paymentId    String          @unique
+  transferCode String          @unique
   amount       Int
-  status       String    @default("PENDING")
+  status       String          @default("PENDING")
   expireAt     DateTime
-  sepayId      Int?      @unique
+  sepayId      Int?            @unique
   completedAt  DateTime?
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime        @default(now())
+  request      RescueRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@index([transferCode])
   @@index([requestId, status])
@@ -449,6 +461,8 @@ model UserWallet {
 
 model UserWalletTransaction {
   id            String                  @id @default(cuid())
+  /// Public reconciliation code for this wallet line (user)
+  txnCode       String?                 @unique
   walletId      String
   type          WalletTransactionType
   amount        Int
@@ -469,6 +483,7 @@ model UserWalletTransaction {
 
 model UserTopupTransaction {
   id                 String     @id @default(cuid())
+  txnCode            String?    @unique
   walletId           String
   amount             Int
   status             String     @default("PENDING")

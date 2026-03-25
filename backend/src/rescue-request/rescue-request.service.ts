@@ -9,6 +9,13 @@ import { UserWalletService } from '../user-wallet/user-wallet.service';
 import { Prisma, UserWalletReferenceType, WalletTransactionStatus, WalletTransactionType, WalletReferenceType } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
 import { DisputeService } from '../dispute/dispute.service';
+import {
+    allocateUniqueOrderCode,
+    allocateUniqueJobPaymentTxnCode,
+    allocateUniqueUserWalletTxnCode,
+    allocateUniqueProviderWalletTxnCode,
+    formatOrderLabelForSupport,
+} from '../common/business-codes';
 
 
 @Injectable()
@@ -139,9 +146,11 @@ export class RescueRequestService {
         const quoteWindowDuration = 180; // 3 minutes (180 seconds)
         const quoteWindowExpiresAt = new Date(now.getTime() + quoteWindowDuration * 1000);
 
+        const orderCode = await allocateUniqueOrderCode(this.prisma);
         // Create rescue request with MATCHING status
         const rescueRequest = await this.prisma.rescueRequest.create({
             data: {
+                orderCode,
                 userId,
                 incidentType: dto.incidentType,
                 vehicleType: dto.vehicleType,
@@ -485,8 +494,10 @@ export class RescueRequestService {
         const phase1Timeout = 60; // Phase 1: 60 seconds
         const expiresAt = new Date(now.getTime() + phase1Timeout * 1000);
 
+        const retryOrderCode = await allocateUniqueOrderCode(this.prisma);
         const newRequest = await this.prisma.rescueRequest.create({
             data: {
+                orderCode: retryOrderCode,
                 userId,
                 incidentType: originalRequest.incidentType,
                 vehicleType: originalRequest.vehicleType,
@@ -578,6 +589,7 @@ export class RescueRequestService {
 
         const statusResponse = {
             id: request.id,
+            orderCode: request.orderCode ?? null,
             status: request.status,
             createdAt: request.createdAt,
             incidentType: request.incidentType,
@@ -1357,6 +1369,7 @@ export class RescueRequestService {
                         name: req.assignedProvider.fullName || req.assignedProvider.email,
                         isProvider: true,
                         requestId,
+                        orderCode: req.orderCode,
                         amount: updated.totalAmount,
                         paymentMethod: String(updated.paymentMethod),
                         completedAt: updated.userConfirmedAt ?? new Date(),
@@ -1400,18 +1413,23 @@ export class RescueRequestService {
             return payment; // Already confirmed — idempotent
         }
 
+        const now = new Date();
+        const nextPaymentStatus = (payment.paymentMethod as string) === 'CASH'
+            ? 'COMPLETED'
+            : 'PROVIDER_CONFIRMED';
+
         const updated = await this.prisma.payment.update({
             where: { requestId },
             data: {
-                providerConfirmedAt: new Date(),
-                status: 'PROVIDER_CONFIRMED',
+                providerConfirmedAt: now,
+                status: nextPaymentStatus as any,
             },
         });
 
         // Mark the rescue request as COMPLETED once both sides confirm
         await this.prisma.rescueRequest.update({
             where: { id: requestId },
-            data: { status: 'COMPLETED', completedAt: new Date() },
+            data: { status: 'COMPLETED', completedAt: now },
         });
 
         // Deduct CASH commission now that provider confirmed receipt
@@ -1442,7 +1460,13 @@ export class RescueRequestService {
                     },
                 });
                 const completedAt = new Date();
-                const baseParams = { requestId, amount: payment.totalAmount, paymentMethod: String(payment.paymentMethod), completedAt };
+                const baseParams = {
+                    requestId,
+                    orderCode: req?.orderCode,
+                    amount: payment.totalAmount,
+                    paymentMethod: String(payment.paymentMethod),
+                    completedAt,
+                };
                 if (req?.user) {
                     await this.mailService.sendPaymentReceipt({ ...baseParams, email: req.user.email, name: req.user.fullName || req.user.email, isProvider: false });
                 }
@@ -1699,6 +1723,7 @@ export class RescueRequestService {
         }
         if (!transferCode!) throw new Error('Could not generate unique job payment code');
 
+        const jobTxnCode = await allocateUniqueJobPaymentTxnCode(this.prisma);
         const expireAt = new Date(now.getTime() + 15 * 60 * 1000); // +15min
 
         const newTx = await (this.prisma as any).jobPaymentTransaction.create({
@@ -1706,6 +1731,7 @@ export class RescueRequestService {
                 requestId,
                 paymentId: payment.id,
                 transferCode,
+                txnCode: jobTxnCode,
                 amount: payment.totalAmount,
                 status: 'PENDING',
                 expireAt,
@@ -1764,6 +1790,7 @@ export class RescueRequestService {
         }
 
         const now = new Date();
+        const walletPayOrderLabel = formatOrderLabelForSupport(request.orderCode, requestId);
 
         // Atomic: debit user wallet + update payment + request in a single transaction
         await this.prisma.$transaction(async (tx) => {
@@ -1774,15 +1801,17 @@ export class RescueRequestService {
                 throw new BadRequestException('Insufficient balance');
             }
 
+            const userPayTxn = await allocateUniqueUserWalletTxnCode(tx);
             await tx.userWalletTransaction.create({
                 data: {
                     walletId: wallet.id,
+                    txnCode: userPayTxn,
                     type: WalletTransactionType.DEBIT,
                     amount: payment.totalAmount,
                     status: WalletTransactionStatus.COMPLETED,
                     referenceType: UserWalletReferenceType.JOB_PAYMENT,
                     referenceId: requestId,
-                    description: `Thanh toán dịch vụ cứu hộ #${requestId.slice(0, 8).toUpperCase()}`,
+                    description: `Thanh toán dịch vụ cứu hộ · ${walletPayOrderLabel}`,
                 },
             });
 
@@ -1823,15 +1852,17 @@ export class RescueRequestService {
 
                     // Credit net amount directly to availableBalance (no hold — wallet payment is instant)
                     await this.prisma.$transaction(async (tx) => {
+                        const provPayTxn = await allocateUniqueProviderWalletTxnCode(tx);
                         await tx.walletTransaction.create({
                             data: {
                                 walletId: providerWallet.id,
+                                txnCode: provPayTxn,
                                 type: WalletTransactionType.CREDIT,
                                 amount: netAmount,
                                 status: WalletTransactionStatus.COMPLETED,
                                 referenceType: WalletReferenceType.JOB_PAYMENT,
                                 referenceId: requestId,
-                                description: `Khách thanh toán qua ví RescueMe - Job #${requestId.slice(0, 8).toUpperCase()} • HH ${commissionRate * 100}%`,
+                                description: `Khách thanh toán qua ví RescueMe · ${walletPayOrderLabel} • HH ${commissionRate * 100}%`,
                             },
                         });
 
@@ -1860,7 +1891,13 @@ export class RescueRequestService {
                     },
                 });
                 const completedAt = new Date();
-                const baseParams = { requestId, amount: payment.totalAmount, paymentMethod: 'WALLET', completedAt };
+                const baseParams = {
+                    requestId,
+                    orderCode: req?.orderCode,
+                    amount: payment.totalAmount,
+                    paymentMethod: 'WALLET',
+                    completedAt,
+                };
                 if (req?.user) {
                     await this.mailService.sendPaymentReceipt({ ...baseParams, email: req.user.email, name: req.user.fullName || req.user.email, isProvider: false });
                 }

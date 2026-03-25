@@ -20,6 +20,7 @@ import {
     ExternalLink,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { displayOrderCode } from '@/lib/reconciliation';
 
 const C = {
     orange: '#f97316',
@@ -159,21 +160,24 @@ export default function AdminTransactionsPage() {
         let bg, color, dot, label;
         switch (statusStr) {
             case 'COMPLETED':
-                bg = C.greenLight; color = C.green; dot = C.green; label = tp('status.COMPLETED');
-                break;
+                bg = C.greenLight; color = C.green; dot = C.green; label = 'Hoàn thành'; break;
             case 'PENDING':
-                bg = C.yellowLight; color = C.yellow; dot = '#facc15'; label = tp('status.PENDING');
-                break;
+                bg = C.yellowLight; color = C.yellow; dot = '#facc15'; label = 'Chờ xử lý'; break;
             case 'FAILED':
-                bg = C.redLight; color = C.red; dot = C.red; label = tp('status.FAILED');
-                break;
+                bg = C.redLight; color = C.red; dot = C.red; label = 'Thất bại'; break;
             case 'EXPIRED':
             case 'CANCELLED':
-                bg = '#f8fafc'; color = C.gray; dot = C.gray; label = tp('status.cancelledGroup');
-                break;
+                bg = '#f8fafc'; color = C.gray; dot = C.gray; label = 'Đã huỷ'; break;
+            case 'USER_CONFIRMED':
+                bg = '#eff6ff'; color = '#2563eb'; dot = '#3b82f6'; label = 'User đã xác nhận'; break;
+            case 'PROVIDER_CONFIRMED':
+                bg = '#f0fdf4'; color = '#15803d'; dot = '#22c55e'; label = 'Provider đã xác nhận'; break;
+            case 'REFUNDED':
+                bg = '#fdf4ff'; color = '#a21caf'; dot = '#d946ef'; label = 'Đã hoàn tiền'; break;
+            case 'DISPUTED':
+                bg = C.redLight; color = C.red; dot = C.red; label = 'Đang tranh chấp'; break;
             default:
-                bg = '#f8fafc'; color = C.gray; dot = C.gray; label = statusStr;
-                break;
+                bg = '#f8fafc'; color = C.gray; dot = C.gray; label = statusStr || '—'; break;
         }
         return (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: bg, color }}>
@@ -214,13 +218,11 @@ export default function AdminTransactionsPage() {
                 </div>
 
                 {/* Stats Cards Row */}
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-5">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
                     {[
                         { label: tp('summary.totalRevenue'), value: summary ? formatCurrency(summary.totalRevenue) : '...', color: C.navy },
                         { label: tp('summary.totalCommission'), value: summary ? formatCurrency(summary.totalCommission) : '...', color: C.green },
                         { label: tp('summary.totalTopupToday'), value: summary ? formatCurrency(summary.totalTopupToday) : '...', color: C.blue },
-                        { label: tp('summary.pendingTransactions'), value: summary ? summary.pendingTransactions : '...', color: C.orange },
-                        { label: tp('summary.pendingWithdrawals'), value: summary ? summary.pendingWithdrawals : '...', color: C.red },
                     ].map(stat => (
                         <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
                             <p className="text-[10px] font-semibold tracking-wider mb-2 uppercase" style={{ color: C.gray }}>{stat.label}</p>
@@ -306,6 +308,21 @@ export default function AdminTransactionsPage() {
                         )}
                     </div>
 
+                    {/* Info Banner - Job Payment */}
+                    {activeTab === 'jobPayment' && (
+                        <div className="mx-4 mb-3 mt-3 flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+                            <svg className="mt-0.5 shrink-0 w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <div>
+                                <p className="text-xs font-semibold text-blue-700 mb-0.5">Chỉ theo dõi giao dịch QR</p>
+                                <p className="text-[11px] text-blue-600 leading-relaxed">
+                                    Tab này ghi nhận các giao dịch QR SePay tạo ra khi khách hàng chọn thanh toán bằng mã QR. 
+                                    Các đơn thanh toán bằng <strong>Tiền mặt</strong> hoặc <strong>Ví</strong> sẽ không xuất hiện ở đây mà chỉ xem được ở tab <strong>Giao dịch hệ thống</strong>.
+                                    Các đơn hoàn tiền (REFUND) sẽ phản ánh trong tab <strong>Ví Đối Tác</strong> và <strong>Ví Khách Hàng</strong>.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
                             <thead style={{ background: C.bg }}>
@@ -321,6 +338,11 @@ export default function AdminTransactionsPage() {
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                                 Đóng băng
                                             </th>
+                                            {activeTab === 'providerWallets' && (
+                                                <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
+                                                    Tổng hoa hồng
+                                                </th>
+                                            )}
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                                 Thống kê
                                             </th>
@@ -336,7 +358,7 @@ export default function AdminTransactionsPage() {
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                                 {tp('columns.transactionId')}
                                             </th>
-                                            {['providerTopup', 'userTopup', 'payment'].includes(activeTab) && (
+                                            {['payment', 'providerTopup', 'userTopup'].includes(activeTab) && (
                                                 <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                                     {tp('columns.user')}
                                                 </th>
@@ -349,17 +371,22 @@ export default function AdminTransactionsPage() {
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                                 {tp('columns.amount')}
                                             </th>
+                                            {['payment'].includes(activeTab) && (
+                                                <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
+                                                    Hoa hồng
+                                                </th>
+                                            )}
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                                 {tp('columns.status')}
                                             </th>
+                                            {['payment'].includes(activeTab) && (
+                                                <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
+                                                    Phương thức
+                                                </th>
+                                            )}
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                                 {tp('columns.createdAt')}
                                             </th>
-                                            {['payment'].includes(activeTab) && (
-                                                <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
-                                                    {tp('columns.paymentMethod')}
-                                                </th>
-                                            )}
                                         </>
                                     )}
                                 </tr>
@@ -399,6 +426,14 @@ export default function AdminTransactionsPage() {
                                                     <td className="px-4 py-3 font-semibold text-sm" style={{ color: C.orange }}>
                                                         {formatCurrency(item.pendingBalance)}
                                                     </td>
+                                                    {activeTab === 'providerWallets' && (
+                                                        <td className="px-4 py-3">
+                                                            <div className="font-semibold text-sm" style={{ color: '#a21caf' }}>
+                                                                {formatCurrency(item.totalCommission ?? 0)}
+                                                            </div>
+                                                            <div className="text-[10px]" style={{ color: C.gray }}>Thu hộ platform</div>
+                                                        </td>
+                                                    )}
                                                     <td className="px-4 py-3">
                                                         <div className="text-xs font-semibold" style={{ color: C.navy }}>
                                                             {item._count?.transactions || 0} Giao dịch
@@ -427,7 +462,18 @@ export default function AdminTransactionsPage() {
                                             ) : (
                                                 <>
                                                     <td className="px-4 py-3 font-mono text-xs" style={{ color: C.navy }}>
-                                                        {item.id ? item.id.slice(-8).toUpperCase() : '—'}
+                                                        <div className="font-semibold">
+                                                            {item.txnCode || (item.id ? item.id.slice(-8).toUpperCase() : '—')}
+                                                        </div>
+                                                        {['providerTopup', 'userTopup'].includes(activeTab) && item.transferCode && (
+                                                            <div className="text-[10px] font-normal mt-0.5" style={{ color: C.gray }}>CK: {item.transferCode}</div>
+                                                        )}
+                                                        {['providerTopup', 'userTopup'].includes(activeTab) && item.sepayReferenceCode && (
+                                                            <div className="text-[10px] font-normal mt-0.5" style={{ color: C.gray }}>Bank: {item.sepayReferenceCode}</div>
+                                                        )}
+                                                        {activeTab === 'jobPayment' && item.transferCode && (
+                                                            <div className="text-[10px] font-normal mt-0.5" style={{ color: C.gray }}>CK: {item.transferCode}</div>
+                                                        )}
                                                     </td>
 
                                                     {['providerTopup', 'userTopup'].includes(activeTab) && (
@@ -444,20 +490,48 @@ export default function AdminTransactionsPage() {
                                                     {['payment'].includes(activeTab) && (
                                                         <td className="px-4 py-3">
                                                             <div className="font-semibold text-xs" style={{ color: C.navy }}>
-                                                                Req: #{item.requestId ? item.requestId.slice(-8).toUpperCase() : '—'}
+                                                                Đơn: {item.requestId ? displayOrderCode(item.request?.orderCode, item.requestId) : '—'}
                                                             </div>
-                                                            <div className="text-xs" style={{ color: C.gray }}>
-                                                                {item.request?.user?.fullName ?? '—'} →{' '}
-                                                                {item.request?.assignedProvider?.fullName || 'Provider'}
+                                                            <div className="mt-1 flex flex-col gap-0.5">
+                                                                <div className="text-[11px] flex items-center gap-1" style={{ color: C.gray }}>
+                                                                    <span className="font-semibold" style={{ color: C.navy, minWidth: 20 }}>KH:</span>
+                                                                    <span>{item.request?.user?.fullName ?? 'Khách vãng lai'}</span>
+                                                                </div>
+                                                                <div className="text-[11px] flex items-center gap-1" style={{ color: C.gray }}>
+                                                                    <span className="font-semibold" style={{ color: C.navy, minWidth: 20 }}>ĐT:</span>
+                                                                    <span>{item.request?.assignedProvider?.fullName ?? '—'}</span>
+                                                                </div>
                                                             </div>
+                                                            {item.paymentMethod && (
+                                                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide" style={{ background: '#f1f5f9', color: C.navy }}>
+                                                                    {item.paymentMethod === 'CASH' ? 'Tiền mặt' : item.paymentMethod === 'QR' ? 'QR' : 'Ví'} · Thanh toán job
+                                                                </span>
+                                                            )}
+                                                            {item.disputeCase && (
+                                                                <button
+                                                                    onClick={() => router.push(`/admin/disputes/${item.disputeCase.id}`)}
+                                                                    className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold hover:opacity-80 transition-opacity"
+                                                                    style={{ background: '#fef2f2', color: C.red }}
+                                                                >
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+                                                                    Khiếu nại
+                                                                    {item.disputeCase.status === 'RESOLVED' && ' · Đã giải quyết'}
+                                                                    {item.disputeCase.status === 'REJECTED' && ' · Từ chối'}
+                                                                    {['WAITING_FOR_PROVIDER', 'WAITING_FOR_CUSTOMER', 'INVESTIGATING'].includes(item.disputeCase.status) && ' · Đang xử lý'}
+                                                                    <ExternalLink className="w-2.5 h-2.5" />
+                                                                </button>
+                                                            )}
                                                         </td>
                                                     )}
 
                                                     {['jobPayment'].includes(activeTab) && (
                                                         <td className="px-4 py-3">
                                                             <div className="text-xs font-semibold" style={{ color: C.navy }}>
-                                                                Req: <span className="font-mono">{item.requestId ? item.requestId.slice(-8).toUpperCase() : '—'}</span>
+                                                                Đơn: <span className="font-mono">{item.requestId ? displayOrderCode(item.request?.orderCode, item.requestId) : '—'}</span>
                                                             </div>
+                                                            {item.txnCode && (
+                                                                <div className="text-[10px] mt-1" style={{ color: C.gray }}>Mã GD: {item.txnCode}</div>
+                                                            )}
                                                             {item.transferCode && (
                                                                 <div className="text-xs mt-1" style={{ color: C.gray }}>
                                                                     Ref: {item.transferCode}
@@ -470,17 +544,43 @@ export default function AdminTransactionsPage() {
                                                         {formatCurrency(item.amount || item.totalAmount || 0)}
                                                     </td>
 
-                                                    <td className="px-4 py-3">{renderStatusBadge(item.status)}</td>
+                                                    {['payment'].includes(activeTab) && (
+                                                        <td className="px-4 py-3">
+                                                            {item.commissionAmount != null ? (
+                                                                <>
+                                                                    <div className="font-semibold text-sm" style={{ color: '#a21caf' }}>
+                                                                        {formatCurrency(item.commissionAmount)}
+                                                                    </div>
+                                                                    <div className="text-[10px]" style={{ color: C.gray }}>
+                                                                        {item.commissionRate != null ? `${(item.commissionRate * 100).toFixed(0)}% phí` : ''}
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-xs italic" style={{ color: C.gray }}>Ch\u01b0a thu</span>
+                                                            )}
+                                                        </td>
+                                                    )}
+
+                                                    <td className="px-4 py-3">{renderStatusBadge(item.status || item.paymentStatus)}</td>
+
+{['payment'].includes(activeTab) && (
+                                                        <td className="px-4 py-3">
+                                                            {item.paymentMethod === 'CASH' && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100" style={{ color: C.navy }}>Tiền mặt</span>
+                                                            )}
+                                                            {item.paymentMethod === 'QR' && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">QR</span>
+                                                            )}
+                                                            {item.paymentMethod === 'WALLET' && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-50" style={{ color: C.orange }}>Ví</span>
+                                                            )}
+                                                            {!item.paymentMethod && <span style={{ color: C.gray }}>—</span>}
+                                                        </td>
+                                                    )}
 
                                                     <td className="px-4 py-3 whitespace-nowrap text-sm" style={{ color: C.gray }}>
                                                         {new Date(item.createdAt).toLocaleString('vi-VN')}
                                                     </td>
-
-                                                    {['payment'].includes(activeTab) && (
-                                                        <td className="px-4 py-3 text-sm font-semibold" style={{ color: C.navy }}>
-                                                            {item.paymentMethod}
-                                                        </td>
-                                                    )}
                                                 </>
                                             )}
                                         </tr>

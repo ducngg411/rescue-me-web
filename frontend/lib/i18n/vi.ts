@@ -2388,7 +2388,7 @@ const vi = {
             title: 'Giao dịch',
             subtitle: 'Quản lý và theo dõi dòng tiền trên toàn hệ thống',
             summary: {
-                totalRevenue: 'Tổng doanh thu (VNĐ)',
+                totalRevenue: 'Tổng giá trị Job (VNĐ)',
                 totalCommission: 'Tổng hoa hồng (VNĐ)',
                 totalTopupToday: 'Nạp tiền hôm nay (VNĐ)',
                 pendingTransactions: 'Giao dịch chờ xử lý',

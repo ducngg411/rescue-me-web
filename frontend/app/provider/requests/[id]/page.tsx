@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import api from '@/lib/api';
+import { displayOrderCode } from '@/lib/reconciliation';
 import toast from 'react-hot-toast';
 import dynamic from 'next/dynamic';
 import { useChat } from '@/lib/hooks/useChat';
@@ -31,6 +32,7 @@ const ProviderNavigationView = dynamic(
 
 interface RescueRequest {
     id: string;
+    orderCode?: string | null;
     incidentType: string;
     vehicleType: string;
     /** Snapshot on the request (guests); falls back to user profile for older rows */
@@ -686,7 +688,7 @@ export default function ProviderRequestDetailPage() {
                 <div className="sticky top-0 z-10 bg-white border-b px-4 py-3 flex items-center gap-3" style={{ borderColor: C.border }}>
                     <div className="flex-1">
                         <p className="text-xs font-semibold" style={{ color: C.gray }}>{t('provider.requestDetail.accepted.headerSubtitle')}</p>
-                        <h1 className="text-sm font-bold" style={{ color: C.navy }}>{t('provider.requestDetail.pageTitle')} #{req.id.slice(0, 8).toUpperCase()}</h1>
+                        <h1 className="text-sm font-bold" style={{ color: C.navy }}>{t('provider.requestDetail.pageTitle')} #{displayOrderCode(req.orderCode, req.id)}</h1>
                     </div>
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: '#f0fdf4', color: '#16a34a' }}>
                         <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -1059,7 +1061,7 @@ export default function ProviderRequestDetailPage() {
                         </button>
                         <div className="flex flex-col">
                             <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">{t('provider.requestDetail.pageTitle')}</h1>
-                            <p className="text-xs md:text-sm font-medium text-gray-500">#{request.id.slice(0, 8).toUpperCase()}</p>
+                            <p className="text-xs md:text-sm font-medium text-gray-500">#{displayOrderCode(request.orderCode, request.id)}</p>
                         </div>
                     </div>
                     {/* Status Pill + Decline button */}

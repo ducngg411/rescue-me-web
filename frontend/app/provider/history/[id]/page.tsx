@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { displayOrderCode } from '@/lib/reconciliation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
@@ -278,7 +279,7 @@ export default function HistoryJobDetailPage() {
                 <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: C.gray }}>{t('provider.historyDetail.title')}</p>
                     <p className="text-sm font-bold truncate" style={{ color: C.navy }}>
-                        #{requestId.slice(0, 8).toUpperCase()}
+                        #{displayOrderCode(req.orderCode, requestId)}
                     </p>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">

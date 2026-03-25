@@ -5,6 +5,7 @@ import {
     UnauthorizedException,
     BadRequestException,
     NotFoundException,
+    ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -89,6 +90,12 @@ export class AuthService {
             );
         }
 
+        if (user.bannedAt) {
+            throw new ForbiddenException(
+                `ACCOUNT_BANNED::${user.banReason || 'Vi phạm điều khoản sử dụng'}`,
+            );
+        }
+
         const isPasswordValid = await bcrypt.compare(
             dto.password,
             user.hashedPassword || '',
@@ -148,6 +155,11 @@ export class AuthService {
                 // Gửi welcome email cho Google user mới
                 this.mailService.sendWelcomeEmail(email, name || email).catch(() => {});
             } else {
+                if (user.bannedAt) {
+                    throw new ForbiddenException(
+                        `ACCOUNT_BANNED::${user.banReason || 'Vi phạm điều khoản sử dụng'}`,
+                    );
+                }
                 await this.prisma.user.update({
                     where: { id: user.id },
                     data: { lastLogin: new Date() },
@@ -363,6 +375,12 @@ export class AuthService {
 
         if (!user) {
             throw new UnauthorizedException('User không tồn tại');
+        }
+
+        if (user.bannedAt) {
+            throw new ForbiddenException(
+                `ACCOUNT_BANNED::${user.banReason || 'Vi phạm điều khoản sử dụng'}`,
+            );
         }
 
         return this.sanitizeUser(user);

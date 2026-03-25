@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { displayWalletTxnCode, displayOrderCode } from '@/lib/reconciliation';
 import { isJobPaymentQrProviderTx } from '@/lib/providerWalletTxLabels';
 import { useProviderGuard } from '@/lib/guards';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -122,17 +123,12 @@ export default function TxDetailPage() {
 
     const { transaction: tx, jobDetail: job } = data;
     const isCredit = tx.type === 'CREDIT';
+    const jobOrderLabel = job?.id ? displayOrderCode(job.orderCode, job.id) : (tx.referenceId ? String(tx.referenceId).slice(0, 8).toUpperCase() : '');
     const jobPaymentDisplayDesc =
         tx.referenceType === 'JOB_PAYMENT' && tx.referenceId
             ? (isJobPaymentQrProviderTx(tx.description)
-                ? t('provider.wallet.txDesc.jobPaymentQr').replace(
-                    '{id}',
-                    String(tx.referenceId).slice(0, 8).toUpperCase(),
-                )
-                : t('provider.wallet.txDesc.jobPaymentWallet').replace(
-                    '{id}',
-                    String(tx.referenceId).slice(0, 8).toUpperCase(),
-                ))
+                ? t('provider.wallet.txDesc.jobPaymentQr').replace('{id}', jobOrderLabel)
+                : t('provider.wallet.txDesc.jobPaymentWallet').replace('{id}', jobOrderLabel))
             : null;
     const statusConfig = {
         PENDING: { label: t('provider.txDetail.statusLabels.PENDING' as any), bg: '#fefce8', color: '#ca8a04', Icon: Clock },
@@ -165,7 +161,7 @@ export default function TxDetailPage() {
                 </button>
                 <div className="flex-1 min-w-0">
                     <h1 className="text-sm font-bold truncate" style={{ color: C.navy }}>{t('provider.txDetail.title')}</h1>
-                    <p className="text-[10px] font-mono" style={{ color: C.gray }}>#{tx.id.slice(0, 16).toUpperCase()}</p>
+                    <p className="text-[10px] font-mono" style={{ color: C.gray }}>{displayWalletTxnCode(tx.txnCode, tx.id)}</p>
                 </div>
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: statusConfig.bg, color: statusConfig.color }}>
                     <statusConfig.Icon className="w-3 h-3" />
@@ -204,7 +200,7 @@ export default function TxDetailPage() {
                             <Row label={t('provider.txDetail.rowLabels.disbursedAt')} value={fmtDate(tx.holdReleaseAt)} valueColor={C.orange} />
                         )}
                         <div className="flex items-center justify-between pt-1" style={{ borderTop: `1px dashed ${C.border}` }}>
-                            <span className="text-[10px] font-mono" style={{ color: '#94a3b8' }}>TX#{tx.id.slice(0, 20).toUpperCase()}</span>
+                            <span className="text-[10px] font-mono" style={{ color: '#94a3b8' }}>{displayWalletTxnCode(tx.txnCode, tx.id)}</span>
                         </div>
                     </div>
                 </div>
@@ -228,7 +224,7 @@ export default function TxDetailPage() {
                             </button>
                         </div>
                         <div className="px-5 py-4 space-y-3">
-                            <Row label={t('provider.txDetail.job.id')} value={`#${job.id.slice(0, 10).toUpperCase()}`} mono />
+                            <Row label={t('provider.txDetail.job.id')} value={displayOrderCode(job.orderCode, job.id)} mono />
                             {job.incidentType && <Row label={t('provider.txDetail.labels.incidentType')} value={t(`provider.txDetail.incidentLabels.${job.incidentType}` as any) || job.incidentType} />}
                             {job.vehicleType && <Row label={t('provider.txDetail.job.vehicleTypeLabel')} value={job.vehicleType === 'CAR' ? ` ${t('provider.txDetail.job.vehicleCar')}` : ` ${t('provider.txDetail.job.vehicleMotorcycle')}`} />}
                             {job.createdAt && <Row label={t('provider.txDetail.job.createdAt')} value={fmtDate(job.createdAt)} />}

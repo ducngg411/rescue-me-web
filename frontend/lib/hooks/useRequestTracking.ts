@@ -4,6 +4,7 @@ import { matchingQuoteWindowSecondsRemaining } from '@/lib/matchingQuoteWindowCo
 
 export interface RequestStatus {
     id: string;
+    orderCode?: string | null;
     status: string;
     createdAt: string;
     incidentType?: string;

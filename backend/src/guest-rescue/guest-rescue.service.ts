@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRescueRequestDto } from '../rescue-request/dto/create-rescue-request.dto';
 import { RescueRequestService } from '../rescue-request/rescue-request.service';
+import { allocateUniqueOrderCode } from '../common/business-codes';
 
 @Injectable()
 export class GuestRescueService {
@@ -113,8 +114,10 @@ export class GuestRescueService {
             }
         }
 
+        const orderCode = await allocateUniqueOrderCode(this.prisma);
         const rescueRequest = await this.prisma.rescueRequest.create({
             data: {
+                orderCode,
                 guestSessionId,
                 requesterType: 'GUEST',
                 incidentType: dto.incidentType,
@@ -183,6 +186,7 @@ export class GuestRescueService {
 
         return {
             id: request.id,
+            orderCode: request.orderCode ?? null,
             status: request.status,
             createdAt: request.createdAt,
             incidentType: request.incidentType,

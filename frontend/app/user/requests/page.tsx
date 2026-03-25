@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import api from '@/lib/api';
+import { displayOrderCode } from '@/lib/reconciliation';
 import AvatarImage from '@/components/AvatarImage';
 import { Search, ArrowUpDown } from 'lucide-react';
 import RescueMeLogo from '@/components/RescueMeLogo';
@@ -14,6 +15,7 @@ import { useUserDisputeNavBadge } from '@/contexts/UserDisputeNavBadgeContext';
 
 interface RescueRequest {
     id: string;
+    orderCode?: string | null;
     incidentType: string;
     vehicleType: string;
     status: string;
@@ -568,7 +570,7 @@ export default function UserRequestsPage() {
                                             style={{ borderTop: `1px solid ${C.border}` }}
                                         >
                                             <span className="text-[10px] font-mono" style={{ color: C.gray }}>
-                                                #{request.id.slice(0, 8).toUpperCase()}
+                                                #{displayOrderCode(request.orderCode, request.id)}
                                             </span>
                                             {request.media && request.media.length > 0 && (
                                                 <span className="flex items-center gap-1 text-[10px]" style={{ color: C.gray }}>

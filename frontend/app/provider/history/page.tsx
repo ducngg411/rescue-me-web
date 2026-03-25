@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import api from '@/lib/api';
+import { displayOrderCode } from '@/lib/reconciliation';
 import ProviderLayout from '@/components/ProviderLayout';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import AvatarImage from '@/components/AvatarImage';
@@ -36,6 +37,7 @@ interface Quote {
     createdAt: string;
     rescueRequest: {
         id: string;
+        orderCode?: string | null;
         status: RequestStatus;
         /** Người được giao cuốc — khác provider hiện tại nếu bạn thua báo giá */
         assignedProviderId?: string | null;
@@ -847,7 +849,7 @@ export default function ProviderHistoryPage() {
                                                     <div>
                                                         <p className="text-sm font-semibold" style={{ color: C.navy }}>{date}</p>
                                                         <p className="text-xs mt-0.5" style={{ color: C.gray }}>{time}</p>
-                                                        <p className="text-[10px] mt-1 font-mono font-bold" style={{ color: '#94a3b8' }}>#{req.id.slice(0, 8).toUpperCase()}</p>
+                                                        <p className="text-[10px] mt-1 font-mono font-bold" style={{ color: '#94a3b8' }}>#{displayOrderCode(req.orderCode, req.id)}</p>
                                                     </div>
                                                     <div className="flex items-center gap-3 min-w-0">
                                                         <Avatar name={req.user?.name ?? 'K'} avatar={req.user?.avatar} />
@@ -911,7 +913,7 @@ export default function ProviderHistoryPage() {
                                                     {req.user?.name ?? t('provider.history.customerFallback')}
                                                 </p>
                                                                 <p className="text-xs" style={{ color: C.gray }}>{date} · {time}</p>
-                                                                <p className="text-[10px] font-mono font-bold mt-0.5" style={{ color: '#94a3b8' }}>#{req.id.slice(0, 8).toUpperCase()}</p>
+                                                                <p className="text-[10px] font-mono font-bold mt-0.5" style={{ color: '#94a3b8' }}>#{displayOrderCode(req.orderCode, req.id)}</p>
                                                             </div>
                                                         </div>
                                                         <ChevronRight size={15} style={{ color: '#cbd5e1', flexShrink: 0 }} />

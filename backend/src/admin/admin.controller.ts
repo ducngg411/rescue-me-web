@@ -3,6 +3,7 @@ import {
     Get,
     Post,
     Patch,
+    Delete,
     Param,
     Body,
     Query,
@@ -24,6 +25,7 @@ import {
     RejectDisputeDto,
     AddDisputeEvidenceDto,
     GetTransactionsQueryDto,
+    GetUsersQueryDto,
 } from './dto/admin.dto';
 
 
@@ -209,6 +211,38 @@ export class AdminController {
     @Get('payments')
     async getPayments(@Query() query: GetTransactionsQueryDto) {
         return this.adminService.getPayments(query);
+    }
+
+    // ── Users ───────────────────────────────────────────────────────────────
+
+    @Get('users/stats')
+    async getUserStats() {
+        return this.adminService.getUserStats();
+    }
+
+    @Get('users/:id')
+    async getUserDetail(@Param('id') id: string) {
+        return this.adminService.getUserDetail(id);
+    }
+
+    @Post('users/:id/suspend')
+    async suspendUser(@Param('id') id: string, @Body() body: { banReason?: string }) {
+        return this.adminService.suspendUser(id, body.banReason || 'Vi phạm điều khoản sử dụng');
+    }
+
+    @Post('users/:id/activate')
+    async activateUser(@Param('id') id: string) {
+        return this.adminService.activateUser(id);
+    }
+
+    @Delete('users/:id')
+    async deleteUser(@Param('id') id: string) {
+        return this.adminService.deleteUser(id);
+    }
+
+    @Get('users')
+    async getUsers(@Query() query: GetUsersQueryDto) {
+        return this.adminService.getUsers(query);
     }
 }
 

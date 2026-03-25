@@ -248,6 +248,54 @@ export const adminApi = {
         const response = await api.get('/admin/payments', { params });
         return response.data;
     },
+
+    getUsers: async (params?: {
+        search?: string;
+        role?: string;
+        status?: string;
+        dateFrom?: string;
+        dateTo?: string;
+        skip?: number;
+        take?: number;
+    }) => {
+        const response = await api.get('/admin/users', { params });
+        return response.data as {
+            items: unknown[];
+            total: number;
+            skip: number;
+            take: number;
+        };
+    },
+
+    getUserStats: async () => {
+        const response = await api.get('/admin/users/stats');
+        return response.data as {
+            total: number;
+            active: number;
+            inactive: number;
+            newThisMonth: number;
+        };
+    },
+
+    getUserDetail: async (id: string) => {
+        const response = await api.get(`/admin/users/${id}`);
+        return response.data;
+    },
+
+    suspendUser: async (id: string, banReason: string) => {
+        const response = await api.post(`/admin/users/${id}/suspend`, { banReason });
+        return response.data;
+    },
+
+    activateUser: async (id: string) => {
+        const response = await api.post(`/admin/users/${id}/activate`);
+        return response.data;
+    },
+
+    deleteUser: async (id: string) => {
+        const response = await api.delete(`/admin/users/${id}`);
+        return response.data;
+    },
 };
 
 

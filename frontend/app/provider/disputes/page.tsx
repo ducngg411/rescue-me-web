@@ -11,6 +11,7 @@ import RescueMeLogo from '@/components/RescueMeLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { providerDisputeApi } from '@/lib/api';
 import api from '@/lib/api';
+import { displayOrderCode } from '@/lib/reconciliation';
 
 const C = {
     orange: '#f97316',
@@ -43,6 +44,7 @@ interface DisputeItem {
     };
     request?: {
         id: string;
+        orderCode?: string | null;
         incidentType: string;
     };
 }
@@ -252,7 +254,7 @@ export default function ProviderDisputesPage() {
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <span className="text-xs font-mono font-bold" style={{ color: C.navy }}>
-                                                        #{requestId.slice(0, 8).toUpperCase()}
+                                                        #{displayOrderCode(d.request?.orderCode, requestId)}
                                                     </span>
                                                     <span
                                                         className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold"

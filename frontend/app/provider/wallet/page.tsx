@@ -9,6 +9,7 @@ import {
 import toast from 'react-hot-toast';
 import RescueMeLogo from '@/components/RescueMeLogo';
 import api from '@/lib/api';
+import { displayWalletTxnCode, displayOrderCode } from '@/lib/reconciliation';
 import { isJobPaymentQrProviderTx } from '@/lib/providerWalletTxLabels';
 import { useProviderGuard } from '@/lib/guards';
 import { useAuth } from '@/contexts/AuthContext';
@@ -44,6 +45,7 @@ interface WalletData {
 
 interface Transaction {
     id: string;
+    txnCode?: string | null;
     type: 'CREDIT' | 'DEBIT';
     amount: number;
     status: 'PENDING' | 'COMPLETED' | 'FAILED';
@@ -88,7 +90,7 @@ function formatDate(iso: string) {
 function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
     availableBalance: number;
     initialQrData?: {
-        topupTxId: string; transferCode: string; qrUrl: string;
+        topupTxId: string; topupTxnCode?: string; transferCode: string; qrUrl: string;
         bankAccount: string; bankCode: string; amount: number; expireAt: string;
     };
     onClose: () => void;
@@ -102,7 +104,7 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
     const [manualChecking, setManualChecking] = useState(false);
     const [error, setError] = useState('');
     const [qrData, setQrData] = useState<{
-        topupTxId: string; transferCode: string; qrUrl: string;
+        topupTxId: string; topupTxnCode?: string; transferCode: string; qrUrl: string;
         bankAccount: string; bankCode: string; amount: number; expireAt: string;
     } | null>(initialQrData ?? null);
     const [secsLeft, setSecsLeft] = useState(0);
@@ -348,6 +350,11 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                                         Copy
                                     </button>
                                 </div>
+                                {qrData.topupTxnCode && (
+                                    <p className="text-[10px] mt-2 text-center font-mono font-semibold" style={{ color: C.navy }}>
+                                        Mã lệnh nạp: {qrData.topupTxnCode}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
@@ -619,12 +626,16 @@ function TxRow({ tx }: { tx: Transaction }) {
 
     // Build a translated description based on referenceType (avoids raw backend Vietnamese strings)
     const txDescription = (() => {
-        const shortId = tx.referenceId?.slice(0, 8).toUpperCase() ?? '';
+        const jobRef =
+            jobDetails?.id && tx.referenceId === jobDetails.id
+                ? displayOrderCode(jobDetails.orderCode, jobDetails.id)
+                : (tx.referenceId?.slice(0, 8).toUpperCase() ?? '');
+        const shortId = jobRef || (tx.referenceId?.slice(0, 8).toUpperCase() ?? '');
         switch (tx.referenceType) {
             case 'COMMISSION':
                 return t('provider.wallet.txDesc.commission').replace('{id}', shortId);
             case 'JOB_PAYMENT': {
-                const jobId = tx.referenceId?.slice(0, 8).toUpperCase() ?? shortId;
+                const jobId = shortId;
                 const key = isJobPaymentQrProviderTx(tx.description)
                     ? 'provider.wallet.txDesc.jobPaymentQr'
                     : 'provider.wallet.txDesc.jobPaymentWallet';
@@ -822,7 +833,7 @@ function TxRow({ tx }: { tx: Transaction }) {
                             {/* Transaction ID */}
                             <div className="flex items-center justify-between pt-1">
                                 <span className="text-[10px] font-mono" style={{ color: '#94a3b8' }}>
-                                    #{tx.id.slice(0, 12).toUpperCase()}
+                                    {displayWalletTxnCode(tx.txnCode, tx.id)}
                                 </span>
                                 <button
                                     onClick={e => { e.stopPropagation(); window.location.href = `/provider/wallet/tx/${tx.id}`; }}
@@ -858,7 +869,7 @@ function TxRow({ tx }: { tx: Transaction }) {
                             <div className="flex justify-between items-center">
                                 <span className="text-xs" style={{ color: C.gray }}>{t('provider.wallet.txRow.txCode')}</span>
                                 <span className="text-[10px] font-mono" style={{ color: '#94a3b8' }}>
-                                    #{tx.id.slice(0, 12).toUpperCase()}
+                                    {displayWalletTxnCode(tx.txnCode, tx.id)}
                                 </span>
                             </div>
                         </div>
@@ -888,7 +899,7 @@ export default function ProviderWalletPage() {
     const [page, setPage] = useState(0);
     const [showAll, setShowAll] = useState(false);
     type PendingTopupData = {
-        topupTxId: string; transferCode: string; qrUrl: string;
+        topupTxId: string; topupTxnCode?: string; transferCode: string; qrUrl: string;
         bankAccount: string; bankCode: string; amount: number; expireAt: string;
     };
     const [pendingTopup, setPendingTopup] = useState<PendingTopupData | null>(null);

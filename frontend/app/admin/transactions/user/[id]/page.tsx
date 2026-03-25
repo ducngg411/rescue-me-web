@@ -16,6 +16,7 @@ import {
     ChevronRight,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { displayWalletTxnCode } from '@/lib/reconciliation';
 
 const C = {
     orange: '#f97316',
@@ -305,7 +306,7 @@ export default function UserWalletDetailPage() {
                                 ) : (
                                     data.map((item) => (
                                         <tr key={item.id} className="border-t hover:bg-gray-50 transition-colors" style={{ borderColor: C.border }}>
-                                            <td className="px-4 py-3 font-mono text-xs" style={{ color: C.navy }}>{item.id.slice(-8).toUpperCase()}</td>
+                                            <td className="px-4 py-3 font-mono text-xs" style={{ color: C.navy }}>{displayWalletTxnCode(item.txnCode, item.id)}</td>
                                             {activeTab === 'transactions' && (
                                                 <td className="px-4 py-3 text-sm">{renderTypeBadge(item.type)}</td>
                                             )}

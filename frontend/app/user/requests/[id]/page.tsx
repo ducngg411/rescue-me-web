@@ -16,6 +16,7 @@ import RescueProgressTimeline from '@/components/RescueProgressTimeline';
 import AvatarImage from '@/components/AvatarImage';
 import { Clock, Banknote, User, Wrench, CheckCircle2, Image as ImageIcon, Play, Phone } from 'lucide-react';
 import api, { userDisputeApi } from '@/lib/api';
+import { displayOrderCode } from '@/lib/reconciliation';
 import toast from 'react-hot-toast';
 
 const C = {
@@ -957,7 +958,7 @@ export default function RequestTrackingPage() {
                 </button>
                 <div className="flex-1 min-w-0">
                     <h1 className="font-bold text-sm leading-tight" style={{ color: C.navy }}>Yêu cầu cứu hộ</h1>
-                    <p className="text-xs truncate" style={{ color: C.gray }}>#{requestId.slice(0, 8).toUpperCase()}</p>
+                    <p className="text-xs truncate" style={{ color: C.gray }}>#{displayOrderCode(status.orderCode, requestId)}</p>
                 </div>
                 {/* Status chip */}
                 <div

@@ -9,6 +9,7 @@ import { userDisputeApi } from '@/lib/api';
 import { uploadFile, UploadPurpose } from '@/lib/upload';
 import { DisputeSLACountdown } from '@/components/DisputeSLACountdown';
 import { CheckCircle2, Clock, ShieldAlert, Receipt, MessageSquare, Image as ImageIcon, Film, AlertCircle } from 'lucide-react';
+import { displayOrderCode, displayDisputeCaseRef } from '@/lib/reconciliation';
 
 const C = {
     orange: '#f97316',
@@ -343,10 +344,10 @@ export default function UserDisputeDetailPage() {
                         <div className="min-w-0">
                             <h1 className="font-bold text-base" style={{ color: C.navy }}>Chi tiết khiếu nại</h1>
                             <p className="text-xs font-semibold mt-0.5" style={{ color: C.gray }}>
-                                Đơn #{String(dispute?.request?.id ?? dispute?.payment?.requestId ?? dispute.id).slice(0, 8).toUpperCase()}
+                                Đơn #{displayOrderCode(dispute?.request?.orderCode, dispute?.payment?.requestId ?? dispute?.request?.id ?? dispute.id)}
                             </p>
                             <p className="text-[10px]" style={{ color: '#94a3b8' }}>
-                                Case #{String(dispute.id).slice(0, 8).toUpperCase()}
+                                Case #{displayDisputeCaseRef(String(dispute.id))}
                             </p>
                         </div>
                     </div>
@@ -405,13 +406,13 @@ export default function UserDisputeDetailPage() {
 
                     {request && (
                         <SectionCard title="Thông tin dịch vụ" icon={<Receipt size={16} style={{ color: C.blue }} />}>
-                            <InfoRow label="Mã dịch vụ gốc" value={
+                            <InfoRow label="Mã đơn" value={
                                 <button 
                                     onClick={() => router.push(`/user/requests/${request.id}`)}
                                     className="flex items-center justify-end gap-1 hover:underline outline-none"
                                     style={{ color: C.blue }}
                                 >
-                                    #{String(request.id).slice(0, 8).toUpperCase()}
+                                    {displayOrderCode(request.orderCode, request.id)}
                                     <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                                     </svg>
