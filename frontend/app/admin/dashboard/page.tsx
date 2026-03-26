@@ -39,10 +39,8 @@ const C = {
 // ─── Formatters ────────────────────────────────────────────────────────────────
 function fmtVnd(v?: number | null): string {
     if (v == null) return '—';
-    if (v >= 1_000_000_000) return (v / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + ' tỷ';
-    if (v >= 1_000_000) return (v / 1_000_000).toFixed(1).replace(/\.0$/, '') + ' tr';
-    if (v >= 1_000) return (v / 1_000).toFixed(0) + 'k';
-    return v.toLocaleString('vi-VN');
+    // Admin money KPIs should show exact VND (no "12.3 tr", "1.2k", … rounding/abbreviation).
+    return new Intl.NumberFormat('vi-VN').format(v);
 }
 
 function fmtNum(v?: number | null): string {

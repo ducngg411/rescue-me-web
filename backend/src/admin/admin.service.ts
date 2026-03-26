@@ -11,6 +11,7 @@ import {
     DisputeSenderRole,
     DisputeMessageType,
     DisputeVisibility,
+    PaymentMethod,
     Prisma,
     VerificationStatus,
     WalletTransactionStatus,
@@ -33,6 +34,43 @@ export class AdminService {
         private prisma: PrismaService,
         private mailService: MailService,
     ) { }
+
+    /**
+     * For QR/WALLET jobs, platform commission is not stored as a standalone row.
+     * It is implied by: gross (Payment.totalAmount) − net provider credit (WalletTransaction CREDIT).
+     *
+     * We take the latest matching CREDIT per requestId to match admin payment list logic.
+     */
+    private async getLatestQrWalletNetCreditByRequestIds(requestIds: string[]) {
+        const ids = Array.from(new Set(requestIds.filter(Boolean)));
+        if (ids.length === 0) return new Map<string, number>();
+
+        const txs = await this.prisma.walletTransaction.findMany({
+            where: {
+                referenceId: { in: ids },
+                referenceType: { in: [WalletReferenceType.JOB, WalletReferenceType.JOB_PAYMENT] },
+                type: WalletTransactionType.CREDIT,
+            },
+            select: { referenceId: true, amount: true, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        const netByRequest = new Map<string, number>();
+        for (const t of txs) {
+            if (!netByRequest.has(t.referenceId)) {
+                netByRequest.set(t.referenceId, t.amount);
+            }
+        }
+        return netByRequest;
+    }
+
+    private qrCommissionFromGrossAndNet(gross: number, net: number | null | undefined, fallbackRate: number) {
+        if (net == null) {
+            // Last-resort estimate (should be rare); keep integer VND without extra rounding layers.
+            return Math.round(gross * fallbackRate);
+        }
+        return Math.max(0, gross - net);
+    }
 
     async getProviders(filters?: {
         status?: string;
@@ -981,12 +1019,13 @@ export class AdminService {
         const qrPayments = providerIds.length > 0
             ? await this.prisma.payment.findMany({
                 where: { providerId: { in: providerIds }, paymentMethod: { in: ['QR', 'WALLET'] as any }, status: 'COMPLETED' },
-                select: { providerId: true, totalAmount: true },
+                select: { providerId: true, requestId: true, totalAmount: true },
             })
             : [];
+        const netByRequest = await this.getLatestQrWalletNetCreditByRequestIds(qrPayments.map(p => p.requestId));
         const qrCommMap = new Map<string, number>();
         for (const p of qrPayments) {
-            const comm = Math.round(p.totalAmount * currentRate);
+            const comm = this.qrCommissionFromGrossAndNet(p.totalAmount, netByRequest.get(p.requestId), currentRate);
             qrCommMap.set(p.providerId, (qrCommMap.get(p.providerId) ?? 0) + comm);
         }
 
@@ -1085,6 +1124,7 @@ export class AdminService {
     async getTransactionSummary() {
         const now = new Date();
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const commissionRate = await this.getCommissionRate();
 
         const completedPayments = await this.prisma.payment.aggregate({
             where: { status: 'COMPLETED' },
@@ -1096,11 +1136,15 @@ export class AdminService {
             _sum: { amount: true },
         });
 
-        const qrwPayments = await this.prisma.payment.aggregate({
-            where: { status: 'COMPLETED', paymentMethod: { in: ['QR', 'WALLET'] } },
-            _sum: { totalAmount: true },
+        const qrwPayments = await this.prisma.payment.findMany({
+            where: { status: 'COMPLETED', paymentMethod: { in: [PaymentMethod.QR, PaymentMethod.WALLET] } },
+            select: { requestId: true, totalAmount: true },
         });
-        const qrwCommission = Math.round((qrwPayments._sum.totalAmount || 0) * await this.getCommissionRate());
+        const netByRequest = await this.getLatestQrWalletNetCreditByRequestIds(qrwPayments.map(p => p.requestId));
+        const qrwCommission = qrwPayments.reduce(
+            (sum, p) => sum + this.qrCommissionFromGrossAndNet(p.totalAmount, netByRequest.get(p.requestId), commissionRate),
+            0,
+        );
         const totalCommission = (commissions._sum.amount || 0) + qrwCommission;
 
         const providerTopups = await this.prisma.topupTransaction.aggregate({
@@ -2213,12 +2257,19 @@ export class AdminService {
         // Commission withheld from QR/WALLET jobs (net = totalAmount * (1 - rate), commission = total - net)
         const qrPayments = await this.prisma.payment.findMany({
             where: { paymentMethod: { in: ['QR', 'WALLET'] as any }, status: 'COMPLETED' as any },
-            select: { totalAmount: true, createdAt: true },
+            select: { requestId: true, totalAmount: true, createdAt: true },
         });
-        const qrTotalComm = qrPayments.reduce((sum, p) => sum + Math.round(p.totalAmount * currentRate), 0);
+        const netByRequest = await this.getLatestQrWalletNetCreditByRequestIds(qrPayments.map(p => p.requestId));
+        const qrTotalComm = qrPayments.reduce(
+            (sum, p) => sum + this.qrCommissionFromGrossAndNet(p.totalAmount, netByRequest.get(p.requestId), currentRate),
+            0,
+        );
         const qrMonthComm = qrPayments
             .filter(p => p.createdAt >= startOfMonth)
-            .reduce((sum, p) => sum + Math.round(p.totalAmount * currentRate), 0);
+            .reduce(
+                (sum, p) => sum + this.qrCommissionFromGrossAndNet(p.totalAmount, netByRequest.get(p.requestId), currentRate),
+                0,
+            );
 
         const totalCommission = (cashCommAgg._sum.amount ?? 0) + qrTotalComm;
         const commissionThisMonth = (cashCommThisMonth._sum.amount ?? 0) + qrMonthComm;
@@ -2405,12 +2456,13 @@ export class AdminService {
         // 2. Aggregate QR/WALLET commissions
         const qrPayments = await this.prisma.payment.findMany({
             where: { paymentMethod: { in: ['QR', 'WALLET'] as any }, status: 'COMPLETED', providerId: { not: undefined } },
-            select: { providerId: true, totalAmount: true },
+            select: { providerId: true, requestId: true, totalAmount: true },
         });
 
+        const netByRequest = await this.getLatestQrWalletNetCreditByRequestIds(qrPayments.map(p => p.requestId));
         for (const p of qrPayments) {
             if (p.providerId) {
-                const comm = Math.round(p.totalAmount * currentRate);
+                const comm = this.qrCommissionFromGrossAndNet(p.totalAmount, netByRequest.get(p.requestId), currentRate);
                 providerComms.set(p.providerId, (providerComms.get(p.providerId) ?? 0) + comm);
             }
         }
