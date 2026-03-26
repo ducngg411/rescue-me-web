@@ -665,6 +665,15 @@ function TxRow({ tx }: { tx: Transaction }) {
 
     const isCredit = tx.type === 'CREDIT';
 
+    const extractCommissionRate = (desc?: string | null): number | null => {
+        const d = String(desc ?? '');
+        const m = d.match(/(\d+(?:\.\d+)?)\s*%/);
+        if (!m) return null;
+        const p = parseFloat(m[1]);
+        if (!Number.isFinite(p) || p < 0 || p > 100) return null;
+        return p / 100;
+    };
+
     // Build a translated description based on referenceType (avoids raw backend Vietnamese strings)
     const txDescription = (() => {
         const jobRef =
@@ -672,15 +681,21 @@ function TxRow({ tx }: { tx: Transaction }) {
                 ? displayOrderCode(jobDetails.orderCode, jobDetails.id)
                 : (tx.referenceId?.slice(0, 8).toUpperCase() ?? '');
         const shortId = jobRef || (tx.referenceId?.slice(0, 8).toUpperCase() ?? '');
+        const envRate = Math.round((Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.2) * 100);
         switch (tx.referenceType) {
-            case 'COMMISSION':
-                return t('provider.wallet.txDesc.commission').replace('{id}', shortId);
+            case 'COMMISSION': {
+                const parsedRate = extractCommissionRate(tx.description);
+                const rateStr = String(parsedRate !== null ? Math.round(parsedRate * 100) : envRate);
+                return t('provider.wallet.txDesc.commission').replace('{id}', shortId).replace('{rate}', rateStr);
+            }
             case 'JOB_PAYMENT': {
                 const jobId = shortId;
                 const key = isJobPaymentQrProviderTx(tx.description)
                     ? 'provider.wallet.txDesc.jobPaymentQr'
                     : 'provider.wallet.txDesc.jobPaymentWallet';
-                return t(key).replace('{id}', jobId);
+                const parsedRate = extractCommissionRate(tx.description);
+                const rateStr = String(parsedRate !== null ? Math.round(parsedRate * 100) : envRate);
+                return t(key).replace('{id}', jobId).replace('{rate}', rateStr);
             }
             case 'TOPUP': {
                 const code = tx.description?.split('·')[1]?.trim() ?? shortId;
@@ -828,7 +843,8 @@ function TxRow({ tx }: { tx: Transaction }) {
                             {/* Payment section */}
                             <div className="pt-2 mt-2" style={{ borderTop: '1px solid #e2e8f0' }}>
                                 {tx.referenceType === 'JOB_PAYMENT' ? (() => {
-                                    const grossAmount = Math.round(tx.amount / 0.9);
+                                    const rate = extractCommissionRate(tx.description) ?? 0.2;
+                                    const grossAmount = rate >= 1 ? tx.amount : Math.round(tx.amount / (1 - rate));
                                     const commissionAmount = grossAmount - tx.amount;
                                     return (
                                         <div className="space-y-1">
@@ -837,7 +853,7 @@ function TxRow({ tx }: { tx: Transaction }) {
                                                 <span className="text-xs font-semibold" style={{ color: C.navy }}>{formatVndFull(grossAmount)}</span>
                                             </div>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-xs" style={{ color: C.gray }}>Phí nền tảng (10%)</span>
+                                                <span className="text-xs" style={{ color: C.gray }}>Phí nền tảng ({Math.round(rate * 100)}%)</span>
                                                 <span className="text-xs font-semibold" style={{ color: '#ef4444' }}>−{formatVndFull(commissionAmount)}</span>
                                             </div>
                                             <div className="flex justify-between items-center pt-1" style={{ borderTop: '1px dashed #e2e8f0' }}>

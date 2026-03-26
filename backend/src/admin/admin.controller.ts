@@ -26,6 +26,10 @@ import {
     AddDisputeEvidenceDto,
     GetTransactionsQueryDto,
     GetUsersQueryDto,
+    UpdateFeeDto,
+    UpdateSepayConfigDto,
+    GetAuditLogQueryDto,
+    SaveSettingsDto,
 } from './dto/admin.dto';
 
 
@@ -287,4 +291,83 @@ export class AdminController {
     async rejectWithdrawal(@Param('id') id: string, @Body() body: { userType: string; reason?: string }) {
         return this.adminService.rejectWithdrawal(id, body.userType, body.reason);
     }
+
+    // ── Billing & Fee ──────────────────────────────────────────────────────────
+
+    @Get('billing')
+    async getBillingConfig() {
+        return this.adminService.getBillingConfig();
+    }
+
+    // ── Settings ───────────────────────────────────────────────────────────────
+
+    @Get('settings')
+    async getSettings() {
+        return this.adminService.getSettings();
+    }
+
+    @Patch('settings')
+    async updateSettings(@Body() dto: SaveSettingsDto, @Request() req: any) {
+        return this.adminService.updateSettings(req.user.id, 'Admin', dto);
+    }
+
+    @Patch('billing/fee')
+    async updateFeeRate(@Body() dto: UpdateFeeDto, @Request() req) {
+        const adminName = req.user?.fullName || req.user?.email || req.user?.name || 'Admin';
+        return this.adminService.updateFeeRate(req.user.id, adminName, dto.commissionRate, dto.note);
+    }
+
+    @Patch('billing/account')
+    async updateSepayConfig(@Body() dto: UpdateSepayConfigDto, @Request() req) {
+        const adminName = req.user?.fullName || req.user?.email || req.user?.name || 'Admin';
+        return this.adminService.updateSepayConfig(req.user.id, adminName, dto);
+    }
+
+    @Get('billing/audit-log')
+    async getBillingAuditLog(@Query() query: GetAuditLogQueryDto) {
+        return this.adminService.getBillingAuditLog(query.skip ?? 0, query.take ?? 20);
+    }
+
+    // ── Chart Data ─────────────────────────────────────────────────────────────
+
+    @Get('charts/top-users-by-requests')
+    async getTopUsersByRequests() {
+        return this.adminService.getTopUsersByRequests();
+    }
+
+    @Get('charts/top-providers-by-commission')
+    async getTopProvidersByCommission() {
+        return this.adminService.getTopProvidersByCommission();
+    }
+
+    @Get('charts/provider-service-distribution')
+    async getProviderServiceDistribution() {
+        return this.adminService.getProviderServiceDistribution();
+    }
+
+    @Get('charts/provider-vehicle-distribution')
+    async getProviderVehicleDistribution() {
+        return this.adminService.getProviderVehicleDistribution();
+    }
+
+    @Get('charts/dispute-resolution-distribution')
+    async getDisputeResolutionDistribution() {
+        return this.adminService.getDisputeResolutionDistribution();
+    }
+
+    @Get('charts/request-status-trend')
+    async getRequestStatusTrend() {
+        return this.adminService.getRequestStatusTrend();
+    }
+
+    @Get('charts/top-users-by-spending')
+    async getTopUsersBySpending() {
+        return this.adminService.getTopUsersBySpending();
+    }
+
+    @Get('charts/withdrawal-trend')
+    async getWithdrawalTrend() {
+        return this.adminService.getWithdrawalTrend();
+    }
 }
+

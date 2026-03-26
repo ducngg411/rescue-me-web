@@ -1,432 +1,569 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
+import { ChartCard, HorizontalBarChart, DonutChart, VerticalBarChart } from '@/components/AdminCharts';
 import {
-    TrendingUp, TrendingDown, Eye, ArrowRight, Bell,
-    CheckCircle, AlertTriangle, Info, Settings
+    RefreshCw, ArrowRight, Users, ShieldCheck, AlertTriangle,
+    TrendingUp, Wallet, FileText, CreditCard, Settings,
+    Banknote, Clock, CheckCircle2, XCircle, Activity,
 } from 'lucide-react';
 
+// ─── Design Tokens ────────────────────────────────────────────────────────────
 const C = {
     orange: '#f97316',
     orangeDark: '#ea6c0a',
     orangeLight: '#fff7ed',
+    orangeMid: '#fdba74',
     navy: '#1a1a2e',
     gray: '#6b7280',
+    grayLight: '#94a3b8',
     border: '#e2e8f0',
     bg: '#f4f6f9',
+    white: '#ffffff',
     green: '#16a34a',
     greenLight: '#f0fdf4',
     red: '#ef4444',
     redLight: '#fef2f2',
-    yellow: '#ca8a04',
-    yellowLight: '#fefce8',
+    yellow: '#d97706',
+    yellowLight: '#fef9c3',
     blue: '#2563eb',
     blueLight: '#eff6ff',
+    purple: '#7c3aed',
+    purpleLight: '#f5f3ff',
 };
 
-interface KpiCard {
-    label: string;
-    value: string | number;
-    delta: string;
-    positive: boolean;
-    icon: React.ReactNode;
-    accent?: boolean;
-    href: string;
+// ─── Formatters ────────────────────────────────────────────────────────────────
+function fmtVnd(v?: number | null): string {
+    if (v == null) return '—';
+    if (v >= 1_000_000_000) return (v / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + ' tỷ';
+    if (v >= 1_000_000) return (v / 1_000_000).toFixed(1).replace(/\.0$/, '') + ' tr';
+    if (v >= 1_000) return (v / 1_000).toFixed(0) + 'k';
+    return v.toLocaleString('vi-VN');
 }
 
-interface ActivityItem {
-    id: string;
-    type: 'success' | 'warning' | 'info' | 'dispute' | 'system';
-    title: string;
-    description: string;
-    time: string;
+function fmtNum(v?: number | null): string {
+    if (v == null) return '—';
+    return v.toLocaleString('vi-VN');
 }
 
-interface TopProvider {
-    id: string;
-    name: string;
-    type: string;
-    service: string;
-    dateApplied: string;
-    status: string;
+function greeting(): string {
+    const h = new Date().getHours();
+    if (h < 12) return 'Chào buổi sáng';
+    if (h < 18) return 'Chào buổi chiều';
+    return 'Chào buổi tối';
 }
 
-interface ActiveDispute {
-    orderId: string;
-    complainant: string;
-    complainantType: string;
-    priority: 'High' | 'Medium' | 'Low';
-    timer: string;
+// ─── SVG Donut Chart ───────────────────────────────────────────────────────────
+// imported from AdminCharts.
+
+// ─── Skeleton Loader ─────────────────────────────────────────────────────────
+function Skeleton({ className = '' }: { className?: string }) {
+    return (
+        <div
+            className={`rounded-lg animate-pulse ${className}`}
+            style={{ background: 'linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)', backgroundSize: '200% 100%' }}
+        />
+    );
 }
 
-// --- Mock data (sẽ được thay bằng API sau) ---
-const mockKpiData: KpiCard[] = [
-    {
-        label: 'Provider Pending',
-        value: 24,
-        delta: '+5% from yesterday',
-        positive: true,
-        href: '/admin/providers?status=PENDING',
-        icon: (
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-        ),
-    },
-    {
-        label: 'Active Disputes',
-        value: 12,
-        delta: '-2% improvement',
-        positive: false,
-        href: '/admin/disputes',
-        icon: (
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-        ),
-    },
-    {
-        label: 'Pending Payments',
-        value: 45,
-        delta: '+8% increase',
-        positive: true,
-        href: '/admin/transactions?tab=pending',
-        icon: (
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-        ),
-    },
-    {
-        label: 'Withdrawals',
-        value: 18,
-        delta: '+12% today',
-        positive: true,
-        href: '/admin/transactions?tab=withdrawals',
-        icon: (
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-        ),
-    },
-];
+// ─── Loading KPI Card ─────────────────────────────────────────────────────────
+function KpiSkeleton() {
+    return (
+        <div className="p-4 rounded-2xl border" style={{ background: C.white, borderColor: C.border }}>
+            <Skeleton className="w-10 h-10 mb-3" />
+            <Skeleton className="w-24 h-3 mb-2" />
+            <Skeleton className="w-16 h-7 mb-2" />
+            <Skeleton className="w-20 h-3" />
+        </div>
+    );
+}
 
-const mockTodayRevenue: KpiCard = {
-    label: 'Today Revenue',
-    value: '$1,240',
-    delta: '+15% vs yesterday',
-    positive: true,
-    accent: true,
-    href: '/admin/transactions',
-    icon: (
-        <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-    ),
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+interface KpiProps {
+    label: string; value: string;
+    sub?: string; href: string;
+    icon: React.ReactNode; accent?: boolean;
+    iconBg?: string; iconColor?: string;
+}
+function KpiCard({ label, value, sub, href, icon, accent, iconBg, iconColor }: KpiProps) {
+    const router = useRouter();
+    return (
+        <button
+            onClick={() => router.push(href)}
+            className="text-left p-4 rounded-2xl border hover:shadow-md transition-all group"
+            style={{
+                background: accent
+                    ? `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`
+                    : C.white,
+                borderColor: accent ? 'transparent' : C.border,
+            }}
+        >
+            <div className="flex items-start justify-between mb-3">
+                <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: accent ? 'rgba(255,255,255,0.2)' : (iconBg ?? C.bg), color: accent ? '#fff' : (iconColor ?? C.orange) }}
+                >
+                    {icon}
+                </div>
+                <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity mt-1"
+                    style={{ color: accent ? 'rgba(255,255,255,0.7)' : C.grayLight }} />
+            </div>
+            <p className="text-xs font-medium mb-1" style={{ color: accent ? 'rgba(255,255,255,0.75)' : C.gray }}>{label}</p>
+            <p className="text-2xl font-bold leading-tight" style={{ color: accent ? '#fff' : C.navy }}>{value}</p>
+            {sub && <p className="text-xs mt-1" style={{ color: accent ? 'rgba(255,255,255,0.65)' : C.grayLight }}>{sub}</p>}
+        </button>
+    );
+}
+
+// ────────────────────────────────────────────────────────────────────────────────
+
+interface AllStats {
+    txSummary: { totalRevenue: number; totalCommission: number; totalTopupToday: number; pendingTransactions: number; pendingWithdrawals: number } | null;
+    providerStats: { total: number; pending: number; approved: number; rejected: number; suspended: number } | null;
+    disputeStats: { new: number; inProgress: number; resolved: number; total: number } | null;
+    userStats: { total: number; active: number; inactive: number; newThisMonth: number } | null;
+    requestStats: { total: number; completed: number; cancelled: number; disputed: number; newThisMonth: number } | null;
+    withdrawalStats: { total: { pending: number; completed: number; failed: number; total: number } } | null;
+    billingConfig: { commissionRate: number } | null;
+}
+
+const EMPTY: AllStats = {
+    txSummary: null, providerStats: null, disputeStats: null,
+    userStats: null, requestStats: null, withdrawalStats: null, billingConfig: null,
 };
-
-const mockActivity: ActivityItem[] = [
-    { id: '1', type: 'success', title: 'Withdrawal Approved', description: "Med-Life Hospital withdrawal request of $450.00 has been approved.", time: '2 minutes ago' },
-    { id: '2', type: 'warning', title: 'New Provider Registered', description: '"Swift Towing NYC" registered for a provider account and is awaiting review.', time: '15 minutes ago' },
-    { id: '3', type: 'dispute', title: 'New Dispute Filed', description: "User #U-1029 filed a dispute for order #RSQ-9082 regarding service delay.", time: '1 hour ago' },
-    { id: '4', type: 'system', title: 'System Update', description: "Database maintenance completed successfully at 02:00 AM UTC.", time: '5 hours ago' },
-    { id: '5', type: 'success', title: 'Provider Verified', description: "Urban Rescue documents verified. Account is now active.", time: '8 hours ago' },
-];
-
-const mockTopProviders: TopProvider[] = [
-    { id: '1', name: 'Fast Towing Co.', type: 'Business', service: 'Towing', dateApplied: 'Oct 24, 2023', status: 'REVIEWING' },
-    { id: '2', name: 'Urban Rescue', type: 'Individual', service: 'Ambulance', dateApplied: 'Oct 23, 2023', status: 'PENDING' },
-];
-
-const mockDisputes: ActiveDispute[] = [
-    { orderId: '#RSQ-9082', complainant: 'John Doe', complainantType: 'User', priority: 'High', timer: '1h 20m left' },
-    { orderId: '#RSQ-9075', complainant: 'Med-Help Ltd', complainantType: 'Provider', priority: 'Medium', timer: '4h 45m left' },
-];
-
-function ActivityIcon({ type }: { type: ActivityItem['type'] }) {
-    if (type === 'success') return <div style={{ background: C.green }} className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"><CheckCircle className="w-4 h-4 text-white" /></div>;
-    if (type === 'warning') return <div style={{ background: C.orange }} className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-4 h-4 text-white" /></div>;
-    if (type === 'dispute') return <div style={{ background: C.red }} className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-4 h-4 text-white" /></div>;
-    if (type === 'system') return <div style={{ background: C.blue }} className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"><Settings className="w-4 h-4 text-white" /></div>;
-    return <div style={{ background: C.gray }} className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"><Info className="w-4 h-4 text-white" /></div>;
-}
-
-function PriorityBadge({ priority }: { priority: ActiveDispute['priority'] }) {
-    if (priority === 'High') return <span style={{ background: '#fee2e2', color: C.red }} className="px-2.5 py-1 rounded-full text-xs font-semibold">High</span>;
-    if (priority === 'Medium') return <span style={{ background: '#fef9c3', color: '#854d0e' }} className="px-2.5 py-1 rounded-full text-xs font-semibold">Medium</span>;
-    return <span style={{ background: C.greenLight, color: C.green }} className="px-2.5 py-1 rounded-full text-xs font-semibold">Low</span>;
-}
-
-function ProviderStatusBadge({ status }: { status: string }) {
-    if (status === 'REVIEWING') return <span style={{ background: '#fef9c3', color: '#854d0e' }} className="px-2.5 py-1 rounded-full text-xs font-semibold">Reviewing</span>;
-    if (status === 'PENDING') return <span style={{ background: C.blueLight, color: C.blue }} className="px-2.5 py-1 rounded-full text-xs font-semibold">Pending</span>;
-    return <span style={{ background: C.orangeLight, color: C.orange }} className="px-2.5 py-1 rounded-full text-xs font-semibold">{status}</span>;
-}
 
 export default function AdminDashboardPage() {
     const router = useRouter();
     const { isReady } = useAdminGuard();
-    const [stats, setStats] = useState({
-        online: 1204,
-        active: 156,
-        status: '99.9%',
-        responseTime: '14m',
-    });
+    const [stats, setStats] = useState<AllStats>(EMPTY);
+    const [loading, setLoading] = useState(true);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const fetchAll = useCallback(async (showRefresh = false) => {
+        if (showRefresh) setRefreshing(true);
+        else setLoading(true);
+        try {
+            const [txSummary, providerStats, disputeStats, userStats, requestStats, withdrawalStats, billingConfig] = await Promise.allSettled([
+                adminApi.getTransactionSummary(),
+                adminApi.getProviderStats(),
+                adminApi.getDisputeStats(),
+                adminApi.getUserStats(),
+                adminApi.getRescueRequestStats(),
+                adminApi.getWithdrawalStats(),
+                adminApi.getBillingConfig(),
+            ]);
+            setStats({
+                txSummary: txSummary.status === 'fulfilled' ? txSummary.value : null,
+                providerStats: providerStats.status === 'fulfilled' ? providerStats.value : null,
+                disputeStats: disputeStats.status === 'fulfilled' ? disputeStats.value : null,
+                userStats: userStats.status === 'fulfilled' ? userStats.value : null,
+                requestStats: requestStats.status === 'fulfilled' ? requestStats.value : null,
+                withdrawalStats: withdrawalStats.status === 'fulfilled' ? withdrawalStats.value : null,
+                billingConfig: billingConfig.status === 'fulfilled' ? billingConfig.value : null,
+            });
+            setLastUpdated(new Date());
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (isReady) fetchAll(false);
+    }, [isReady, fetchAll]);
 
     if (!isReady) {
         return (
             <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
                 <div className="text-center">
-                    <div className="w-10 h-10 rounded-full border-[3px] border-t-transparent animate-spin mx-auto mb-3" style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
+                    <div className="w-10 h-10 rounded-full border-[3px] animate-spin mx-auto mb-3"
+                        style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
                     <p className="text-sm" style={{ color: C.gray }}>Đang tải...</p>
                 </div>
             </div>
         );
     }
 
+    const { txSummary, providerStats, disputeStats, userStats, requestStats, withdrawalStats, billingConfig } = stats;
+    const commissionRate = billingConfig?.commissionRate ?? 0.2;
+
+    // ─ Provider donut slices ─
+    const providerSlices: { label: string; value: number; color: string }[] = [
+        { label: 'Đã duyệt', value: providerStats?.approved ?? 0, color: C.green },
+        { label: 'Chờ duyệt', value: providerStats?.pending ?? 0, color: C.orange },
+        { label: 'Bị từ chối', value: providerStats?.rejected ?? 0, color: C.red },
+        { label: 'Đình chỉ', value: providerStats?.suspended ?? 0, color: C.yellow },
+    ];
+
+    // ─ Dispute donut slices ─
+    const disputeSlices: { label: string; value: number; color: string }[] = [
+        { label: 'Đã giải quyết', value: disputeStats?.resolved ?? 0, color: C.green },
+        { label: 'Đang xử lý', value: (disputeStats?.inProgress ?? 0) - (disputeStats?.new ?? 0), color: C.blue },
+        { label: 'Mới', value: disputeStats?.new ?? 0, color: C.orange },
+    ];
+
+    // ─ Withdrawal mini bars ─
+    const wdBars: { label: string; value: number; color: string }[] = [
+        { label: 'Chờ', value: withdrawalStats?.total.pending ?? 0, color: C.orange },
+        { label: 'Hoàn thành', value: withdrawalStats?.total.completed ?? 0, color: C.green },
+        { label: 'Thất bại', value: withdrawalStats?.total.failed ?? 0, color: C.red },
+    ];
+
+
+
+
     return (
         <AdminLayout activeTab="/admin/dashboard">
-            <div className="p-6 min-h-screen" style={{ background: C.bg }}>
+            <div className="p-6 min-h-screen" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
 
-                {/* ─── Topbar ─── */}
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="flex-1">
-                        <div className="relative max-w-xs">
-                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: C.gray }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                            <input
-                                type="text"
-                                placeholder="Global Search..."
-                                className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border focus:outline-none focus:ring-2"
-                                style={{ background: '#ffffff', borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}
-                            />
+                {/* ─── Header ─── */}
+                <div className="flex items-center justify-between mb-6">
+                    <div>
+                        <h1 className="text-xl font-bold" style={{ color: C.navy }}>{greeting()}, Admin 👋</h1>
+                        <p className="text-xs mt-0.5" style={{ color: C.gray }}>
+                            {lastUpdated
+                                ? `Cập nhật lúc ${lastUpdated.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
+                                : 'Đang tải dữ liệu thời gian thực...'}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
+                            style={{ background: C.greenLight, color: C.green }}>
+                            <Activity className="w-3.5 h-3.5" />
+                            Hệ thống hoạt động
                         </div>
-                    </div>
-                    <button className="p-2 rounded-xl hover:bg-white transition-colors relative" style={{ color: C.gray }}>
-                        <Bell className="w-5 h-5" />
-                        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: C.red }} />
-                    </button>
-                    <button className="p-2 rounded-xl hover:bg-white transition-colors" style={{ color: C.gray }}>
-                        <Settings className="w-5 h-5" />
-                    </button>
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: C.orange }}>
-                        A
-                    </div>
-                </div>
-
-                {/* ─── KPI Cards ─── */}
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-                    {mockKpiData.map((card) => (
                         <button
-                            key={card.label}
-                            onClick={() => router.push(card.href)}
-                            className="text-left p-4 rounded-2xl border hover:shadow-md transition-all"
-                            style={{ background: '#ffffff', borderColor: C.border }}
+                            onClick={() => fetchAll(true)}
+                            disabled={refreshing}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all hover:shadow-sm active:scale-95"
+                            style={{ background: C.white, borderColor: C.border, color: C.navy }}
                         >
-                            <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: C.bg, color: C.orange }}>
-                                {card.icon}
-                            </div>
-                            <p className="text-xs font-medium mb-1" style={{ color: C.gray }}>{card.label}</p>
-                            <p className="text-2xl font-bold mb-1" style={{ color: C.navy }}>{card.value}</p>
-                            <div className="flex items-center gap-1">
-                                {card.positive
-                                    ? <TrendingUp className="w-3 h-3" style={{ color: C.green }} />
-                                    : <TrendingDown className="w-3 h-3" style={{ color: C.red }} />
-                                }
-                                <span className="text-xs font-medium" style={{ color: card.positive ? C.green : C.red }}>{card.delta}</span>
-                            </div>
+                            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                            Làm mới
                         </button>
-                    ))}
-
-                    {/* Today Revenue - accent orange card */}
-                    <button
-                        onClick={() => router.push(mockTodayRevenue.href)}
-                        className="text-left p-4 rounded-2xl col-span-1 hover:opacity-95 transition-all"
-                        style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)` }}
-                    >
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: 'rgba(255,255,255,0.2)' }}>
-                            {mockTodayRevenue.icon}
-                        </div>
-                        <p className="text-xs font-medium mb-1 text-white/80">{mockTodayRevenue.label}</p>
-                        <p className="text-2xl font-bold mb-1 text-white">{mockTodayRevenue.value}</p>
-                        <div className="flex items-center gap-1">
-                            <TrendingUp className="w-3 h-3 text-white/80" />
-                            <span className="text-xs font-medium text-white/80">{mockTodayRevenue.delta}</span>
-                        </div>
-                    </button>
+                    </div>
                 </div>
 
-                {/* ─── Middle Section: Operations Health + Activity Feed ─── */}
+                {/* ─── KPI Row 1 ─── */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    {loading ? (
+                        Array.from({ length: 4 }).map((_, i) => <KpiSkeleton key={i} />)
+                    ) : (
+                        <>
+                            {/* Total Revenue – accent */}
+                            <KpiCard
+                                accent
+                                label="Tổng doanh thu nền tảng"
+                                value={fmtVnd(txSummary?.totalRevenue) + ' đ'}
+                                sub={`Commission ${(commissionRate * 100).toFixed(0)}% đang áp dụng`}
+                                href="/admin/transactions"
+                                icon={<TrendingUp className="w-5 h-5" />}
+                            />
+                            {/* Commission earned */}
+                            <KpiCard
+                                label="Hoa hồng đã thu"
+                                value={fmtVnd(txSummary?.totalCommission) + ' đ'}
+                                sub="Tích lũy tất cả thời gian"
+                                href="/admin/billing"
+                                icon={<Wallet className="w-5 h-5" />}
+                                iconBg={C.greenLight} iconColor={C.green}
+                            />
+                            {/* Topup today */}
+                            <KpiCard
+                                label="Nạp tiền hôm nay"
+                                value={fmtVnd(txSummary?.totalTopupToday) + ' đ'}
+                                sub="Tổng topup trong ngày"
+                                href="/admin/transactions"
+                                icon={<CreditCard className="w-5 h-5" />}
+                                iconBg={C.blueLight} iconColor={C.blue}
+                            />
+                            {/* Pending withdrawals */}
+                            <KpiCard
+                                label="Rút tiền chờ duyệt"
+                                value={fmtNum(txSummary?.pendingWithdrawals)}
+                                sub="Cần xử lý thủ công"
+                                href="/admin/withdrawals"
+                                icon={<Clock className="w-5 h-5" />}
+                                iconBg={C.yellowLight} iconColor={C.yellow}
+                            />
+                        </>
+                    )}
+                </div>
+
+                {/* ─── KPI Row 2 ─── */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    {loading ? (
+                        Array.from({ length: 4 }).map((_, i) => <KpiSkeleton key={i} />)
+                    ) : (
+                        <>
+                            <KpiCard
+                                label="Providers chờ xét duyệt"
+                                value={fmtNum(providerStats?.pending)}
+                                sub={`Tổng: ${fmtNum(providerStats?.total)} providers`}
+                                href="/admin/providers?status=PENDING"
+                                icon={<ShieldCheck className="w-5 h-5" />}
+                                iconBg={C.orangeLight} iconColor={C.orange}
+                            />
+                            <KpiCard
+                                label="Tranh chấp đang xử lý"
+                                value={fmtNum(disputeStats?.inProgress)}
+                                sub={`Tổng: ${fmtNum(disputeStats?.total)} disputes`}
+                                href="/admin/disputes"
+                                icon={<AlertTriangle className="w-5 h-5" />}
+                                iconBg={C.redLight} iconColor={C.red}
+                            />
+                            <KpiCard
+                                label="Đơn cứu hộ tháng này"
+                                value={fmtNum(requestStats?.newThisMonth)}
+                                sub={`Tổng: ${fmtNum(requestStats?.total)} đơn`}
+                                href="/admin/requests"
+                                icon={<FileText className="w-5 h-5" />}
+                                iconBg={C.purpleLight} iconColor={C.purple}
+                            />
+                            <KpiCard
+                                label="Người dùng mới tháng này"
+                                value={fmtNum(userStats?.newThisMonth)}
+                                sub={`Tổng: ${fmtNum(userStats?.total)} users`}
+                                href="/admin/users"
+                                icon={<Users className="w-5 h-5" />}
+                                iconBg={C.blueLight} iconColor={C.blue}
+                            />
+                        </>
+                    )}
+                </div>
+
+                {/* ─── Charts Row ─── */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
 
-                    {/* Operations Health (2/3 width) */}
-                    <div className="lg:col-span-2">
-                        <div className="bg-white rounded-2xl border p-5 h-full" style={{ borderColor: C.border }}>
-                            <div className="flex items-center gap-2 mb-4">
+                    {/* Provider Status Donut */}
+                    <div className="bg-white rounded-2xl border p-5" style={{ borderColor: C.border }}>
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
                                 <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.orangeLight }}>
-                                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2.5}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                    </svg>
+                                    <ShieldCheck className="w-3.5 h-3.5" style={{ color: C.orange }} />
                                 </div>
-                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Operations Health</h2>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Trạng thái Providers</h2>
                             </div>
-
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                {[
-                                    { label: 'ONLINE', value: stats.online.toLocaleString(), sub: 'Providers Active', color: C.green },
-                                    { label: 'ACTIVE', value: stats.active, sub: 'Orders in progress', color: C.blue },
-                                    { label: 'STATUS', value: stats.status, sub: 'System Healthy', color: C.green },
-                                    { label: 'RESP. TIME', value: stats.responseTime, sub: 'Avg response', color: C.navy },
-                                ].map((stat) => (
-                                    <div key={stat.label} className="p-3 rounded-xl" style={{ background: C.bg }}>
-                                        <p className="text-[10px] font-semibold tracking-wider mb-1" style={{ color: C.gray }}>{stat.label}</p>
-                                        <p className="text-xl font-bold mb-0.5" style={{ color: stat.color }}>{stat.value}</p>
-                                        <p className="text-[11px]" style={{ color: C.gray }}>{stat.sub}</p>
-                                    </div>
-                                ))}
-                            </div>
+                            <button onClick={() => router.push('/admin/providers?status=ALL')}
+                                className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: C.orange }}>
+                                Xem tất cả <ArrowRight className="w-3 h-3" />
+                            </button>
                         </div>
+                        {loading ? (
+                            <div className="flex items-center justify-center h-32"><Skeleton className="w-28 h-28 rounded-full" /></div>
+                        ) : (
+                            <div className="flex items-center gap-5">
+                                <div className="relative flex-shrink-0">
+                                    <DonutChart 
+                                        slices={providerSlices} 
+                                        size={110} 
+                                        centerLabel={fmtNum(providerStats?.total)} 
+                                        centerSub="Tổng"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                                    {providerSlices.map((s) => (
+                                        <div key={s.label} className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                                            <div className="flex items-center justify-between flex-1 min-w-0">
+                                                <span className="text-xs truncate" style={{ color: C.gray }}>{s.label}</span>
+                                                <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: C.navy }}>{fmtNum(s.value)}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Activity Feed (1/3 width) */}
+                    {/* Dispute Status Donut */}
                     <div className="bg-white rounded-2xl border p-5" style={{ borderColor: C.border }}>
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: '#fef3c7' }}>
-                                <Bell className="w-3.5 h-3.5" style={{ color: '#d97706' }} />
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.redLight }}>
+                                    <AlertTriangle className="w-3.5 h-3.5" style={{ color: C.red }} />
+                                </div>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Trạng thái Disputes</h2>
                             </div>
-                            <h2 className="text-sm font-bold flex-1" style={{ color: C.navy }}>Activity Feed</h2>
+                            <button onClick={() => router.push('/admin/disputes')}
+                                className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: C.orange }}>
+                                Xem tất cả <ArrowRight className="w-3 h-3" />
+                            </button>
                         </div>
-                        <div className="space-y-3">
-                            {mockActivity.map((item) => (
-                                <div key={item.id} className="flex gap-2.5">
-                                    <ActivityIcon type={item.type} />
-                                    <div className="min-w-0">
-                                        <p className="text-xs font-semibold leading-tight" style={{ color: C.navy }}>{item.title}</p>
-                                        <p className="text-[11px] leading-snug mt-0.5" style={{ color: C.gray }}>{item.description}</p>
-                                        <p className="text-[10px] mt-1" style={{ color: '#94a3b8' }}>{item.time}</p>
+                        {loading ? (
+                            <div className="flex items-center justify-center h-32"><Skeleton className="w-28 h-28 rounded-full" /></div>
+                        ) : (
+                            <div className="flex items-center gap-5">
+                                <div className="relative flex-shrink-0">
+                                    <DonutChart 
+                                        slices={disputeSlices} 
+                                        size={110} 
+                                        centerLabel={fmtNum(disputeStats?.total)} 
+                                        centerSub="Tổng"
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                                    {disputeSlices.map((s) => (
+                                        <div key={s.label} className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                                            <div className="flex items-center justify-between flex-1 min-w-0">
+                                                <span className="text-xs truncate" style={{ color: C.gray }}>{s.label}</span>
+                                                <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: C.navy }}>{fmtNum(s.value)}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className="mt-1 pt-2" style={{ borderTop: `1px solid ${C.border}` }}>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: C.grayLight }} />
+                                            <div className="flex items-center justify-between flex-1 min-w-0">
+                                                <span className="text-xs truncate" style={{ color: C.gray }}>Đã giải quyết</span>
+                                                <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: C.green }}>{fmtNum(disputeStats?.resolved)}</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Request Stats */}
+                    <div className="bg-white rounded-2xl border p-5" style={{ borderColor: C.border }}>
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.purpleLight }}>
+                                    <FileText className="w-3.5 h-3.5" style={{ color: C.purple }} />
+                                </div>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Đơn cứu hộ</h2>
+                            </div>
+                            <button onClick={() => router.push('/admin/requests')}
+                                className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: C.orange }}>
+                                Xem tất cả <ArrowRight className="w-3 h-3" />
+                            </button>
                         </div>
-                        <button className="mt-4 w-full text-center text-xs font-semibold py-2 rounded-xl border hover:bg-gray-50 transition-colors" style={{ color: C.navy, borderColor: C.border }}>
-                            Load More Activity
-                        </button>
+                        {loading ? (
+                            <div className="space-y-3">
+                                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8" />)}
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {[
+                                    { label: 'Tổng đơn', value: requestStats?.total ?? 0, color: C.navy, icon: <FileText className="w-3.5 h-3.5" /> },
+                                    { label: 'Hoàn thành', value: requestStats?.completed ?? 0, color: C.green, icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+                                    { label: 'Đã hủy', value: requestStats?.cancelled ?? 0, color: C.red, icon: <XCircle className="w-3.5 h-3.5" /> },
+                                    { label: 'Có tranh chấp', value: requestStats?.disputed ?? 0, color: C.yellow, icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+                                ].map((row) => {
+                                    const total = requestStats?.total ?? 1;
+                                    const pct = total > 0 ? Math.min(100, Math.round((row.value / total) * 100)) : 0;
+                                    return (
+                                        <div key={row.label}>
+                                            <div className="flex items-center justify-between mb-1">
+                                                <div className="flex items-center gap-1.5" style={{ color: row.color }}>
+                                                    {row.icon}
+                                                    <span className="text-xs font-medium" style={{ color: C.gray }}>{row.label}</span>
+                                                </div>
+                                                <span className="text-xs font-bold" style={{ color: C.navy }}>{fmtNum(row.value)}</span>
+                                            </div>
+                                            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: C.bg }}>
+                                                <div className="h-full rounded-full transition-all duration-700"
+                                                    style={{ width: `${pct}%`, background: row.color, opacity: 0.8 }} />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* ─── Bottom Section: Top Provider Approval + Active Disputes ─── */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* ─── Bottom Row ─── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-                    {/* Top 5 Provider Approval (2/3) */}
-                    <div className="lg:col-span-2 bg-white rounded-2xl border p-5" style={{ borderColor: C.border }}>
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-sm font-bold" style={{ color: C.navy }}>Top 5 Provider Approval</h2>
-                            <button
-                                onClick={() => router.push('/admin/providers')}
-                                className="flex items-center gap-1 text-xs font-semibold hover:underline"
-                                style={{ color: C.orange }}
-                            >
-                                View All <ArrowRight className="w-3 h-3" />
-                            </button>
-                        </div>
-
-                        <table className="w-full">
-                            <thead>
-                                <tr>
-                                    {['PROVIDER', 'TYPE', 'DATE APPLIED', 'STATUS', 'ACTION'].map(h => (
-                                        <th key={h} className="text-left text-[10px] font-semibold tracking-wider pb-3 pr-3" style={{ color: C.gray }}>
-                                            {h}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y" style={{ borderColor: C.border }}>
-                                {mockTopProviders.map((p) => (
-                                    <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="py-3 pr-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: C.orange }}>
-                                                    {p.name.charAt(0)}
-                                                </div>
-                                                <span className="text-xs font-semibold" style={{ color: C.navy }}>{p.name}</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-3 pr-3 text-xs" style={{ color: C.gray }}>{p.type}</td>
-                                        <td className="py-3 pr-3 text-xs" style={{ color: C.gray }}>{p.dateApplied}</td>
-                                        <td className="py-3 pr-3">
-                                            <ProviderStatusBadge status={p.status} />
-                                        </td>
-                                        <td className="py-3">
-                                            <button
-                                                onClick={() => router.push(`/admin/providers/${p.id}`)}
-                                                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                                                style={{ color: C.gray }}
-                                            >
-                                                <Eye className="w-4 h-4" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Active Disputes (1/3) */}
+                    {/* User Stats */}
                     <div className="bg-white rounded-2xl border p-5" style={{ borderColor: C.border }}>
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-sm font-bold" style={{ color: C.navy }}>Active Disputes</h2>
-                            <button
-                                onClick={() => router.push('/admin/transactions?tab=disputes')}
-                                className="flex items-center gap-1 text-xs font-semibold hover:underline"
-                                style={{ color: C.orange }}
-                            >
-                                View All <ArrowRight className="w-3 h-3" />
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.blueLight }}>
+                                    <Users className="w-3.5 h-3.5" style={{ color: C.blue }} />
+                                </div>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Người dùng</h2>
+                            </div>
+                            <button onClick={() => router.push('/admin/users')}
+                                className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: C.orange }}>
+                                Quản lý <ArrowRight className="w-3 h-3" />
                             </button>
                         </div>
-
-                        <table className="w-full">
-                            <thead>
-                                <tr>
-                                    {['ORDER ID', 'COMPLAINANT', 'PRIORITY', 'TIMER', 'ACTION'].map(h => (
-                                        <th key={h} className="text-left text-[10px] font-semibold tracking-wider pb-3 pr-2" style={{ color: C.gray }}>
-                                            {h}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {mockDisputes.map((d) => (
-                                    <tr key={d.orderId} className="border-t hover:bg-gray-50 transition-colors" style={{ borderColor: C.border }}>
-                                        <td className="py-3 pr-2">
-                                            <span className="text-xs font-bold" style={{ color: C.orange }}>{d.orderId}</span>
-                                        </td>
-                                        <td className="py-3 pr-2">
-                                            <div>
-                                                <p className="text-xs font-semibold" style={{ color: C.navy }}>{d.complainant}</p>
-                                                <p className="text-[10px]" style={{ color: C.gray }}>({d.complainantType})</p>
-                                            </div>
-                                        </td>
-                                        <td className="py-3 pr-2">
-                                            <PriorityBadge priority={d.priority} />
-                                        </td>
-                                        <td className="py-3 pr-2 text-[11px]" style={{ color: C.gray }}>{d.timer}</td>
-                                        <td className="py-3">
-                                            <button
-                                                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors hover:opacity-90"
-                                                style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)` }}
-                                            >
-                                                Resolve
-                                            </button>
-                                        </td>
-                                    </tr>
+                        {loading ? (
+                            <div className="grid grid-cols-2 gap-3">
+                                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    { label: 'Tổng users', value: userStats?.total ?? 0, color: C.navy, bg: C.bg },
+                                    { label: 'Hoạt động', value: userStats?.active ?? 0, color: C.green, bg: C.greenLight },
+                                    { label: 'Đã khóa', value: userStats?.inactive ?? 0, color: C.red, bg: C.redLight },
+                                    { label: 'Mới tháng này', value: userStats?.newThisMonth ?? 0, color: C.blue, bg: C.blueLight },
+                                ].map((s) => (
+                                    <div key={s.label} className="p-3 rounded-xl flex items-center gap-3" style={{ background: s.bg }}>
+                                        <div>
+                                            <p className="text-xl font-bold" style={{ color: s.color }}>{fmtNum(s.value)}</p>
+                                            <p className="text-[11px]" style={{ color: C.gray }}>{s.label}</p>
+                                        </div>
+                                    </div>
                                 ))}
-                            </tbody>
-                        </table>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Withdrawal Stats */}
+                    <div className="bg-white rounded-2xl border p-5" style={{ borderColor: C.border }}>
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.greenLight }}>
+                                    <Banknote className="w-3.5 h-3.5" style={{ color: C.green }} />
+                                </div>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Rút tiền</h2>
+                            </div>
+                            <button onClick={() => router.push('/admin/withdrawals')}
+                                className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: C.orange }}>
+                                Quản lý <ArrowRight className="w-3 h-3" />
+                            </button>
+                        </div>
+                        {loading ? (
+                            <div className="flex items-center gap-6">
+                                <Skeleton className="w-20 h-20 rounded-lg" />
+                                <div className="flex-1 space-y-3">
+                                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-8" />)}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-6">
+                                {/* Mini bar chart */}
+                                <div className="flex flex-col items-center gap-2 flex-shrink-0 w-32">
+                                    <div className="w-full mt-2">
+                                        <VerticalBarChart items={wdBars} height={80} />
+                                    </div>
+                                </div>
+                                {/* Stats */}
+                                <div className="flex-1 space-y-2">
+                                    {[
+                                        { label: 'Chờ duyệt', value: withdrawalStats?.total.pending ?? 0, color: C.orange, bg: C.orangeLight },
+                                        { label: 'Hoàn thành', value: withdrawalStats?.total.completed ?? 0, color: C.green, bg: C.greenLight },
+                                        { label: 'Thất bại', value: withdrawalStats?.total.failed ?? 0, color: C.red, bg: C.redLight },
+                                    ].map((s) => (
+                                        <div key={s.label} className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: s.bg }}>
+                                            <span className="text-xs font-medium" style={{ color: C.gray }}>{s.label}</span>
+                                            <span className="text-sm font-bold" style={{ color: s.color }}>{fmtNum(s.value)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 

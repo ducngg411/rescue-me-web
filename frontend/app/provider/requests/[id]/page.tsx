@@ -1462,7 +1462,7 @@ export default function ProviderRequestDetailPage() {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                         <p className="text-[11px] leading-relaxed" style={{ color: '#9a3412' }}>
-                                            {t('provider.requestDetail.quote.feeNote')}
+                                            {t('provider.requestDetail.quote.feeNote').replace('{rate}', String(Math.round((Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.2) * 100)))}
                                         </p>
                                     </div>
                                 </form>

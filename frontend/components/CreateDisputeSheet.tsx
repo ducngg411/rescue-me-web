@@ -39,7 +39,7 @@ export default function CreateDisputeSheet({
 }: CreateDisputeSheetProps) {
     const { t, locale } = useLanguage();
     const router = useRouter();
-    const commissionRate = Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.1;
+    const commissionRate = Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.2;
     const maxAmount = Math.max(0, Math.floor(totalAmount - (totalAmount * commissionRate)));
 
     const [reason, setReason] = useState('');

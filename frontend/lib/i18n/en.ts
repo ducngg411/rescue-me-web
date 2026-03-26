@@ -1095,9 +1095,9 @@ const en = {
                 txCode: 'Tx code',
             },
             txDesc: {
-                commission: 'Platform commission 10% - Job #{id}',
-                jobPaymentWallet: 'Customer paid via RescueMe wallet - Job #{id} • 10% fee',
-                jobPaymentQr: 'Customer paid via bank transfer (QR) - Job #{id} • 10% fee',
+                commission: 'Platform commission {rate}% - Job #{id}',
+                jobPaymentWallet: 'Customer paid via RescueMe wallet - Job #{id} • {rate}% fee',
+                jobPaymentQr: 'Customer paid via bank transfer (QR) - Job #{id} • {rate}% fee',
                 topup: 'Top-up via SePay · {code}',
                 withdraw: 'Withdrawal request #{id}',
             },
@@ -1380,7 +1380,7 @@ const en = {
             systemOk: 'System operational',
             chart: {
                 revenueProfit: 'Revenue / Profit',
-                platformFee: 'Platform fee: 10%',
+                platformFee: 'Platform fee: {rate}%',
                 revenue: 'Revenue',
                 profit: 'Profit',
                 noData: 'No revenue data yet',
@@ -1496,7 +1496,7 @@ const en = {
                 messagePlaceholder: 'Additional details for customer...',
                 submitBtn: 'SEND QUOTE',
                 submitting: 'Submitting...',
-                feeNote: '* Platform takes 10% commission from this amount.',
+                feeNote: '* Platform takes {rate}% commission from this amount.',
                 priceError: 'Price must be at least 10,000 ₫',
                 etaError: 'ETA must be 1–300 minutes',
             },
@@ -1659,7 +1659,7 @@ const en = {
                 qr: {
                     title: 'Customer has paid!',
                     desc: 'Money is in the system. Tap complete to finish the job.',
-                    note: 'Funds will be released to your wallet after 24 hours (minus 10% commission)',
+                    note: 'Funds will be released to your wallet after 24 hours (minus {rate}% commission)',
                     completeBtn: 'Complete job',
                 },
                 cash: {
@@ -1759,7 +1759,7 @@ const en = {
                 pickupLocation: 'Pickup Location',
                 description: 'Description',
                 grossRevenue: 'Gross Revenue',
-                platformFee: 'Platform Fee (10%)',
+                platformFee: 'Platform Fee ({rate}%)',
                 netProfit: 'Net Profit',
                 paymentMethod: 'Payment Method',
                 cash: 'Cash',
@@ -1828,7 +1828,7 @@ const en = {
             },
             quoteInfo: {
                 quotedPrice: 'Quoted price',
-                profit: 'Profit (~90%)',
+                profit: 'Profit (~{rate}%)',
                 eta: 'Quoted ETA',
                 status: 'Quote status',
                 yourMessage: 'Your message',
@@ -1934,7 +1934,7 @@ const en = {
                 basePrice: 'Base price',
                 surcharge: 'Surcharge: {label}',
                 total: 'Total payment',
-                netIncome: 'Net income (after 10% fee)',
+                netIncome: 'Net income (after {rate}% fee)',
             },
             media: {
                 title: 'Media ({count})',

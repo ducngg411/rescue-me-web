@@ -10,8 +10,9 @@ import { displayOrderCode } from '@/lib/reconciliation';
 import {
     Search, ChevronLeft, ChevronRight, Filter, Calendar, Eye,
     X, Mail, Phone, Wallet, Car, Star, Clock, ShieldOff, ShieldCheck,
-    AlertTriangle, Loader2, Trash2, ExternalLink, Users, CheckCircle, Lock
+    AlertTriangle, Loader2, Trash2, ExternalLink, Users, CheckCircle, Lock, BarChart2
 } from 'lucide-react';
+import { ChartCard, HorizontalBarChart } from '@/components/AdminCharts';
 
 const C = {
     orange: '#f97316',
@@ -42,7 +43,8 @@ interface UserItem {
     bannedAt: string | null;
     createdAt: string;
     lastLogin: string | null;
-    _count: { rescueRequests: number };
+    _count: { rescueRequests: number; assignedRequests?: number };
+    averageRating?: number;
     userWallet: { availableBalance: number } | null;
     providerWallet?: { availableBalance: number } | null;
 }
@@ -54,8 +56,16 @@ interface UserDetail extends UserItem {
     defaultAddress: { addressText?: string } | null;
     banReason: string | null;
     userWallet: { availableBalance: number; pendingBalance: number } | null;
-    _count: { rescueRequests: number; reviewsGiven: number };
+    _count: { rescueRequests: number; reviewsGiven: number; assignedRequests?: number; reviewsReceived?: number };
     rescueRequests: Array<{
+        id: string;
+        orderCode: string | null;
+        incidentType: string;
+        status: string;
+        createdAt: string;
+        payment: { totalAmount: number } | null;
+    }>;
+    assignedRequests?: Array<{
         id: string;
         orderCode: string | null;
         incidentType: string;
@@ -367,8 +377,18 @@ function UserDetailPanel({
                                                         : '—',
                                                 icon: <Wallet className="w-3.5 h-3.5" />,
                                             },
-                                    { label: 'Yêu cầu', value: String(user._count.rescueRequests), icon: <Car className="w-3.5 h-3.5" /> },
-                                    { label: 'Đánh giá', value: String(user._count.reviewsGiven), icon: <Star className="w-3.5 h-3.5" /> },
+                                    { 
+                                        label: user.role === 'PROVIDER' ? 'Job Hoàn Thành' : 'Yêu cầu', 
+                                        value: String(user.role === 'PROVIDER' ? user._count.assignedRequests : user._count.rescueRequests), 
+                                        icon: <Car className="w-3.5 h-3.5" /> 
+                                    },
+                                    { 
+                                        label: 'Đánh giá', 
+                                        value: user.role === 'PROVIDER' 
+                                            ? `${user.averageRating?.toFixed(1) || '0.0'} (${user._count.reviewsReceived || 0})` 
+                                            : String(user._count.reviewsGiven), 
+                                        icon: <Star className="w-3.5 h-3.5" /> 
+                                    },
                                 ].map(s => (
                                     <div key={s.label} className="bg-white px-3 py-3 text-center">
                                         <div className="flex items-center justify-center gap-1 mb-1" style={{ color: C.gray }}>
@@ -425,7 +445,39 @@ function UserDetailPanel({
                             )}
 
                             {/* Recent requests */}
-                            {user.rescueRequests.length > 0 && (
+                            {user.role === 'PROVIDER' && user.assignedRequests && user.assignedRequests.length > 0 && (
+                                <div className="px-5 py-4 border-b" style={{ borderColor: C.border }}>
+                                    <p className="text-[10px] font-semibold tracking-wider uppercase mb-3" style={{ color: C.gray }}>5 job nhận gần nhất</p>
+                                    <div className="space-y-2">
+                                        {user.assignedRequests.map(r => {
+                                            const st = REQUEST_STATUS_LABELS[r.status] || { label: r.status, color: C.gray, bg: C.bg };
+                                            return (
+                                                <div key={r.id} className="flex items-center justify-between gap-2 p-2.5 rounded-xl border" style={{ borderColor: C.border }}>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-semibold truncate" style={{ color: C.navy }}>
+                                                            {INCIDENT_LABELS[r.incidentType] || r.incidentType}
+                                                            {r.orderCode && (
+                                                                <span className="ml-1 font-mono font-normal" style={{ color: C.gray }}>
+                                                                    #{displayOrderCode(r.orderCode, r.id)}
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                        <p className="text-[10px]" style={{ color: C.gray }}>
+                                                            {new Date(r.createdAt).toLocaleDateString('vi-VN')}
+                                                            {r.payment && ` · ${r.payment.totalAmount.toLocaleString('vi-VN')}₫`}
+                                                        </p>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: st.bg, color: st.color }}>
+                                                        {st.label}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {user.role === 'USER' && user.rescueRequests && user.rescueRequests.length > 0 && (
                                 <div className="px-5 py-4 border-b" style={{ borderColor: C.border }}>
                                     <p className="text-[10px] font-semibold tracking-wider uppercase mb-3" style={{ color: C.gray }}>5 yêu cầu gần nhất</p>
                                     <div className="space-y-2">
@@ -666,6 +718,11 @@ export default function AdminUsersPage() {
 
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
+    // Chart data
+    const [chartTopUsersReqs, setChartTopUsersReqs] = useState<{ rank: number; label: string; sublabel?: string; value: number }[]>([]);
+    const [chartTopUsersSpend, setChartTopUsersSpend] = useState<{ rank: number; label: string; sublabel?: string; value: number; displayValue: string }[]>([]);
+    const [chartsLoading, setChartsLoading] = useState(true);
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
@@ -683,7 +740,13 @@ export default function AdminUsersPage() {
         }
     }, []);
 
-    useEffect(() => { if (isReady) load(); }, [isReady, load]);
+    useEffect(() => {
+        if (isReady) {
+            load();
+            adminApi.getTopUsersByRequests().then(setChartTopUsersReqs).catch(() => {});
+            adminApi.getTopUsersBySpending().then(setChartTopUsersSpend).catch(() => {}).finally(() => setChartsLoading(false));
+        }
+    }, [isReady, load]);
 
     const filtered = items.filter(u => {
         // Tab filter
@@ -747,6 +810,33 @@ export default function AdminUsersPage() {
                             {stat.sub && <p className="text-[10px] mt-1 font-medium" style={{ color: C.gray }}>{stat.sub}</p>}
                         </div>
                     ))}
+                </div>
+
+                {/* ─── Chart Row ─── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    <ChartCard
+                        title="Top 10 Users theo số yêu cầu"
+                        icon={<BarChart2 className="w-3.5 h-3.5" />}
+                        iconBg="#eff6ff" iconColor="#2563eb"
+                    >
+                        <HorizontalBarChart
+                            loading={chartsLoading}
+                            items={chartTopUsersReqs}
+                            color="#2563eb"
+                            suffix=" đơn"
+                        />
+                    </ChartCard>
+                    <ChartCard
+                        title="Top 10 Users theo chi tiêu"
+                        icon={<BarChart2 className="w-3.5 h-3.5" />}
+                        iconBg="#f0fdf4" iconColor="#16a34a"
+                    >
+                        <HorizontalBarChart
+                            loading={chartsLoading}
+                            items={chartTopUsersSpend}
+                            color="#16a34a"
+                        />
+                    </ChartCard>
                 </div>
 
                 {/* Main Card */}
@@ -835,7 +925,7 @@ export default function AdminUsersPage() {
                             <table className="w-full text-left text-sm">
                                 <thead style={{ background: C.bg }}>
                                     <tr>
-                                        {['NGƯỜI DÙNG', 'SĐT', 'ĐĂNG NHẬP', 'SỐ DƯ VÍ', 'YÊU CẦU', 'NGÀY THAM GIA', 'HỒ SƠ', 'TÀI KHOẢN', ''].map(h => (
+                                        {['NGƯỜI DÙNG', 'SĐT', 'ĐĂNG NHẬP', 'SỐ DƯ VÍ', tab === 'ROLE_PROVIDER' ? 'JOB HOÀN THÀNH' : 'YÊU CẦU', 'NGÀY THAM GIA', 'HỒ SƠ', 'TÀI KHOẢN', ''].map(h => (
                                             <th key={h} className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>{h}</th>
                                         ))}
                                     </tr>
@@ -865,7 +955,9 @@ export default function AdminUsersPage() {
                                                         ? `${user.providerWallet.availableBalance.toLocaleString('vi-VN')}₫`
                                                         : <span className="text-xs" style={{ color: C.gray }}>—</span>}
                                             </td>
-                                            <td className="px-4 py-3 text-sm font-semibold" style={{ color: C.navy }}>{user._count.rescueRequests}</td>
+                                            <td className="px-4 py-3 text-sm font-semibold" style={{ color: C.navy }}>
+                                                {user.role === 'PROVIDER' ? (user._count.assignedRequests || 0) : user._count.rescueRequests}
+                                            </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="text-xs font-medium" style={{ color: C.navy }}>{new Date(user.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>

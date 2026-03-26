@@ -58,6 +58,28 @@ export class WalletService {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
+    private parseCommissionRate(raw?: string | null): number {
+        if (raw == null) return NaN;
+        const parsed = parseFloat(String(raw));
+        if (Number.isNaN(parsed) || parsed < 0 || parsed > 1) return NaN;
+        return parsed;
+    }
+
+    /** Effective commission rate: DB (`platformConfig`) → env → 0.1 */
+    private async getEffectiveCommissionRate(): Promise<number> {
+        const row = await (this.prisma as any).platformConfig?.findUnique?.({
+            where: { key: 'COMMISSION_RATE' },
+            select: { value: true },
+        });
+        const dbRate = this.parseCommissionRate(row?.value);
+        if (!Number.isNaN(dbRate)) return dbRate;
+
+        const envRate = this.parseCommissionRate(process.env.COMMISSION_RATE ?? null);
+        if (!Number.isNaN(envRate)) return envRate;
+
+        return 0.1;
+    }
+
     /**
      * Ensure a wallet row exists for the given provider.
      * Returns the wallet (creates one lazily if missing).
@@ -125,7 +147,7 @@ export class WalletService {
 
         const todayRevenue = todayRequests.reduce((s, req) => s + getRevenue(req), 0);
         // Apply platform commission rate to get provider's net earnings
-        const commissionRate = parseFloat(process.env.COMMISSION_RATE ?? '0.1');
+        const commissionRate = await this.getEffectiveCommissionRate();
         const todayEarnings = Math.round(todayRevenue * (1 - commissionRate));
         return { todayEarnings, todayJobCount: todayRequests.length };
     }
@@ -1245,7 +1267,7 @@ export class WalletService {
         if (!payment) return { success: true, message: 'Payment record not found' };
 
         const wallet = await this.ensureWallet(payment.providerId);
-        const commissionRate = parseFloat(process.env.COMMISSION_RATE ?? '0.1');
+        const commissionRate = await this.getEffectiveCommissionRate();
         const netAmount = Math.round(transferAmount * (1 - commissionRate));
         const holdReleaseAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // +24h
 

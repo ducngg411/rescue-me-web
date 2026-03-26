@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, Min, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsInt, Min, IsEnum, IsNumber, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { DisputeCaseStatus, DisputeResolutionType, DisputeSenderRole } from '@prisma/client';
 
@@ -192,4 +192,56 @@ export class GetUsersQueryDto {
     @IsInt()
     @Min(1)
     take?: number;
+}
+
+// ── Billing & Fee ─────────────────────────────────────────────────────────────
+
+export class UpdateFeeDto {
+    @Type(() => Number)
+    @IsNumber()
+    @Min(0)
+    @Max(1)
+    commissionRate: number;
+
+    @IsOptional()
+    @IsString()
+    note?: string;
+}
+
+export class UpdateSepayConfigDto {
+    @IsOptional()
+    @IsString()
+    apiKey?: string;
+
+    @IsString()
+    @IsNotEmpty()
+    bankAccount: string;
+
+    @IsString()
+    @IsNotEmpty()
+    bankCode: string;
+
+    @IsOptional()
+    @IsString()
+    note?: string;
+}
+
+export class GetAuditLogQueryDto {
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(0)
+    skip?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    take?: number;
+}
+
+export class SaveSettingsDto {
+    @IsString()
+    @IsNotEmpty()
+    platformName: string;
 }

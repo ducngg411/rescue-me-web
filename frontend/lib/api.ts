@@ -342,6 +342,99 @@ export const adminApi = {
         const response = await api.get(`/admin/requests/${id}`);
         return response.data;
     },
+
+    // ── Billing & Fee ─────────────────────────────────────────────────────────
+
+    getBillingConfig: async () => {
+        const response = await api.get('/admin/billing');
+        return response.data as {
+            commissionRate: number;
+            totalCommission: number;
+            commissionThisMonth: number;
+            sepayApiKey: string | null;
+            sepayBankAccount: string | null;
+            sepayBankCode: string | null;
+        };
+    },
+
+    updateFee: async (commissionRate: number, note?: string) => {
+        const response = await api.patch('/admin/billing/fee', { commissionRate, note });
+        return response.data as { success: boolean; commissionRate: number };
+    },
+
+    updateBankAccount: async (dto: {
+        bankAccount: string;
+        bankCode: string;
+        apiKey?: string;
+        note?: string;
+    }) => {
+        const response = await api.patch('/admin/billing/account', dto);
+        return response.data as { success: boolean };
+    },
+
+    getBillingAuditLog: async (params?: { skip?: number; take?: number }) => {
+        const response = await api.get('/admin/billing/audit-log', { params });
+        return response.data as {
+            items: {
+                id: string;
+                adminId: string;
+                adminName: string;
+                changeType: 'FEE_RATE' | 'BANK_ACCOUNT';
+                oldValue: string | null;
+                newValue: string;
+                note: string | null;
+                createdAt: string;
+            }[];
+            total: number;
+            skip: number;
+            take: number;
+        };
+    },
+
+    // ── Settings ──────────────────────────────────────────────────────────────
+    getSettings: async () => {
+        const response = await api.get('/admin/settings');
+        return response.data as { platformName: string };
+    },
+
+    updateSettings: async (platformName: string) => {
+        const response = await api.patch('/admin/settings', { platformName });
+        return response.data as { success: boolean };
+    },
+
+    // ── Charts ────────────────────────────────────────────────────────────────
+    getTopUsersByRequests: async () => {
+        const res = await api.get('/admin/charts/top-users-by-requests');
+        return res.data as { rank: number; label: string; sublabel?: string; value: number }[];
+    },
+    getTopProvidersByCommission: async () => {
+        const res = await api.get('/admin/charts/top-providers-by-commission');
+        return res.data as { rank: number; label: string; value: number; displayValue: string }[];
+    },
+    getProviderServiceDistribution: async () => {
+        const res = await api.get('/admin/charts/provider-service-distribution');
+        return res.data as { label: string; value: number; key: string }[];
+    },
+    getProviderVehicleDistribution: async () => {
+        const res = await api.get('/admin/charts/provider-vehicle-distribution');
+        return res.data as { label: string; value: number; color: string }[];
+    },
+    getDisputeResolutionDistribution: async () => {
+        const res = await api.get('/admin/charts/dispute-resolution-distribution');
+        return res.data as { label: string; value: number; key: string }[];
+    },
+    getRequestStatusTrend: async () => {
+        const res = await api.get('/admin/charts/request-status-trend');
+        return res.data as { label: string; total: number; completed: number; cancelled: number }[];
+    },
+    getTopUsersBySpending: async () => {
+        const res = await api.get('/admin/charts/top-users-by-spending');
+        return res.data as { rank: number; label: string; sublabel?: string; value: number; displayValue: string }[];
+    },
+    getWithdrawalTrend: async () => {
+        const res = await api.get('/admin/charts/withdrawal-trend');
+        return res.data as { label: string; total: number; completed: number; amount: number }[];
+    },
 };
 
 

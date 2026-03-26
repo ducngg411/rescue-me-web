@@ -1509,11 +1509,13 @@ export class RescueRequestService {
             select: { id: true, status: true, type: true },
         });
 
+        const commissionRate = await this.commissionService.getEffectiveCommissionRate();
         return {
             ...payment,
             walletTxId: walletTx?.id ?? null,
             walletTxStatus: walletTx?.status ?? null,
             walletTxType: walletTx?.type ?? null,
+            commissionRate,
         };
     }
 
@@ -1846,7 +1848,7 @@ export class RescueRequestService {
                 });
                 if (providerWallet) {
                     // Deduct commission first to compute net amount
-                    const commissionRate = 0.10;
+                    const commissionRate = await this.commissionService.getEffectiveCommissionRate();
                     const commissionAmount = Math.round(payment.totalAmount * commissionRate);
                     const netAmount = payment.totalAmount - commissionAmount;
 

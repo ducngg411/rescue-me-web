@@ -75,15 +75,35 @@ export class CommissionService {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    /** Resolve the effective commission rate (env override → config → default). */
-    private resolveRate(config?: CommissionConfig): number {
+    private parseCommissionRate(raw?: string | null): number {
+        if (raw == null) return NaN;
+        const parsed = parseFloat(String(raw));
+        if (Number.isNaN(parsed) || parsed < 0 || parsed > 1) return NaN;
+        return parsed;
+    }
+
+    /** Resolve the effective commission rate (config → DB → env → default). */
+    private async resolveRate(config?: CommissionConfig): Promise<number> {
         if (config?.commissionRate !== undefined) {
             const r = config.commissionRate;
             if (r < 0 || r > 1) throw new BadRequestException('commissionRate must be between 0 and 1');
             return r;
         }
-        const envRate = parseFloat(process.env.COMMISSION_RATE ?? '');
-        return isNaN(envRate) ? DEFAULT_COMMISSION_RATE : envRate;
+
+        const row = await (this.prisma as any).platformConfig?.findUnique?.({
+            where: { key: 'COMMISSION_RATE' },
+            select: { value: true },
+        });
+        const dbRate = this.parseCommissionRate(row?.value);
+        if (!Number.isNaN(dbRate)) return dbRate;
+
+        const envRate = this.parseCommissionRate(process.env.COMMISSION_RATE ?? null);
+        return Number.isNaN(envRate) ? DEFAULT_COMMISSION_RATE : envRate;
+    }
+
+    /** Public getter for current effective commission rate. */
+    async getEffectiveCommissionRate(): Promise<number> {
+        return this.resolveRate();
     }
 
     /** Round to nearest VND integer (VND has no decimals). */
@@ -133,7 +153,7 @@ export class CommissionService {
         }
 
         // 3. Calculate commission
-        const rate = this.resolveRate(config);
+        const rate = await this.resolveRate(config);
         const commissionAmount = this.roundVnd(payment.totalAmount * rate);
 
         this.logger.log(
@@ -223,7 +243,7 @@ export class CommissionService {
         }
 
         // 3. Calculate commission & net amount
-        const rate = this.resolveRate(config);
+        const rate = await this.resolveRate(config);
         const commissionAmount = this.roundVnd(payment.totalAmount * rate);
         const netAmount = payment.totalAmount - commissionAmount;
 

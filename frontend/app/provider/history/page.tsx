@@ -399,6 +399,7 @@ export default function ProviderHistoryPage() {
     const router = useRouter();
     const { t } = useLanguage();
     const { user, loading: authLoading } = useAuth();
+    const commissionRate = Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.2;
 
     const [quotes, setQuotes] = useState<Quote[]>([]);
     const [stats, setStats] = useState<HistoryStats | null>(null);
@@ -504,7 +505,7 @@ export default function ProviderHistoryPage() {
             const isWonJob = q.status === 'ACCEPTED' && assignee === user?.id;
             const isCompleted = isWonJob && (req.status === 'COMPLETED' || req.status === 'PAID');
             const revenueAmount = isWonJob ? (req.payment?.totalAmount ?? q.price) : q.price;
-            const profit = isCompleted ? Math.round((req.payment?.totalAmount ?? q.price) * 0.9) : 0;
+            const profit = isCompleted ? Math.round((req.payment?.totalAmount ?? q.price) * (1 - commissionRate)) : 0;
             let statusLabel = STATUS_LABELS[req.status] ?? req.status;
             if (q.status === 'REJECTED') statusLabel = t('provider.history.quoteStatusBadge.REJECTED');
             else if (q.status === 'PENDING' && req.status === 'MATCHING') statusLabel = t('provider.history.quoteStatusBadge.AWAITING_CUSTOMER');
@@ -633,7 +634,7 @@ export default function ProviderHistoryPage() {
                                     </p>
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-bold"
                                         style={{ background: '#fef2f2', color: '#ef4444' }}>
-                                        {t('provider.history.chart.platformFee')}
+                                        {t('provider.history.chart.platformFee').replace('{rate}', String(Math.round(commissionRate * 100)))}
                                     </span>
                                 </div>
                                 <select
@@ -832,7 +833,7 @@ export default function ProviderHistoryPage() {
                                     const isWonJob = q.status === 'ACCEPTED' && assignee === user?.id;
                                     const lostQuote = ['CANCELLED', 'EXPIRED', 'REJECTED'].includes(q.status);
                                     const revenueAmount = isWonJob ? (req.payment?.totalAmount ?? q.price) : q.price;
-                                    const profit = Math.round(revenueAmount * 0.9);
+                                    const profit = Math.round(revenueAmount * (1 - commissionRate));
                                     const incColor = INCIDENT_COLORS[req.incidentType] ?? { bg: '#f3f4f6', color: C.gray };
                                     const isCompleted = isWonJob && (req.status === 'COMPLETED' || req.status === 'PAID');
                                     const isPending = isWonJob && req.status === 'PAYMENT_PENDING';

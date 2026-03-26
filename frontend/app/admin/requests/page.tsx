@@ -10,8 +10,9 @@ import { displayOrderCode } from '@/lib/reconciliation';
 import {
     Search, ChevronLeft, ChevronRight, Filter, Calendar, Eye,
     X, Car, Clock, AlertTriangle, ShieldAlert, CheckCircle,
-    XCircle, Loader2, Wrench,
+    XCircle, Loader2, Wrench, BarChart2,
 } from 'lucide-react';
+import { ChartCard, LineSparkChart, HorizontalBarChart } from '@/components/AdminCharts';
 
 const C = {
     orange: '#f97316', orangeLight: '#fff7ed',
@@ -101,6 +102,11 @@ export default function AdminRequestsPage() {
     const [dateFilter, setDateFilter] = useState('');
     const [page, setPage] = useState(1);
 
+    // Chart data
+    const [chartTrend, setChartTrend] = useState<{ label: string; total: number; completed: number }[]>([]);
+    const [chartTopUsers, setChartTopUsers] = useState<{ rank: number; label: string; value: number }[]>([]);
+    const [chartsLoading, setChartsLoading] = useState(true);
+
     const getStatusQuery = (t: TabType) => {
         if (t === 'ACTIVE') return ['CREATED','SEARCHING','MATCHING','MATCHED','ACCEPTED','ASSIGNED','IN_PROGRESS','ARRIVED','WORKING','PAYMENT_PENDING'].join(',');
         if (t === 'COMPLETED') return ['COMPLETED', 'PAID'].join(',');
@@ -134,7 +140,13 @@ export default function AdminRequestsPage() {
         }
     }, [tab, search, incidentFilter, dateFilter, page]);
 
-    useEffect(() => { if (isReady) load(); }, [isReady, load]);
+    useEffect(() => {
+        if (isReady) {
+            load();
+            adminApi.getRequestStatusTrend().then(setChartTrend).catch(() => {});
+            adminApi.getTopUsersByRequests().then(setChartTopUsers).catch(() => {}).finally(() => setChartsLoading(false));
+        }
+    }, [isReady, load]);
 
     // No client-side filtering needed since tab (status) and search/date are fully server-side now.
     const filtered = items;
@@ -172,6 +184,40 @@ export default function AdminRequestsPage() {
                             )}
                         </div>
                     ))}
+                </div>
+
+                {/* ─── Chart Row ─── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    <ChartCard
+                        title="Xu hướng đơn cứu hộ (14 ngày gần nhất)"
+                        icon={<BarChart2 className="w-3.5 h-3.5" />}
+                        iconBg="#fff7ed" iconColor="#f97316"
+                    >
+                        <LineSparkChart
+                            points={chartTrend.map(d => ({ label: d.label, value: d.total }))}
+                            color="#f97316"
+                            showLabels
+                            height={120}
+                        />
+                        <div className="flex items-center gap-3 mt-2">
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full" style={{ background: '#f97316' }} />
+                                <span className="text-[10px]" style={{ color: '#6b7280' }}>Tổng đơn</span>
+                            </div>
+                        </div>
+                    </ChartCard>
+                    <ChartCard
+                        title="Top 10 Khách hàng nhiều đơn nhất"
+                        icon={<BarChart2 className="w-3.5 h-3.5" />}
+                        iconBg="#eff6ff" iconColor="#2563eb"
+                    >
+                        <HorizontalBarChart
+                            loading={chartsLoading}
+                            items={chartTopUsers}
+                            color="#2563eb"
+                            suffix=" đơn"
+                        />
+                    </ChartCard>
                 </div>
 
                 {/* Main Card */}

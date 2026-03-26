@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
-import { Search, Filter, Calendar, Clock, CheckCircle, AlertTriangle, FileText, ChevronRight, ChevronLeft, XCircle, Eye, Copy, QrCode, ExternalLink } from 'lucide-react';
+import { Search, Filter, Calendar, Clock, CheckCircle, AlertTriangle, FileText, ChevronRight, ChevronLeft, XCircle, Eye, Copy, QrCode, ExternalLink, BarChart2 } from 'lucide-react';
+import { ChartCard, LineSparkChart, DonutChart } from '@/components/AdminCharts';
 import { toast } from 'react-hot-toast';
 import bankCodeData from '../../../public/bankcode.json';
 
@@ -99,6 +100,10 @@ export default function AdminWithdrawalsPage() {
     const [rejectReason, setRejectReason] = useState('');
     const [processing, setProcessing] = useState(false);
 
+    // Chart data
+    const [chartTrend, setChartTrend] = useState<{ label: string; total: number; completed: number; amount: number }[]>([]);
+    const [chartsLoading, setChartsLoading] = useState(true);
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
@@ -133,7 +138,10 @@ export default function AdminWithdrawalsPage() {
     }, [tab]);
 
     useEffect(() => {
-        if (isReady) load();
+        if (isReady) {
+            load();
+            adminApi.getWithdrawalTrend().then(setChartTrend).catch(() => {}).finally(() => setChartsLoading(false));
+        }
     }, [isReady, load]);
 
     // Polling for viewData if PENDING
@@ -271,6 +279,53 @@ export default function AdminWithdrawalsPage() {
                             <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
                         </div>
                     ))}
+                </div>
+
+                {/* ─── Chart Row ─── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    <ChartCard
+                        title="Xu hướng rút tiền (14 ngày gần nhất)"
+                        icon={<BarChart2 className="w-3.5 h-3.5" />}
+                        iconBg="#fff7ed" iconColor="#f97316"
+                    >
+                        <LineSparkChart
+                            points={chartTrend.map(d => ({ label: d.label, value: d.total }))}
+                            color="#f97316"
+                            showLabels
+                            height={110}
+                        />
+                    </ChartCard>
+                    <ChartCard
+                        title="Phân bố trạng thái rút tiền"
+                        icon={<BarChart2 className="w-3.5 h-3.5" />}
+                        iconBg="#fefce8" iconColor="#ca8a04"
+                    >
+                        <div className="flex items-center gap-4">
+                            <DonutChart
+                                size={110}
+                                centerLabel={String(stats.total)}
+                                centerSub="Tổng"
+                                slices={[
+                                    { label: 'Chờ duyệt', value: stats.pending, color: '#ca8a04' },
+                                    { label: 'Thành công', value: stats.completed, color: '#16a34a' },
+                                    { label: 'Từ chối', value: stats.failed, color: '#ef4444' },
+                                ]}
+                            />
+                            <div className="space-y-2">
+                                {[
+                                    { label: 'Chờ duyệt', value: stats.pending, color: '#ca8a04' },
+                                    { label: 'Thành công', value: stats.completed, color: '#16a34a' },
+                                    { label: 'Từ chối', value: stats.failed, color: '#ef4444' },
+                                ].map(s => (
+                                    <div key={s.label} className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                                        <span className="text-xs" style={{ color: '#6b7280' }}>{s.label}</span>
+                                        <span className="text-xs font-bold ml-auto pl-2" style={{ color: '#1a1a2e' }}>{s.value}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </ChartCard>
                 </div>
 
                 {/* Main Card */}

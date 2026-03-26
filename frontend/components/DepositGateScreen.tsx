@@ -20,6 +20,7 @@ interface DepositGateScreenProps {
 export default function DepositGateScreen({ currentBalance }: DepositGateScreenProps) {
     const router = useRouter();
     const needed = Math.max(0, MIN_DEPOSIT - currentBalance);
+    const commissionRatePct = Math.round((Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.2) * 100);
 
     return (
         <div
@@ -70,7 +71,7 @@ export default function DepositGateScreen({ currentBalance }: DepositGateScreenP
                         </p>
                         <div className="space-y-1.5">
                             {[
-                                'Mỗi đơn hoàn thành, hệ thống trừ 10% hoa hồng từ ví',
+                                `Mỗi đơn hoàn thành, hệ thống trừ ${commissionRatePct}% hoa hồng từ ví`,
                                 'Số dư tối thiểu đảm bảo bạn có thể nhận đơn liên tục',
                                 'Khi số dư xuống thấp, bạn sẽ được nhắc nạp thêm',
                             ].map(s => (

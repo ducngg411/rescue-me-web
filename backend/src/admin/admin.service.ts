@@ -17,6 +17,7 @@ import {
     WalletTransactionType,
     UserWalletReferenceType,
     WalletReferenceType,
+    AuditChangeType,
 } from '@prisma/client';
 import { MailService } from '../mail/mail.service';
 import {
@@ -410,9 +411,24 @@ export class AdminService {
         };
     }
 
-    private getCommissionRate(): number {
-        const parsed = parseFloat(process.env.COMMISSION_RATE ?? '0.1');
-        if (Number.isNaN(parsed) || parsed < 0 || parsed >= 1) return 0.1;
+    private async getCommissionRate(rateFromDb?: string | null): Promise<number> {
+        // Priority: explicit arg > DB PlatformConfig > env var > hardcoded default
+        if (rateFromDb !== undefined && rateFromDb !== null) {
+            const parsed = parseFloat(rateFromDb);
+            if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 1) return parsed;
+        }
+        try {
+            const row = await (this.prisma as any).platformConfig?.findUnique?.({
+                where: { key: 'COMMISSION_RATE' },
+                select: { value: true },
+            });
+            if (row?.value != null) {
+                const parsed = parseFloat(String(row.value));
+                if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 1) return parsed;
+            }
+        } catch { /* ignore – fall through to env/default */ }
+        const parsed = parseFloat(process.env.COMMISSION_RATE ?? '0.2');
+        if (Number.isNaN(parsed) || parsed < 0 || parsed > 1) return 0.2;
         return parsed;
     }
 
@@ -430,7 +446,7 @@ export class AdminService {
             return { amount: netTx.amount, source: 'WALLET_TX' as const };
         }
 
-        const commissionRate = this.getCommissionRate();
+        const commissionRate = await this.getCommissionRate();
         const commissionAmount = Math.round(paymentTotalAmount * commissionRate);
         const fallback = Math.max(0, paymentTotalAmount - commissionAmount);
         return { amount: fallback, source: 'FALLBACK_BY_COMMISSION_RATE' as const };
@@ -915,6 +931,7 @@ export class AdminService {
 
     // ── Wallets ─────────────────────────────────────────────────────────────
 
+
     async getProviderWallets(query: any) {
         const where: any = {};
         if (query.search) {
@@ -949,15 +966,34 @@ export class AdminService {
 
         // Aggregate total commission per wallet in a single batch query
         const walletIds = items.map((w: any) => w.id);
+        const providerIds = items.map((w: any) => w.provider.id);
         const commAgg = walletIds.length > 0
             ? await this.prisma.walletTransaction.groupBy({
                 by: ['walletId'],
-                where: { walletId: { in: walletIds }, referenceType: 'COMMISSION' as any, type: 'DEBIT' },
+                where: { walletId: { in: walletIds }, referenceType: 'COMMISSION' as any, type: 'DEBIT', status: 'COMPLETED' as any },
                 _sum: { amount: true },
               })
             : [];
         const commMap = new Map(commAgg.map((r: any) => [r.walletId, r._sum.amount ?? 0]));
-        const itemsWithComm = items.map((w: any) => ({ ...w, totalCommission: commMap.get(w.id) ?? 0 }));
+
+        // Include QR commissions for these providers
+        const currentRate = await this.getEffectiveCommissionRate();
+        const qrPayments = providerIds.length > 0
+            ? await this.prisma.payment.findMany({
+                where: { providerId: { in: providerIds }, paymentMethod: { in: ['QR', 'WALLET'] as any }, status: 'COMPLETED' },
+                select: { providerId: true, totalAmount: true },
+            })
+            : [];
+        const qrCommMap = new Map<string, number>();
+        for (const p of qrPayments) {
+            const comm = Math.round(p.totalAmount * currentRate);
+            qrCommMap.set(p.providerId, (qrCommMap.get(p.providerId) ?? 0) + comm);
+        }
+
+        const itemsWithComm = items.map((w: any) => ({
+            ...w,
+            totalCommission: (commMap.get(w.id) ?? 0) + (qrCommMap.get(w.provider.id) ?? 0)
+        }));
 
         return { items: itemsWithComm, total, skip, take };
     }
@@ -1064,7 +1100,7 @@ export class AdminService {
             where: { status: 'COMPLETED', paymentMethod: { in: ['QR', 'WALLET'] } },
             _sum: { totalAmount: true },
         });
-        const qrwCommission = Math.round((qrwPayments._sum.totalAmount || 0) * this.getCommissionRate());
+        const qrwCommission = Math.round((qrwPayments._sum.totalAmount || 0) * await this.getCommissionRate());
         const totalCommission = (commissions._sum.amount || 0) + qrwCommission;
 
         const providerTopups = await this.prisma.topupTransaction.aggregate({
@@ -1339,8 +1375,10 @@ export class AdminService {
             this.prisma.payment.count({ where })
         ]);
 
-        // Attach commission amount per payment (COMMISSION DEBIT on provider wallet, referenceId = requestId)
+        // Attach commission amount per payment — derive from actual historical transactions.
         const requestIds = items.map((p: any) => p.requestId);
+
+        // CASH: a COMMISSION DEBIT wallet-tx is created for each cash job
         const commTxs = requestIds.length > 0
             ? await this.prisma.walletTransaction.findMany({
                 where: { referenceId: { in: requestIds }, referenceType: 'COMMISSION' as any, type: 'DEBIT' },
@@ -1348,22 +1386,61 @@ export class AdminService {
               })
             : [];
         const commByRequest = new Map(commTxs.map((t: any) => [t.referenceId, t.amount]));
-        const commissionRate = this.getCommissionRate();
+
+        // QR/WALLET: commission is withheld before the net CREDIT is created for provider.
+        // Fetch the net CREDIT tx so we can infer commissionAmount = totalAmount - netAmount.
+        const netCreditTxs = requestIds.length > 0
+            ? await this.prisma.walletTransaction.findMany({
+                where: {
+                    referenceId: { in: requestIds },
+                    referenceType: { in: ['JOB', 'JOB_PAYMENT'] as any },
+                    type: 'CREDIT',
+                },
+                select: { referenceId: true, amount: true },
+                orderBy: { createdAt: 'desc' },
+              })
+            : [];
+        // Keep only the first (latest) net credit per requestId
+        const netCreditByRequest = new Map<string, number>();
+        for (const tx of netCreditTxs) {
+            if (!netCreditByRequest.has(tx.referenceId)) {
+                netCreditByRequest.set(tx.referenceId, tx.amount);
+            }
+        }
+
+        // Current global rate — only used as a last-resort fallback for brand-new/unprocessed payments
+        const currentCommissionRate = await this.getCommissionRate();
+
         const itemsWithComm = items.map((p: any) => {
-            // Current system:
-            // - CASH: commission is actually debited from provider wallet -> read from COMMISSION DEBIT tx
-            // - QR/WALLET: commission is withheld when crediting provider payout (net credit), but no COMMISSION DEBIT tx is created
-            // => fallback for QR/WALLET to keep admin UI consistent.
-            const commissionFromTx = commByRequest.get(p.requestId);
-            const commissionFallback =
-                ['QR', 'WALLET'].includes(p.paymentMethod)
-                    ? Math.round((p.totalAmount ?? 0) * commissionRate)
-                    : null;
+            const total: number = p.totalAmount ?? 0;
+
+            // --- Derive the actual commission amount ---
+            let commissionAmount: number | null = null;
+            let derivedRate: number | null = null;
+
+            const cashCommTx = commByRequest.get(p.requestId);
+            if (cashCommTx != null) {
+                // CASH: we have the exact debit amount
+                commissionAmount = cashCommTx;
+                derivedRate = total > 0 ? cashCommTx / total : null;
+            } else {
+                const netCredit = netCreditByRequest.get(p.requestId);
+                if (netCredit != null && ['QR', 'WALLET'].includes(p.paymentMethod)) {
+                    // QR/WALLET: infer commission from net payout
+                    commissionAmount = total - netCredit;
+                    derivedRate = total > 0 ? commissionAmount / total : null;
+                } else if (['QR', 'WALLET'].includes(p.paymentMethod)) {
+                    // No historical data yet (payment still pending) → use current rate
+                    commissionAmount = Math.round(total * currentCommissionRate);
+                    derivedRate = currentCommissionRate;
+                }
+                // CASH with no DEBIT tx (very old or failed deduction) → show null
+            }
 
             return {
                 ...p,
-                commissionAmount: commissionFromTx ?? commissionFallback,
-                commissionRate,
+                commissionAmount,
+                commissionRate: derivedRate,
             };
         });
 
@@ -1560,8 +1637,12 @@ export class AdminService {
                     createdAt: true,
                     lastLogin: true,
                     _count: {
-                        select: { rescueRequests: true },
+                        select: { 
+                            rescueRequests: true,
+                            assignedRequests: { where: { status: 'COMPLETED' } }
+                        },
                     },
+                    averageRating: true,
                     userWallet: {
                         select: { availableBalance: true },
                     },
@@ -1616,8 +1697,28 @@ export class AdminService {
                 providerWallet: {
                     select: { availableBalance: true, pendingBalance: true },
                 },
-                _count: { select: { rescueRequests: true, reviewsGiven: true } },
+                averageRating: true,
+                _count: { 
+                    select: { 
+                        rescueRequests: true, 
+                        reviewsGiven: true,
+                        assignedRequests: { where: { status: 'COMPLETED' } },
+                        reviewsReceived: true
+                    } 
+                },
                 rescueRequests: {
+                    take: 5,
+                    orderBy: { createdAt: 'desc' },
+                    select: {
+                        id: true,
+                        orderCode: true,
+                        incidentType: true,
+                        status: true,
+                        createdAt: true,
+                        payment: { select: { totalAmount: true } },
+                    },
+                },
+                assignedRequests: {
                     take: 5,
                     orderBy: { createdAt: 'desc' },
                     select: {
@@ -1869,33 +1970,124 @@ export class AdminService {
     }
 
     async approveWithdrawal(transactionId: string, userType: string = 'PROVIDER') {
-        return this.prisma.$transaction(async (tx) => {
+        const parseBankInfo = (description?: string | null) => {
+            const d = String(description ?? '');
+            const bankNameMatch = d.match(/Ngân hàng:\s*([^·]+)/);
+            const accNumberMatch = d.match(/Số TK:\s*([^·]+)/);
+            const accHolderMatch = d.match(/Chủ TK:\s*([^·]+)/);
+            return {
+                bankName: bankNameMatch ? bankNameMatch[1].trim() : '',
+                accountNumber: accNumberMatch ? accNumberMatch[1].trim() : '',
+                accountHolderName: accHolderMatch ? accHolderMatch[1].trim() : '',
+            };
+        };
+
+        // NOTE: Using a loose type here to avoid TS "never" narrowing issues
+        // observed with Prisma transaction closures in this codebase.
+        let mailCtx: any = undefined;
+
+        const updated = await this.prisma.$transaction(async (tx) => {
             if (userType === 'PROVIDER') {
-                const walletTx = await tx.walletTransaction.findUnique({ where: { id: transactionId } });
+                const walletTx = await tx.walletTransaction.findUnique({
+                    where: { id: transactionId },
+                    include: {
+                        wallet: { include: { provider: { select: { email: true, fullName: true } } } },
+                    },
+                });
                 if (!walletTx) throw new NotFoundException('Transaction not found');
                 if (walletTx.status !== 'PENDING') throw new BadRequestException(`Transaction is not PENDING (status=${walletTx.status})`);
-                
-                return tx.walletTransaction.update({
+
+                const updatedTx = await tx.walletTransaction.update({
                     where: { id: transactionId },
                     data: { status: 'COMPLETED' },
                 });
+
+                const b = parseBankInfo(walletTx.description);
+                const provider = (walletTx as any).wallet?.provider;
+                if (provider?.email) {
+                    mailCtx = {
+                        email: provider.email,
+                        name: provider.fullName || provider.email,
+                        amount: walletTx.amount,
+                        txnCode: walletTx.txnCode,
+                        referenceId: walletTx.referenceId,
+                        completedAt: new Date(),
+                        bankName: b.bankName || null,
+                        accountHolderName: b.accountHolderName || null,
+                        accountNumber: b.accountNumber || null,
+                    };
+                }
+
+                return updatedTx;
             } else {
-                const walletTx = await tx.userWalletTransaction.findUnique({ where: { id: transactionId } });
+                const walletTx = await tx.userWalletTransaction.findUnique({
+                    where: { id: transactionId },
+                    include: {
+                        wallet: { include: { user: { select: { email: true, fullName: true } } } },
+                    },
+                });
                 if (!walletTx) throw new NotFoundException('Transaction not found');
                 if (walletTx.status !== 'PENDING') throw new BadRequestException(`Transaction is not PENDING (status=${walletTx.status})`);
-                
-                return tx.userWalletTransaction.update({
+
+                const updatedTx = await tx.userWalletTransaction.update({
                     where: { id: transactionId },
                     data: { status: 'COMPLETED' },
                 });
+
+                const b = parseBankInfo(walletTx.description);
+                const user = (walletTx as any).wallet?.user;
+                if (user?.email) {
+                    mailCtx = {
+                        email: user.email,
+                        name: user.fullName || user.email,
+                        amount: walletTx.amount,
+                        txnCode: walletTx.txnCode,
+                        referenceId: walletTx.referenceId,
+                        completedAt: new Date(),
+                        bankName: b.bankName || null,
+                        accountHolderName: b.accountHolderName || null,
+                        accountNumber: b.accountNumber || null,
+                    };
+                }
+
+                return updatedTx;
             }
         });
+
+        if (mailCtx?.email) {
+            const ctx = mailCtx;
+            setImmediate(() => {
+                this.mailService.sendWithdrawalApproved(ctx).catch(() => { });
+            });
+        }
+
+        return updated;
     }
 
     async rejectWithdrawal(transactionId: string, userType: string = 'PROVIDER', reason?: string) {
-        return this.prisma.$transaction(async (tx) => {
+        const parseBankInfo = (description?: string | null) => {
+            const d = String(description ?? '');
+            const bankNameMatch = d.match(/Ngân hàng:\s*([^·]+)/);
+            const accNumberMatch = d.match(/Số TK:\s*([^·]+)/);
+            const accHolderMatch = d.match(/Chủ TK:\s*([^·]+)/);
+            return {
+                bankName: bankNameMatch ? bankNameMatch[1].trim() : '',
+                accountNumber: accNumberMatch ? accNumberMatch[1].trim() : '',
+                accountHolderName: accHolderMatch ? accHolderMatch[1].trim() : '',
+            };
+        };
+
+        // NOTE: Using a loose type here to avoid TS "never" narrowing issues.
+        let mailCtx: any = undefined;
+
+        const updated = await this.prisma.$transaction(async (tx) => {
             if (userType === 'PROVIDER') {
-                const walletTx = await tx.walletTransaction.findUnique({ where: { id: transactionId } });
+                const walletTx = await tx.walletTransaction.findUnique({
+                    where: { id: transactionId },
+                    include: {
+                        wallet: { include: { provider: { select: { email: true, fullName: true } } } },
+                    },
+                });
                 if (!walletTx) throw new NotFoundException('Transaction not found');
                 if (walletTx.status !== 'PENDING') throw new BadRequestException(`Transaction is not PENDING`);
 
@@ -1912,9 +2104,31 @@ export class AdminService {
                     data: { availableBalance: { increment: walletTx.amount } },
                 });
 
+                const b = parseBankInfo(walletTx.description);
+                const provider = (walletTx as any).wallet?.provider;
+                if (provider?.email) {
+                    mailCtx = {
+                        email: provider.email,
+                        name: provider.fullName || provider.email,
+                        amount: walletTx.amount,
+                        txnCode: walletTx.txnCode,
+                        referenceId: walletTx.referenceId,
+                        rejectedAt: new Date(),
+                        reason: reason ?? null,
+                        bankName: b.bankName || null,
+                        accountHolderName: b.accountHolderName || null,
+                        accountNumber: b.accountNumber || null,
+                    };
+                }
+
                 return updatedTx;
             } else {
-                const walletTx = await tx.userWalletTransaction.findUnique({ where: { id: transactionId } });
+                const walletTx = await tx.userWalletTransaction.findUnique({
+                    where: { id: transactionId },
+                    include: {
+                        wallet: { include: { user: { select: { email: true, fullName: true } } } },
+                    },
+                });
                 if (!walletTx) throw new NotFoundException('Transaction not found');
                 if (walletTx.status !== 'PENDING') throw new BadRequestException(`Transaction is not PENDING`);
 
@@ -1931,8 +2145,467 @@ export class AdminService {
                     data: { availableBalance: { increment: walletTx.amount } },
                 });
 
+                const b = parseBankInfo(walletTx.description);
+                const user = (walletTx as any).wallet?.user;
+                if (user?.email) {
+                    mailCtx = {
+                        email: user.email,
+                        name: user.fullName || user.email,
+                        amount: walletTx.amount,
+                        txnCode: walletTx.txnCode,
+                        referenceId: walletTx.referenceId,
+                        rejectedAt: new Date(),
+                        reason: reason ?? null,
+                        bankName: b.bankName || null,
+                        accountHolderName: b.accountHolderName || null,
+                        accountNumber: b.accountNumber || null,
+                    };
+                }
+
                 return updatedTx;
             }
         });
+
+        if (mailCtx?.email) {
+            const ctx = mailCtx;
+            setImmediate(() => {
+                this.mailService.sendWithdrawalRejected(ctx).catch(() => { });
+            });
+        }
+
+        return updated;
+    }
+
+    // ── Billing & Fee ──────────────────────────────────────────────────────────
+
+    /** Resolve effective commission rate: DB → env → 0.1 */
+    async getEffectiveCommissionRate(): Promise<number> {
+        const row = await this.prisma.platformConfig.findUnique({ where: { key: 'COMMISSION_RATE' } });
+        return this.getCommissionRate(row?.value);
+    }
+
+    async getBillingConfig() {
+        const rows = await this.prisma.platformConfig.findMany();
+        const map = new Map(rows.map(r => [r.key, r.value]));
+
+        const rateRaw = map.get('COMMISSION_RATE');
+        const currentRate = await this.getCommissionRate(rateRaw ?? null);
+
+        // Aggregate commission stats
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        // Total commission from COMMISSION DEBIT wallet transactions
+        const cashCommAgg = await this.prisma.walletTransaction.aggregate({
+            where: { referenceType: WalletReferenceType.COMMISSION, type: WalletTransactionType.DEBIT, status: WalletTransactionStatus.COMPLETED },
+            _sum: { amount: true },
+        });
+        const cashCommThisMonth = await this.prisma.walletTransaction.aggregate({
+            where: {
+                referenceType: WalletReferenceType.COMMISSION,
+                type: WalletTransactionType.DEBIT,
+                status: WalletTransactionStatus.COMPLETED,
+                createdAt: { gte: startOfMonth },
+            },
+            _sum: { amount: true },
+        });
+
+        // Commission withheld from QR/WALLET jobs (net = totalAmount * (1 - rate), commission = total - net)
+        const qrPayments = await this.prisma.payment.findMany({
+            where: { paymentMethod: { in: ['QR', 'WALLET'] as any }, status: 'COMPLETED' as any },
+            select: { totalAmount: true, createdAt: true },
+        });
+        const qrTotalComm = qrPayments.reduce((sum, p) => sum + Math.round(p.totalAmount * currentRate), 0);
+        const qrMonthComm = qrPayments
+            .filter(p => p.createdAt >= startOfMonth)
+            .reduce((sum, p) => sum + Math.round(p.totalAmount * currentRate), 0);
+
+        const totalCommission = (cashCommAgg._sum.amount ?? 0) + qrTotalComm;
+        const commissionThisMonth = (cashCommThisMonth._sum.amount ?? 0) + qrMonthComm;
+
+        return {
+            commissionRate: currentRate,
+            totalCommission,
+            commissionThisMonth,
+            // SePay config: DB overrides env fallback
+            sepayApiKey: map.get('SEPAY_API_KEY') ?? process.env.SEPAY_API_KEY ?? null,
+            sepayBankAccount: map.get('SEPAY_BANK_ACCOUNT') ?? process.env.SEPAY_BANK_ACCOUNT ?? null,
+            sepayBankCode: map.get('SEPAY_BANK_CODE') ?? process.env.SEPAY_BANK_CODE ?? null,
+        };
+    }
+
+    async updateFeeRate(
+        adminId: string,
+        adminName: string,
+        commissionRate: number,
+        note?: string,
+    ) {
+        const oldRow = await this.prisma.platformConfig.findUnique({ where: { key: 'COMMISSION_RATE' } });
+        const oldValue = oldRow?.value ?? String(parseFloat(process.env.COMMISSION_RATE ?? '0.1'));
+
+        await this.prisma.$transaction(async (tx) => {
+            await tx.platformConfig.upsert({
+                where: { key: 'COMMISSION_RATE' },
+                create: { key: 'COMMISSION_RATE', value: String(commissionRate) },
+                update: { value: String(commissionRate) },
+            });
+            await tx.feeAuditLog.create({
+                data: {
+                    adminId,
+                    adminName,
+                    changeType: AuditChangeType.FEE_RATE,
+                    oldValue,
+                    newValue: String(commissionRate),
+                    note: note ?? null,
+                },
+            });
+        });
+
+        return { success: true, commissionRate };
+    }
+
+    async updateSepayConfig(
+        adminId: string,
+        adminName: string,
+        dto: { apiKey?: string; bankAccount: string; bankCode: string; note?: string },
+    ) {
+        const oldRow = await this.prisma.platformConfig.findMany({
+            where: { key: { in: ['SEPAY_API_KEY', 'SEPAY_BANK_ACCOUNT', 'SEPAY_BANK_CODE'] } },
+        });
+        const oldMap = new Map(oldRow.map(r => [r.key, r.value]));
+        const oldValue = JSON.stringify({
+            bankAccount: oldMap.get('SEPAY_BANK_ACCOUNT') ?? process.env.SEPAY_BANK_ACCOUNT,
+            bankCode: oldMap.get('SEPAY_BANK_CODE') ?? process.env.SEPAY_BANK_CODE,
+        });
+        const newValue = JSON.stringify({
+            bankAccount: dto.bankAccount,
+            bankCode: dto.bankCode,
+        });
+
+        await this.prisma.$transaction(async (tx) => {
+            const upsert = (key: string, value: string | undefined | null) =>
+                value
+                    ? tx.platformConfig.upsert({ where: { key }, create: { key, value }, update: { value } })
+                    : Promise.resolve();
+
+            await Promise.all([
+                upsert('SEPAY_BANK_ACCOUNT', dto.bankAccount),
+                upsert('SEPAY_BANK_CODE', dto.bankCode),
+                ...(dto.apiKey ? [upsert('SEPAY_API_KEY', dto.apiKey)] : []),
+            ]);
+
+            await tx.feeAuditLog.create({
+                data: {
+                    adminId,
+                    adminName,
+                    changeType: AuditChangeType.BANK_ACCOUNT,
+                    oldValue,
+                    newValue,
+                    note: dto.note ?? null,
+                },
+            });
+        });
+
+        return { success: true };
+    }
+
+    async getBillingAuditLog(skip = 0, take = 20) {
+        const [items, total] = await this.prisma.$transaction([
+            this.prisma.feeAuditLog.findMany({
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: Math.min(take, 100),
+            }),
+            this.prisma.feeAuditLog.count(),
+        ]);
+        return { items, total, skip, take };
+    }
+
+    // ── Settings ─────────────────────────────────────────────────────────────
+
+    async getSettings() {
+        const row = await this.prisma.platformConfig.findUnique({ where: { key: 'PLATFORM_NAME' } });
+        return {
+            platformName: row?.value ?? 'Rescue Me',
+        };
+    }
+
+    async updateSettings(adminId: string, adminName: string, dto: { platformName: string }) {
+        await this.prisma.platformConfig.upsert({
+            where: { key: 'PLATFORM_NAME' },
+            create: { key: 'PLATFORM_NAME', value: dto.platformName },
+            update: { value: dto.platformName },
+        });
+        return { success: true };
+    }
+
+    // ── Chart Data ─────────────────────────────────────────────────────────────
+
+    async getTopUsersByRequests(limit = 10) {
+        const rows = await this.prisma.rescueRequest.groupBy({
+            by: ['userId'],
+            _count: { _all: true },
+            orderBy: { _count: { userId: 'desc' } },
+            take: limit,
+            where: { userId: { not: null } },
+        });
+
+        const userIds = rows.map(r => r.userId).filter(Boolean) as string[];
+        const users = await this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, fullName: true, email: true },
+        });
+        const map = new Map(users.map(u => [u.id, u]));
+
+        return rows.map((r, i) => {
+            const u = map.get(r.userId!);
+            return {
+                rank: i + 1,
+                userId: r.userId,
+                label: u?.fullName || u?.email || r.userId!.slice(0, 8),
+                sublabel: u?.email,
+                value: r._count._all,
+            };
+        });
+    }
+
+    async getTopProvidersByCommission(limit = 10) {
+        // To match getTransactionSummary and getProviderWallets exactly:
+        // 1. CASH commission comes from WalletTransaction (type=DEBIT, ref=COMMISSION)
+        // 2. QR/WALLET commission comes from Payment (totalAmount * currentRate)
+
+        const currentRate = await this.getEffectiveCommissionRate();
+
+        // Target all providers who have either cash commission OR completed QR payments
+        
+        // 1. Aggregate CASH commissions per wallet
+        const cashAgg = await this.prisma.walletTransaction.groupBy({
+            by: ['walletId'],
+            where: { referenceType: 'COMMISSION' as any, type: 'DEBIT', status: 'COMPLETED' as any },
+            _sum: { amount: true },
+        });
+        
+        // Find provider IDs for these wallets
+        const walletIds = cashAgg.map(a => a.walletId).filter(Boolean);
+        const wallets = await this.prisma.providerWallet.findMany({
+            where: { id: { in: walletIds as string[] } },
+            select: { id: true, providerId: true },
+        });
+        const walletToUser = new Map(wallets.map(w => [w.id, w.providerId]));
+
+        const providerComms = new Map<string, number>();
+
+        for (const agg of cashAgg) {
+            const providerId = walletToUser.get(agg.walletId!);
+            if (providerId) {
+                providerComms.set(providerId, (providerComms.get(providerId) ?? 0) + (agg._sum.amount ?? 0));
+            }
+        }
+
+        // 2. Aggregate QR/WALLET commissions
+        const qrPayments = await this.prisma.payment.findMany({
+            where: { paymentMethod: { in: ['QR', 'WALLET'] as any }, status: 'COMPLETED', providerId: { not: undefined } },
+            select: { providerId: true, totalAmount: true },
+        });
+
+        for (const p of qrPayments) {
+            if (p.providerId) {
+                const comm = Math.round(p.totalAmount * currentRate);
+                providerComms.set(p.providerId, (providerComms.get(p.providerId) ?? 0) + comm);
+            }
+        }
+
+        // Sort by commission desc
+        const sorted = Array.from(providerComms.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, limit);
+
+        if (sorted.length === 0) return [];
+
+        const providerIds = sorted.map(s => s[0]);
+        const providers = await this.prisma.user.findMany({
+            where: { id: { in: providerIds } },
+            select: { id: true, fullName: true, businessName: true, email: true },
+        });
+        const map = new Map(providers.map(p => [p.id, p]));
+
+        return sorted.map(([providerId, comm], i) => {
+            const p = map.get(providerId);
+            return {
+                rank: i + 1,
+                providerId,
+                label: p?.businessName || p?.fullName || p?.email || providerId.slice(0, 8),
+                sublabel: p?.email,
+                value: comm,
+                displayValue: comm.toLocaleString('vi-VN') + ' ₫',
+            };
+        });
+    }
+
+    async getProviderServiceDistribution() {
+        const providers = await this.prisma.user.findMany({
+            where: { role: 'PROVIDER', verificationStatus: { in: ['APPROVED', 'PENDING'] } },
+            select: { serviceTypes: true },
+        });
+
+        const counts: Record<string, number> = {};
+        for (const p of providers) {
+            for (const s of (p.serviceTypes as string[])) {
+                counts[s] = (counts[s] ?? 0) + 1;
+            }
+        }
+
+        const labels: Record<string, string> = {
+            TOWING: 'Kéo xe',
+            BATTERY_JUMP: 'Pin',
+            TIRE_CHANGE: 'Vá lốp',
+            FUEL_DELIVERY: 'Tiếp nhiên liệu',
+            LOCKOUT: 'Mở khóa',
+            BREAKDOWN_REPAIR: 'Sửa chữa',
+        };
+
+        return Object.entries(counts)
+            .sort((a, b) => b[1] - a[1])
+            .map(([key, count]) => ({ label: labels[key] || key, value: count, key }));
+    }
+
+    async getProviderVehicleDistribution() {
+        const providers = await this.prisma.user.findMany({
+            where: { role: 'PROVIDER', verificationStatus: { in: ['APPROVED', 'PENDING'] } },
+            select: { supportedVehicleTypes: true },
+        });
+
+        let car = 0;
+        let moto = 0;
+
+        for (const p of providers) {
+            const types = p.supportedVehicleTypes as string[] || [];
+            if (types.includes('CAR')) car++;
+            if (types.includes('MOTORCYCLE')) moto++;
+        }
+
+        return [
+            { label: 'Xe máy', value: moto, color: '#f97316' },
+            { label: 'Ô tô', value: car, color: '#2563eb' }
+        ];
+    }
+
+    async getDisputeResolutionDistribution() {
+        const rows = await this.prisma.disputeCase.groupBy({
+            by: ['resolutionType'],
+            where: { status: 'RESOLVED', resolutionType: { not: null } },
+            _count: { _all: true },
+        });
+
+        const labels: Record<string, string> = {
+            FULL_REFUND: 'Hoàn 100%',
+            PARTIAL_REFUND: 'Hoàn một phần',
+            NO_REFUND: 'Không hoàn',
+        };
+
+        return rows
+            .filter(r => r.resolutionType)
+            .map(r => ({
+                label: labels[r.resolutionType!] || r.resolutionType,
+                value: r._count._all,
+                key: r.resolutionType,
+            }));
+    }
+
+    async getRequestStatusTrend(days = 14) {
+        const now = new Date();
+        const from = new Date(now);
+        from.setDate(from.getDate() - days + 1);
+        from.setHours(0, 0, 0, 0);
+
+        const requests = await this.prisma.rescueRequest.findMany({
+            where: { createdAt: { gte: from } },
+            select: { createdAt: true, status: true },
+        });
+
+        const byDay: Record<string, { total: number; completed: number; cancelled: number }> = {};
+        for (let i = 0; i < days; i++) {
+            const d = new Date(from);
+            d.setDate(d.getDate() + i);
+            const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+            byDay[key] = { total: 0, completed: 0, cancelled: 0 };
+        }
+
+        for (const req of requests) {
+            const d = new Date(req.createdAt);
+            const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+            if (!byDay[key]) continue;
+            byDay[key].total++;
+            if (req.status === 'COMPLETED' || req.status === 'PAID') byDay[key].completed++;
+            if (req.status === 'CANCELLED' || req.status === 'EXPIRED') byDay[key].cancelled++;
+        }
+
+        return Object.entries(byDay).map(([label, v]) => ({ label, ...v }));
+    }
+
+    async getTopUsersBySpending(limit = 10) {
+        const rows = await this.prisma.payment.groupBy({
+            by: ['userId'],
+            where: { status: 'COMPLETED', userId: { not: null } },
+            _sum: { totalAmount: true },
+            orderBy: { _sum: { totalAmount: 'desc' } },
+            take: limit,
+        });
+
+        const userIds = rows.map(r => r.userId).filter(Boolean) as string[];
+        const users = await this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, fullName: true, email: true },
+        });
+        const map = new Map(users.map(u => [u.id, u]));
+
+        return rows.map((r, i) => {
+            const u = map.get(r.userId!);
+            return {
+                rank: i + 1,
+                userId: r.userId,
+                label: u?.fullName || u?.email || r.userId!.slice(0, 8),
+                sublabel: u?.email,
+                value: r._sum.totalAmount ?? 0,
+                displayValue: (r._sum.totalAmount ?? 0).toLocaleString('vi-VN') + ' ₫',
+            };
+        });
+    }
+
+    async getWithdrawalTrend(days = 14) {
+        const now = new Date();
+        const from = new Date(now);
+        from.setDate(from.getDate() - days + 1);
+        from.setHours(0, 0, 0, 0);
+
+        const [provTxns, userTxns] = await Promise.all([
+            this.prisma.walletTransaction.findMany({
+                where: { referenceType: 'WITHDRAW', createdAt: { gte: from } },
+                select: { createdAt: true, status: true, amount: true },
+            }),
+            this.prisma.userWalletTransaction.findMany({
+                where: { referenceType: 'WITHDRAW', createdAt: { gte: from } },
+                select: { createdAt: true, status: true, amount: true },
+            }),
+        ]);
+
+        const byDay: Record<string, { total: number; completed: number; amount: number }> = {};
+        for (let i = 0; i < days; i++) {
+            const d = new Date(from);
+            d.setDate(d.getDate() + i);
+            const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+            byDay[key] = { total: 0, completed: 0, amount: 0 };
+        }
+
+        for (const tx of [...provTxns, ...userTxns]) {
+            const d = new Date(tx.createdAt);
+            const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+            if (!byDay[key]) continue;
+            byDay[key].total++;
+            if (tx.status === 'COMPLETED') { byDay[key].completed++; byDay[key].amount += tx.amount; }
+        }
+
+        return Object.entries(byDay).map(([label, v]) => ({ label, ...v }));
     }
 }
+

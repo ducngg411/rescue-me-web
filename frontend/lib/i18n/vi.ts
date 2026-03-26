@@ -1099,9 +1099,9 @@ const vi = {
                 txCode: 'Mã GD',
             },
             txDesc: {
-                commission: 'Phí hoa hồng nền tảng 10% - Job #{id}',
-                jobPaymentWallet: 'Khách thanh toán qua ví RescueMe - Job #{id} • HH 10%',
-                jobPaymentQr: 'Khách thanh toán qua chuyển khoản QR - Job #{id} • HH 10%',
+                commission: 'Phí hoa hồng nền tảng {rate}% - Job #{id}',
+                jobPaymentWallet: 'Khách thanh toán qua ví RescueMe - Job #{id} • HH {rate}%',
+                jobPaymentQr: 'Khách thanh toán qua chuyển khoản QR - Job #{id} • HH {rate}%',
                 topup: 'Nạp tiền qua SePay · {code}',
                 withdraw: 'Yêu cầu rút tiền #{id}',
             },
@@ -1384,7 +1384,7 @@ const vi = {
             systemOk: 'Hệ thống hoạt động',
             chart: {
                 revenueProfit: 'Doanh thu / Lợi nhuận',
-                platformFee: 'Phí nền tảng: 10%',
+                platformFee: 'Phí nền tảng: {rate}%',
                 revenue: 'Doanh thu',
                 profit: 'Lợi nhuận',
                 noData: 'Chưa có dữ liệu doanh thu',
@@ -1500,7 +1500,7 @@ const vi = {
                 messagePlaceholder: 'Thông tin thêm cho khách hàng...',
                 submitBtn: 'GỬI BÁO GIÁ',
                 submitting: 'Đang gửi...',
-                feeNote: '* Nền tảng thu 10% hoa hồng từ số tiền này.',
+                feeNote: '* Nền tảng thu {rate}% hoa hồng từ số tiền này.',
                 priceError: 'Giá báo giá phải từ 10,000 ₫ trở lên',
                 etaError: 'Thời gian đến phải từ 1-300 phút',
             },
@@ -1679,7 +1679,7 @@ const vi = {
                 qr: {
                     title: 'Khách hàng đã thanh toán!',
                     desc: 'Tiền đã vào hệ thống. Bấm hoàn thành để kết thúc job.',
-                    note: 'Tiền sẽ giải ngân vào ví sau 24 giờ (trừ hoa hồng 10%)',
+                    note: 'Tiền sẽ giải ngân vào ví sau 24 giờ (trừ hoa hồng {rate}%)',
                     completeBtn: 'Hoàn thành job',
                 },
                 cash: {
@@ -1779,7 +1779,7 @@ const vi = {
                 pickupLocation: 'Vị trí đón',
                 description: 'Mô tả',
                 grossRevenue: 'Doanh thu gộp',
-                platformFee: 'Phí nền tảng (10%)',
+                platformFee: 'Phí nền tảng ({rate}%)',
                 netProfit: 'Lợi nhuận ròng',
                 paymentMethod: 'Phương thức thanh toán',
                 cash: 'Tiền mặt',
@@ -1954,7 +1954,7 @@ const vi = {
                 basePrice: 'Giá cơ bản',
                 surcharge: 'Phụ phí: {label}',
                 total: 'Tổng thanh toán',
-                netIncome: 'Thu nhập sau commission (10%)',
+                netIncome: 'Thu nhập sau commission ({rate}%)',
             },
             media: {
                 title: 'Hình ảnh & Video ({count})',

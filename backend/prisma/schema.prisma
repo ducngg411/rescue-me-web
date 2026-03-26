@@ -789,3 +789,34 @@ enum UserWalletReferenceType {
   WITHDRAW
   ADJUSTMENT
 }
+
+// ── Platform Configuration ─────────────────────────────────────────────────
+
+model PlatformConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_configs")
+}
+
+model FeeAuditLog {
+  id          String          @id @default(cuid())
+  adminId     String
+  adminName   String
+  changeType  AuditChangeType
+  oldValue    String?
+  newValue    String
+  note        String?
+  createdAt   DateTime        @default(now())
+
+  @@index([createdAt])
+  @@map("fee_audit_logs")
+}
+
+enum AuditChangeType {
+  FEE_RATE
+  BANK_ACCOUNT
+}

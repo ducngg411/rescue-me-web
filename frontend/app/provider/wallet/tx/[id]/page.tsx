@@ -261,12 +261,26 @@ export default function TxDetailPage() {
                                 <span className="text-base font-bold" style={{ color: C.orange }}>{fmt(job.payment.totalAmount)}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-xs" style={{ color: C.gray }}>Phí nền tảng (10%)</span>
-                                <span className="text-xs font-semibold" style={{ color: '#ef4444' }}>−{fmt(Math.round(job.payment.totalAmount * 0.1))}</span>
+                                {(() => {
+                                    const rate = typeof job.payment.commissionRate === 'number' ? job.payment.commissionRate : 0.2;
+                                    const fee = Math.round(job.payment.totalAmount * rate);
+                                    return (
+                                        <>
+                                            <span className="text-xs" style={{ color: C.gray }}>Phí nền tảng ({Math.round(rate * 100)}%)</span>
+                                            <span className="text-xs font-semibold" style={{ color: '#ef4444' }}>−{fmt(fee)}</span>
+                                        </>
+                                    );
+                                })()}
                             </div>
                             <div className="flex items-center justify-between pt-1" style={{ borderTop: `1px dashed ${C.border}` }}>
-                                <span className="text-xs font-semibold" style={{ color: C.gray }}>{t('provider.txDetail.payment.netIncome')}</span>
-                                <span className="text-sm font-bold" style={{ color: C.green }}>+{fmt(Math.round(job.payment.totalAmount * 0.9))}</span>
+                                <span className="text-xs font-semibold" style={{ color: C.gray }}>{t('provider.txDetail.payment.netIncome').replace('{rate}', String(Math.round((typeof job.payment.commissionRate === 'number' ? job.payment.commissionRate : 0.2) * 100)))}</span>
+                                {(() => {
+                                    const rate = typeof job.payment.commissionRate === 'number' ? job.payment.commissionRate : 0.2;
+                                    const net = Math.round(job.payment.totalAmount * (1 - rate));
+                                    return (
+                                        <span className="text-sm font-bold" style={{ color: C.green }}>+{fmt(net)}</span>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>

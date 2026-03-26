@@ -18,7 +18,9 @@ import {
     ChevronLeft,
     ChevronRight,
     ExternalLink,
+    BarChart2,
 } from 'lucide-react';
+import { ChartCard, HorizontalBarChart, LineSparkChart } from '@/components/AdminCharts';
 import { toast } from 'react-hot-toast';
 import { displayOrderCode } from '@/lib/reconciliation';
 
@@ -74,6 +76,11 @@ export default function AdminTransactionsPage() {
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(false);
     const [initialLoad, setInitialLoad] = useState(true);
+
+    // Chart data
+    const [chartTopProviders, setChartTopProviders] = useState<{ rank: number; label: string; value: number; displayValue: string }[]>([]);
+    const [chartTrend, setChartTrend] = useState<{ label: string; total: number }[]>([]);
+    const [chartsLoading, setChartsLoading] = useState(true);
 
     const LIMIT = 20;
 
@@ -138,6 +145,8 @@ export default function AdminTransactionsPage() {
     useEffect(() => {
         if (!isReady) return;
         fetchSummary();
+        adminApi.getTopProvidersByCommission().then(setChartTopProviders).catch(() => {});
+        adminApi.getRequestStatusTrend().then(d => setChartTrend(d.map(x => ({ label: x.label, total: x.total })))).catch(() => {}).finally(() => setChartsLoading(false));
     }, [isReady]);
 
     useEffect(() => {
@@ -236,6 +245,33 @@ export default function AdminTransactionsPage() {
                             <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
                         </div>
                     ))}
+                </div>
+
+                {/* ─── Chart Row ─── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+                    <ChartCard
+                        title="Top 10 Providers đem lại hoa hồng nhiều nhất"
+                        icon={<BarChart2 className="w-3.5 h-3.5" />}
+                        iconBg="#f0fdf4" iconColor="#16a34a"
+                    >
+                        <HorizontalBarChart
+                            loading={chartsLoading}
+                            items={chartTopProviders}
+                            color="#16a34a"
+                        />
+                    </ChartCard>
+                    <ChartCard
+                        title="Xu hướng đơn dịch vụ (14 ngày)"
+                        icon={<BarChart2 className="w-3.5 h-3.5" />}
+                        iconBg="#fff7ed" iconColor="#f97316"
+                    >
+                        <LineSparkChart
+                            points={chartTrend.map(d => ({ label: d.label, value: d.total }))}
+                            color="#f97316"
+                            showLabels
+                            height={110}
+                        />
+                    </ChartCard>
                 </div>
 
                 {/* Main Card */}

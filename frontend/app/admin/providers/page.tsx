@@ -6,7 +6,11 @@ import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import AvatarImage from '@/components/AvatarImage';
-import { Search, ChevronLeft, ChevronRight, Eye, CheckCircle, Filter, Calendar, Users, Clock, XCircle } from 'lucide-react';
+import {
+    Search, ChevronLeft, ChevronRight, Filter, Calendar, Eye, Users,
+    X, Wallet, Car, Star, Clock, AlertTriangle, CheckCircle, XCircle, FileText, Download, UserCheck, Shield, BarChart2
+} from 'lucide-react';
+import { ChartCard, VerticalBarChart, DonutChart } from '@/components/AdminCharts';
 
 const C = {
     orange: '#f97316',
@@ -98,8 +102,17 @@ export default function ProviderApprovalPage() {
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
 
+    // Chart data
+    const [chartServiceDist, setChartServiceDist] = useState<{ label: string; value: number; key: string }[]>([]);
+    const [chartVehicleDist, setChartVehicleDist] = useState<{ label: string; value: number; color: string }[]>([]);
+    const [chartsLoading, setChartsLoading] = useState(true);
+
     useEffect(() => {
-        if (isReady) loadProviders();
+        if (isReady) {
+            loadProviders();
+            adminApi.getProviderServiceDistribution().then(setChartServiceDist).catch(() => {});
+            adminApi.getProviderVehicleDistribution().then(setChartVehicleDist).catch(() => {}).finally(() => setChartsLoading(false));
+        }
     }, [isReady, activeTab]);
 
     const loadProviders = async () => {
@@ -178,6 +191,48 @@ export default function ProviderApprovalPage() {
                             <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
                         </div>
                     ))}
+                </div>
+
+                {/* ─── Chart Row ─── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+                    <ChartCard
+                        title="Phân bổ dịch vụ Providers"
+                        icon={<BarChart2 className="w-3.5 h-3.5" />}
+                        iconBg="#fff7ed" iconColor="#f97316"
+                    >
+                        <VerticalBarChart
+                            loading={chartsLoading}
+                            height={130}
+                            items={chartServiceDist.map(d => ({
+                                label: d.label, value: d.value,
+                                color: '#f97316',
+                                displayValue: d.value.toString(),
+                            }))}
+                        />
+                    </ChartCard>
+                    <ChartCard
+                        title="Phương tiện cứu hộ"
+                        icon={<Car className="w-3.5 h-3.5" />}
+                        iconBg="#f0fdf4" iconColor="#16a34a"
+                    >
+                        <div className="flex items-center gap-4">
+                            <DonutChart
+                                size={110}
+                                slices={chartVehicleDist.map(d => ({ label: d.label, value: d.value, color: d.color }))}
+                                centerLabel={String(chartVehicleDist.reduce((s, d) => s + d.value, 0))}
+                                centerSub="Tổng"
+                            />
+                            <div className="space-y-2">
+                                {chartVehicleDist.map(s => (
+                                    <div key={s.label} className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                                        <span className="text-xs" style={{ color: '#6b7280' }}>{s.label}</span>
+                                        <span className="text-xs font-bold ml-auto pl-2" style={{ color: '#1a1a2e' }}>{s.value}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </ChartCard>
                 </div>
 
                 {/* Main Card */}

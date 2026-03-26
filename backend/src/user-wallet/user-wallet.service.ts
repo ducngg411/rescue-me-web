@@ -130,17 +130,9 @@ export class UserWalletService {
             throw new BadRequestException(`Số tiền rút tối thiểu là ${MIN_WITHDRAWAL.toLocaleString('vi-VN')}₫`);
         }
 
-        let mailCtx: null | {
-            email: string;
-            name: string;
-            amount: number;
-            txnCode?: string | null;
-            referenceId?: string | null;
-            createdAt: Date;
-            bankName?: string | null;
-            accountHolderName?: string | null;
-            accountNumber?: string | null;
-        } = null;
+        // NOTE: Using a loose type here to avoid TS "never" narrowing issues
+        // observed with Prisma transaction closures in this codebase.
+        let mailCtx: any = undefined;
 
         const result = await this.prisma.$transaction(async (tx) => {
             const wallet = await tx.userWallet.findUnique({ where: { id: walletId } });
@@ -214,8 +206,9 @@ export class UserWalletService {
         });
 
         if (mailCtx?.email) {
+            const ctx = mailCtx;
             setImmediate(() => {
-                this.mailService.sendWithdrawalRequested(mailCtx!).catch(() => { });
+                this.mailService.sendWithdrawalRequested(ctx).catch(() => { });
             });
         }
 

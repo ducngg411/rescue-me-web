@@ -403,7 +403,7 @@ export default function ProviderNavigationView({
                 setArrivalState('working');
             } else if (status === 'COMPLETED') {
                 api.get(`/rescue-requests/${requestId}/payment`).then(payRes => {
-                    if (payRes.data) setJobEarnings({ totalAmount: payRes.data.totalAmount, commissionRate: 0.1 });
+                    if (payRes.data) setJobEarnings({ totalAmount: payRes.data.totalAmount, commissionRate: payRes.data.commissionRate ?? 0.2 });
                 }).catch(() => { });
                 setShowJobDone(true);
             }
@@ -1493,7 +1493,7 @@ export default function ProviderNavigationView({
                             onCompleted={async () => {
                                 try {
                                     const payRes = await api.get(`/rescue-requests/${requestId}/payment`);
-                                    if (payRes.data) setJobEarnings({ totalAmount: payRes.data.totalAmount, commissionRate: 0.1 });
+                                    if (payRes.data) setJobEarnings({ totalAmount: payRes.data.totalAmount, commissionRate: payRes.data.commissionRate ?? 0.2 });
                                 } catch { /* ignore */ }
                                 setIsPaymentPending(false);
                                 setShowJobDone(true);
@@ -1521,7 +1521,7 @@ export default function ProviderNavigationView({
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <p className="text-xs" style={{ color: '#166534' }}>
-                                    {t('provider.navigation.payment.qr.note')}
+                                     {t('provider.navigation.payment.qr.note').replace('{rate}', String(Math.round((jobEarnings?.commissionRate ?? 0.2) * 100)))}
                                 </p>
                             </div>
                             <button
@@ -1532,7 +1532,7 @@ export default function ProviderNavigationView({
                                         if (payRes.data) {
                                             setJobEarnings({
                                                 totalAmount: payRes.data.totalAmount,
-                                                commissionRate: 0.1,
+                                                commissionRate: payRes.data.commissionRate ?? 0.2,
                                             });
                                         }
                                         setShowJobDone(true);
@@ -1592,7 +1592,7 @@ export default function ProviderNavigationView({
                                         await api.patch(`/rescue-requests/${requestId}/payment/confirm-received`);
                                         try {
                                             const payRes = await api.get(`/rescue-requests/${requestId}/payment`);
-                                            if (payRes.data) setJobEarnings({ totalAmount: payRes.data.totalAmount, commissionRate: 0.1 });
+                                            if (payRes.data) setJobEarnings({ totalAmount: payRes.data.totalAmount, commissionRate: payRes.data.commissionRate ?? 0.2 });
                                         } catch { /* ignore */ }
                                         setShowJobDone(true);
                                     } catch (err: any) {

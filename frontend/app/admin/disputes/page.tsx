@@ -6,8 +6,9 @@ import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { ChevronRight, ChevronLeft, Search, Filter, Calendar, AlertTriangle, Clock, CheckCircle, ShieldAlert } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Search, Filter, Calendar, AlertTriangle, Clock, CheckCircle, ShieldAlert, BarChart2 } from 'lucide-react';
 import { displayOrderCode, displayDisputeCaseRef } from '@/lib/reconciliation';
+import { ChartCard, VerticalBarChart, DonutChart } from '@/components/AdminCharts';
 
 const C = {
     orange: '#f97316',
@@ -121,6 +122,10 @@ export default function AdminDisputesPage() {
     const [dateFilter, setDateFilter] = useState('');
     const [page, setPage] = useState(1);
 
+    // Chart data
+    const [chartResolution, setChartResolution] = useState<{ label: string; value: number }[]>([]);
+    const [chartsLoading, setChartsLoading] = useState(true);
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
@@ -165,7 +170,10 @@ export default function AdminDisputesPage() {
     }, [tab]);
 
     useEffect(() => {
-        if (isReady) load();
+        if (isReady) {
+            load();
+            adminApi.getDisputeResolutionDistribution().then(setChartResolution).catch(() => {}).finally(() => setChartsLoading(false));
+        }
     }, [isReady, load]);
 
     const tabs = [
@@ -239,6 +247,56 @@ export default function AdminDisputesPage() {
                             <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
                         </div>
                     ))}
+                </div>
+
+                {/* ─── Chart Row ─── */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    <ChartCard
+                        title="Kết quả giải quyết tranh chấp"
+                        icon={<BarChart2 className="w-3.5 h-3.5" />}
+                        iconBg="#f0fdf4" iconColor="#16a34a"
+                    >
+                        <VerticalBarChart
+                            loading={chartsLoading}
+                            height={130}
+                            items={chartResolution.map((d, i) => ({
+                                label: d.label, value: d.value,
+                                color: ['#16a34a', '#f97316', '#ef4444'][i % 3],
+                                displayValue: d.value.toString(),
+                            }))}
+                        />
+                    </ChartCard>
+                    <ChartCard
+                        title="Phân bố trạng thái tranh chấp"
+                        icon={<BarChart2 className="w-3.5 h-3.5" />}
+                        iconBg="#fef2f2" iconColor="#ef4444"
+                    >
+                        <div className="flex items-center gap-4">
+                            <DonutChart
+                                size={110}
+                                centerLabel={String(stats.total)}
+                                centerSub="Tổng"
+                                slices={[
+                                    { label: 'Mới', value: stats.new, color: '#f97316' },
+                                    { label: 'Đang xử lý', value: stats.inProgress, color: '#2563eb' },
+                                    { label: 'Đã xử lý', value: stats.resolved, color: '#16a34a' },
+                                ]}
+                            />
+                            <div className="space-y-2">
+                                {[
+                                    { label: 'Mới', value: stats.new, color: '#f97316' },
+                                    { label: 'Đang xử lý', value: stats.inProgress, color: '#2563eb' },
+                                    { label: 'Đã xử lý', value: stats.resolved, color: '#16a34a' },
+                                ].map(s => (
+                                    <div key={s.label} className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                                        <span className="text-xs" style={{ color: '#6b7280' }}>{s.label}</span>
+                                        <span className="text-xs font-bold ml-auto pl-2" style={{ color: '#1a1a2e' }}>{s.value}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </ChartCard>
                 </div>
 
                 {/* Main Card */}

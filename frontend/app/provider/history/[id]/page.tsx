@@ -232,8 +232,9 @@ export default function HistoryJobDetailPage() {
     );
     // Use actual payment amount (includes surcharges) when available, fall back to quote price
     const revenueAmount = isWinner ? (payment?.totalAmount ?? quote?.price ?? 0) : (quote?.price ?? 0);
-    const profit = Math.round(revenueAmount * 0.9);
-    const quoteProfit = quote ? Math.round(quote.price * 0.9) : 0;
+    const commissionRate = typeof payment?.commissionRate === 'number' ? payment.commissionRate : 0.2;
+    const profit = Math.round(revenueAmount * (1 - commissionRate));
+    const quoteProfit = quote ? Math.round(quote.price * (1 - commissionRate)) : 0;
 
     // Status label for rescue request
     const reqStatusCfg: Record<string, { color: string; bg: string }> = {
@@ -462,7 +463,7 @@ export default function HistoryJobDetailPage() {
                                 <p className="text-lg font-bold" style={{ color: C.navy }}>{fmtVnd(quote.price)}</p>
                             </div>
                             <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.quoteInfo.profit')}</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.quoteInfo.profit').replace('{rate}', String(Math.round((1 - commissionRate) * 100)))}</p>
                                 {isWinner ? (
                                     <p className="text-lg font-bold" style={{ color: C.green }}>+{fmtVnd(quoteProfit)}</p>
                                 ) : (
