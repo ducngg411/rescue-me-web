@@ -72,12 +72,12 @@ export default function UserDashboard() {
     const [requests, setRequests] = useState<any[]>([]);
     const [isLoadingRequests, setIsLoadingRequests] = useState(true);
 
-    const fetchRequests = async () => {
+    const fetchRequests = async (signal?: AbortSignal) => {
         try {
-            const res = await api.get('/rescue-requests');
+            const res = await api.get('/rescue-requests', { signal });
             setRequests(res.data);
-        } catch (e) {
-            console.error(e);
+        } catch (e: any) {
+            if (e?.code !== 'ERR_CANCELED') console.error(e);
         } finally {
             setIsLoadingRequests(false);
         }
@@ -85,7 +85,9 @@ export default function UserDashboard() {
 
     useEffect(() => {
         if (!isReady) return;
-        fetchRequests();
+        const controller = new AbortController();
+        fetchRequests(controller.signal);
+        return () => controller.abort();
     }, [isReady]);
 
     // Poll more aggressively when there's an active request
@@ -93,7 +95,7 @@ export default function UserDashboard() {
         if (!isReady) return;
         const hasActive = requests.some(r => ACTIVE_STATUSES.includes(r.status));
         const interval = hasActive ? 5000 : 15000;
-        const id = setInterval(fetchRequests, interval);
+        const id = setInterval(() => fetchRequests(), interval);
         return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isReady, requests.some(r => ACTIVE_STATUSES.includes(r.status))]);

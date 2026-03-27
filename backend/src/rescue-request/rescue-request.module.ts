@@ -7,9 +7,10 @@ import { WalletModule } from '../wallet/wallet.module';
 import { UserWalletModule } from '../user-wallet/user-wallet.module';
 import { MailModule } from '../mail/mail.module';
 import { DisputeModule } from '../dispute/dispute.module';
+import { VietMapModule } from '../vietmap/vietmap.module';
 
 @Module({
-    imports: [PrismaModule, ScheduleModule.forRoot(), WalletModule, UserWalletModule, MailModule, DisputeModule],
+    imports: [PrismaModule, ScheduleModule.forRoot(), WalletModule, UserWalletModule, MailModule, DisputeModule, VietMapModule],
     controllers: [RescueRequestController],
     providers: [RescueRequestService],
     exports: [RescueRequestService],

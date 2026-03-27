@@ -79,8 +79,8 @@ export default function AssignedProvider({
 
     const displayDistance = distance
         ? (distance < 1 ? `${(distance * 1000).toFixed(0)} m` : `${distance.toFixed(1)} km`)
-        : '~5 km';
-    const displayEta = eta ? `${eta} phút` : '~15 phút';
+        : 'Đang cập nhật';
+    const displayEta = eta ? `${eta} phút` : 'Đang cập nhật';
 
     const handleCall = () => { if (provider.phoneNumber) window.location.href = `tel:${provider.phoneNumber}`; };
 

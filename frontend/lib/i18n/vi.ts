@@ -2445,6 +2445,36 @@ const vi = {
             empty: 'Không có dữ liệu giao dịch',
         },
     },
+    chatbot: {
+        title: 'Rescue Me Assistant',
+        subtitle: 'Trợ lý ảo thông minh',
+        placeholder: 'Nhập tin nhắn...',
+        greeting: 'Xin chào! Tôi có thể giúp gì?',
+        greetingSub: 'Hỏi về cứu hộ, theo dõi đơn, hoặc gửi ảnh sự cố',
+        connectionError: 'Không thể kết nối. Vui lòng thử lại.',
+        processing: 'Đang xử lý...',
+        quickActions: {
+            requestStatus: 'Trạng thái đơn',
+            howToCreate: 'Cách tạo đơn',
+            howToDispute: 'Cách khiếu nại',
+            walletBalance: 'Số dư ví',
+            todayEarnings: 'Thu nhập hôm nay',
+            activeRequest: 'Đơn đang xử lý',
+            verification: 'Xác minh tài khoản',
+            howToRescue: 'Cách gọi cứu hộ',
+            registerBenefits: 'Đăng ký tài khoản',
+        },
+        tools: {
+            get_my_requests: 'Đang tra cứu đơn cứu hộ...',
+            get_request_status: 'Đang kiểm tra trạng thái đơn...',
+            get_wallet_balance: 'Đang kiểm tra ví...',
+            analyze_vehicle_image: 'Đang phân tích ảnh...',
+            get_incident_types: 'Đang lấy danh sách sự cố...',
+            get_my_earnings: 'Đang tra cứu thu nhập...',
+            get_active_request: 'Đang kiểm tra đơn đang xử lý...',
+            get_verification_guide: 'Đang kiểm tra trạng thái xác minh...',
+        },
+    },
 } as const;
 
 export default vi;

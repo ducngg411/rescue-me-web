@@ -30,8 +30,8 @@ import { join } from 'path';
                         from: config.get<string>('MAIL_FROM'),
                     },
                     template: {
-                        // Compiled JS lives under dist/src/mail; nest-cli assets emit templates to dist/mail/templates
-                        dir: join(__dirname, '..', '..', 'mail', 'templates'),
+                        // Dev: src/mail/templates; Prod build: dist/mail/templates (assets copied by nest-cli)
+                        dir: join(__dirname, 'templates'),
                         adapter: new HandlebarsAdapter(),
                         options: {
                             strict: true,

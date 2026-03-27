@@ -73,12 +73,16 @@ export class UploadsService {
         }
 
         // Validate file size
-        if (dto.fileSize > 5 * 1024 * 1024) {
-            throw new BadRequestException('File size must not exceed 5MB');
+        const maxSize = dto.purpose === UploadPurpose.CHATBOT_ATTACHMENT ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+        if (dto.fileSize > maxSize) {
+            throw new BadRequestException(`File size must not exceed ${maxSize / (1024 * 1024)}MB`);
         }
 
         // Validate content type
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        let allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (dto.purpose === UploadPurpose.CHATBOT_ATTACHMENT) {
+            allowedTypes = [...allowedTypes, 'video/mp4', 'video/quicktime', 'video/webm'];
+        }
         if (!allowedTypes.includes(dto.contentType)) {
             throw new BadRequestException(`Content type must be one of: ${allowedTypes.join(', ')}`);
         }
@@ -206,6 +210,9 @@ export class UploadsService {
             case UploadPurpose.BEFORE_AFTER:
                 return `before-after/${userId}/${timestamp}_${random}.${extension}`;
 
+            case UploadPurpose.CHATBOT_ATTACHMENT:
+                return `chatbot/${userId}/${timestamp}_${random}.${extension}`;
+
             default:
                 throw new BadRequestException('Invalid upload purpose');
         }
@@ -217,6 +224,7 @@ export class UploadsService {
             [UploadPurpose.REQUEST_PHOTO]: PrismaUploadPurpose.REQUEST_PHOTO,
             [UploadPurpose.REVIEW_PHOTO]: PrismaUploadPurpose.REVIEW_PHOTO,
             [UploadPurpose.BEFORE_AFTER]: PrismaUploadPurpose.BEFORE_AFTER,
+            [UploadPurpose.CHATBOT_ATTACHMENT]: PrismaUploadPurpose.REQUEST_PHOTO as PrismaUploadPurpose,
         };
         return mapping[purpose];
     }
@@ -490,13 +498,13 @@ export class UploadsService {
         guestSessionId: string,
         dto: { fileName: string; fileSize: number; contentType: string },
     ): Promise<{ uploadUrl: string; objectKey: string; publicUrl: string; expiresIn: number }> {
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime', 'video/webm'];
         if (!allowedTypes.includes(dto.contentType)) {
             throw new BadRequestException(`Content type must be one of: ${allowedTypes.join(', ')}`);
         }
 
-        if (dto.fileSize > 5 * 1024 * 1024) {
-            throw new BadRequestException('File size must not exceed 5MB');
+        if (dto.fileSize > 50 * 1024 * 1024) {
+            throw new BadRequestException('File size must not exceed 50MB');
         }
 
         const timestamp = Date.now();

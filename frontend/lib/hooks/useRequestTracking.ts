@@ -56,6 +56,7 @@ export function useRequestTracking({
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const expireCheckInProgress = useRef<boolean>(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
     // Track latest status in a ref so countdown interval can read it without stale closure
     const statusRef = useRef<RequestStatus | null>(null);
     const prevCountdownSecRef = useRef<number | null>(null);
@@ -68,16 +69,17 @@ export function useRequestTracking({
             expireCheckInProgress.current = true;
             console.log(' [useRequestTracking] Triggering immediate expire check');
 
-            // Call admin endpoint to force immediate phase transition
-            await api.post('/rescue-requests/admin/expire-check');
+            await api.post('/rescue-requests/admin/expire-check', undefined, {
+                signal: abortControllerRef.current?.signal,
+            });
 
-            // Wait a bit for backend to process
             await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Refetch status to get updated phase
             await fetchStatus();
-        } catch (err) {
-            console.error('Error triggering expire check:', err);
+        } catch (err: any) {
+            if (err?.code !== 'ERR_CANCELED') {
+                console.error('Error triggering expire check:', err);
+            }
         } finally {
             expireCheckInProgress.current = false;
         }
@@ -85,7 +87,9 @@ export function useRequestTracking({
 
     const fetchStatus = useCallback(async () => {
         try {
-            const response = await api.get(`/rescue-requests/${requestId}/status`);
+            const response = await api.get(`/rescue-requests/${requestId}/status`, {
+                signal: abortControllerRef.current?.signal,
+            });
             const newStatus = response.data;
             setStatus(newStatus);
             statusRef.current = newStatus; // keep ref in sync
@@ -111,6 +115,7 @@ export function useRequestTracking({
 
             return newStatus;
         } catch (err: any) {
+            if (err?.code === 'ERR_CANCELED') return;
             console.error('Error fetching request status:', err);
             setError(err.response?.data?.message || 'Failed to fetch status');
             throw err;
@@ -128,10 +133,13 @@ export function useRequestTracking({
             clearInterval(countdownIntervalRef.current);
             countdownIntervalRef.current = null;
         }
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
     }, []);
 
     const startPolling = useCallback(() => {
         stopPolling(); // Clear any existing intervals
+        abortControllerRef.current = new AbortController();
 
         // Initial fetch
         fetchStatus();
@@ -180,10 +188,13 @@ export function useRequestTracking({
 
     const cancelRequest = async () => {
         try {
-            await api.patch(`/rescue-requests/${requestId}/cancel`);
-            await fetchStatus(); // Refresh status
+            await api.patch(`/rescue-requests/${requestId}/cancel`, undefined, {
+                signal: abortControllerRef.current?.signal,
+            });
+            await fetchStatus();
             return true;
         } catch (err: any) {
+            if (err?.code === 'ERR_CANCELED') return false;
             console.error('Error cancelling request:', err);
             setError(err.response?.data?.message || 'Failed to cancel request');
             return false;
@@ -192,9 +203,12 @@ export function useRequestTracking({
 
     const retryRequest = async () => {
         try {
-            const response = await api.post(`/rescue-requests/${requestId}/retry`);
-            return response.data; // Return new request
+            const response = await api.post(`/rescue-requests/${requestId}/retry`, undefined, {
+                signal: abortControllerRef.current?.signal,
+            });
+            return response.data;
         } catch (err: any) {
+            if (err?.code === 'ERR_CANCELED') throw err;
             console.error('Error retrying request:', err);
             setError(err.response?.data?.message || 'Failed to retry request');
             throw err;

@@ -676,10 +676,14 @@ function TxRow({ tx }: { tx: Transaction }) {
 
     // Build a translated description based on referenceType (avoids raw backend Vietnamese strings)
     const txDescription = (() => {
+        const rmoMatch = tx.description?.match(/RMO-[A-Z0-9-]+/i);
+        const refCodeFromDesc = rmoMatch ? rmoMatch[0] : null;
+
         const jobRef =
             jobDetails?.id && tx.referenceId === jobDetails.id
                 ? displayOrderCode(jobDetails.orderCode, jobDetails.id)
-                : (tx.referenceId?.slice(0, 8).toUpperCase() ?? '');
+                : refCodeFromDesc || (tx.referenceId?.slice(0, 8).toUpperCase() ?? '');
+        
         const shortId = jobRef || (tx.referenceId?.slice(0, 8).toUpperCase() ?? '');
         const envRate = Math.round((Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.2) * 100);
         switch (tx.referenceType) {

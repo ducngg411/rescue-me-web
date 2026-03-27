@@ -187,15 +187,20 @@ export default function UserRequestsPage() {
     const historyLabel = t('user.nav.history');
 
     useEffect(() => {
-        if (isReady) fetchRequests();
+        if (!isReady) return;
+        const controller = new AbortController();
+        fetchRequests(controller.signal);
+        return () => controller.abort();
     }, [isReady]);
 
-    const fetchRequests = async () => {
+    const fetchRequests = async (signal?: AbortSignal) => {
         try {
-            const response = await api.get('/rescue-requests');
+            const response = await api.get('/rescue-requests', { signal });
             setRequests(response.data);
-        } catch (error) {
-            console.error('Error fetching requests:', error);
+        } catch (error: any) {
+            if (error?.code !== 'ERR_CANCELED') {
+                console.error('Error fetching requests:', error);
+            }
         } finally {
             setIsLoading(false);
         }

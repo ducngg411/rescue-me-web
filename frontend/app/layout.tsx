@@ -5,6 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { GuestProvider } from "@/contexts/GuestContext";
 import { Toaster } from "react-hot-toast";
+import ChatbotWidget from "@/components/ChatbotWidget";
 
 const lexend = Lexend({
   variable: "--font-lexend",
@@ -31,6 +32,7 @@ export default function RootLayout({
           <AuthProvider>
             <GuestProvider>
               {children}
+              <ChatbotWidget />
             </GuestProvider>
           </AuthProvider>
         </LanguageProvider>

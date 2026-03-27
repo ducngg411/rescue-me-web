@@ -16,6 +16,7 @@ import {
     allocateUniqueProviderWalletTxnCode,
     formatOrderLabelForSupport,
 } from '../common/business-codes';
+import { VietMapService } from '../vietmap/vietmap.service';
 
 
 @Injectable()
@@ -26,7 +27,52 @@ export class RescueRequestService {
         private userWalletService: UserWalletService,
         private mailService: MailService,
         private disputeService: DisputeService,
+        private vietMapService: VietMapService,
     ) { }
+
+    /**
+     * Road distance (km) from provider to customer pickup via VietMap Route API — same source as provider accept / pending inbox.
+     * Used when user accepts a quote so UI can show e.g. "330 m" while ETA stays from the quote.
+     */
+    async getRoadDistanceKmProviderToPickup(
+        providerId: string,
+        customerLat: number,
+        customerLng: number,
+    ): Promise<number | null> {
+        const user = await this.prisma.user.findUnique({
+            where: { id: providerId },
+            select: { currentLocation: true, permanentAddress: true, businessAddress: true },
+        });
+        if (!user) return null;
+
+        let providerLat: number | undefined;
+        let providerLng: number | undefined;
+
+        if (user.currentLocation) {
+            const loc = user.currentLocation as { lat?: number; lng?: number };
+            providerLat = loc.lat;
+            providerLng = loc.lng;
+        } else if (user.permanentAddress) {
+            const a = user.permanentAddress as { lat?: number; lng?: number };
+            providerLat = a?.lat;
+            providerLng = a?.lng;
+        } else if (user.businessAddress) {
+            const a = user.businessAddress as { lat?: number; lng?: number };
+            providerLat = a?.lat;
+            providerLng = a?.lng;
+        }
+
+        if (providerLat == null || providerLng == null) return null;
+
+        const routeInfo = await this.vietMapService.calculateRoute(
+            providerLat,
+            providerLng,
+            customerLat,
+            customerLng,
+            'car',
+        );
+        return routeInfo.success ? routeInfo.distance : null;
+    }
 
     // Auto-expire MATCHING requests every minute
     @Cron(CronExpression.EVERY_MINUTE)
@@ -980,6 +1026,17 @@ export class RescueRequestService {
         const now = new Date();
 
         if (action === 'ACCEPT') {
+            let matchedDistance: number | null = null;
+            const pickupLoc = rescueRequest.pickupLocation as { lat?: number; lng?: number } | null;
+            if (pickupLoc?.lat != null && pickupLoc?.lng != null) {
+                const km = await this.getRoadDistanceKmProviderToPickup(
+                    quote.providerId,
+                    pickupLoc.lat,
+                    pickupLoc.lng,
+                );
+                matchedDistance = km ?? null;
+            }
+
             // Accept quote: Update quote status and assign provider to request
             await this.prisma.$transaction(async (tx) => {
                 // Update quote status to ACCEPTED
@@ -998,8 +1055,7 @@ export class RescueRequestService {
                         status: 'ASSIGNED',
                         assignedProviderId: quote.providerId,
                         assignedAt: now,
-                        // Calculate distance/ETA from provider location
-                        matchedDistance: null, // TODO: Calculate from providerLocation
+                        matchedDistance,
                         matchedEta: quote.estimatedArrivalMinutes,
                     },
                 });

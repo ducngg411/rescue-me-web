@@ -5,6 +5,7 @@ export enum UploadPurpose {
     REQUEST_PHOTO = 'request_photo',
     REVIEW_PHOTO = 'review_photo',
     BEFORE_AFTER = 'before_after',
+    CHATBOT_ATTACHMENT = 'chatbot_attachment',
 }
 
 export enum DocumentType {
@@ -33,12 +34,12 @@ export class PresignUploadDto {
 
     @IsNumber()
     @Min(1)
-    @Max(5 * 1024 * 1024) // 5MB
+    @Max(50 * 1024 * 1024) // 50MB
     fileSize: number;
 
     @IsString()
     @IsNotEmpty()
-    @IsEnum(['image/jpeg', 'image/png', 'image/webp'])
+    @IsEnum(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime', 'video/webm'])
     contentType: string;
 }
 

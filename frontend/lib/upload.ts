@@ -5,6 +5,7 @@ export enum UploadPurpose {
     REQUEST_PHOTO = 'request_photo',
     REVIEW_PHOTO = 'review_photo',
     BEFORE_AFTER = 'before_after',
+    CHATBOT_ATTACHMENT = 'chatbot_attachment',
 }
 
 export enum DocumentType {
@@ -69,7 +70,7 @@ export async function uploadFile(
 ): Promise<UploadResult> {
     try {
         // Validate file
-        const validation = validateFile(file);
+        const validation = validateFile(file, purpose);
         if (!validation.valid) {
             return {
                 success: false,
@@ -165,21 +166,28 @@ async function uploadToR2(
 /**
  * Validate file before upload
  */
-export function validateFile(file: File): { valid: boolean; error?: string } {
-    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+export function validateFile(file: File, purpose?: UploadPurpose): { valid: boolean; error?: string } {
+    let MAX_SIZE = 5 * 1024 * 1024; // 5MB
+    let ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+    if (purpose === UploadPurpose.CHATBOT_ATTACHMENT) {
+        MAX_SIZE = 50 * 1024 * 1024; // 50MB
+        ALLOWED_TYPES = [...ALLOWED_TYPES, 'video/mp4', 'video/quicktime', 'video/webm'];
+    }
 
     if (file.size > MAX_SIZE) {
         return {
             valid: false,
-            error: 'File size must not exceed 5MB',
+            error: `File size must not exceed ${MAX_SIZE / (1024 * 1024)}MB`,
         };
     }
 
     if (!ALLOWED_TYPES.includes(file.type)) {
         return {
             valid: false,
-            error: 'Only JPEG, PNG, and WebP images are allowed',
+            error: purpose === UploadPurpose.CHATBOT_ATTACHMENT 
+                ? 'Only JPEG, PNG, WebP images and MP4, MOV, WEBM videos are allowed'
+                : 'Only JPEG, PNG, and WebP images are allowed',
         };
     }
 

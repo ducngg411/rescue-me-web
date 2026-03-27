@@ -283,6 +283,17 @@ export class GuestRescueService {
         const now = new Date();
 
         if (action === 'ACCEPT') {
+            let matchedDistance: number | null = null;
+            const pickupLoc = rescueRequest.pickupLocation as { lat?: number; lng?: number } | null;
+            if (pickupLoc?.lat != null && pickupLoc?.lng != null) {
+                const km = await this.rescueRequestService.getRoadDistanceKmProviderToPickup(
+                    quote.providerId,
+                    pickupLoc.lat,
+                    pickupLoc.lng,
+                );
+                matchedDistance = km ?? null;
+            }
+
             await this.prisma.$transaction(async (tx) => {
                 await tx.quote.update({
                     where: { id: quoteId },
@@ -295,6 +306,7 @@ export class GuestRescueService {
                         status: 'ASSIGNED',
                         assignedProviderId: quote.providerId,
                         assignedAt: now,
+                        matchedDistance,
                         matchedEta: quote.estimatedArrivalMinutes,
                         quoteWindowClosedAt: now,
                     },

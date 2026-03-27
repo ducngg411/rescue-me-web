@@ -2424,6 +2424,36 @@ const en = {
             empty: 'No transactions found',
         },
     },
+    chatbot: {
+        title: 'Rescue Me Assistant',
+        subtitle: 'Smart AI Assistant',
+        placeholder: 'Type a message...',
+        greeting: 'Hello! How can I help?',
+        greetingSub: 'Ask about rescue, track orders, or send incident photos',
+        connectionError: 'Cannot connect. Please try again.',
+        processing: 'Processing...',
+        quickActions: {
+            requestStatus: 'Request status',
+            howToCreate: 'How to create',
+            howToDispute: 'How to dispute',
+            walletBalance: 'Wallet balance',
+            todayEarnings: "Today's earnings",
+            activeRequest: 'Active request',
+            verification: 'Verification',
+            howToRescue: 'How to rescue',
+            registerBenefits: 'Register benefits',
+        },
+        tools: {
+            get_my_requests: 'Looking up rescue requests...',
+            get_request_status: 'Checking request status...',
+            get_wallet_balance: 'Checking wallet...',
+            analyze_vehicle_image: 'Analyzing image...',
+            get_incident_types: 'Loading incident types...',
+            get_my_earnings: 'Looking up earnings...',
+            get_active_request: 'Checking active request...',
+            get_verification_guide: 'Checking verification status...',
+        },
+    },
 } as const;
 
 export default en;

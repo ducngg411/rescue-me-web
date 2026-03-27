@@ -19,6 +19,7 @@ import { GuestAuthModule } from './guest-auth/guest-auth.module';
 import { GuestRescueModule } from './guest-rescue/guest-rescue.module';
 import { DisputeModule } from './dispute/dispute.module';
 import { WithdrawalAccountsModule } from './withdrawal-accounts/withdrawal-accounts.module';
+import { ChatbotModule } from './chatbot/chatbot.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { WithdrawalAccountsModule } from './withdrawal-accounts/withdrawal-accou
     GuestRescueModule,
     DisputeModule,
     WithdrawalAccountsModule,
+    ChatbotModule,
   ],
   controllers: [AppController],
   providers: [AppService],

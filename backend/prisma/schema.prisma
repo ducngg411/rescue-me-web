@@ -75,6 +75,7 @@ model User {
 
   providerWithdrawalAccounts ProviderWithdrawalAccount[] @relation("ProviderWithdrawalAccounts")
   customerWithdrawalAccounts CustomerWithdrawalAccount[] @relation("CustomerWithdrawalAccounts")
+  chatbotConversations       ChatbotConversation[]
 
   @@index([email])
   @@index([googleId])
@@ -573,10 +574,45 @@ model GuestSession {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   rescueRequests  RescueRequest[]
+  chatbotConversations ChatbotConversation[]
 
   @@index([phoneNormalized])
   @@index([expiresAt])
   @@map("guest_sessions")
+}
+
+model ChatbotConversation {
+  id             String              @id @default(cuid())
+  userId         String?
+  guestSessionId String?
+  userRole       ChatbotUserRole
+  title          String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  messages       ChatbotMessage[]
+
+  user           User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestSession   GuestSession?       @relation(fields: [guestSessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([guestSessionId])
+  @@map("chatbot_conversations")
+}
+
+model ChatbotMessage {
+  id             String              @id @default(cuid())
+  conversationId String
+  role           ChatbotMessageRole
+  content        String
+  toolCalls      Json?
+  toolResults    Json?
+  imageUrls      String[]            @default([])
+  createdAt      DateTime            @default(now())
+
+  conversation   ChatbotConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("chatbot_messages")
 }
 
 enum ResetType {
@@ -819,4 +855,17 @@ model FeeAuditLog {
 enum AuditChangeType {
   FEE_RATE
   BANK_ACCOUNT
+}
+
+enum ChatbotUserRole {
+  USER
+  PROVIDER
+  GUEST
+}
+
+enum ChatbotMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
 }

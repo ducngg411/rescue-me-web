@@ -352,7 +352,7 @@ export default function ProviderDisputeDetailPage() {
                         <div className="min-w-0">
                             <h1 className="font-bold text-base" style={{ color: C.navy }}>Chi tiết khiếu nại</h1>
                             <p className="text-xs font-semibold mt-0.5" style={{ color: C.gray }}>
-                                Đơn #{displayOrderCode(dispute?.request?.orderCode, dispute?.payment?.requestId ?? dispute?.request?.id ?? dispute.id)}
+                                Đơn #{displayOrderCode(dispute?.request?.orderCode ?? dispute?.payment?.request?.orderCode, dispute?.payment?.requestId ?? dispute?.request?.id ?? dispute.id)}
                             </p>
                             <p className="text-[10px]" style={{ color: '#94a3b8' }}>
                                 Case #{displayDisputeCaseRef(String(dispute.id))}
