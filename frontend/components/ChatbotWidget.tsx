@@ -64,6 +64,7 @@ type CustomerCtaUiKind =
     | 'incident'
     | 'enterInfo'
     | 'createRequest'
+    | 'describeIncident'
     | 'generic';
 
 /** Fallback when server did not send ctaPhase — keep in sync with backend customer-cta-phase.ts */
@@ -168,6 +169,18 @@ function detectShouldShowCta(content: string, isLastAssistant: boolean): boolean
     return (hasIncidentMention || hasRisk) && !alreadyHasCta;
 }
 
+function looksLikeDescribeIncidentStep(content: string): boolean {
+    if (!content) return false;
+    if (looksLikeConfirmRecapStep(content)) return false;
+    const lower = content.toLowerCase();
+    
+    // Check if it's asking for description/media
+    const hasMediaKeywords = /(mô tả|diễn tả|mô tả thêm|chi tiết thêm|hiện trường|ảnh hiện trường|video hiện trường)/i.test(lower);
+    const hasQuestionKeywords = lower.includes('muốn') || lower.includes('có thể') || lower.includes('có muốn') || lower.includes('cho em xin') || lower.includes('gửi giúp') || lower.includes('bỏ qua');
+    
+    return hasMediaKeywords && hasQuestionKeywords;
+}
+
 function resolveCustomerCtaUi(
     content: string,
     isLastAssistant: boolean,
@@ -188,12 +201,15 @@ function resolveCustomerCtaUi(
                 return 'enterInfo';
             case 'CREATE_REQUEST':
                 return 'createRequest';
+            case 'DESCRIBE_INCIDENT':
+                return 'describeIncident';
             default:
                 break;
         }
     }
 
     if (looksLikeConfirmRecapStep(content)) return 'confirm';
+    if (looksLikeDescribeIncidentStep(content)) return 'describeIncident';
     if (looksLikeLocationChoiceStep(content)) return 'location';
     if (looksLikeCreateRequestStep(content)) return 'createRequest';
     if (looksLikeSelectIssueStep(content)) return 'incident';
@@ -230,6 +246,7 @@ function MessageBubble({
     onCtaClick,
     onUseCurrentLocation,
     onChooseOtherLocation,
+    onOpenFileUpload,
     isSending,
     allowStructuredCustomerCta,
 }: {
@@ -238,6 +255,7 @@ function MessageBubble({
     onCtaClick: (text: string) => void;
     onUseCurrentLocation: () => void;
     onChooseOtherLocation: () => void;
+    onOpenFileUpload: () => void;
     isSending: boolean;
     allowStructuredCustomerCta: boolean;
 }) {
@@ -506,6 +524,34 @@ function MessageBubble({
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                             </svg>
                             Tạo yêu cầu cứu hộ
+                        </button>
+                    </div>
+                )}
+                {ctaKind === 'describeIncident' && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                        <button
+                            onClick={() => onCtaClick('Bỏ qua, tạo đơn ngay')}
+                            disabled={isSending}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{
+                                background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
+                                color: 'white',
+                                boxShadow: `0 2px 8px ${C.orange}40`,
+                            }}
+                        >
+                            ⚡ Bỏ qua và tạo đơn ngay
+                        </button>
+                        <button
+                            onClick={onOpenFileUpload}
+                            disabled={isSending}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{
+                                background: C.orangeLight,
+                                color: C.orangeDark,
+                                border: `1px solid ${C.orange}30`,
+                            }}
+                        >
+                            📷 Gửi ảnh/video
                         </button>
                     </div>
                 )}
@@ -1012,6 +1058,7 @@ function ChatPanel({
                                     onCtaClick={onSend}
                                     onUseCurrentLocation={onUseCurrentLocation}
                                     onChooseOtherLocation={() => setShowLocationPicker(true)}
+                                    onOpenFileUpload={() => fileInputRef.current?.click()}
                                     isSending={isSending}
                                     allowStructuredCustomerCta={allowStructuredCustomerCta}
                                 />

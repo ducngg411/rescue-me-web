@@ -566,6 +566,15 @@ Quy tắc:
                 description: (args.description as string) || null,
                 licensePlate: (args.licensePlate as string) || null,
                 vehicleColor: (args.vehicleColor as string) || null,
+                media: Array.isArray(args.mediaUrls) && args.mediaUrls.length > 0 ? {
+                    create: args.mediaUrls.map((url: string) => ({
+                        publicUrl: String(url),
+                        fileName: 'chatbot_upload.jpg',
+                        fileSize: 0,
+                        contentType: 'image/jpeg',
+                        mediaType: String(url).match(/\.(mp4|mov|avi|webm)(?:\?|$)/i) ? 'VIDEO' : 'IMAGE',
+                    }))
+                } : undefined,
                 matchingStartedAt: now,
                 expiresAt: phaseExpiresAt,
                 matchAttempts: 1,

@@ -62,12 +62,13 @@ interface GuidedDraftRequest {
         lat: number;
         lng: number;
     };
+    description?: string;
     mediaUrls?: string[];
 }
 
 interface GuidedConversationState {
     profileLoaded: boolean;
-    pendingAction?: 'confirm_location' | 'confirm_create' | 'edit_field';
+    pendingAction?: 'confirm_location' | 'confirm_create' | 'edit_field' | 'describe_incident';
     draftRequest: GuidedDraftRequest;
 }
 
@@ -167,6 +168,7 @@ export class ChatbotService {
         conversationId: string,
         content: string,
         imageUrls?: string[],
+        originalMediaUrls?: string[],
     ): Promise<Subject<ChatbotStreamEvent>> {
         const conversation =
             await this.prisma.chatbotConversation.findUnique({
@@ -183,12 +185,24 @@ export class ChatbotService {
         this.assertOwnership(caller, conversation);
 
         let normalizedContent: string;
+        let aiImageUrls = imageUrls;
+
         if (caller.userRole === 'USER') {
             this.loadGuidedStateFromPersistence(conversationId, conversation.guidedState);
+            const state = this.getOrCreateGuidedState(conversationId);
+            
+            // Block image pass-through to AI if responding to DESCRIBE_INCIDENT.
+            // This prevents massive TPM bills from Gpt-4o re-analyzing images/videos
+            // when we already have all state and just want it to invoke create_rescue_request.
+            if (state.pendingAction === 'describe_incident') {
+                aiImageUrls = [];
+            }
+
             normalizedContent = this.normalizeUserContentForGuidedFlow(
                 conversationId,
                 content,
                 imageUrls,
+                originalMediaUrls,
             );
             if (caller.userId) {
                 await this.eagerHydrateCustomerProfile(conversationId, caller.userId);
@@ -198,12 +212,14 @@ export class ChatbotService {
             normalizedContent = content.trim();
         }
 
+        const dbImageUrls = originalMediaUrls?.length ? originalMediaUrls : (imageUrls || []);
+
         await this.prisma.chatbotMessage.create({
             data: {
                 conversationId,
                 role: 'USER',
                 content: normalizedContent,
-                imageUrls: imageUrls || [],
+                imageUrls: dbImageUrls,
             },
         });
 
@@ -217,7 +233,7 @@ export class ChatbotService {
 
         const subject = new Subject<ChatbotStreamEvent>();
 
-        this.processAIResponse(caller, conversationId, conversation.messages, normalizedContent, imageUrls, subject).catch(
+        this.processAIResponse(caller, conversationId, conversation.messages, normalizedContent, aiImageUrls, subject).catch(
             (err) => {
                 this.logger.error('AI processing error', err);
                 subject.next({ type: 'error', content: 'Có lỗi xảy ra. Vui lòng thử lại.' });
@@ -310,7 +326,7 @@ export class ChatbotService {
                 : {};
         const pa = o.pendingAction;
         const pendingOk =
-            pa === 'confirm_location' || pa === 'confirm_create' || pa === 'edit_field' ? pa : undefined;
+            pa === 'confirm_location' || pa === 'confirm_create' || pa === 'edit_field' || pa === 'describe_incident' ? pa : undefined;
         this.guidedState.set(conversationId, {
             profileLoaded: !!o.profileLoaded,
             pendingAction: pendingOk,
@@ -384,12 +400,37 @@ export class ChatbotService {
         conversationId: string,
         rawContent: string,
         imageUrls?: string[],
+        originalMediaUrls?: string[],
     ): string {
         const state = this.getOrCreateGuidedState(conversationId);
         const content = rawContent.trim();
+        
+        const mediaToUse = originalMediaUrls?.length ? originalMediaUrls : imageUrls;
 
-        if (imageUrls?.length) {
-            state.draftRequest.mediaUrls = imageUrls;
+        // ── DESCRIBE_INCIDENT: user is responding to the optional media/description prompt ──
+        // Any response (skip, text, or media) → just record and let AI call create_rescue_request
+        if (state.pendingAction === 'describe_incident') {
+            if (mediaToUse?.length) {
+                // Media uploaded during DESCRIBE_INCIDENT → store as mediaUrls (not AI analysis)
+                state.draftRequest.mediaUrls = [
+                    ...(state.draftRequest.mediaUrls ?? []),
+                    ...mediaToUse,
+                ];
+            }
+            const skipPhrases = ['bỏ qua', 'bo qua', 'skip', 'tạo đơn ngay', 'không cần mô tả'];
+            const lower = content.toLowerCase();
+            const isSkipping = skipPhrases.some((p) => lower.includes(p));
+            if (!isSkipping && content.length > 0 && content !== 'Bỏ qua, tạo đơn ngay') {
+                // User typed a real description
+                state.draftRequest.description = content;
+            }
+            // pendingAction stays 'describe_incident' — AI will read DESCRIBE_INCIDENT directive
+            // and immediately call create_rescue_request after acknowledging
+            return `${content}\n\n[System Note: Khách hàng đã phản hồi ở bước mô tả. HÃY GỌI NGAY tool create_rescue_request bằng thông tin trong bản nháp, tuyệt đối không hỏi thêm bất kỳ câu nào nữa.]`;
+        }
+
+        if (mediaToUse?.length) {
+            state.draftRequest.mediaUrls = mediaToUse;
         }
 
         if (content.startsWith('__location_current__|')) {
@@ -412,6 +453,24 @@ export class ChatbotService {
                 state.pendingAction = 'confirm_create';
             }
             return `Tôi chọn vị trí khác: ${addressText}`;
+        }
+
+        // ── Detect user confirming info while in confirm_create → transition to describe_incident ──
+        if (state.pendingAction === 'confirm_create') {
+            const lower = content.toLowerCase();
+            const isConfirmation =
+                lower.includes('đúng rồi') ||
+                lower.includes('xác nhận') ||
+                lower.includes('tạo đơn') ||
+                lower.includes('tạo yêu cầu') ||
+                lower === 'ok' ||
+                lower === 'đồng ý' ||
+                lower === 'tiếp tục';
+            if (isConfirmation) {
+                state.pendingAction = 'describe_incident';
+                // Return a neutral message so AI doesn't re-confirm but asks for media
+                return `[Khách hàng xác nhận thông tin chính xác] Hãy tiếp tục bước DESCRIBE_INCIDENT: Chỉ hỏi khách có muốn bổ sung thêm mô tả hoặc gửi ảnh/video hiện trường không. KHÔNG gọi tool create_rescue_request lúc này.`;
+            }
         }
 
         const lower = content.toLowerCase();
@@ -796,6 +855,8 @@ ${formatMissingFieldsDirective(missing)}`;
         const lower = text.toLowerCase();
         if (assistantTextImpliesConfirmRecap(lower)) return text;
         const state = this.getOrCreateGuidedState(conversationId);
+        // Never append generic CTA during describe_incident — AI handles create directly
+        if (state.pendingAction === 'describe_incident') return text;
         if (
             state.pendingAction === 'confirm_create' &&
             state.draftRequest.pickupLocation &&

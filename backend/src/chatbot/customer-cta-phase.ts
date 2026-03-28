@@ -8,11 +8,12 @@ export type CustomerCtaPhase =
     | 'CONFIRM_INFO'
     | 'CREATE_REQUEST'
     | 'LOCATION_CHOICE'
+    | 'DESCRIBE_INCIDENT'
     | 'GENERAL';
 
 /** Valid CustomerCtaPhase values for runtime validation. */
 const VALID_CTA_PHASES = new Set<CustomerCtaPhase>([
-    'SELECT_ISSUE', 'ENTER_INFO', 'CONFIRM_INFO', 'CREATE_REQUEST', 'LOCATION_CHOICE', 'GENERAL',
+    'SELECT_ISSUE', 'ENTER_INFO', 'CONFIRM_INFO', 'CREATE_REQUEST', 'LOCATION_CHOICE', 'DESCRIBE_INCIDENT', 'GENERAL',
 ]);
 
 /** The hidden tag the model appends, e.g. <!--STATE:{"s":"CONFIRM_INFO"}--> or <!--STATE:CONFIRM_INFO--> */
@@ -123,7 +124,7 @@ export interface GuidedDraftLike {
 
 export interface GuidedStateLike {
     profileLoaded: boolean;
-    pendingAction?: 'confirm_location' | 'confirm_create' | 'edit_field';
+    pendingAction?: 'confirm_location' | 'confirm_create' | 'edit_field' | 'describe_incident';
     draftRequest: GuidedDraftLike;
 }
 
@@ -149,6 +150,7 @@ export function computeCustomerCtaPhase(
 
     // ── Final fallback: guided state ──
     const d = state.draftRequest;
+    if (state.pendingAction === 'describe_incident') return 'DESCRIBE_INCIDENT';
     if (state.pendingAction === 'confirm_create' && d.pickupLocation && d.contactPhone) {
         return 'CONFIRM_INFO';
     }
@@ -167,6 +169,7 @@ export function computeCustomerCtaPhase(
 /** Phase hint for system prompt before the model replies (after user message, guided state updated). */
 export function inferPromptCtaPhaseForUserMessage(state: GuidedStateLike): CustomerCtaPhase {
     const d = state.draftRequest;
+    if (state.pendingAction === 'describe_incident') return 'DESCRIBE_INCIDENT';
     if (state.pendingAction === 'confirm_location') return 'LOCATION_CHOICE';
     if (state.pendingAction === 'confirm_create' && d.pickupLocation && d.contactPhone) {
         return 'CONFIRM_INFO';
@@ -191,6 +194,8 @@ export function formatCtaStateDirective(phase: CustomerCtaPhase): string {
             'Lượt này hệ thống đang ở CREATE_REQUEST. Một hành động tạo yêu cầu cứu hộ. Không lặp danh sách sự cố.',
         LOCATION_CHOICE:
             'Lượt này hệ thống đang ở LOCATION_CHOICE. Chỉ hỏi vị trí hiện tại hay chọn trên bản đồ. Không gộp thêm danh sách loại sự cố.',
+        DESCRIBE_INCIDENT:
+            'Lượt này hệ thống đang ở DESCRIBE_INCIDENT. Hỏi thêm mô tả sự cố và ảnh/video một cách nhẹ nhàng — KHÔNG BẮT BUỘC. KHÔNG hỏi lại bất kỳ thông tin nào đã xác nhận (loại xe, SĐT, vị trí…). Sau khi nhận BẤT KỲ phản hồi nào của user (kể cả "bỏ qua" hay im lặng bằng nút CTA), GỌI NGAY tool create_rescue_request với toàn bộ thông tin trong draftRequest, kèm description/mediaUrls nếu user có cung cấp. TUYỆT ĐỐI không hỏi xác nhận thêm lần nào nữa.',
         GENERAL:
             'Ngoài luồng tạo đơn có cấu trúc: trả lời tự nhiên; có thể một câu hành động gợi ý ở cuối nếu phù hợp. Không mô tả sai nhóm CTA với bước guided.',
     };

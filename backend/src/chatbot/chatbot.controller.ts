@@ -86,6 +86,7 @@ export class ChatbotController {
             id,
             dto.content,
             dto.imageUrls,
+            dto.originalMediaUrls,
         );
 
         res.setHeader('Content-Type', 'text/event-stream');
@@ -163,6 +164,7 @@ export class ChatbotController {
             id,
             dto.content,
             dto.imageUrls,
+            dto.originalMediaUrls,
         );
 
         res.setHeader('Content-Type', 'text/event-stream');

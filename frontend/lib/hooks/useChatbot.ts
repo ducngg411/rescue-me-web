@@ -10,6 +10,7 @@ export type CustomerCtaPhase =
     | 'CONFIRM_INFO'
     | 'CREATE_REQUEST'
     | 'LOCATION_CHOICE'
+    | 'DESCRIBE_INCIDENT'
     | 'GENERAL';
 
 export interface ChatbotMessage {
@@ -160,6 +161,7 @@ export function useChatbot(options: UseChatbotOptions = {}) {
                 body: JSON.stringify({
                     content,
                     imageUrls: analysisImageUrls ?? displayMediaUrls,
+                    originalMediaUrls: displayMediaUrls,
                 }),
                 signal: abortController.signal,
             });
