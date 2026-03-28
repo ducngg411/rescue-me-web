@@ -451,7 +451,7 @@ export class WalletService {
             });
 
             const orderCodeMap = new Map(requests.map(r => [r.id, r.orderCode]));
-            
+
             items.forEach(item => {
                 if (jobReferenceTypes.includes(item.referenceType)) {
                     (item as any).orderCode = orderCodeMap.get(item.referenceId) || null;
@@ -1422,7 +1422,7 @@ export class WalletService {
                 where: { id: walletId },
                 data: { pendingBalance: correctPending },
             });
-            this.logger.log(`🔧 [AutoRelease] Reconciled wallet=${walletId} pendingBalance=${correctPending}`);
+            this.logger.log(` [AutoRelease] Reconciled wallet=${walletId} pendingBalance=${correctPending}`);
         });
     }
 

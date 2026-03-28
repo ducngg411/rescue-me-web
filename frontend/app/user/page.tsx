@@ -11,6 +11,7 @@ import dynamic from 'next/dynamic';
 import api from '@/lib/api';
 import RescueMeLogo from '@/components/RescueMeLogo';
 import { useUserDisputeNavBadge } from '@/contexts/UserDisputeNavBadgeContext';
+import NearbyShopsSheet from '@/components/NearbyShopsSheet';
 
 const VietMap = dynamic(() => import('@/components/VietMap'), {
     ssr: false,
@@ -71,6 +72,7 @@ export default function UserDashboard() {
     const [locationError, setLocationError] = useState<string | null>(null);
     const [requests, setRequests] = useState<any[]>([]);
     const [isLoadingRequests, setIsLoadingRequests] = useState(true);
+    const [isNearbySheetOpen, setIsNearbySheetOpen] = useState(false);
 
     const fetchRequests = async (signal?: AbortSignal) => {
         try {
@@ -97,7 +99,7 @@ export default function UserDashboard() {
         const interval = hasActive ? 5000 : 15000;
         const id = setInterval(() => fetchRequests(), interval);
         return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isReady, requests.some(r => ACTIVE_STATUSES.includes(r.status))]);
 
     const activeRequest = requests.find(r => ACTIVE_STATUSES.includes(r.status));
@@ -344,26 +346,57 @@ export default function UserDashboard() {
                                 <MapSection height="220px" />
                             </div>
 
-                            {/* Request Assistance CTA */}
-                            <button
-                                onClick={() => router.push('/user/create-request')}
-                                className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl text-white transition-all active:scale-[0.98]"
-                                style={{
-                                    background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`,
-                                    boxShadow: `0 4px 16px ${C.orange}40`,
-                                }}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
-                                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                            {/* Quick Actions Row */}
+                            <div className="grid grid-cols-2 gap-3">
+                                {/* Request Assistance CTA */}
+                                <button
+                                    onClick={() => router.push('/user/create-request')}
+                                    className="col-span-2 flex items-center justify-between px-4 py-3.5 rounded-xl text-white transition-all active:scale-[0.98]"
+                                    style={{
+                                        background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`,
+                                        boxShadow: `0 4px 16px ${C.orange}40`,
+                                    }}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                                            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="font-bold text-sm leading-tight">{t('user.dashboard.requestAssistance')}</p>
+                                            <p className="text-xs opacity-80 mt-0.5">{t('user.dashboard.requestSubtitle')}</p>
+                                        </div>
                                     </div>
-                                    <div className="text-left">
-                                        <p className="font-bold text-sm leading-tight">{t('user.dashboard.requestAssistance')}</p>
-                                        <p className="text-xs opacity-80 mt-0.5">{t('user.dashboard.requestSubtitle')}</p>
+                                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                                </button>
+
+                                {/* Nearby Shops CTA */}
+                                <button
+                                    id="nearby-shops-btn"
+                                    onClick={() => setIsNearbySheetOpen(true)}
+                                    className="col-span-2 flex items-center gap-3 px-4 py-3 rounded-xl transition-all active:scale-[0.98]"
+                                    style={{
+                                        background: 'white',
+                                        border: `1.5px solid ${C.border}`,
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                                    }}
+                                >
+                                    <div
+                                        className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+                                        style={{ background: '#f0fdf4', color: '#16a34a' }}
+                                    >
+                                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                        </svg>
                                     </div>
-                                </div>
-                                <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-                            </button>
+                                    <div className="flex-1 text-left">
+                                        <p className="font-semibold text-sm" style={{ color: C.navy }}>Cửa hàng sửa xe gần đây</p>
+                                        <p className="text-xs" style={{ color: C.gray }}>Tìm garage, tiệm sửa xe gần vị trí của bạn</p>
+                                    </div>
+                                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#94a3b8" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                            </div>
 
                             {/* Rescue in Progress */}
                             <div className="bg-white rounded-xl p-4" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
@@ -625,6 +658,14 @@ export default function UserDashboard() {
                     );
                 })}
             </nav>
+
+            {/* Nearby Shops Bottom Sheet */}
+            <NearbyShopsSheet
+                isOpen={isNearbySheetOpen}
+                onClose={() => setIsNearbySheetOpen(false)}
+                userLat={currentLocation?.lat}
+                userLng={currentLocation?.lng}
+            />
         </div>
     );
 }

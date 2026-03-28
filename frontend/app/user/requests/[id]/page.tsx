@@ -14,6 +14,7 @@ import ExpiredRetry from '@/components/ExpiredRetry';
 import QuoteSelectionPanel from '@/components/QuoteSelectionPanel';
 import RescueProgressTimeline from '@/components/RescueProgressTimeline';
 import AvatarImage from '@/components/AvatarImage';
+import NearbyShopsSheet from '@/components/NearbyShopsSheet';
 import { Clock, Banknote, User, Wrench, CheckCircle2, Image as ImageIcon, Play, Phone } from 'lucide-react';
 import api, { userDisputeApi } from '@/lib/api';
 import { displayOrderCode } from '@/lib/reconciliation';
@@ -812,6 +813,19 @@ export default function RequestTrackingPage() {
     const { isReady } = useUserGuard();
     const [isRetrying, setIsRetrying] = useState(false);
     const [showQuoteSelection, setShowQuoteSelection] = useState(false);
+    const [isNearbySheetOpen, setIsNearbySheetOpen] = useState(false);
+    const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+    // Grab user coords once for nearby shops
+    useEffect(() => {
+        if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                () => { }, // ignore errors silently
+                { enableHighAccuracy: true, timeout: 8000 },
+            );
+        }
+    }, []);
 
     // Live quotes state (during countdown)
     const [liveQuotes, setLiveQuotes] = useState<Quote[]>([]);
@@ -1031,6 +1045,39 @@ export default function RequestTrackingPage() {
                     />
                 )}
 
+                {/* Nearby Shops Banner — shown during MATCHING while waiting for providers */}
+                {isMatchingWithWindowOpen && liveQuotes.length === 0 && (
+                    <button
+                        id="nearby-shops-matching-btn"
+                        onClick={() => setIsNearbySheetOpen(true)}
+                        className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all active:scale-[0.98]"
+                        style={{
+                            background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+                            border: '1.5px solid #86efac',
+                        }}
+                    >
+                        <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                            style={{ background: 'white', boxShadow: '0 2px 8px rgba(22,163,74,0.15)' }}
+                        >
+                            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                        </div>
+                        <div className="flex-1 text-left">
+                            <p className="text-sm font-bold" style={{ color: '#15803d' }}>
+                                Trong lúc chờ — Xem cửa hàng sửa xe gần đây
+                            </p>
+                            <p className="text-xs mt-0.5" style={{ color: '#16a34a' }}>
+                                Tìm garage, tiệm sửa xe gần đây ngay bây giờ
+                            </p>
+                        </div>
+                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                )}
+
                 {/* ── Live Quote Cards (during countdown) ── */}
                 {isMatchingWithWindowOpen && liveQuotes.length > 0 && (
                     <div className="space-y-3">
@@ -1153,6 +1200,14 @@ export default function RequestTrackingPage() {
                     </div>
                 )}
             </div>
+
+            {/* Nearby Shops Bottom Sheet */}
+            <NearbyShopsSheet
+                isOpen={isNearbySheetOpen}
+                onClose={() => setIsNearbySheetOpen(false)}
+                userLat={userCoords?.lat ?? status.pickupLocation?.lat}
+                userLng={userCoords?.lng ?? status.pickupLocation?.lng}
+            />
         </div>
     );
 }

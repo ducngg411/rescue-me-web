@@ -17,7 +17,7 @@ const SERVICE_TYPES = [
     { value: 'TIRE_CHANGE', label: 'Thay lốp', icon: '🛞' },
     { value: 'FUEL_DELIVERY', label: 'Tiếp nhiên liệu', icon: '⛽' },
     { value: 'LOCKOUT', label: 'Mở khóa xe', icon: '🔑' },
-    { value: 'BREAKDOWN_REPAIR', label: 'Sửa tại chỗ', icon: '🔧' },
+    { value: 'BREAKDOWN_REPAIR', label: 'Sửa tại chỗ', icon: '' },
 ];
 
 const inputCls = (err?: string) =>

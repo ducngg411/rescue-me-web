@@ -1,6 +1,29 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+export interface VietMapPlaceResult {
+    ref_id: string;
+    name: string;
+    address: string;
+    lat: number;
+    lng: number;
+    distance?: number; // meters, returned by VietMap
+}
+
+export interface NearbyShopResult {
+    id: string;
+    name: string;
+    address: string;
+    phone?: string;
+    lat: number;
+    lng: number;
+    distanceKm: number;
+    source: 'PLATFORM' | 'VIETMAP';
+    isVerified: boolean;
+    averageRating?: number;
+    reviewCount?: number;
+}
+
 interface VietMapRouteResponse {
     code: string;
     paths?: Array<{
@@ -159,5 +182,91 @@ export class VietMapService {
 
     private deg2rad(deg: number): number {
         return deg * (Math.PI / 180);
+    }
+
+    /**
+     * Search nearby repair shops using VietMap Place API v4
+     * @param lat User latitude
+     * @param lng User longitude
+     * @param radiusMeters Search radius in meters (default 2000m)
+     * @returns List of nearby POI results
+     */
+    async searchNearbyRepairShops(
+        lat: number,
+        lng: number,
+        radiusMeters: number = 2000,
+    ): Promise<VietMapPlaceResult[]> {
+        if (!this.apiKey) {
+            this.logger.warn('VIETMAP_API_KEY not configured, skipping Place API search');
+            return [];
+        }
+
+        const keywords = ['sửa xe', 'sửa ô tô', 'garage', 'tiệm sửa xe', 'cứu hộ xe'];
+        const allResults: VietMapPlaceResult[] = [];
+        const seenIds = new Set<string>();
+
+        // Run searches in parallel for each keyword
+        const searches = keywords.map(async (text) => {
+            try {
+                const url = new URL('https://maps.vietmap.vn/api/search/v4');
+                url.searchParams.append('apikey', this.apiKey);
+                url.searchParams.append('text', text);
+                url.searchParams.append('location', `${lat},${lng}`);
+                url.searchParams.append('radius', String(radiusMeters));
+                url.searchParams.append('size', '10');
+
+                this.logger.debug(`🔍 VietMap Place search: "${text}" near ${lat},${lng} r=${radiusMeters}m`);
+
+                const res = await fetch(url.toString(), {
+                    signal: AbortSignal.timeout(5000),
+                });
+
+                if (!res.ok) {
+                    this.logger.warn(`VietMap Place API error for "${text}": HTTP ${res.status}`);
+                    return [];
+                }
+
+                const data = await res.json();
+
+                // VietMap Place v4 returns array directly or wrapped in features
+                const items: any[] = Array.isArray(data) ? data : (data.features || data.data || []);
+
+                return items.map((item: any) => {
+                    // Handle both GeoJSON feature format and flat format
+                    const geometry = item.geometry || item;
+                    const coords = geometry?.coordinates || [item.lng, item.lat];
+                    const props = item.properties || item;
+
+                    return {
+                        ref_id: String(props.ref_id || props.id || item.ref_id || Math.random()),
+                        name: props.name || item.name || 'Cửa hàng sửa xe',
+                        address: props.address || props.display || item.address || '',
+                        lat: coords[1] ?? item.lat ?? 0,
+                        lng: coords[0] ?? item.lng ?? 0,
+                        distance: props.distance || item.distance,
+                    } as VietMapPlaceResult;
+                });
+            } catch (error: any) {
+                if (error?.name !== 'TimeoutError') {
+                    this.logger.warn(`VietMap Place search failed for "${text}": ${error.message}`);
+                }
+                return [];
+            }
+        });
+
+        const results = await Promise.all(searches);
+
+        // Merge and deduplicate by ref_id, then by proximity (within 50m)
+        for (const batch of results) {
+            for (const item of batch) {
+                if (!seenIds.has(item.ref_id) && item.lat && item.lng) {
+                    seenIds.add(item.ref_id);
+                    allResults.push(item);
+                }
+            }
+        }
+
+        this.logger.debug(`VietMap Place: found ${allResults.length} unique results`);
+        return allResults;
     }
 }
