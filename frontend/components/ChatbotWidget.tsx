@@ -849,7 +849,7 @@ export default function ChatbotWidget() {
             {!isOpen && (
                 <button
                     onClick={handleOpen}
-                    className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-105 active:scale-95"
+                    className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-105 active:scale-95"
                     style={{
                         background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
                         boxShadow: `0 4px 20px ${C.orange}50`,

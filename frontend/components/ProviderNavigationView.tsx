@@ -1104,7 +1104,7 @@ export default function ProviderNavigationView({
                             <div
                                 className="absolute left-3 right-3 flex items-center gap-3 px-4 py-3 rounded-2xl"
                                 style={{
-                                    top: '8px',
+                                    top: '180px',
                                     background: hudBg,
                                     boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
                                     zIndex: 20,

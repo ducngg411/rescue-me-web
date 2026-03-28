@@ -3,6 +3,7 @@
 import React, { ReactNode, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { Menu, X } from 'lucide-react';
 import RescueMeLogo from '@/components/RescueMeLogo';
 import api from '@/lib/api';
 
@@ -126,6 +127,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
     const { user, logout } = useAuth();
     const [disputeBadge, setDisputeBadge] = useState(0);
     const [latestDisputeTotal, setLatestDisputeTotal] = useState(0);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const currentActiveTab = activeTab || pathname;
 
@@ -289,9 +291,153 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative pb-[60px] md:pb-0">
+                {/* Mobile Top Header */}
+                <div 
+                    className="md:hidden flex flex-shrink-0 items-center justify-between px-4 py-3 z-20 shadow-sm"
+                    style={{ background: '#ffffff', borderBottom: `1px solid ${C.border}` }}
+                >
+                    <RescueMeLogo size={24} textClass="text-sm font-bold" />
+                    <div className="w-8 h-8 flex-shrink-0 rounded-full bg-cover bg-center border flex items-center justify-center overflow-hidden" style={{ background: user?.avatar ? `url(${user.avatar}) center/cover` : C.orangeLight, borderColor: C.border }}>
+                        {!user?.avatar && <span className="text-[10px] font-bold" style={{ color: C.orange }}>{initials}</span>}
+                    </div>
+                </div>
+
                 <div className="flex-1 overflow-y-auto">
                     {children}
+                </div>
+            </div>
+
+            {/* Mobile Bottom Navigation */}
+            <nav
+                className="fixed bottom-0 left-0 right-0 md:hidden z-30 flex items-stretch shadow-[0_-2px_10px_rgba(0,0,0,0.05)]"
+                style={{ background: '#ffffff', borderTop: `1px solid ${C.border}`, height: '60px' }}
+            >
+                {[
+                    navGroups[0].items.find(i => i.href === '/admin/dashboard'),
+                    navGroups[0].items.find(i => i.href === '/admin/requests'),
+                    navGroups[0].items.find(i => i.href === '/admin/disputes'),
+                ].filter(Boolean).map((item: any) => {
+                    const active = isActive(item.href);
+                    return (
+                        <button
+                            key={item.label}
+                            onClick={() => {
+                                if (item.href === '/admin/disputes') {
+                                    localStorage.setItem('admin.disputes.badgeCount', '0');
+                                    localStorage.setItem('admin.disputes.seenTotal', String(latestDisputeTotal));
+                                    setDisputeBadge(0);
+                                }
+                                router.push(item.href);
+                            }}
+                            className="relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+                            style={{ color: active ? C.orange : '#94a3b8' }}
+                        >
+                            <span style={{ color: active ? C.orange : '#94a3b8' }}>{item.icon}</span>
+                            <span className="text-[9px] font-medium">{item.label}</span>
+                            {item.href === '/admin/disputes' && disputeBadge > 0 && !active && (
+                                <span className="absolute top-1 right-1/4 w-4 h-4 text-[9px] font-bold text-white rounded-full flex items-center justify-center" style={{ background: '#ef4444' }}>
+                                    {disputeBadge > 99 ? '99+' : disputeBadge}
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
+                {/* Menu Toggle Button */}
+                <button
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+                    style={{ color: isMobileMenuOpen ? C.orange : '#94a3b8' }}
+                >
+                    <Menu className="w-[18px] h-[18px]" />
+                    <span className="text-[9px] font-medium">Menu</span>
+                </button>
+            </nav>
+
+            {/* Mobile Menu Drawer Overlay */}
+            {isMobileMenuOpen && (
+                <div 
+                    className="fixed inset-0 z-40 bg-black/50 md:hidden transition-opacity" 
+                    onClick={() => setIsMobileMenuOpen(false)}
+                />
+            )}
+
+            {/* Mobile Menu Drawer Panel */}
+            <div 
+                className={`fixed inset-y-0 right-0 z-50 w-72 bg-white shadow-xl transform transition-transform duration-300 ease-in-out md:hidden flex flex-col ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            >
+                <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <h2 className="text-sm font-bold" style={{ color: C.navy }}>Menu Chức Năng</h2>
+                    <button onClick={() => setIsMobileMenuOpen(false)} className="p-1 rounded-full bg-gray-100 hover:bg-gray-200" style={{ color: C.gray }}>
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+                    {navGroups.map((group, gi) => (
+                        <div key={gi}>
+                            {group.label && (
+                                <p className="text-xs font-semibold tracking-wider mb-2 px-3" style={{ color: C.gray }}>
+                                    {group.label}
+                                </p>
+                            )}
+                            <div className="space-y-1">
+                                {group.items.map((item) => {
+                                    const active = isActive(item.href);
+                                    return (
+                                        <button
+                                            key={item.href}
+                                            onClick={() => {
+                                                if (item.href === '/admin/disputes') {
+                                                    localStorage.setItem('admin.disputes.badgeCount', '0');
+                                                    localStorage.setItem('admin.disputes.seenTotal', String(latestDisputeTotal));
+                                                    setDisputeBadge(0);
+                                                }
+                                                setIsMobileMenuOpen(false);
+                                                router.push(item.href);
+                                            }}
+                                            className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all"
+                                            style={{
+                                                background: active ? C.orangeLight : 'transparent',
+                                                color: active ? C.orange : '#64748b',
+                                            }}
+                                        >
+                                            {item.icon}
+                                            {item.label}
+                                            {item.href === '/admin/disputes' && disputeBadge > 0 && !active && (
+                                                <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>
+                                                    {disputeBadge}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Mobile Logout */}
+                <div className="p-4" style={{ borderTop: `1px solid ${C.border}` }}>
+                    <div className="flex items-center gap-3 mb-4 px-2">
+                        <div className="w-9 h-9 flex-shrink-0 rounded-full bg-cover bg-center border flex items-center justify-center overflow-hidden" style={{ background: user?.avatar ? `url(${user.avatar}) center/cover` : C.orangeLight, borderColor: C.border }}>
+                            {!user?.avatar && <span className="text-[10px] font-bold" style={{ color: C.orange }}>{initials}</span>}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
+                            <p className="text-xs" style={{ color: C.gray }}>Super Admin</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => { setIsMobileMenuOpen(false); logout(); }}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-lg text-sm font-bold transition-all hover:bg-red-50"
+                        style={{ color: C.red }}
+                    >
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        Đăng xuất
+                    </button>
                 </div>
             </div>
         </div>

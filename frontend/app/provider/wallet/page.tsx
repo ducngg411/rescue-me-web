@@ -682,7 +682,9 @@ function TxRow({ tx }: { tx: Transaction }) {
         const jobRef =
             jobDetails?.id && tx.referenceId === jobDetails.id
                 ? displayOrderCode(jobDetails.orderCode, jobDetails.id)
-                : refCodeFromDesc || (tx.referenceId?.slice(0, 8).toUpperCase() ?? '');
+                : (tx as any).orderCode 
+                    ? displayOrderCode((tx as any).orderCode, tx.referenceId)
+                    : (refCodeFromDesc || (tx.referenceId?.slice(0, 8).toUpperCase() ?? ''));
         
         const shortId = jobRef || (tx.referenceId?.slice(0, 8).toUpperCase() ?? '');
         const envRate = Math.round((Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.2) * 100);

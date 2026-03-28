@@ -421,7 +421,7 @@ export default function UserSettingsPage() {
 
             {/* ═══ DESKTOP Sidebar ═══ */}
             <aside
-                className="hidden md:flex flex-col justify-between py-6 px-4 flex-shrink-0"
+                className="hidden md:flex flex-col justify-between py-6 px-4 flex-shrink-0 sticky top-0 h-screen"
                 style={{ width: '220px', background: C.white, borderRight: `1px solid ${C.border}` }}
             >
                 <div>

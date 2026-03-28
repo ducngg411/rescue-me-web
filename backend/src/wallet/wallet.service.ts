@@ -436,6 +436,29 @@ export class WalletService {
             }),
             this.prisma.walletTransaction.count({ where: { walletId } }),
         ]);
+
+        const jobReferenceTypes = ['JOB', 'JOB_PAYMENT', 'COMMISSION'];
+        const referenceIdsToFetch = items
+            .filter(item => jobReferenceTypes.includes(item.referenceType) && item.referenceId)
+            .map(item => item.referenceId);
+
+        const uniqueReferenceIds = [...new Set(referenceIdsToFetch)];
+
+        if (uniqueReferenceIds.length > 0) {
+            const requests = await this.prisma.rescueRequest.findMany({
+                where: { id: { in: uniqueReferenceIds } },
+                select: { id: true, orderCode: true },
+            });
+
+            const orderCodeMap = new Map(requests.map(r => [r.id, r.orderCode]));
+            
+            items.forEach(item => {
+                if (jobReferenceTypes.includes(item.referenceType)) {
+                    (item as any).orderCode = orderCodeMap.get(item.referenceId) || null;
+                }
+            });
+        }
+
         return { items, total, skip, take };
     }
 
