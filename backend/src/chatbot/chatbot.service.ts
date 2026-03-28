@@ -7,6 +7,13 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { OpenAIService } from './openai.service';
 import { ToolExecutorService } from './tool-executor.service';
+import { CustomerProfileDefaultsService } from './customer-profile-defaults.service';
+import {
+    buildCustomerKnownSnapshot,
+    computeOrderedMissingFields,
+    formatCustomerKnownDirective,
+    formatMissingFieldsDirective,
+} from './guided-missing-fields';
 import { CUSTOMER_SYSTEM_PROMPT } from './prompts/customer-system-prompt';
 import { PROVIDER_SYSTEM_PROMPT } from './prompts/provider-system-prompt';
 import { GUEST_SYSTEM_PROMPT } from './prompts/guest-system-prompt';
@@ -17,6 +24,17 @@ import {
     ChatCompletionTool,
 } from 'openai/resources/chat/completions';
 import { Subject } from 'rxjs';
+import {
+    type CustomerCtaPhase,
+    computeCustomerCtaPhase,
+    inferPromptCtaPhaseForUserMessage,
+    formatCtaStateDirective,
+    assistantTextImpliesConfirmRecap,
+    extractModelState,
+    stripModelStateTag,
+} from './customer-cta-phase';
+
+export type { CustomerCtaPhase } from './customer-cta-phase';
 
 export interface ChatbotStreamEvent {
     type: 'delta' | 'tool_start' | 'tool_end' | 'done' | 'error' | 'action';
@@ -24,6 +42,7 @@ export interface ChatbotStreamEvent {
     toolName?: string;
     action?: string;
     payload?: Record<string, unknown>;
+    ctaPhase?: CustomerCtaPhase;
 }
 
 interface CallerIdentity {
@@ -68,6 +87,7 @@ export class ChatbotService {
         private prisma: PrismaService,
         private openaiService: OpenAIService,
         private toolExecutor: ToolExecutorService,
+        private customerProfileDefaults: CustomerProfileDefaultsService,
     ) {}
 
     async createConversation(caller: CallerIdentity, title?: string) {
@@ -148,12 +168,6 @@ export class ChatbotService {
         content: string,
         imageUrls?: string[],
     ): Promise<Subject<ChatbotStreamEvent>> {
-        const normalizedContent = this.normalizeUserContentForGuidedFlow(
-            conversationId,
-            content,
-            imageUrls,
-        );
-
         const conversation =
             await this.prisma.chatbotConversation.findUnique({
                 where: { id: conversationId },
@@ -167,6 +181,22 @@ export class ChatbotService {
 
         if (!conversation) throw new NotFoundException('Conversation not found');
         this.assertOwnership(caller, conversation);
+
+        let normalizedContent: string;
+        if (caller.userRole === 'USER') {
+            this.loadGuidedStateFromPersistence(conversationId, conversation.guidedState);
+            normalizedContent = this.normalizeUserContentForGuidedFlow(
+                conversationId,
+                content,
+                imageUrls,
+            );
+            if (caller.userId) {
+                await this.eagerHydrateCustomerProfile(conversationId, caller.userId);
+            }
+            await this.persistGuidedStateToDb(conversationId);
+        } else {
+            normalizedContent = content.trim();
+        }
 
         await this.prisma.chatbotMessage.create({
             data: {
@@ -202,7 +232,7 @@ export class ChatbotService {
         existingMessages: Array<{ role: string; content: string }>,
         userRole: string,
     ): string | null {
-        if (userRole === 'PROVIDER') return null;
+        if (userRole === 'PROVIDER' || userRole === 'GUEST') return null;
 
         const recentMessages = existingMessages.slice(-10);
 
@@ -260,6 +290,94 @@ export class ChatbotService {
         };
         this.guidedState.set(conversationId, created);
         return created;
+    }
+
+    private loadGuidedStateFromPersistence(conversationId: string, raw: unknown) {
+        const empty: GuidedConversationState = {
+            profileLoaded: false,
+            pendingAction: undefined,
+            draftRequest: {},
+        };
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+            this.guidedState.set(conversationId, { ...empty, draftRequest: { ...empty.draftRequest } });
+            return;
+        }
+        const o = raw as Record<string, unknown>;
+        const draftIn = o.draftRequest;
+        const draft: GuidedDraftRequest =
+            draftIn && typeof draftIn === 'object' && !Array.isArray(draftIn)
+                ? { ...(draftIn as GuidedDraftRequest) }
+                : {};
+        const pa = o.pendingAction;
+        const pendingOk =
+            pa === 'confirm_location' || pa === 'confirm_create' || pa === 'edit_field' ? pa : undefined;
+        this.guidedState.set(conversationId, {
+            profileLoaded: !!o.profileLoaded,
+            pendingAction: pendingOk,
+            draftRequest: draft,
+        });
+    }
+
+    private async persistGuidedStateToDb(conversationId: string) {
+        const state = this.guidedState.get(conversationId);
+        if (!state) return;
+        try {
+            await this.prisma.chatbotConversation.update({
+                where: { id: conversationId },
+                data: {
+                    guidedState: JSON.parse(
+                        JSON.stringify({
+                            profileLoaded: state.profileLoaded,
+                            pendingAction: state.pendingAction ?? null,
+                            draftRequest: state.draftRequest,
+                        }),
+                    ),
+                },
+            });
+        } catch (e) {
+            this.logger.warn(`persistGuidedStateToDb failed for ${conversationId}`, e);
+        }
+    }
+
+    private async eagerHydrateCustomerProfile(conversationId: string, userId: string) {
+        const state = this.getOrCreateGuidedState(conversationId);
+        if (state.profileLoaded) return;
+        const payload = await this.customerProfileDefaults.loadPayload(userId);
+        if (!payload) return;
+        this.mergeProfileDefaultsIntoState(state, {
+            contactPhone: payload.contactPhone,
+            defaultVehicle: payload.defaultVehicle,
+        });
+    }
+
+    private mergeProfileDefaultsIntoState(
+        state: GuidedConversationState,
+        profile: {
+            contactPhone?: string | null;
+            defaultVehicle?: { type?: string | null; licensePlate?: string | null; color?: string | null };
+        },
+    ) {
+        state.profileLoaded = true;
+        const d = state.draftRequest;
+        if (profile.contactPhone && !d.contactPhone) {
+            d.contactPhone = profile.contactPhone;
+        }
+        if (profile.defaultVehicle?.type && !d.vehicleType) {
+            d.vehicleType = profile.defaultVehicle.type;
+        }
+        if (profile.defaultVehicle?.licensePlate && !d.licensePlate) {
+            d.licensePlate = profile.defaultVehicle.licensePlate;
+        }
+        if (profile.defaultVehicle?.color && !d.vehicleColor) {
+            d.vehicleColor = profile.defaultVehicle.color;
+        }
+        if (
+            !d.pickupLocation &&
+            state.pendingAction !== 'confirm_create' &&
+            state.pendingAction !== 'edit_field'
+        ) {
+            state.pendingAction = 'confirm_location';
+        }
     }
 
     private normalizeUserContentForGuidedFlow(
@@ -323,11 +441,14 @@ export class ChatbotService {
         const state = this.getOrCreateGuidedState(conversationId);
         const draft = state.draftRequest;
 
+        const missing = computeOrderedMissingFields(draft);
+        const knownSnap = buildCustomerKnownSnapshot(draft);
+
         return `[GUIDED-FLOW]
 Mục tiêu: tạo rescue request nhanh cho USER bằng auto-fill profile.
 Quy tắc bắt buộc:
-1) Nếu chưa có profileLoaded=true, hãy gọi tool get_profile_defaults.
-2) KHÔNG hỏi lại các trường đã có trong draft/profile. Chỉ hỏi thiếu hoặc khi user muốn sửa.
+1) profileLoaded=true nghĩa là server đã đồng bộ hồ sơ (eager) hoặc đã có kết quả get_profile_defaults. KHÔNG cần gọi get_profile_defaults chỉ để lấy lại cùng dữ liệu; chỉ gọi khi user vừa cập nhật hồ sơ và cần refresh.
+2) KHÔNG hỏi lại các trường đã có trong [CUSTOMER_KNOWN]/draft. Chỉ hỏi đúng mục trong [MISSING_FOR_ORDER] hoặc khi user muốn sửa.
 3) Với vị trí, chỉ hỏi 1 câu xác nhận: "dùng vị trí hiện tại hay vị trí khác?".
 3.1) Không được tự in "địa chỉ mặc định" từ profile. Chỉ nêu địa chỉ sau khi user đã xác nhận vị trí hiện tại hoặc chọn vị trí khác trên map.
 4) Nếu user chưa gửi ảnh/video bằng chứng, hỏi thêm 1 lần (không ép).
@@ -346,7 +467,25 @@ ${JSON.stringify(
             },
             null,
             2,
-        )}`;
+        )}
+
+${formatCustomerKnownDirective(knownSnap)}
+
+${formatMissingFieldsDirective(missing)}`;
+    }
+
+    private buildCtaStateDirective(
+        caller: CallerIdentity,
+        conversationId: string,
+    ): string | null {
+        if (caller.userRole !== 'USER') return null;
+        const state = this.getOrCreateGuidedState(conversationId);
+        const phase = inferPromptCtaPhaseForUserMessage({
+            profileLoaded: state.profileLoaded,
+            pendingAction: state.pendingAction,
+            draftRequest: state.draftRequest,
+        });
+        return formatCtaStateDirective(phase);
     }
 
     private async processAIResponse(
@@ -362,11 +501,15 @@ ${JSON.stringify(
 
         const ctaDirective = this.buildCtaDirective(existingMessages, caller.userRole);
         const guidedDirective = this.buildGuidedFlowDirective(caller, conversationId);
-        const fullSystemPrompt = ctaDirective
-            ? `${systemPrompt}\n\n${ctaDirective}${guidedDirective ? `\n\n${guidedDirective}` : ''}`
-            : guidedDirective
-              ? `${systemPrompt}\n\n${guidedDirective}`
-            : systemPrompt;
+        const ctaStateDirective = this.buildCtaStateDirective(caller, conversationId);
+        const fullSystemPrompt = [
+            systemPrompt,
+            ctaDirective,
+            guidedDirective,
+            ctaStateDirective,
+        ]
+            .filter(Boolean)
+            .join('\n\n');
 
         const messages: ChatCompletionMessageParam[] = [
             { role: 'system', content: fullSystemPrompt },
@@ -446,7 +589,7 @@ ${JSON.stringify(
         depth = 0,
     ) {
         if (depth > 3) {
-            subject.next({ type: 'done' });
+            subject.next({ type: 'done', ctaPhase: 'GENERAL' });
             subject.complete();
             return;
         }
@@ -525,6 +668,7 @@ ${JSON.stringify(
 
                 if (caller.userRole === 'USER') {
                     this.updateGuidedStateFromTool(conversationId, tc.name, args, result);
+                    await this.persistGuidedStateToDb(conversationId);
                 }
 
                 if (tc.name === 'create_rescue_request') {
@@ -578,11 +722,47 @@ ${JSON.stringify(
                 depth + 1,
             );
         } else {
+            // ── 1. Extract model-declared state before any processing ──
+            const modelState = extractModelState(fullContent);
+
+            // ── 2. Strip the hidden tag so it never reaches DB or UI ──
+            const strippedContent = stripModelStateTag(fullContent);
+
+            // ── 3. Optional CTA appendage (runs on clean text) ──
+            const displayContent =
+                caller.userRole === 'USER'
+                    ? this.ensureCustomerCta(strippedContent, conversationId)
+                    : strippedContent;
+
+            // ── 4. Compute CTA phase — model state takes priority ──
+            const guidedForCta = this.getOrCreateGuidedState(conversationId);
+            const ctaPhase =
+                caller.userRole === 'USER'
+                    ? computeCustomerCtaPhase(
+                          displayContent,
+                          {
+                              profileLoaded: guidedForCta.profileLoaded,
+                              pendingAction: guidedForCta.pendingAction,
+                              draftRequest: guidedForCta.draftRequest,
+                          },
+                          caller.userRole,
+                          modelState,
+                      )
+                    : ('GENERAL' as CustomerCtaPhase);
+
+            if (modelState) {
+                this.logger.debug(
+                    `[CTA] conv=${conversationId} model_state=${modelState} → phase=${ctaPhase}`,
+                );
+            }
+
             await this.prisma.chatbotMessage.create({
                 data: {
                     conversationId,
                     role: 'ASSISTANT',
-                    content: fullContent,
+                    content: displayContent,
+                    metadata:
+                        caller.userRole === 'USER' ? { ctaPhase } : undefined,
                 },
             });
 
@@ -591,9 +771,63 @@ ${JSON.stringify(
                 data: { updatedAt: new Date() },
             });
 
-            subject.next({ type: 'done' });
+            if (caller.userRole === 'USER') {
+                await this.persistGuidedStateToDb(conversationId);
+            }
+
+            subject.next({ type: 'done', ctaPhase });
             subject.complete();
         }
+    }
+
+    private hasActionableCta(text: string): boolean {
+        const lower = text.toLowerCase();
+        return (
+            lower.includes('anh/chị muốn') ||
+            lower.includes('muốn em') ||
+            lower.includes('tạo yêu cầu cứu hộ') ||
+            lower.includes('xác nhận tạo đơn') ||
+            lower.includes('hành động đề xuất')
+        );
+    }
+
+    private ensureCustomerCta(text: string, conversationId: string): string {
+        if (!text || this.hasActionableCta(text)) return text;
+        const lower = text.toLowerCase();
+        if (assistantTextImpliesConfirmRecap(lower)) return text;
+        const state = this.getOrCreateGuidedState(conversationId);
+        if (
+            state.pendingAction === 'confirm_create' &&
+            state.draftRequest.pickupLocation &&
+            state.draftRequest.contactPhone
+        ) {
+            return text;
+        }
+
+        if (
+            lower.includes('lốp') ||
+            lower.includes('ắc quy') ||
+            lower.includes('hết xăng') ||
+            lower.includes('chết máy') ||
+            lower.includes('tai nạn') ||
+            lower.includes('sự cố')
+        ) {
+            return `${text}\n\nHành động đề xuất: Anh/chị muốn em tạo yêu cầu cứu hộ ngay bây giờ không ạ?`;
+        }
+
+        if (lower.includes('khiếu nại')) {
+            return `${text}\n\nHành động đề xuất: Anh/chị muốn em hướng dẫn mở khiếu nại theo từng bước ngay bây giờ không ạ?`;
+        }
+
+        if (lower.includes('đơn') || lower.includes('trạng thái')) {
+            return `${text}\n\nHành động đề xuất: Anh/chị muốn em kiểm tra trạng thái đơn gần nhất giúp luôn không ạ?`;
+        }
+
+        if (lower.includes('ví') || lower.includes('wallet') || lower.includes('nạp')) {
+            return `${text}\n\nHành động đề xuất: Anh/chị muốn em hướng dẫn thao tác nạp ví nhanh trong 1 phút không ạ?`;
+        }
+
+        return `${text}\n\nHành động đề xuất: Anh/chị muốn em xử lý tiếp ngay bước tiếp theo cho anh/chị không ạ?`;
     }
 
     private updateGuidedStateFromTool(
@@ -606,15 +840,15 @@ ${JSON.stringify(
         if (toolName === 'get_profile_defaults') {
             try {
                 const profile = JSON.parse(rawResult) as {
+                    error?: string;
                     contactPhone?: string | null;
                     defaultVehicle?: { type?: string | null; licensePlate?: string | null; color?: string | null };
                 };
-                state.profileLoaded = true;
-                if (profile.contactPhone) state.draftRequest.contactPhone = profile.contactPhone;
-                if (profile.defaultVehicle?.type) state.draftRequest.vehicleType = profile.defaultVehicle.type;
-                if (profile.defaultVehicle?.licensePlate) state.draftRequest.licensePlate = profile.defaultVehicle.licensePlate;
-                if (profile.defaultVehicle?.color) state.draftRequest.vehicleColor = profile.defaultVehicle.color;
-                state.pendingAction = 'confirm_location';
+                if (profile?.error) return;
+                this.mergeProfileDefaultsIntoState(state, {
+                    contactPhone: profile.contactPhone,
+                    defaultVehicle: profile.defaultVehicle,
+                });
             } catch {
                 // no-op
             }
@@ -659,7 +893,7 @@ ${JSON.stringify(
             case 'PROVIDER':
                 return PROVIDER_TOOLS;
             case 'GUEST':
-                return CUSTOMER_TOOLS;
+                return [];
             default:
                 return CUSTOMER_TOOLS;
         }

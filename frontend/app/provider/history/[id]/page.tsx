@@ -231,7 +231,10 @@ export default function HistoryJobDetailPage() {
         (req.status === 'COMPLETED' && payment?.walletTxStatus === 'PENDING')
     );
     // Use actual payment amount (includes surcharges) when available, fall back to quote price
-    const revenueAmount = isWinner ? (payment?.totalAmount ?? quote?.price ?? 0) : (quote?.price ?? 0);
+    const payAmt = payment?.totalAmount;
+    const revenueAmount = isWinner
+        ? (payAmt != null && payAmt > 0 ? payAmt : (quote?.price ?? 0))
+        : (quote?.price ?? 0);
     const commissionRate = typeof payment?.commissionRate === 'number' ? payment.commissionRate : 0.2;
     const profit = Math.round(revenueAmount * (1 - commissionRate));
     const quoteProfit = quote ? Math.round(quote.price * (1 - commissionRate)) : 0;

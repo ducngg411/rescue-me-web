@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGuest } from '@/contexts/GuestContext';
-import { useChatbot, ChatbotMessage } from '@/lib/hooks/useChatbot';
+import { useChatbot, ChatbotMessage, type CustomerCtaPhase } from '@/lib/hooks/useChatbot';
 import { uploadFile, UploadPurpose } from '@/lib/upload';
 import LocationPicker from '@/components/LocationPicker';
 import { reverseGeocode } from '@/lib/vietmap';
@@ -57,25 +57,152 @@ function detectRiskLevel(content: string): RiskLevel {
     return null;
 }
 
+type CustomerCtaUiKind =
+    | 'none'
+    | 'confirm'
+    | 'location'
+    | 'incident'
+    | 'enterInfo'
+    | 'createRequest'
+    | 'generic';
+
+/** Fallback when server did not send ctaPhase — keep in sync with backend customer-cta-phase.ts */
+function looksLikeConfirmRecapStep(content: string): boolean {
+    const lower = content.toLowerCase();
+    if (lower.includes('xác nhận lại thông tin')) return true;
+    if (lower.includes('vui lòng xác nhận')) return true;
+    if (lower.includes('xác nhận giúp em') && (lower.includes('thông tin') || lower.includes('đơn'))) return true;
+    if (lower.includes('thông tin trên') && lower.includes('xác nhận')) return true;
+    if (
+        lower.includes('xác nhận') &&
+        lower.includes('thông tin') &&
+        (lower.includes('tóm tắt') || lower.includes('sau đó em') || lower.includes('tiến hành tạo'))
+    ) {
+        return true;
+    }
+    if (lower.includes('trước khi em') && (lower.includes('tạo') || lower.includes('thi'))) return true;
+    if (/\d+\.\s*\*?\*?loại sự cố/i.test(lower) && lower.includes('xác nhận')) return true;
+    return false;
+}
+
+function looksLikeLocationChoiceStep(content: string): boolean {
+    if (!content) return false;
+    const lower = content.toLowerCase();
+    if (lower.includes('đã ghi nhận vị trí') || lower.includes('đã xác nhận vị trí')) return false;
+    if (lower.includes('chúng ta sẽ dùng vị trí hiện tại')) return false;
+    const hasLoc =
+        lower.includes('vị trí hiện tại') ||
+        lower.includes('vị trí khác') ||
+        lower.includes('chọn vị trí');
+    const asks =
+        lower.includes('chọn') || lower.includes('hay') || lower.includes('hay là') || lower.includes('?');
+    return hasLoc && asks;
+}
+
+function looksLikeSelectIssueStep(content: string): boolean {
+    if (!content || looksLikeConfirmRecapStep(content)) return false;
+    if (looksLikeLocationChoiceStep(content)) return false;
+    const lower = content.toLowerCase();
+    return (
+        (lower.includes('loại sự cố') &&
+            (lower.includes('?') ||
+                lower.includes('là gì') ||
+                lower.includes('đang gặp') ||
+                lower.includes('là như thế nào'))) ||
+        lower.includes('đang gặp phải là gì') ||
+        (lower.includes('ví dụ: xe hỏng') && lower.includes('?')) ||
+        (lower.includes('tai nạn') && lower.includes('v.v') && lower.includes('?'))
+    );
+}
+
+function looksLikeEnterInfoStep(content: string): boolean {
+    if (!content || looksLikeConfirmRecapStep(content)) return false;
+    if (looksLikeLocationChoiceStep(content)) return false;
+    const lower = content.toLowerCase();
+    if (
+        lower.includes('loại sự cố') &&
+        (lower.includes('?') || lower.includes('là gì') || lower.includes('đang gặp'))
+    ) {
+        return false;
+    }
+    return (
+        (lower.includes('loại xe') && (lower.includes('?') || lower.includes('ô tô') || lower.includes('xe máy'))) ||
+        (lower.includes('số điện thoại') && (lower.includes('?') || lower.includes('liên hệ'))) ||
+        (lower.includes('biển số') && (lower.includes('?') || lower.includes('cho em'))) ||
+        (lower.includes('màu xe') && lower.includes('?'))
+    );
+}
+
+function looksLikeCreateRequestStep(content: string): boolean {
+    if (!content || looksLikeConfirmRecapStep(content)) return false;
+    const lower = content.toLowerCase();
+    const createCue =
+        lower.includes('tạo yêu cầu cứu hộ') ||
+        lower.includes('tạo đơn cứu hộ') ||
+        lower.includes('tạo đơn');
+    if (!createCue) return false;
+    return (
+        lower.includes('bấm') ||
+        lower.includes('nhấn') ||
+        lower.includes('chọn') ||
+        lower.includes('ngay bây giờ') ||
+        lower.includes('sẵn sàng')
+    );
+}
+
 function detectShouldShowCta(content: string, isLastAssistant: boolean): boolean {
     if (!isLastAssistant || !content) return false;
+    if (looksLikeConfirmRecapStep(content)) return false;
     const lower = content.toLowerCase();
-    const hasIncidentMention = lower.includes('sự cố') || lower.includes('hỏng') ||
-        lower.includes('xẹp lốp') || lower.includes('chết máy') || lower.includes('tai nạn') ||
-        lower.includes('ắc quy') || lower.includes('hết xăng') || lower.includes('ngập nước');
+    const hasIncidentMention =
+        lower.includes('sự cố') ||
+        lower.includes('hỏng') ||
+        lower.includes('xẹp lốp') ||
+        lower.includes('chết máy') ||
+        lower.includes('tai nạn') ||
+        lower.includes('ắc quy') ||
+        lower.includes('hết xăng') ||
+        lower.includes('ngập nước');
     const hasRisk = content.includes('🔴') || content.includes('🟡');
     const alreadyHasCta = lower.includes('tạo yêu cầu cứu hộ') || lower.includes('tạo đơn');
     return (hasIncidentMention || hasRisk) && !alreadyHasCta;
 }
 
-function detectShouldShowLocationActions(content: string, isLastAssistant: boolean): boolean {
-    if (!isLastAssistant || !content) return false;
-    const lower = content.toLowerCase();
-    return (
-        lower.includes('vị trí hiện tại') ||
-        lower.includes('vị trí khác') ||
-        lower.includes('địa chỉ đón')
-    );
+function resolveCustomerCtaUi(
+    content: string,
+    isLastAssistant: boolean,
+    ctaPhase: CustomerCtaPhase | null | undefined,
+    allowStructuredCustomerCta: boolean,
+): CustomerCtaUiKind {
+    if (!allowStructuredCustomerCta || !isLastAssistant || !content) return 'none';
+
+    if (ctaPhase && ctaPhase !== 'GENERAL') {
+        switch (ctaPhase) {
+            case 'CONFIRM_INFO':
+                return 'confirm';
+            case 'LOCATION_CHOICE':
+                return 'location';
+            case 'SELECT_ISSUE':
+                return 'incident';
+            case 'ENTER_INFO':
+                return 'enterInfo';
+            case 'CREATE_REQUEST':
+                return 'createRequest';
+            default:
+                break;
+        }
+    }
+
+    if (looksLikeConfirmRecapStep(content)) return 'confirm';
+    if (looksLikeLocationChoiceStep(content)) return 'location';
+    if (looksLikeCreateRequestStep(content)) return 'createRequest';
+    if (looksLikeSelectIssueStep(content)) return 'incident';
+    if (looksLikeEnterInfoStep(content)) return 'enterInfo';
+
+    if (ctaPhase === 'GENERAL' || ctaPhase === null || ctaPhase === undefined) {
+        if (detectShouldShowCta(content, true)) return 'generic';
+    }
+    return 'none';
 }
 
 function RiskBadge({ level }: { level: RiskLevel }) {
@@ -104,6 +231,7 @@ function MessageBubble({
     onUseCurrentLocation,
     onChooseOtherLocation,
     isSending,
+    allowStructuredCustomerCta,
 }: {
     msg: ChatbotMessage;
     isLastAssistant: boolean;
@@ -111,12 +239,14 @@ function MessageBubble({
     onUseCurrentLocation: () => void;
     onChooseOtherLocation: () => void;
     isSending: boolean;
+    allowStructuredCustomerCta: boolean;
 }) {
     const isUser = msg.role === 'USER';
     const riskLevel = !isUser ? detectRiskLevel(msg.content) : null;
-    const showCta = !isUser && detectShouldShowCta(msg.content, isLastAssistant) && !msg.isStreaming;
-    const showLocationActions =
-        !isUser && detectShouldShowLocationActions(msg.content, isLastAssistant) && !msg.isStreaming;
+    const ctaKind: CustomerCtaUiKind =
+        !isUser && !msg.isStreaming
+            ? resolveCustomerCtaUi(msg.content, isLastAssistant, msg.ctaPhase, allowStructuredCustomerCta)
+            : 'none';
 
     return (
         <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
@@ -177,7 +307,7 @@ function MessageBubble({
                         <span className="inline-block w-1 h-4 ml-0.5 bg-gray-400 animate-pulse align-middle" />
                     )}
                 </div>
-                {showCta && (
+                {ctaKind === 'generic' && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
                         <button
                             onClick={() => onCtaClick('Tôi muốn tạo yêu cầu cứu hộ')}
@@ -227,7 +357,7 @@ function MessageBubble({
                         </button>
                     </div>
                 )}
-                {showLocationActions && (
+                {ctaKind === 'location' && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
                         <button
                             onClick={onUseCurrentLocation}
@@ -251,6 +381,131 @@ function MessageBubble({
                             }}
                         >
                             Nhập vị trí khác
+                        </button>
+                    </div>
+                )}
+                {ctaKind === 'incident' && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                        <button
+                            onClick={() => onCtaClick('Xe tôi bị hỏng/chết máy')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{ background: C.orangeLight, color: C.orangeDark, border: `1px solid ${C.orange}30` }}
+                        >
+                            Hỏng xe
+                        </button>
+                        <button
+                            onClick={() => onCtaClick('Xe tôi hết bình ắc quy')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{ background: C.orangeLight, color: C.orangeDark, border: `1px solid ${C.orange}30` }}
+                        >
+                            Hết bình
+                        </button>
+                        <button
+                            onClick={() => onCtaClick('Xe tôi bị nổ/xẹp lốp')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{ background: C.orangeLight, color: C.orangeDark, border: `1px solid ${C.orange}30` }}
+                        >
+                            Nổ lốp
+                        </button>
+                        <button
+                            onClick={() => onCtaClick('Xe tôi bị hết xăng')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{ background: C.orangeLight, color: C.orangeDark, border: `1px solid ${C.orange}30` }}
+                        >
+                            Hết xăng
+                        </button>
+                        <button
+                            onClick={() => onCtaClick('Tôi bị khóa xe trong xe')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{ background: C.orangeLight, color: C.orangeDark, border: `1px solid ${C.orange}30` }}
+                        >
+                            Khóa xe
+                        </button>
+                        <button
+                            onClick={() => onCtaClick('Tôi gặp tai nạn')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}
+                        >
+                            Tai nạn
+                        </button>
+                    </div>
+                )}
+                {ctaKind === 'confirm' && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                        <button
+                            onClick={() => onCtaClick('Đúng rồi, tạo yêu cầu cứu hộ ngay')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{
+                                background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
+                                color: 'white',
+                            }}
+                        >
+                            Xác nhận
+                        </button>
+                        <button
+                            onClick={() => onCtaClick('Tôi muốn chỉnh lại thông tin')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{
+                                background: C.orangeLight,
+                                color: C.orangeDark,
+                                border: `1px solid ${C.orange}30`,
+                            }}
+                        >
+                            Thay đổi thông tin
+                        </button>
+                    </div>
+                )}
+                {ctaKind === 'enterInfo' && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                        <button
+                            onClick={() => onCtaClick('Tiếp tục')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{
+                                background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
+                                color: 'white',
+                            }}
+                        >
+                            Tiếp tục
+                        </button>
+                        <button
+                            onClick={() => onCtaClick('Nhập lại thông tin từ đầu')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{
+                                background: C.orangeLight,
+                                color: C.orangeDark,
+                                border: `1px solid ${C.orange}30`,
+                            }}
+                        >
+                            Nhập lại
+                        </button>
+                    </div>
+                )}
+                {ctaKind === 'createRequest' && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                        <button
+                            onClick={() => onCtaClick('Tôi muốn tạo yêu cầu cứu hộ')}
+                            disabled={isSending}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{
+                                background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
+                                color: 'white',
+                                boxShadow: `0 2px 8px ${C.orange}40`,
+                            }}
+                        >
+                            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Tạo yêu cầu cứu hộ
                         </button>
                     </div>
                 )}
@@ -359,9 +614,11 @@ const PROVIDER_QUICK_ACTIONS: QuickAction[] = [
 ];
 
 const GUEST_QUICK_ACTIONS: QuickAction[] = [
-    { label: 'Gọi cứu hộ ngay', message: 'Tôi muốn tạo yêu cầu cứu hộ' },
-    { label: 'Trạng thái đơn', message: 'Đơn cứu hộ hiện tại của tôi đang ở đâu?' },
-    { label: 'Lợi ích đăng ký', message: 'Đăng ký tài khoản có lợi ích gì?' },
+    { label: 'Rescue Me hoạt động thế nào?', message: 'Rescue Me hoạt động thế nào? Em giải thích ngắn giúp anh/chị.' },
+    { label: 'Chọn địa chỉ đón', message: 'Trên form tạo yêu cầu guest trên web (PWA), chọn điểm đón có những cách nào? (em trả lời ngắn, đúng với giao diện)' },
+    { label: 'Cách tạo yêu cầu cứu hộ', message: 'Trên trang web dành cho khách guest (PWA), tạo yêu cầu cứu hộ như thế nào?' },
+    { label: 'Thanh toán & phí', message: 'Khách guest thanh toán bằng hình thức nào? Có ví không?' },
+    { label: 'Lợi ích đăng ký', message: 'Đăng ký tài khoản có lợi ích gì so với dùng guest?' },
 ];
 
 export default function ChatbotWidget() {
@@ -585,6 +842,8 @@ export default function ChatbotWidget() {
                 onUseCurrentLocation={handleUseCurrentLocation}
                 onConfirmOtherLocation={handleConfirmOtherLocation}
                 onClose={() => setIsOpen(false)}
+                allowStructuredCustomerCta={userRole === 'USER'}
+                faqOnlyGuest={isGuestMode}
             />}
         </>
     );
@@ -613,6 +872,10 @@ interface ChatPanelProps {
     onUseCurrentLocation: () => void;
     onConfirmOtherLocation: () => void;
     onClose: () => void;
+    /** Incident/location/confirm chips — chỉ user đăng nhập */
+    allowStructuredCustomerCta: boolean;
+    /** Guest: chỉ FAQ, ẩn đính kèm & copy gợi ý tạo đơn trong chat */
+    faqOnlyGuest: boolean;
 }
 
 function ChatPanel({
@@ -638,6 +901,8 @@ function ChatPanel({
     onUseCurrentLocation,
     onConfirmOtherLocation,
     onClose,
+    allowStructuredCustomerCta,
+    faqOnlyGuest,
 }: ChatPanelProps) {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -680,7 +945,9 @@ function ChatPanel({
                     </div>
                     <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-white truncate">Rescue Me Assistant</p>
-                        <p className="text-[10px] text-white/70">Tư vấn viên cứu hộ xe</p>
+                        <p className="text-[10px] text-white/70">
+                            {faqOnlyGuest ? 'Hỏi đáp về hệ thống (FAQ)' : 'Tư vấn viên cứu hộ xe'}
+                        </p>
                     </div>
                     <button
                         onClick={onClose}
@@ -713,7 +980,9 @@ function ChatPanel({
                                     Xin chào! Em có thể giúp gì ạ?
                                 </p>
                                 <p className="text-xs mt-1" style={{ color: C.grayLight }}>
-                                    Gửi ảnh sự cố, tạo đơn cứu hộ, hoặc hỏi bất kỳ điều gì
+                                    {faqOnlyGuest
+                                        ? 'Hỏi về cách dùng Rescue Me trên web (PWA), thanh toán và quy trình — không tạo đơn trong chat.'
+                                        : 'Gửi ảnh sự cố, tạo đơn cứu hộ, hoặc hỏi bất kỳ điều gì'}
                                 </p>
                             </div>
                             <div className="flex flex-wrap gap-2 justify-center mt-2">
@@ -744,6 +1013,7 @@ function ChatPanel({
                                     onUseCurrentLocation={onUseCurrentLocation}
                                     onChooseOtherLocation={() => setShowLocationPicker(true)}
                                     isSending={isSending}
+                                    allowStructuredCustomerCta={allowStructuredCustomerCta}
                                 />
                             ))}
                             {activeToolName && (
@@ -817,28 +1087,33 @@ function ChatPanel({
                         </div>
                     )}
                     <div className="flex items-end gap-2.5 px-4 py-3">
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            className="hidden"
-                            multiple
-                            accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
-                            onChange={onFileUpload}
-                        />
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isUploading || isSending}
-                            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{ background: C.bg, border: `1.5px solid ${C.border}` }}
-                        >
-                            {isUploading ? (
-                                <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                </svg>
-                            )}
-                        </button>
+                        {!faqOnlyGuest && (
+                            <>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    multiple
+                                    accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
+                                    onChange={onFileUpload}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isUploading || isSending}
+                                    className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    style={{ background: C.bg, border: `1.5px solid ${C.border}` }}
+                                >
+                                    {isUploading ? (
+                                        <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                                    ) : (
+                                        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                        </svg>
+                                    )}
+                                </button>
+                            </>
+                        )}
                         <textarea
                             ref={inputRef}
                             value={inputText}

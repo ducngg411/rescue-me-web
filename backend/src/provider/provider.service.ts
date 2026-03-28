@@ -5,6 +5,11 @@ import { UpdateProviderProfileDto } from '../auth/dto/auth.dto';
 import { Prisma, UserRole, VerificationStatus, ProviderType, DocumentType } from '@prisma/client';
 import { SubmitVerificationResponseDto } from './dto/submit-verification.dto';
 import { MailService } from '../mail/mail.service';
+import { CommissionService } from '../wallet/commission.service';
+import {
+    grossRevenueFromCompletedRequest,
+    whereCompletedJobsInLocalDay,
+} from '../stats/provider-job-stats.util';
 
 @Injectable()
 export class ProviderService {
@@ -15,6 +20,7 @@ export class ProviderService {
         private prisma: PrismaService,
         private vietMapService: VietMapService,
         private mailService: MailService,
+        private commissionService: CommissionService,
     ) { }
 
     async updateProfile(userId: string, dto: UpdateProviderProfileDto, userRole: UserRole) {
@@ -918,15 +924,9 @@ export class ProviderService {
      */
     async getHistoryStats(providerId: string, days = 7) {
         const now = new Date();
+        const commissionRate = await this.commissionService.getEffectiveCommissionRate();
 
-        // Helper to extract revenue from a completed request
-        const getRequestRevenue = (req: any) => {
-            if (req.payment?.totalAmount != null) return req.payment.totalAmount;
-            if (req.quotes && req.quotes.length > 0) return req.quotes[0].price;
-            return 0;
-        };
-
-        // ── 7-day daily revenue totals ────────────────────────────────
+        // ── 7-day daily revenue totals (by completion day, not request creation) ──
         const weeklyRevenue: { date: string; revenue: number; profit: number }[] = [];
         for (let i = days - 1; i >= 0; i--) {
             const dayStart = new Date(now);
@@ -936,11 +936,7 @@ export class ProviderService {
             dayEnd.setDate(dayEnd.getDate() + 1);
 
             const requests = await this.prisma.rescueRequest.findMany({
-                where: {
-                    assignedProviderId: providerId,
-                    status: { in: ['COMPLETED', 'PAID'] },
-                    createdAt: { gte: dayStart, lt: dayEnd },
-                },
+                where: whereCompletedJobsInLocalDay(providerId, dayStart, dayEnd),
                 include: {
                     payment: { select: { totalAmount: true } },
                     quotes: {
@@ -950,13 +946,13 @@ export class ProviderService {
                 },
             });
 
-            const revenue = requests.reduce((sum, req) => sum + getRequestRevenue(req), 0);
+            const revenue = requests.reduce((sum, req) => sum + grossRevenueFromCompletedRequest(req), 0);
             // Use local date string (not UTC) to avoid timezone offset bug (e.g. UTC+7)
             const localDateStr = `${dayStart.getFullYear()}-${String(dayStart.getMonth() + 1).padStart(2, '0')}-${String(dayStart.getDate()).padStart(2, '0')}`;
             weeklyRevenue.push({
                 date: localDateStr,
                 revenue,
-                profit: Math.round(revenue * 0.9),
+                profit: Math.round(revenue * (1 - commissionRate)),
             });
         }
 
@@ -965,34 +961,28 @@ export class ProviderService {
         todayStart.setHours(0, 0, 0, 0);
         const yesterdayStart = new Date(todayStart);
         yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+        const tomorrowStart = new Date(todayStart);
+        tomorrowStart.setDate(tomorrowStart.getDate() + 1);
 
         const todayRequests = await this.prisma.rescueRequest.findMany({
-            where: {
-                assignedProviderId: providerId,
-                status: { in: ['COMPLETED', 'PAID'] },
-                createdAt: { gte: todayStart },
-            },
+            where: whereCompletedJobsInLocalDay(providerId, todayStart, tomorrowStart),
             include: {
                 payment: { select: { totalAmount: true } },
                 quotes: { where: { status: 'ACCEPTED' }, select: { price: true } }
             },
         });
         const yesterdayRequests = await this.prisma.rescueRequest.findMany({
-            where: {
-                assignedProviderId: providerId,
-                status: { in: ['COMPLETED', 'PAID'] },
-                createdAt: { gte: yesterdayStart, lt: todayStart },
-            },
+            where: whereCompletedJobsInLocalDay(providerId, yesterdayStart, todayStart),
             include: {
                 payment: { select: { totalAmount: true } },
                 quotes: { where: { status: 'ACCEPTED' }, select: { price: true } }
             },
         });
 
-        const todayRevenue = todayRequests.reduce((s, req) => s + getRequestRevenue(req), 0);
-        const yesterdayRevenue = yesterdayRequests.reduce((s, req) => s + getRequestRevenue(req), 0);
-        const todayProfit = Math.round(todayRevenue * 0.9);
-        const yesterdayProfit = Math.round(yesterdayRevenue * 0.9);
+        const todayRevenue = todayRequests.reduce((s, req) => s + grossRevenueFromCompletedRequest(req), 0);
+        const yesterdayRevenue = yesterdayRequests.reduce((s, req) => s + grossRevenueFromCompletedRequest(req), 0);
+        const todayProfit = Math.round(todayRevenue * (1 - commissionRate));
+        const yesterdayProfit = Math.round(yesterdayRevenue * (1 - commissionRate));
         const profitChangePercent = yesterdayProfit === 0
             ? (todayProfit > 0 ? 100 : 0)
             : Math.round(((todayProfit - yesterdayProfit) / yesterdayProfit) * 100);
@@ -1031,6 +1021,7 @@ export class ProviderService {
             totalAccepted,
             avgRating,
             reviewCount: reviews.length,
+            commissionRate,
         };
     }
 }

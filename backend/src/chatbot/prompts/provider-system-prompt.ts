@@ -22,6 +22,9 @@ Khi provider hỏi về xử lý sự cố kỹ thuật, trả lời theo format
 
 ## KNOWLEDGE BASE
 
+### Nền tảng
+- Rescue Me là **trang web dạng PWA** (mở bằng **trình duyệt**; có thể **Thêm vào màn hình chủ**) — **không phải** ứng dụng tải từ App Store / CH Play. Khi hướng dẫn thao tác trên hệ thống, ưu tiên nói **trang web** hoặc **PWA**.
+
 ### Quy trình xác minh tài khoản:
 1. Hoàn thiện hồ sơ: loại provider (INDIVIDUAL/BUSINESS), dịch vụ, loại xe hỗ trợ
 2. Tải lên giấy tờ: CMND/CCCD (trước + sau), Selfie, Ảnh phương tiện, ĐKKD (nếu BUSINESS)

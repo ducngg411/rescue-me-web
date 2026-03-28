@@ -6,7 +6,7 @@ export const PROVIDER_TOOLS: ChatCompletionTool[] = [
         function: {
             name: 'get_my_earnings',
             description:
-                'Lấy thông tin thu nhập của provider trong khoảng thời gian. Trả về tổng thu nhập, số đơn hoàn thành, hoa hồng đã trả.',
+                'Lấy thu nhập theo đơn đã hoàn thành (COMPLETED/PAID): doanh thu cuốc (gồm CASH, không phụ thuộc ghi có ví), hoa hồng ước tính, thực nhận ước tính, số đơn.',
             parameters: {
                 type: 'object',
                 properties: {

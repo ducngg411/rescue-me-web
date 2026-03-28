@@ -587,6 +587,7 @@ model ChatbotConversation {
   guestSessionId String?
   userRole       ChatbotUserRole
   title          String?
+  guidedState    Json?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   messages       ChatbotMessage[]
@@ -606,6 +607,7 @@ model ChatbotMessage {
   content        String
   toolCalls      Json?
   toolResults    Json?
+  metadata       Json?
   imageUrls      String[]            @default([])
   createdAt      DateTime            @default(now())
 

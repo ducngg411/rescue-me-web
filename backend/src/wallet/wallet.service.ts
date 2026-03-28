@@ -20,6 +20,10 @@ import {
     allocateUniqueProviderTopupTxnCode,
     allocateUniqueUserTopupTxnCode,
 } from '../common/business-codes';
+import {
+    grossRevenueFromCompletedRequest,
+    whereCompletedJobsInLocalDay,
+} from '../stats/provider-job-stats.util';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Option types
@@ -126,26 +130,18 @@ export class WalletService {
     async getWeeklyStats(providerId: string) {
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
+        const startOfTomorrow = new Date(startOfDay);
+        startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
 
         const todayRequests = await this.prisma.rescueRequest.findMany({
-            where: {
-                assignedProviderId: providerId,
-                status: { in: ['COMPLETED', 'PAID'] as any },
-                createdAt: { gte: startOfDay },
-            },
+            where: whereCompletedJobsInLocalDay(providerId, startOfDay, startOfTomorrow),
             include: {
                 payment: { select: { totalAmount: true } },
                 quotes: { where: { status: 'ACCEPTED' }, select: { price: true } },
             },
         });
 
-        const getRevenue = (req: any): number => {
-            if (req.payment?.totalAmount != null) return req.payment.totalAmount;
-            if (req.quotes?.length > 0) return req.quotes[0].price;
-            return 0;
-        };
-
-        const todayRevenue = todayRequests.reduce((s, req) => s + getRevenue(req), 0);
+        const todayRevenue = todayRequests.reduce((s, req) => s + grossRevenueFromCompletedRequest(req), 0);
         // Apply platform commission rate to get provider's net earnings
         const commissionRate = await this.getEffectiveCommissionRate();
         const todayEarnings = Math.round(todayRevenue * (1 - commissionRate));

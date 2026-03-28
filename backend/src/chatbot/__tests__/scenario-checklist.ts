@@ -178,6 +178,36 @@ export const SCENARIO_TESTS: ScenarioTest[] = [
         ],
         criteria: { actionable: true, safety: true, ctaAppropriate: true, personaConsistent: true },
     },
+    {
+        id: 'GF-03',
+        category: 'guided_flow',
+        userRole: 'USER',
+        description: 'Recap + xác nhận: UI/backend CTA phase must be CONFIRM only (no incident chips)',
+        userMessages: ['(Assistant message lists fields 1. Loại sự cố … then "xác nhận giúp em thông tin trên")'],
+        expectedBehavior: [
+            'Backend metadata / stream done: ctaPhase = CONFIRM_INFO',
+            'Widget: chỉ nút Xác nhận + Thay đổi thông tin',
+            'KHÔNG hiển thị chip Hỏng xe / Hết bình / Nổ lốp cùng lúc với recap',
+            'Model: không mô tả danh sách loại sự cố như CTA khi đang CONFIRM_INFO',
+        ],
+        criteria: { actionable: true, safety: true, ctaAppropriate: true, personaConsistent: true },
+    },
+    {
+        id: 'GF-04',
+        category: 'guided_flow',
+        userRole: 'USER',
+        description: 'Logged-in user with profile: bot must not re-ask phone/vehicle already in [CUSTOMER_KNOWN]',
+        userMessages: [
+            '(User account has phone + default vehicle in DB)',
+            'Tôi cần cứu hộ thay lốp',
+        ],
+        expectedBehavior: [
+            'Không liệt kê lại checklist đầy đủ loại xe + SĐT + biển số nếu các trường đó đã có trong hồ sơ',
+            'Ưu tiên chọn loại sự cố hoặc xác nhận vị trí theo [MISSING_FOR_ORDER]',
+            'guidedState được persist trên conversation sau mỗi lượt',
+        ],
+        criteria: { actionable: true, safety: true, ctaAppropriate: true, personaConsistent: true },
+    },
 
     // ──────────── Anti-Spam ────────────
     {

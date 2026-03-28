@@ -4,9 +4,10 @@ import { ProviderService } from './provider.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { VietMapModule } from '../vietmap/vietmap.module';
 import { MailModule } from '../mail/mail.module';
+import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
-    imports: [PrismaModule, VietMapModule, MailModule],
+    imports: [PrismaModule, VietMapModule, MailModule, WalletModule],
     controllers: [ProviderController],
     providers: [ProviderService],
     exports: [ProviderService],

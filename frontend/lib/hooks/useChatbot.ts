@@ -3,12 +3,24 @@
 import { useState, useCallback, useRef } from 'react';
 import api from '@/lib/api';
 
+/** Mirrors backend CustomerCtaPhase for assistant message chips */
+export type CustomerCtaPhase =
+    | 'SELECT_ISSUE'
+    | 'ENTER_INFO'
+    | 'CONFIRM_INFO'
+    | 'CREATE_REQUEST'
+    | 'LOCATION_CHOICE'
+    | 'GENERAL';
+
 export interface ChatbotMessage {
     id: string;
     role: 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL';
     content: string;
     imageUrls?: string[];
     toolCalls?: unknown;
+    metadata?: { ctaPhase?: CustomerCtaPhase } | null;
+    /** Flattened from metadata.ctaPhase for UI */
+    ctaPhase?: CustomerCtaPhase | null;
     createdAt: string;
     isStreaming?: boolean;
 }
@@ -70,9 +82,14 @@ export function useChatbot(options: UseChatbotOptions = {}) {
             const res = await api.get(`${prefix}/conversations/${id}`);
             const conv = res.data;
             setActiveConversation(conv);
-            const visibleMessages = (conv.messages || []).filter(
-                (m: ChatbotMessage) => m.role === 'USER' || m.role === 'ASSISTANT',
-            );
+            const raw = conv.messages || [];
+            const visibleMessages = raw
+                .filter((m: ChatbotMessage) => m.role === 'USER' || m.role === 'ASSISTANT')
+                .map((m: ChatbotMessage) => {
+                    const meta = m.metadata as { ctaPhase?: CustomerCtaPhase } | null | undefined;
+                    const ctaPhase = meta?.ctaPhase ?? m.ctaPhase ?? null;
+                    return { ...m, ctaPhase };
+                });
             setMessages(visibleMessages);
         } catch (err) {
             console.error('[useChatbot] loadConversation error:', err);
@@ -173,6 +190,7 @@ export function useChatbot(options: UseChatbotOptions = {}) {
 
             const decoder = new TextDecoder();
             let buffer = '';
+            let doneCtaPhase: CustomerCtaPhase | undefined;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -216,6 +234,8 @@ export function useChatbot(options: UseChatbotOptions = {}) {
                                         : m,
                                 ),
                             );
+                        } else if (event.type === 'done' && event.ctaPhase) {
+                            doneCtaPhase = event.ctaPhase as CustomerCtaPhase;
                         }
                     } catch {
                         // skip malformed JSON
@@ -225,7 +245,13 @@ export function useChatbot(options: UseChatbotOptions = {}) {
 
             setMessages((prev) =>
                 prev.map((m) =>
-                    m.id === assistantId ? { ...m, isStreaming: false } : m,
+                    m.id === assistantId
+                        ? {
+                              ...m,
+                              isStreaming: false,
+                              ...(doneCtaPhase ? { ctaPhase: doneCtaPhase } : {}),
+                          }
+                        : m,
                 ),
             );
         } catch (err: unknown) {

@@ -1,7 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OpenAIService } from './openai.service';
 import { allocateUniqueOrderCode } from '../common/business-codes';
+import { CustomerProfileDefaultsService } from './customer-profile-defaults.service';
+import { CommissionService } from '../wallet/commission.service';
+import {
+    grossRevenueFromCompletedRequest,
+    whereCompletedJobsInTimeRange,
+} from '../stats/provider-job-stats.util';
 
 interface ToolContext {
     userId?: string;
@@ -17,6 +24,8 @@ export class ToolExecutorService {
     constructor(
         private prisma: PrismaService,
         private openaiService: OpenAIService,
+        private customerProfileDefaults: CustomerProfileDefaultsService,
+        private commissionService: CommissionService,
     ) {}
 
     async executeTool(
@@ -25,6 +34,13 @@ export class ToolExecutorService {
         context: ToolContext,
     ): Promise<string> {
         this.logger.log(`Executing tool: ${toolName} with args: ${JSON.stringify(args)}`);
+
+        if (context.userRole === 'GUEST') {
+            return JSON.stringify({
+                error:
+                    'Chatbot khách vãng lai chỉ trả lời FAQ. Để tạo yêu cầu cứu hộ, anh/chị dùng màn hình gọi cứu hộ trên app; để tra đơn/khiếu nại/ví, vui lòng đăng ký hoặc đăng nhập tài khoản.',
+            });
+        }
 
         try {
             switch (toolName) {
@@ -133,56 +149,12 @@ export class ToolExecutorService {
             });
         }
 
-        const user = await this.prisma.user.findUnique({
-            where: { id: context.userId },
-            select: {
-                fullName: true,
-                phoneNumber: true,
-                vehicleType: true,
-                licensePlate: true,
-                vehicleColor: true,
-                rescueVehicles: true,
-                defaultAddress: true,
-            },
-        });
-
-        if (!user) {
+        const payload = await this.customerProfileDefaults.loadPayload(context.userId);
+        if (!payload) {
             return JSON.stringify({ error: 'Không tìm thấy thông tin người dùng.' });
         }
 
-        let defaultVehicle: {
-            type: string | null;
-            licensePlate: string | null;
-            color: string | null;
-        } = {
-            type: user.vehicleType || null,
-            licensePlate: user.licensePlate || null,
-            color: user.vehicleColor || null,
-        };
-
-        const vehicles = Array.isArray(user.rescueVehicles)
-            ? user.rescueVehicles
-            : [];
-        if (!defaultVehicle.type && vehicles.length > 0) {
-            const first = vehicles[0] as Record<string, unknown>;
-            defaultVehicle = {
-                type: (first.type as string) || null,
-                licensePlate: (first.licensePlate as string) || null,
-                color: (first.color as string) || null,
-            };
-        }
-
-        return JSON.stringify({
-            fullName: user.fullName || null,
-            contactPhone: user.phoneNumber || null,
-            defaultVehicle,
-            rescueVehicles: vehicles,
-            // Do not expose raw defaultAddress to the model to avoid it asserting
-            // a specific location before user confirmation in chat flow.
-            hasDefaultAddress: !!user.defaultAddress,
-            note:
-                'Thông tin này dùng để auto-fill tạo yêu cầu cứu hộ. Luôn hỏi xác nhận vị trí trước, không tự nêu địa chỉ cụ thể nếu chưa được user xác nhận.',
-        });
+        return this.customerProfileDefaults.toToolResultJson(payload);
     }
 
     private async getRequestStatus(
@@ -384,72 +356,81 @@ Quy tắc:
         if (context.userRole !== 'PROVIDER') {
             return JSON.stringify({ error: 'Chỉ provider mới có thể xem thu nhập.' });
         }
-
-        const wallet = await this.prisma.providerWallet.findUnique({
-            where: { providerId: context.userId },
-        });
-
-        if (!wallet) {
-            return JSON.stringify({ message: 'Ví chưa được tạo.' });
+        if (!context.userId) {
+            return JSON.stringify({ error: 'Không xác định được tài khoản provider.' });
         }
 
         const period = (args.period as string) || 'today';
         const now = new Date();
-        let startDate: Date;
+        let rangeStart: Date;
+        let rangeEndExclusive: Date | null = null;
 
         switch (period) {
             case 'this_week': {
-                startDate = new Date(now);
-                startDate.setDate(now.getDate() - now.getDay());
-                startDate.setHours(0, 0, 0, 0);
+                rangeStart = new Date(now);
+                rangeStart.setDate(now.getDate() - now.getDay());
+                rangeStart.setHours(0, 0, 0, 0);
+                rangeEndExclusive = new Date(rangeStart);
+                rangeEndExclusive.setDate(rangeEndExclusive.getDate() + 7);
                 break;
             }
             case 'this_month': {
-                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                rangeEndExclusive = new Date(now.getFullYear(), now.getMonth() + 1, 1);
                 break;
             }
             case 'all_time': {
-                startDate = new Date(0);
+                rangeStart = new Date(0);
+                rangeEndExclusive = null;
                 break;
             }
             default: {
-                startDate = new Date(now);
-                startDate.setHours(0, 0, 0, 0);
+                rangeStart = new Date(now);
+                rangeStart.setHours(0, 0, 0, 0);
+                rangeEndExclusive = new Date(rangeStart);
+                rangeEndExclusive.setDate(rangeEndExclusive.getDate() + 1);
             }
         }
 
-        const transactions = await this.prisma.walletTransaction.findMany({
-            where: {
-                walletId: wallet.id,
-                type: 'CREDIT',
-                referenceType: { in: ['JOB', 'JOB_PAYMENT'] },
-                status: 'COMPLETED',
-                createdAt: { gte: startDate },
-            },
-            select: { amount: true },
-        });
+        const whereJobs: Prisma.RescueRequestWhereInput =
+            rangeEndExclusive == null
+                ? {
+                      assignedProviderId: context.userId,
+                      status: { in: ['COMPLETED', 'PAID'] },
+                      OR: [
+                          { completedAt: { gte: rangeStart } },
+                          {
+                              AND: [
+                                  { completedAt: null },
+                                  { updatedAt: { gte: rangeStart } },
+                              ],
+                          },
+                      ],
+                  }
+                : whereCompletedJobsInTimeRange(context.userId, rangeStart, rangeEndExclusive);
 
-        const commissions = await this.prisma.walletTransaction.findMany({
-            where: {
-                walletId: wallet.id,
-                type: 'DEBIT',
-                referenceType: 'COMMISSION',
-                status: 'COMPLETED',
-                createdAt: { gte: startDate },
-            },
-            select: { amount: true },
-        });
-
-        const totalEarnings = transactions.reduce((s, t) => s + t.amount, 0);
-        const totalCommission = commissions.reduce((s, t) => s + t.amount, 0);
-
-        const completedRequests = await this.prisma.rescueRequest.count({
-            where: {
-                assignedProviderId: context.userId,
-                status: 'COMPLETED',
-                completedAt: { gte: startDate },
+        const completedJobRows = await this.prisma.rescueRequest.findMany({
+            where: whereJobs,
+            include: {
+                payment: { select: { totalAmount: true } },
+                quotes: { where: { status: 'ACCEPTED' }, select: { price: true } },
             },
         });
+
+        type Row = (typeof completedJobRows)[number];
+        const grossRevenue = completedJobRows.reduce(
+            (s, r: Row) =>
+                s +
+                grossRevenueFromCompletedRequest({
+                    payment: r.payment,
+                    quotes: r.quotes,
+                }),
+            0,
+        );
+        const commissionRate = await this.commissionService.getEffectiveCommissionRate();
+        const estimatedCommission = Math.round(grossRevenue * commissionRate);
+        const netEarnings = grossRevenue - estimatedCommission;
+        const completedRequests = completedJobRows.length;
 
         const periodLabel =
             period === 'today' ? 'Hôm nay'
@@ -459,11 +440,13 @@ Quy tắc:
 
         return JSON.stringify({
             period: periodLabel,
-            totalEarnings,
-            totalCommission,
-            netEarnings: totalEarnings - totalCommission,
+            grossRevenue,
+            totalEarnings: grossRevenue,
+            totalCommission: estimatedCommission,
+            netEarnings,
             completedRequests,
-            formatted: `${periodLabel}: Thu nhập ${totalEarnings.toLocaleString('vi-VN')} VND, Hoa hồng ${totalCommission.toLocaleString('vi-VN')} VND, Thực nhận ${(totalEarnings - totalCommission).toLocaleString('vi-VN')} VND. Số đơn hoàn thành: ${completedRequests}`,
+            commissionRate,
+            formatted: `${periodLabel}: Doanh thu cuốc ${grossRevenue.toLocaleString('vi-VN')} VND, Hoa hồng ước tính ${estimatedCommission.toLocaleString('vi-VN')} VND (${Math.round(commissionRate * 100)}%), Thực nhận ước tính ${netEarnings.toLocaleString('vi-VN')} VND. Số đơn hoàn thành: ${completedRequests}. Lưu ý: tiền mặt không vào ví nhưng vẫn tính trong doanh thu cuốc; hoa hồng tiền mặt có thể đã trừ ví.`,
         });
     }
 

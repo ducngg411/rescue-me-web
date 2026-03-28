@@ -63,6 +63,8 @@ interface HistoryStats {
     totalAccepted: number;
     avgRating: number | null;
     reviewCount: number;
+    /** Tỷ lệ hoa hồng nền tảng (0–1), đồng bộ với backend */
+    commissionRate?: number;
 }
 
 /* ─────────────────────── Constants ──────────────────── */
@@ -106,6 +108,12 @@ function fmtDate(iso: string) {
 function fmtShortDate(iso: string) {
     const d = new Date(iso);
     return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Doanh thu hiển thị: ưu tiên payment.totalAmount > 0, không thì giá báo giá (tránh totalAmount = 0). */
+function grossFromPaymentAndQuote(paymentTotal: number | null | undefined, quotePrice: number): number {
+    if (paymentTotal != null && paymentTotal > 0) return paymentTotal;
+    return quotePrice;
 }
 
 /* ─────────────────────── Sub-components ────────────── */
@@ -399,7 +407,6 @@ export default function ProviderHistoryPage() {
     const router = useRouter();
     const { t } = useLanguage();
     const { user, loading: authLoading } = useAuth();
-    const commissionRate = Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.2;
 
     const [quotes, setQuotes] = useState<Quote[]>([]);
     const [stats, setStats] = useState<HistoryStats | null>(null);
@@ -504,8 +511,8 @@ export default function ProviderHistoryPage() {
             const assignee = req.assignedProviderId ?? null;
             const isWonJob = q.status === 'ACCEPTED' && assignee === user?.id;
             const isCompleted = isWonJob && (req.status === 'COMPLETED' || req.status === 'PAID');
-            const revenueAmount = isWonJob ? (req.payment?.totalAmount ?? q.price) : q.price;
-            const profit = isCompleted ? Math.round((req.payment?.totalAmount ?? q.price) * (1 - commissionRate)) : 0;
+            const revenueAmount = isWonJob ? grossFromPaymentAndQuote(req.payment?.totalAmount, q.price) : q.price;
+            const profit = isCompleted ? Math.round(revenueAmount * (1 - commissionRate)) : 0;
             let statusLabel = STATUS_LABELS[req.status] ?? req.status;
             if (q.status === 'REJECTED') statusLabel = t('provider.history.quoteStatusBadge.REJECTED');
             else if (q.status === 'PENDING' && req.status === 'MATCHING') statusLabel = t('provider.history.quoteStatusBadge.AWAITING_CUSTOMER');
@@ -552,6 +559,11 @@ export default function ProviderHistoryPage() {
 
     // Block PENDING providers — no history yet
     if (user.verificationStatus === 'PENDING') return <PendingVerificationScreen />;
+
+    const commissionRate =
+        typeof stats?.commissionRate === 'number' && !Number.isNaN(stats.commissionRate)
+            ? stats.commissionRate
+            : Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.1;
 
     const todayProfit = stats?.todayProfit ?? 0;
     const profitChange = stats?.profitChangePercent ?? 0;
@@ -832,7 +844,7 @@ export default function ProviderHistoryPage() {
                                     const assignee = req.assignedProviderId ?? null;
                                     const isWonJob = q.status === 'ACCEPTED' && assignee === user?.id;
                                     const lostQuote = ['CANCELLED', 'EXPIRED', 'REJECTED'].includes(q.status);
-                                    const revenueAmount = isWonJob ? (req.payment?.totalAmount ?? q.price) : q.price;
+                                    const revenueAmount = isWonJob ? grossFromPaymentAndQuote(req.payment?.totalAmount, q.price) : q.price;
                                     const profit = Math.round(revenueAmount * (1 - commissionRate));
                                     const incColor = INCIDENT_COLORS[req.incidentType] ?? { bg: '#f3f4f6', color: C.gray };
                                     const isCompleted = isWonJob && (req.status === 'COMPLETED' || req.status === 'PAID');

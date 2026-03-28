@@ -7,11 +7,31 @@ const api = axios.create({
     },
 });
 
+/** Guest JWT: /guest/* API và /chatbot/guest/* (axios chỉ nhận path tương đối). */
+function isGuestApiPath(url: string): boolean {
+    if (!url) return false;
+    let path = url;
+    if (url.startsWith('http')) {
+        try {
+            path = new URL(url).pathname;
+        } catch {
+            /* keep url as-is */
+        }
+    }
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    if (path.startsWith(base)) {
+        path = path.slice(base.length) || '/';
+    }
+    if (!path.startsWith('/')) path = `/${path}`;
+    // Pathname đầy đủ có thể là /api/chatbot/guest/... tùy axios / server
+    return path.startsWith('/guest/') || path.includes('/chatbot/guest');
+}
+
 // Request interceptor để thêm token
 api.interceptors.request.use(
     (config) => {
         const url = config.url || '';
-        const isGuestRoute = url.startsWith('/guest/');
+        const isGuestRoute = isGuestApiPath(url);
 
         if (isGuestRoute) {
             const guestToken = localStorage.getItem('guestAccessToken');
@@ -47,7 +67,8 @@ api.interceptors.response.use(
                 message === 'Unauthorized'; // raw JWT guard rejection
 
             if (isTokenError) {
-                const isGuestRoute = error.config?.url?.startsWith('/guest/');
+                const reqUrl = error.config?.url || '';
+                const isGuestRoute = isGuestApiPath(reqUrl);
                 const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
 
                 if (isGuestRoute) {

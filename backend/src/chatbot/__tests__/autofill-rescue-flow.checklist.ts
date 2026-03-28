@@ -11,11 +11,12 @@ export const AUTOFILL_RESCUE_FLOW_SCENARIOS: AutofillFlowScenario[] = [
         title: 'Auto-fill from profile and choose current location',
         steps: [
             'User: "Tạo yêu cầu cứu hộ giúp tôi"',
-            'Bot calls get_profile_defaults',
+            'Server eager-hydrates profile vào guidedState (USER đăng nhập)',
             'User clicks "Dùng vị trí hiện tại"',
             'User confirms recap',
         ],
         expected: [
+            'Backend injects [CUSTOMER_KNOWN]/[MISSING_FOR_ORDER] mỗi lượt; guidedState persist trên conversation',
             'Bot does not ask again for contact phone if available in profile',
             'Bot does not ask again for vehicle type/license plate if profile defaults exist',
             'Bot asks only location confirmation (current vs other)',
