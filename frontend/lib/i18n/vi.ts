@@ -298,6 +298,10 @@ const vi = {
             wallet: 'Ví',
             settings: 'Cài đặt',
             disputes: 'Khiếu nại',
+            map: 'Bản đồ',
+        },
+        incidentMap: {
+            headerSubtitle: 'Sự cố đã hoàn thành hoặc đã hủy (xem toàn hệ thống)',
         },
         disputes: {
             title: 'Khiếu nại của tôi',
@@ -983,6 +987,7 @@ const vi = {
             wallet: 'Ví',
             settings: 'Cài đặt',
             disputes: 'Khiếu nại',
+            incidentMap: 'Bản đồ',
         },
         disputes: {
             title: 'Khiếu nại',
@@ -2345,6 +2350,9 @@ const vi = {
             menuTitle: 'Menu chức năng',
             menu: 'Menu',
             superAdmin: 'Super Admin',
+        },
+        incidentMap: {
+            title: 'Bản đồ sự cố',
         },
         providers: {
             title: 'Duyệt cứu hộ viên',

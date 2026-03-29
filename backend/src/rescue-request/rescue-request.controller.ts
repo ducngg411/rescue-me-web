@@ -48,6 +48,17 @@ export class RescueRequestController {
         return this.rescueRequestService.getUserRescueRequests(req.user.id);
     }
 
+    /**
+     * Incident Map: Lấy danh sách điểm sự cố COMPLETED/CANCELLED để hiển thị trên bản đồ.
+     * Dùng chung cho User và Provider (cả 2 đều dùng JwtAuthGuard).
+     * NOTE: Phải đặt TRƯỚC route ':id' để không bị conflict.
+     * GET /rescue-requests/incident-map
+     */
+    @Get('incident-map')
+    async getIncidentMapData() {
+        return this.rescueRequestService.getIncidentMapData();
+    }
+
     @Get(':id')
     async getRescueRequestById(@Request() req, @Param('id') id: string) {
         return this.rescueRequestService.getRescueRequestById(id, req.user.id);

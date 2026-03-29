@@ -294,6 +294,10 @@ const en = {
             wallet: 'Wallet',
             settings: 'Settings',
             disputes: 'Disputes',
+            map: 'Map',
+        },
+        incidentMap: {
+            headerSubtitle: 'Completed and cancelled incidents (system view)',
         },
         disputes: {
             title: 'My Disputes',
@@ -979,6 +983,7 @@ const en = {
             wallet: 'Wallet',
             settings: 'Settings',
             disputes: 'Disputes',
+            incidentMap: 'Map',
         },
         disputes: {
             title: 'Disputes',
@@ -2325,6 +2330,9 @@ const en = {
             menuTitle: 'Navigation',
             menu: 'Menu',
             superAdmin: 'Super Admin',
+        },
+        incidentMap: {
+            title: 'Incident Map',
         },
         providers: {
             title: 'Provider approval',

@@ -369,5 +369,15 @@ export class AdminController {
     async getWithdrawalTrend() {
         return this.adminService.getWithdrawalTrend();
     }
-}
 
+    // ── Incident Map ────────────────────────────────────────────────────────────
+
+    /**
+     * GET /admin/incidents/map-data
+     * Danh sách điểm sự cố COMPLETED/CANCELLED để hiển thị trên bản đồ.
+     */
+    @Get('incidents/map-data')
+    async getIncidentMapData() {
+        return this.adminService.getIncidentMapData();
+    }
+}

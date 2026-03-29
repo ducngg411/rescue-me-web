@@ -2659,5 +2659,60 @@ export class AdminService {
 
         return Object.entries(byDay).map(([label, v]) => ({ label, ...v }));
     }
-}
 
+    /**
+     * Incident Map: Lấy danh sách điểm sự cố COMPLETED/CANCELLED để hiển thị trên bản đồ (Admin view).
+     * Admin có thể xem tất cả incidents.
+     */
+    async getIncidentMapData(): Promise<{
+        id: string;
+        incidentType: string;
+        status: string;
+        createdAt: Date;
+        lat: number;
+        lng: number;
+        addressText?: string;
+    }[]> {
+        const requests = await this.prisma.rescueRequest.findMany({
+            where: {
+                status: { in: ['COMPLETED', 'CANCELLED'] },
+            },
+            select: {
+                id: true,
+                incidentType: true,
+                status: true,
+                createdAt: true,
+                pickupLocation: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 2000,
+        });
+
+        const result: {
+            id: string;
+            incidentType: string;
+            status: string;
+            createdAt: Date;
+            lat: number;
+            lng: number;
+            addressText?: string;
+        }[] = [];
+
+        for (const req of requests) {
+            if (!req.pickupLocation) continue;
+            const loc = req.pickupLocation as { lat?: number; lng?: number; addressText?: string };
+            if (loc?.lat == null || loc?.lng == null) continue;
+            result.push({
+                id: req.id,
+                incidentType: req.incidentType,
+                status: req.status,
+                createdAt: req.createdAt,
+                lat: loc.lat,
+                lng: loc.lng,
+                addressText: loc.addressText,
+            });
+        }
+
+        return result;
+    }
+}

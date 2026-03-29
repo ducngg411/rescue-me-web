@@ -92,7 +92,7 @@ export class VietMapService {
             url.searchParams.append('vehicle', vehicle);
             url.searchParams.append('points_encoded', 'true');
 
-            this.logger.debug(`🗺️ Calling VietMap Route API: ${fromLat},${fromLng} → ${toLat},${toLng}`);
+            this.logger.debug(`Calling VietMap Route API: ${fromLat},${fromLng} → ${toLat},${toLng}`);
 
             const response = await fetch(url.toString());
             const data: VietMapRouteResponse = await response.json();

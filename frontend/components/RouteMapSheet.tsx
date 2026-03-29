@@ -191,7 +191,7 @@ export default function RouteMapSheet({
             url.searchParams.append('instructions', 'true');
             url.searchParams.append('points_encoded', 'false');
 
-            console.log(`🗺️ Route API: ${v} from [${userLat},${userLng}] → [${shopLat},${shopLng}]`);
+            console.log(`Route API: ${v} from [${userLat},${userLng}] → [${shopLat},${shopLng}]`);
 
             const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
