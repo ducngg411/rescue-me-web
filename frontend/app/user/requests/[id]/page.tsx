@@ -19,6 +19,9 @@ import { Clock, Banknote, User, Wrench, CheckCircle2, Image as ImageIcon, Play, 
 import api, { userDisputeApi } from '@/lib/api';
 import { displayOrderCode } from '@/lib/reconciliation';
 import toast from 'react-hot-toast';
+import dynamic from 'next/dynamic';
+
+const ProviderTrackingMap = dynamic(() => import('@/components/ProviderTrackingMap'), { ssr: false });
 
 const C = {
     orange: '#f97316',
@@ -815,6 +818,7 @@ export default function RequestTrackingPage() {
     const [showQuoteSelection, setShowQuoteSelection] = useState(false);
     const [isNearbySheetOpen, setIsNearbySheetOpen] = useState(false);
     const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+    const [showTrackingMap, setShowTrackingMap] = useState(false);
 
     // Grab user coords once for nearby shops
     useEffect(() => {
@@ -878,6 +882,14 @@ export default function RequestTrackingPage() {
             setShowQuoteSelection(true);
         }
     }, [status?.quoteWindowOpen, status?.quoteCount, status?.status]);
+
+    // ── Auto-close tracking map when provider arrives ─────────────────────────
+    useEffect(() => {
+        if (showTrackingMap && status?.status && status.status !== 'IN_PROGRESS') {
+            setShowTrackingMap(false);
+            toast.success('Bản đồ đã thu nhỏ, vui lòng xác nhận trạng thái');
+        }
+    }, [status?.status, showTrackingMap]);
 
     // ── Accept quote during countdown ────────────────────────────────────────
     const handleAcceptLiveQuote = async (quoteId: string) => {
@@ -1128,6 +1140,60 @@ export default function RequestTrackingPage() {
                     />
                 )}
 
+                {/* ── Live Tracking Map CTA — only when provider is moving ── */}
+                {status.status === 'IN_PROGRESS' && status.assignedProvider && status.pickupLocation && (
+                    <button
+                        id="open-tracking-map-btn"
+                        onClick={() => setShowTrackingMap(true)}
+                        className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all active:scale-[0.98]"
+                        style={{
+                            background: `linear-gradient(135deg, ${C.orange}10 0%, ${C.orangeLight} 100%)`,
+                            border: `1.5px solid ${C.orange}30`,
+                            boxShadow: `0 2px 16px ${C.orange}15`,
+                        }}
+                    >
+                        {/* Pulsing map icon */}
+                        <div className="relative flex-shrink-0">
+                            <div
+                                className="absolute inset-0 rounded-full animate-ping"
+                                style={{ background: `${C.orange}30` }}
+                            />
+                            <div
+                                className="relative w-12 h-12 rounded-full flex items-center justify-center"
+                                style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`, boxShadow: `0 4px 12px ${C.orange}50` }}
+                            >
+                                <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={1.8}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        {/* Text */}
+                        <div className="flex-1 text-left">
+                            <p className="font-bold text-sm" style={{ color: C.navy }}>
+                                Xem Cứu hộ viên trên bản đồ
+                            </p>
+                            <p className="text-xs mt-0.5" style={{ color: C.gray }}>
+                                Theo dõi vị trí real-time • Tuyến đường • ETA
+                            </p>
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: C.orange }} />
+                                <span className="text-[10px] font-semibold" style={{ color: C.orange }}>TRỰC TIẾP</span>
+                                {status.matchedEta && (
+                                    <span className="text-[10px]" style={{ color: C.gray }}>
+                                        · Còn khoảng {status.matchedEta} phút
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Arrow */}
+                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                )}
+
                 {/* ARRIVED: provider says they're here, ask customer to confirm */}
                 {status.status === 'ARRIVED' && status.assignedProvider && (
                     <ArrivalConfirmation
@@ -1208,6 +1274,21 @@ export default function RequestTrackingPage() {
                 userLat={userCoords?.lat ?? status.pickupLocation?.lat}
                 userLng={userCoords?.lng ?? status.pickupLocation?.lng}
             />
+
+            {/* ── Real-time Provider Tracking Map (fullscreen overlay) ── */}
+            {showTrackingMap && status.pickupLocation && (
+                <ProviderTrackingMap
+                    requestId={requestId}
+                    customerLat={status.pickupLocation.lat}
+                    customerLng={status.pickupLocation.lng}
+                    customerAddress={status.pickupLocation.addressText}
+                    providerName={status.assignedProvider?.name}
+                    providerAvatar={status.assignedProvider?.avatar}
+                    providerPhone={status.assignedProvider?.phoneNumber}
+                    matchedEta={status.matchedEta}
+                    onClose={() => setShowTrackingMap(false)}
+                />
+            )}
         </div>
     );
 }

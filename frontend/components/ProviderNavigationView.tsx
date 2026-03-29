@@ -9,6 +9,8 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import WorkingView from './WorkingView';
 import AvatarImage from './AvatarImage';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 const ChatModal = lazy(() => import('@/components/ChatModal'));
 
@@ -354,9 +356,12 @@ export default function ProviderNavigationView({
     const currentStepIdxRef = useRef(0);
     const routeCoordsRef = useRef<[number, number][]>([]);
     const smoothRouteRef = useRef<[number, number][]>([]); // 10x interpolated for simulation
+    // ── Firestore location publish — throttle by distance ────────────────────
+    const lastPublishedRef = useRef<[number, number] | null>(null); // [lng, lat]
     const lastRerouteRef = useRef<number>(0);
     const watchIdRef = useRef<number | null>(null);
     const isNavigatingRef = useRef(false);
+    const providerLocationRef = useRef<{ lat: number; lng: number } | null>(null); // stable ref for map init
     // Mirror arrivalState + isPaymentPending as refs so GPS callback (runs once) reads latest
     const arrivalStateRef = useRef<'idle' | 'waiting' | 'confirmed' | 'denied' | 'working'>('idle');
     const isPaymentPendingRef = useRef(false);
@@ -365,6 +370,7 @@ export default function ProviderNavigationView({
     const simIndexRef = useRef(0);
     const simRafRef = useRef<number | null>(null);
     const simMsPerStepRef = useRef(40); // ms between each smooth-point advance (lower = faster)
+    const isSimulatingRef = useRef(false); // mirror of isSimulating for GPS callback (no stale closure)
 
     // Get provider identity directly from auth — avoids relying on props being undefined
     const { user: authUser } = useAuth();
@@ -481,7 +487,8 @@ export default function ProviderNavigationView({
         const animate = (now: number) => {
             const idx = simIndexRef.current;
             if (idx >= smooth.length - 1) {
-                setIsSimulating(false);
+                // DO NOT set isSimulating(false) here. Keep it true so the marker stays at the destination
+                // and the real GPS doesn't immediately snap it back to the start.
                 simRafRef.current = null;
                 return;
             }
@@ -516,6 +523,21 @@ export default function ProviderNavigationView({
                     pitch: 25,
                     duration: msPerStep * 3,
                 });
+
+                // ── Publish simulated position to Firestore for customer tracking ──
+                // Throttle: only write every ~10 steps to avoid hammering Firestore
+                if (simIndexRef.current % 10 === 0 && arrivalStateRef.current === 'idle' && !isPaymentPendingRef.current) {
+                    const [lng, lat] = cur;
+                    const prev = lastPublishedRef.current;
+                    if (!prev || haversineM([lng, lat], prev) >= 5) {
+                        lastPublishedRef.current = [lng, lat];
+                        setDoc(doc(db, 'locations', requestId), {
+                            lat, lng, bearing: brng,
+                            updatedAt: serverTimestamp(),
+                            active: true,
+                        }, { merge: true }).catch((err) => console.warn('[Tracking] Firestore sim write failed:', err));
+                    }
+                }
 
                 // Throttle progress line update to avoid GPU thrash
                 stepsSinceProgressUpdate += stepsThisFrame;
@@ -569,10 +591,30 @@ export default function ProviderNavigationView({
     useEffect(() => {
         arrivalStateRef.current = arrivalState;
         isPaymentPendingRef.current = isPaymentPending;
+        isSimulatingRef.current = isSimulating; // keep ref in sync
         if (arrivalState === 'working' || isPaymentPending) {
             isNavigatingRef.current = false;
         }
-    }, [arrivalState, isPaymentPending]);
+    }, [arrivalState, isPaymentPending, isSimulating]);
+
+    // Keep providerLocationRef in sync — used by map init effect which must not re-run on GPS updates
+    useEffect(() => {
+        providerLocationRef.current = providerLocation;
+    }, [providerLocation]);
+
+    // ── 0. Publish initial position to Firestore so customer sees provider immediately ──
+    useEffect(() => {
+        if (!providerLocation || !requestId) return;
+        if (lastPublishedRef.current) return;
+        lastPublishedRef.current = [providerLocation.lng, providerLocation.lat];
+        setDoc(doc(db, 'locations', requestId), {
+            lat: providerLocation.lat,
+            lng: providerLocation.lng,
+            bearing: 0,
+            updatedAt: serverTimestamp(),
+            active: true,
+        }, { merge: true }).catch((err) => console.warn('[Tracking] Initial Firestore write failed:', err));
+    }, [providerLocation, requestId]);
 
     // ── 1. GPS watchPosition — continuous tracking ────────────────────────────
     useEffect(() => {
@@ -582,12 +624,32 @@ export default function ProviderNavigationView({
             return;
         }
         const onSuccess = (pos: GeolocationPosition) => {
+            if (isSimulatingRef.current) return; // Ignore real GPS when in simulation mode
+
             const { latitude: lat, longitude: lng } = pos.coords;
             setProviderLocation({ lat, lng });
 
             // Update provider marker on map
             if (providerMarkerRef.current) {
                 providerMarkerRef.current.setLngLat([lng, lat]);
+            }
+
+            // ── Publish to Firestore for customer real-time tracking ──────────
+            // Only publish when provider is actively navigating (not arrived/working)
+            if (arrivalStateRef.current === 'idle' && !isPaymentPendingRef.current) {
+                const prev = lastPublishedRef.current;
+                const movedEnough = !prev || haversineM([lng, lat], prev) >= 5; // 5m threshold
+                if (movedEnough) {
+                    lastPublishedRef.current = [lng, lat];
+                    const bearing = prev ? bearingDeg(prev, [lng, lat]) : 0;
+                    setDoc(doc(db, 'locations', requestId), {
+                        lat,
+                        lng,
+                        bearing,
+                        updatedAt: serverTimestamp(),
+                        active: true,
+                    }, { merge: true }).catch((err) => console.warn('[Tracking] Firestore GPS write failed:', err));
+                }
             }
 
             // Follow user on map (navigation mode)
@@ -630,29 +692,20 @@ export default function ProviderNavigationView({
                         setCurrentStepIdx(next);
                     }
 
-                    // ── Re-route when off-route >50m ──
-                    // Skip re-routing if provider is working on-site or during payment
-                    const now = Date.now();
-                    const dToRoute = distToRoute([lng, lat], coords);
-                    if (dToRoute > 50 && now - lastRerouteRef.current > 8000
-                        && isNavigatingRef.current
-                        && arrivalStateRef.current === 'idle'
-                        && !isPaymentPendingRef.current) {
-                        lastRerouteRef.current = now;
-                        toast.loading(t('provider.navigation.rerouteToast'), { id: 'reroute', duration: 3000 });
-                        routeDrawn.current = false;
-                        instructionsRef.current = [];
-                        currentStepIdxRef.current = 0;
-                        setInstructions([]);
-                        setCurrentStepIdx(0);
-                        drawRoute(lat, lng);
-                    }
+
                 }
             }
         };
         const onError = () => {
             setLocationError('Không lấy được vị trí GPS');
-            setProviderLocation({ lat: 21.028511, lng: 105.804817 });
+            const fallback = { lat: 21.028511, lng: 105.804817 };
+            setProviderLocation(fallback);
+            if (arrivalStateRef.current === 'idle' && !isPaymentPendingRef.current) {
+                setDoc(doc(db, 'locations', requestId), {
+                    lat: fallback.lat, lng: fallback.lng, bearing: 0,
+                    updatedAt: serverTimestamp(), active: true,
+                }, { merge: true }).catch((err) => console.warn('[Tracking] Fallback write failed:', err));
+            }
         };
         watchIdRef.current = navigator.geolocation.watchPosition(onSuccess, onError,
             { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
@@ -833,9 +886,11 @@ export default function ProviderNavigationView({
     }, [pickupLocation]);
 
     // ── 4. Initialize map once VietMap ready + provider location ready ───────
+    // Guard: map.current prevents re-init on every GPS update (providerLocation changes each second)
+    // Cleanup is in a SEPARATE effect so it only runs on unmount, not on dep changes
     useEffect(() => {
         if (!isMapReady || !providerLocation || !mapContainer.current) return;
-        if (map.current) return; // already initialized
+        if (map.current) return; // already initialized — GPS just updated, skip
 
         const vgl = (window as any).vietmapgl;
 
@@ -882,18 +937,27 @@ export default function ProviderNavigationView({
             .setPopup(new vgl.Popup({ offset: 36 }).setText(user?.name ? t('provider.navigation.customerMarkerNamed').replace('{name}', user.name) : t('provider.navigation.customerMarker')))
             .addTo(map.current);
 
-        // Draw route
+        // Draw route once on map load
         map.current.on('load', () => {
-            drawRoute(providerLocation.lat, providerLocation.lng);
+            const loc = providerLocationRef.current ?? providerLocation;
+            drawRoute(loc.lat, loc.lng);
         });
 
+        // NOTE: no cleanup return here — cleanup is handled by the unmount effect below
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isMapReady, providerLocation]); // providerLocation needed so effect re-checks when first GPS arrives
+
+    // ── 4b. Map cleanup — runs ONLY on unmount, never on GPS update ──────────
+    useEffect(() => {
         return () => {
             routeDrawn.current = false;
-            try {
-                if (map.current) { map.current.remove(); map.current = null; }
-            } catch (e) { /* ignore */ }
+            const m = map.current;
+            map.current = null;
+            if (m) {
+                try { m.remove(); } catch { /* ignore */ }
+            }
         };
-    }, [isMapReady, providerLocation, pickupLocation, drawRoute]);
+    }, []); // empty deps = unmount only
 
     const displayName = user?.name || t('provider.navigation.customerMarker');
     const displayPhone = user?.phoneNumber;

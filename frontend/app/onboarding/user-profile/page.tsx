@@ -9,6 +9,10 @@ import { updateUserProfile, UpdateUserProfileData } from '@/lib/auth';
 import { searchPlaces, getPlaceDetails, PlaceSearchResult } from '@/lib/vietmap';
 import { normalizeVietnamPlate, isValidVietnamPlate, formatVietnamPlate } from '@/lib/validators';
 import RescueMeLogo from '@/components/RescueMeLogo';
+import dynamic from 'next/dynamic';
+import type { MapLocationData } from '@/components/MapLocationPicker';
+
+const MapLocationPicker = dynamic(() => import('@/components/MapLocationPicker'), { ssr: false });
 
 const C = { orange: '#f97316', orangeDark: '#ea6c0a', orangeLight: '#fff7ed', navy: '#1a1a2e', gray: '#6b7280', border: '#e2e8f0', bg: '#f4f6f9', green: '#16a34a', red: '#ef4444' };
 const VEHICLE_COLOR_KEYS = ['white', 'black', 'gray', 'silver', 'red', 'blue', 'green', 'yellow', 'orange', 'brown'] as const;
@@ -36,6 +40,11 @@ export default function UserProfilePage() {
         fullName: '', phoneNumber: '', contactEmail: '',
         defaultAddress: undefined, vehicleType: 'CAR', licensePlate: '', vehicleColor: VEHICLE_COLOR_KEYS[0],
     });
+
+    // Map modal state
+    const [showMapModal, setShowMapModal] = useState(false);
+    const [mapPendingLocation, setMapPendingLocation] = useState<{addressText: string, lat: number, lng: number} | null>(null);
+    const [mapInitialGps, setMapInitialGps] = useState<[number, number] | undefined>(undefined);
 
     useEffect(() => {
         if (!loading && !user) { router.push('/auth/login'); return; }
@@ -67,6 +76,29 @@ export default function UserProfilePage() {
     const handleSelectAddress = async (s: PlaceSearchResult) => {
         setIsAddressSelected(true); setAddressQuery(s.displayName); setShowSuggestions(false); setAddressSuggestions([]);
         if (s.refId) { try { const d = await getPlaceDetails(s.refId); if (d) setFormData(p => ({ ...p, defaultAddress: { addressText: d.display, lat: d.lat, lng: d.lng } })); } catch { } }
+    };
+
+    const openMapModal = () => {
+        if (formData.defaultAddress) {
+            setMapInitialGps([formData.defaultAddress.lng, formData.defaultAddress.lat]);
+        } else if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => setMapInitialGps([pos.coords.longitude, pos.coords.latitude]),
+                () => setMapInitialGps(undefined),
+                { enableHighAccuracy: true, timeout: 8000 }
+            );
+        }
+        setMapPendingLocation(null);
+        setShowMapModal(true);
+    };
+
+    const handleMapConfirm = () => {
+        if (!mapPendingLocation) return;
+        setFormData(p => ({ ...p, defaultAddress: mapPendingLocation }));
+        setAddressQuery(mapPendingLocation.addressText);
+        setShowSuggestions(false);
+        setIsAddressSelected(true);
+        setShowMapModal(false);
     };
 
     const validate = () => {
@@ -231,6 +263,16 @@ export default function UserProfilePage() {
                                                 <p className="text-xs" style={{ color: C.green }}>{t('onboarding.userProfile.personal.addressSelected')}</p>
                                             </div>
                                         )}
+                                        <button
+                                            type="button"
+                                            onClick={openMapModal}
+                                            className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed text-xs font-semibold transition-all hover:border-orange-400 hover:bg-orange-50"
+                                            style={{ borderColor: C.border, color: C.gray }}
+                                        >
+                                            <MapPin className="w-3.5 h-3.5" style={{ color: C.orange }} />
+                                            <span style={{ color: C.orange }}>Chọn trên bản đồ</span>
+                                            <span style={{ color: C.gray }}>– chính xác hơn</span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -300,6 +342,60 @@ export default function UserProfilePage() {
                     </div>
                 </div>
             </div>
+
+            {showMapModal && (
+                <div
+                    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+                    style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowMapModal(false); }}
+                >
+                    <div
+                        className="w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl overflow-hidden"
+                        style={{ background: 'white', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
+                    >
+                        <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${C.border}` }}>
+                            <div>
+                                <p className="text-sm font-bold" style={{ color: C.navy }}>Chọn vị trí trên bản đồ</p>
+                                <p className="text-xs mt-0.5" style={{ color: C.gray }}>Địa chỉ thường dùng – kéo bản đồ để tinh chỉnh chính xác</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowMapModal(false)}
+                                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-gray-100"
+                                style={{ color: C.gray }}
+                            >
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <MapLocationPicker
+                            initialCenter={mapInitialGps}
+                            onLocationChange={(data) => setMapPendingLocation(data)}
+                            height="320px"
+                        />
+                        <div className="flex gap-3 px-4 py-3" style={{ borderTop: `1px solid ${C.border}` }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowMapModal(false)}
+                                className="flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50"
+                                style={{ borderColor: C.border, color: C.gray }}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleMapConfirm}
+                                disabled={!mapPendingLocation}
+                                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40 active:scale-[0.98]"
+                                style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
+                            >
+                                Xác nhận vị trí này
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

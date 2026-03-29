@@ -1183,6 +1183,8 @@ const en = {
                     businessNamePlaceholder: 'Rescue ABC',
                     permanentAddress: 'Permanent address',
                     businessAddress: 'Business address',
+                    businessAddressMapHint:
+                        'This address is used to show your rescue location on the map and in “nearby rescue” for customers — pick your real operating base (yard / garage). It does not have to match the legal business name on your license.',
                     addressPlaceholder: 'Search address...',
                     addressSelected: 'Address selected',
                 },

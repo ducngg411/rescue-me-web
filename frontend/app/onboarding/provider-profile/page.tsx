@@ -268,6 +268,11 @@ export default function ProviderProfilePage() {
                                         <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>
                                             {formData.providerType === 'INDIVIDUAL' ? 'Địa chỉ thường trú' : 'Địa chỉ doanh nghiệp'} <span style={{ color: C.red }}>*</span>
                                         </label>
+                                        {formData.providerType === 'BUSINESS' && (
+                                            <p className="text-[11px] leading-snug mb-1.5" style={{ color: C.gray }}>
+                                                Địa chỉ này dùng để hiển thị vị trí cứu hộ của bạn trên bản đồ và trong mục “cứu hộ gần đây” cho khách — nên chọn đúng điểm hoạt động (cơ sở / bãi xe), không nhất thiết trùng tên doanh nghiệp trên giấy phép.
+                                            </p>
+                                        )}
                                         <div className="relative">
                                             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: C.gray }} />
                                             <input ref={addressInputRef} type="text" value={addressQuery}

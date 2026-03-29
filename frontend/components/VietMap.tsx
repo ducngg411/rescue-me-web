@@ -147,9 +147,7 @@ export default function VietMap({
                     marker.current.remove();
                     marker.current = null;
                 }
-            } catch (error) {
-                console.warn('Error removing marker:', error);
-            }
+            } catch { /* ignore */ }
 
             // Capture and null the ref immediately to prevent re-use
             const mapInstance = map.current;
@@ -157,10 +155,8 @@ export default function VietMap({
 
             if (mapInstance) {
                 // map.remove() aborts pending tile/style fetches internally.
-                // Those fetch-promise rejections are async, so they escape a
-                // synchronous try/catch and surface as unhandled rejections in
-                // Next.js's dev overlay.  Suppress them for the brief window
-                // while removal is in progress.
+                // Those fetch-promise rejections are async and escape a synchronous
+                // try/catch — suppress them for 500ms while removal settles.
                 const suppressAbort = (e: PromiseRejectionEvent) => {
                     if (e.reason?.name === 'AbortError') e.preventDefault();
                 };
@@ -175,7 +171,7 @@ export default function VietMap({
                 } finally {
                     setTimeout(
                         () => window.removeEventListener('unhandledrejection', suppressAbort),
-                        200,
+                        500, // increased from 200ms — tiles can take longer to abort
                     );
                 }
             }

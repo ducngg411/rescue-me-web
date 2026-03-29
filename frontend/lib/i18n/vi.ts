@@ -1187,6 +1187,8 @@ const vi = {
                     businessNamePlaceholder: 'Cứu hộ ABC',
                     permanentAddress: 'Địa chỉ thường trú',
                     businessAddress: 'Địa chỉ doanh nghiệp',
+                    businessAddressMapHint:
+                        'Địa chỉ này dùng để hiển thị vị trí cứu hộ của bạn trên bản đồ và trong mục “cứu hộ gần đây” cho khách — nên chọn đúng điểm hoạt động (cơ sở / bãi xe), không nhất thiết trùng tên doanh nghiệp trên giấy phép.',
                     addressPlaceholder: 'Tìm kiếm địa chỉ...',
                     addressSelected: 'Đã chọn địa chỉ',
                 },

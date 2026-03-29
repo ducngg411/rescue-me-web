@@ -6,8 +6,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useGuest } from '@/contexts/GuestContext';
 import { useChatbot, ChatbotMessage, type CustomerCtaPhase } from '@/lib/hooks/useChatbot';
 import { uploadFile, UploadPurpose } from '@/lib/upload';
-import LocationPicker from '@/components/LocationPicker';
+import dynamic from 'next/dynamic';
+import type { MapLocationData } from '@/components/MapLocationPicker';
+
+const MapLocationPicker = dynamic(() => import('@/components/MapLocationPicker'), { ssr: false });
 import { reverseGeocode } from '@/lib/vietmap';
+import { assistantPlainTextForChatUi } from '@/lib/formatChatbotMessage';
 
 const C = {
     orange: '#f97316',
@@ -260,6 +264,7 @@ function MessageBubble({
     allowStructuredCustomerCta: boolean;
 }) {
     const isUser = msg.role === 'USER';
+    const displayContent = isUser ? msg.content : assistantPlainTextForChatUi(msg.content);
     const riskLevel = !isUser ? detectRiskLevel(msg.content) : null;
     const ctaKind: CustomerCtaUiKind =
         !isUser && !msg.isStreaming
@@ -313,7 +318,7 @@ function MessageBubble({
                             : '0 1px 4px rgba(0,0,0,0.06)',
                     }}
                 >
-                    {msg.content}
+                    {displayContent}
                     {msg.isStreaming && !msg.content && (
                         <span className="inline-flex gap-1">
                             <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -1077,33 +1082,37 @@ function ChatPanel({
                 {/* Input area */}
                 <div className="flex flex-col flex-shrink-0" style={{ background: 'white', borderTop: `1px solid ${C.border}` }}>
                     {showLocationPicker && (
-                        <div className="px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${C.border}` }}>
-                            <p className="text-xs font-semibold mb-2" style={{ color: C.navy }}>
-                                Chọn vị trí đón khác
-                            </p>
-                            <LocationPicker
-                                variant="rescue"
-                                label=""
-                                value={selectedLocation}
-                                onChange={(loc) => setSelectedLocation(loc as RescueLocationData | null)}
-                                placeholder="Tìm địa chỉ đón..."
-                                required
-                            />
-                            <div className="flex gap-2 mt-2">
+                        <div style={{ borderBottom: `1px solid ${C.border}` }}>
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+                                <div>
+                                    <p className="text-xs font-bold" style={{ color: C.navy }}>Chọn vị trí đón</p>
+                                    <p className="text-[10px]" style={{ color: C.grayLight }}>Kéo bản đồ để tinh chỉnh chính xác</p>
+                                </div>
                                 <button
                                     type="button"
                                     onClick={() => setShowLocationPicker(false)}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                                    style={{ background: C.bg, color: C.gray }}
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs transition-colors hover:bg-gray-100"
+                                    style={{ color: C.gray }}
                                 >
-                                    Hủy
+                                    ✕
                                 </button>
+                            </div>
+                            {/* Map */}
+                            <MapLocationPicker
+                                onLocationChange={(data: MapLocationData) =>
+                                    setSelectedLocation({ addressText: data.addressText, lat: data.lat, lng: data.lng })
+                                }
+                                height="220px"
+                            />
+                            {/* Confirm button */}
+                            <div className="px-4 py-2.5">
                                 <button
                                     type="button"
                                     onClick={onConfirmOtherLocation}
                                     disabled={!selectedLocation || isSending}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
-                                    style={{ background: C.orange, color: 'white' }}
+                                    className="w-full py-2 rounded-xl text-xs font-semibold transition-all active:scale-[0.98] disabled:opacity-40"
+                                    style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`, color: 'white' }}
                                 >
                                     Xác nhận vị trí này
                                 </button>

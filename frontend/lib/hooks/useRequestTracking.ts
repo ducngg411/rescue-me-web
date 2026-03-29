@@ -26,6 +26,7 @@ export interface RequestStatus {
     assignedProvider?: {
         id: string;
         name: string | null;
+        avatar?: string | null;
         serviceName: string | null;
         serviceTypes: string[];
         phoneNumber: string | null;
@@ -34,6 +35,9 @@ export interface RequestStatus {
         isOnline: boolean;
         averageRating: number | null;
         reviewCount: number;
+        licensePlate?: string | null;
+        vehicleType?: string | null;
+        vehicleColor?: string | null;
     };
 }
 

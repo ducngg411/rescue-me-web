@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { searchPlaces, getPlaceDetails, PlaceSearchResult, PlaceDetails } from '@/lib/vietmap';
+import { searchPlaces, getPlaceDetails, PlaceSearchResult } from '@/lib/vietmap';
 import { MagnifyingGlassIcon, MapPinIcon } from '@heroicons/react/24/outline';
-import toast from 'react-hot-toast';
+import dynamic from 'next/dynamic';
 import { useLanguage } from '@/contexts/LanguageContext';
+import type { MapLocationData } from '@/components/MapLocationPicker';
+
+// Lazy-load map component (uses browser APIs)
+const MapLocationPicker = dynamic(() => import('@/components/MapLocationPicker'), { ssr: false });
 
 interface LocationData {
     addressText: string;
@@ -20,6 +24,15 @@ interface LocationPickerProps {
     required?: boolean;
     /** Align focus/selected colors with rescue flow (orange/navy) instead of default blue/green. */
     variant?: 'default' | 'rescue';
+    /**
+     * Vị trí khởi đầu cho map tab (nên là GPS hiện tại hoặc địa chỉ đã có).
+     * Nếu không truyền, MapLocationPicker tự fallback Hà Nội.
+     */
+    mapInitialCenter?: [number, number]; // [lng, lat]
+    /** Chế độ mặc định khi mở: 'search' | 'map'. Default: 'search' */
+    defaultMode?: 'search' | 'map';
+    /** Callback khi user chuyển tab */
+    onModeChange?: (mode: 'search' | 'map') => void;
 }
 
 export default function LocationPicker({
@@ -29,14 +42,18 @@ export default function LocationPicker({
     placeholder,
     required = false,
     variant = 'default',
+    mapInitialCenter,
+    defaultMode = 'search',
+    onModeChange,
 }: LocationPickerProps) {
     const { t } = useLanguage();
+    const [mode, setMode] = useState<'search' | 'map'>(defaultMode);
     const [query, setQuery] = useState('');
     const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [showResults, setShowResults] = useState(false);
     const [selectedPlace, setSelectedPlace] = useState<LocationData | null>(value);
-    const [isSelecting, setIsSelecting] = useState(false); // Flag để ngăn search khi đang chọn
+    const [isSelecting, setIsSelecting] = useState(false);
 
     // Sync selectedPlace when value prop changes from parent
     useEffect(() => {
@@ -44,13 +61,10 @@ export default function LocationPicker({
         if (value) setQuery('');
     }, [value]);
 
-    // Debounce search
+    // ── Search mode: debounce ──────────────────────────────────────────────
     useEffect(() => {
-        // Không search nếu đang trong quá trình chọn địa chỉ
-        if (isSelecting) {
-            return;
-        }
-
+        if (mode !== 'search') return;
+        if (isSelecting) return;
         if (!query.trim()) {
             setSearchResults([]);
             setShowResults(false);
@@ -66,13 +80,11 @@ export default function LocationPicker({
         }, 500);
 
         return () => clearTimeout(timer);
-    }, [query, isSelecting]);
+    }, [query, isSelecting, mode]);
 
     const handleSelectPlace = async (result: PlaceSearchResult) => {
-        setIsSelecting(true); // Bắt đầu quá trình chọn
-
+        setIsSelecting(true);
         if (result.refId) {
-            // Fetch full details including coordinates
             const details = await getPlaceDetails(result.refId);
             if (details) {
                 const locationData: LocationData = {
@@ -82,68 +94,38 @@ export default function LocationPicker({
                 };
                 setSelectedPlace(locationData);
                 onChange(locationData);
-                setQuery(''); // Xóa query để không trigger search
+                setQuery('');
                 setShowResults(false);
                 setSearchResults([]);
             }
         }
-
-        setIsSelecting(false); // Kết thúc quá trình chọn
+        setIsSelecting(false);
     };
 
-    const handleGetCurrentLocation = () => {
-        if ('geolocation' in navigator) {
-            console.log(' [LocationPicker] Requesting current position...');
-
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    console.log(' [LocationPicker] Position received:', {
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude,
-                        accuracy: position.coords.accuracy,
-                        timestamp: new Date(position.timestamp).toLocaleString('vi-VN')
-                    });
-
-                    const { latitude, longitude } = position.coords;
-
-                    // Use reverse geocoding or just use coordinates
-                    const locationData: LocationData = {
-                        addressText: t('common.locationPicker.currentLocation', { lat: latitude.toFixed(6), lng: longitude.toFixed(6) }),
-                        lat: latitude,
-                        lng: longitude,
-                    };
-
-                    setSelectedPlace(locationData);
-                    onChange(locationData);
-                    // KHÔNG set query để tránh trigger search
-                    setQuery('');
-                    setShowResults(false);
-                },
-                (error) => {
-                    console.error('❌ [LocationPicker] Error:', {
-                        code: error.code,
-                        message: error.message,
-                        PERMISSION_DENIED: error.code === 1,
-                        POSITION_UNAVAILABLE: error.code === 2,
-                        TIMEOUT: error.code === 3
-                    });
-                    toast.error(t('common.locationPicker.error'));
-                },
-                {
-                    enableHighAccuracy: true,  // Sử dụng GPS chính xác nhất
-                    timeout: 15000,            // Timeout sau 15 giây
-                    maximumAge: 0,             // KHÔNG dùng cache, luôn lấy vị trí mới
-                }
-            );
-        } else {
-            toast.error(t('common.locationPicker.noSupport'));
-        }
+    // ── Map mode: live update from map center ──────────────────────────────
+    const handleMapLocationChange = (data: MapLocationData) => {
+        const loc: LocationData = { addressText: data.addressText, lat: data.lat, lng: data.lng };
+        setSelectedPlace(loc);
+        onChange(loc);
     };
 
-    const inputFocusClass =
-        variant === 'rescue'
-            ? 'focus:ring-2 focus:ring-orange-500 focus:border-orange-400'
-            : 'focus:ring-2 focus:ring-blue-500 focus:border-transparent';
+    // Map starting point: explicit prop → existing value → MapLocationPicker handles GPS internally
+    const resolvedMapCenter: [number, number] | undefined =
+        mapInitialCenter ?? (value ? [value.lng, value.lat] : undefined);
+
+    // ── Style variants ─────────────────────────────────────────────────────
+    const isOrange = variant === 'rescue';
+    const tabActiveBg = isOrange ? '#fff7ed' : '#eff6ff';
+    const tabActiveColor = isOrange ? '#f97316' : '#2563eb';
+    const inputFocusClass = isOrange
+        ? 'focus:ring-2 focus:ring-orange-500 focus:border-orange-400'
+        : 'focus:ring-2 focus:ring-blue-500 focus:border-transparent';
+    const hoverBg = isOrange ? 'hover:bg-orange-50' : 'hover:bg-gray-50';
+    const selectedBg = isOrange ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200';
+    const selectedIconColor = isOrange ? 'text-orange-600' : 'text-green-600';
+    const selectedTitleColor = isOrange ? 'text-orange-950' : 'text-green-900';
+    const selectedTextColor = isOrange ? 'text-slate-800' : 'text-green-700';
+    const selectedCoordColor = isOrange ? 'text-orange-800' : 'text-green-600';
 
     return (
         <div className="space-y-2">
@@ -151,84 +133,103 @@ export default function LocationPicker({
                 {label} {required && <span className="text-red-500 ml-1">*</span>}
             </label>
 
-            <div className="relative">
-                <div className="relative">
-                    <input
-                        type="text"
-                        value={query}
-                        onChange={(e) => {
-                            setQuery(e.target.value);
-                            // Khi user gõ lại, xóa địa điểm đã chọn
-                            if (selectedPlace && e.target.value.trim()) {
-                                setSelectedPlace(null);
-                            }
+            {/* ── Mode tabs ── */}
+            <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid #e5e7eb' }}>
+                {(['search', 'map'] as const).map((m) => (
+                    <button
+                        key={m}
+                        type="button"
+                        onClick={() => { setMode(m); onModeChange?.(m); }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium transition-colors"
+                        style={{
+                            background: mode === m ? tabActiveBg : 'white',
+                            color: mode === m ? tabActiveColor : '#6b7280',
+                            borderRight: m === 'search' ? '1px solid #e5e7eb' : 'none',
                         }}
-                        onFocus={() => {
-                            if (query.trim() && searchResults.length > 0) {
-                                setShowResults(true);
-                            }
-                        }}
-                        placeholder={placeholder || t('common.locationPicker.placeholder')}
-                        className={`w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 ${inputFocusClass}`}
-                    />
-                    <MagnifyingGlassIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                </div>
-
-
-
-                {/* Search Results Dropdown */}
-                {showResults && searchResults.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        {searchResults.map((result, index) => (
-                            <button
-                                key={index}
-                                type="button"
-                                onClick={() => handleSelectPlace(result)}
-                                className={`w-full px-4 py-3 text-left border-b border-gray-100 last:border-b-0 ${
-                                    variant === 'rescue' ? 'hover:bg-orange-50' : 'hover:bg-gray-50'
-                                }`}
-                            >
-                                <div className="font-medium text-gray-900">{result.displayName}</div>
-                                <div className="text-sm text-gray-500">{result.address}</div>
-                            </button>
-                        ))}
-                    </div>
-                )}
-
-                {isSearching && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
-                        {t('common.locationPicker.searching')}
-                    </div>
-                )}
+                    >
+                        {m === 'search' ? (
+                            <>
+                                <MagnifyingGlassIcon className="h-3.5 w-3.5" />
+                                Tìm kiếm
+                            </>
+                        ) : (
+                            <>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                </svg>
+                                Chọn trên bản đồ
+                            </>
+                        )}
+                    </button>
+                ))}
             </div>
 
-            {/* Selected Location Display */}
-            {selectedPlace && (
-                <div
-                    className={
-                        variant === 'rescue'
-                            ? 'mt-2 p-3 rounded-lg border bg-orange-50 border-orange-200'
-                            : 'mt-2 p-3 bg-green-50 border border-green-200 rounded-lg'
-                    }
-                >
-                    <div className="flex items-start gap-2">
-                        <MapPinIcon
-                            className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
-                                variant === 'rescue' ? 'text-orange-600' : 'text-green-600'
-                            }`}
+            {/* ── Search mode ── */}
+            {mode === 'search' && (
+                <div className="relative">
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={query}
+                            onChange={(e) => {
+                                setQuery(e.target.value);
+                                if (selectedPlace && e.target.value.trim()) setSelectedPlace(null);
+                            }}
+                            onFocus={() => {
+                                if (query.trim() && searchResults.length > 0) setShowResults(true);
+                            }}
+                            placeholder={placeholder || t('common.locationPicker.placeholder')}
+                            className={`w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 ${inputFocusClass}`}
                         />
+                        <MagnifyingGlassIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    </div>
+
+                    {/* Search results dropdown */}
+                    {showResults && searchResults.length > 0 && (
+                        <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            {searchResults.map((result, index) => (
+                                <button
+                                    key={index}
+                                    type="button"
+                                    onClick={() => handleSelectPlace(result)}
+                                    className={`w-full px-4 py-3 text-left border-b border-gray-100 last:border-b-0 ${hoverBg}`}
+                                >
+                                    <div className="font-medium text-gray-900 text-sm">{result.displayName}</div>
+                                    <div className="text-xs text-gray-500">{result.address}</div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {isSearching && (
+                        <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500 text-sm">
+                            {t('common.locationPicker.searching')}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── Map mode ── */}
+            {mode === 'map' && (
+                <MapLocationPicker
+                    initialCenter={resolvedMapCenter}
+                    onLocationChange={handleMapLocationChange}
+                    height="240px"
+                    className="border border-gray-200"
+                />
+            )}
+
+            {/* ── Selected location display (search mode only – map has its own overlay) ── */}
+            {mode === 'search' && selectedPlace && (
+                <div className={`mt-2 p-3 rounded-lg border ${selectedBg}`}>
+                    <div className="flex items-start gap-2">
+                        <MapPinIcon className={`h-5 w-5 mt-0.5 flex-shrink-0 ${selectedIconColor}`} />
                         <div>
-                            <div
-                                className={`text-sm font-medium ${
-                                    variant === 'rescue' ? 'text-orange-950' : 'text-green-900'
-                                }`}
-                            >
+                            <div className={`text-sm font-medium ${selectedTitleColor}`}>
                                 {t('common.locationPicker.selected')}
                             </div>
-                            <div className={`text-sm ${variant === 'rescue' ? 'text-slate-800' : 'text-green-700'}`}>
-                                {selectedPlace.addressText}
-                            </div>
-                            <div className={`text-xs mt-1 ${variant === 'rescue' ? 'text-orange-800' : 'text-green-600'}`}>
+                            <div className={`text-sm ${selectedTextColor}`}>{selectedPlace.addressText}</div>
+                            <div className={`text-xs mt-1 ${selectedCoordColor}`}>
                                 {t('common.locationPicker.coordinates', {
                                     lat: selectedPlace.lat.toFixed(6),
                                     lng: selectedPlace.lng.toFixed(6),

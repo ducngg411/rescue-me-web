@@ -1,12 +1,26 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle, Plus, Trash2, MapPin } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { CheckCircle, Plus, Trash2, MapPin, Map } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { searchPlaces, getPlaceDetails, PlaceSearchResult } from '@/lib/vietmap';
 import { normalizeVietnamPlate, isValidVietnamPlate, formatVietnamPlate } from '@/lib/validators';
+import dynamic from 'next/dynamic';
+import type { MapLocationData } from '@/components/MapLocationPicker';
 
-const C = { orange: '#f97316', orangeDark: '#ea6c0a', orangeLight: '#fff7ed', navy: '#1a1a2e', gray: '#6b7280', border: '#e2e8f0', bg: '#f4f6f9', green: '#16a34a', red: '#ef4444' };
+const MapLocationPicker = dynamic(() => import('@/components/MapLocationPicker'), { ssr: false });
+
+const C = {
+    orange: '#f97316',
+    orangeDark: '#ea6c0a',
+    orangeLight: '#fff7ed',
+    navy: '#1a1a2e',
+    gray: '#6b7280',
+    border: '#e2e8f0',
+    bg: '#f4f6f9',
+    green: '#16a34a',
+    red: '#ef4444',
+};
 
 const inputCls = (err?: boolean) =>
     `w-full px-3 py-2.5 text-sm rounded-xl border transition-all focus:outline-none focus:ring-2 bg-white font-[Lexend] ${err ? 'border-red-400 bg-red-50 focus:ring-red-100' : 'border-gray-200 focus:ring-orange-100'}`;
@@ -20,6 +34,12 @@ const SectionCard = ({ title, children }: { title: string; children: React.React
         {children}
     </div>
 );
+
+interface AddressData {
+    addressText: string;
+    lat: number;
+    lng: number;
+}
 
 interface ServiceInfoStepProps {
     initialData: any;
@@ -44,6 +64,8 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // ── Text search state ──────────────────────────────────────────────────
     const [addressQuery, setAddressQuery] = useState(
         initialData?.providerType === 'INDIVIDUAL'
             ? initialData?.permanentAddress?.addressText || ''
@@ -51,13 +73,21 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
     );
     const [addressSuggestions, setAddressSuggestions] = useState<PlaceSearchResult[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
-    const [addressSelected, setAddressSelected] = useState(!!initialData?.permanentAddress?.addressText || !!initialData?.businessAddress?.addressText);
+    const [addressSelected, setAddressSelected] = useState(
+        !!initialData?.permanentAddress?.addressText || !!initialData?.businessAddress?.addressText
+    );
     const suggestionsRef = useRef<HTMLDivElement>(null);
     const addressInputRef = useRef<HTMLInputElement>(null);
 
+    // ── Map modal state ────────────────────────────────────────────────────
+    const [showMapModal, setShowMapModal] = useState(false);
+    const [mapPendingLocation, setMapPendingLocation] = useState<AddressData | null>(null);
+    const [mapInitialGps, setMapInitialGps] = useState<[number, number] | undefined>(undefined);
+
+    // ── Text search autocomplete ───────────────────────────────────────────
     useEffect(() => {
         if (addressSelected) return;
-        const t = setTimeout(async () => {
+        const timer = setTimeout(async () => {
             if (addressQuery.trim().length < 2) { setAddressSuggestions([]); return; }
             try {
                 const r = await searchPlaces(addressQuery);
@@ -65,13 +95,15 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
                 setShowSuggestions(r.length > 0);
             } catch { setAddressSuggestions([]); }
         }, 300);
-        return () => clearTimeout(t);
+        return () => clearTimeout(timer);
     }, [addressQuery, addressSelected]);
 
     useEffect(() => {
         const h = (e: MouseEvent) => {
-            if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node) &&
-                addressInputRef.current && !addressInputRef.current.contains(e.target as Node)) {
+            if (
+                suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node) &&
+                addressInputRef.current && !addressInputRef.current.contains(e.target as Node)
+            ) {
                 setShowSuggestions(false);
             }
         };
@@ -82,15 +114,56 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
     const handleSelectAddress = async (place: PlaceSearchResult) => {
         try {
             const details = place.refId ? await getPlaceDetails(place.refId) : null;
-            const address = { addressText: place.displayName || details?.name || '', lat: details?.lat || 0, lng: details?.lng || 0 };
-            if (formData.providerType === 'INDIVIDUAL') setFormData(p => ({ ...p, permanentAddress: address }));
-            else setFormData(p => ({ ...p, businessAddress: address }));
-            setAddressQuery(address.addressText);
-            setShowSuggestions(false);
-            setAddressSelected(true);
+            const address: AddressData = {
+                addressText: place.displayName || details?.name || '',
+                lat: details?.lat || 0,
+                lng: details?.lng || 0,
+            };
+            applyAddress(address);
         } catch { }
     };
 
+    // ── Shared address setter ──────────────────────────────────────────────
+    const applyAddress = (address: AddressData) => {
+        if (formData.providerType === 'INDIVIDUAL') {
+            setFormData(p => ({ ...p, permanentAddress: address }));
+        } else {
+            setFormData(p => ({ ...p, businessAddress: address }));
+        }
+        setAddressQuery(address.addressText);
+        setShowSuggestions(false);
+        setAddressSelected(true);
+    };
+
+    // ── Map modal handlers ─────────────────────────────────────────────────
+    const openMapModal = useCallback(() => {
+        // Determine initial map center:
+        //  1. Existing confirmed address
+        //  2. GPS (fetched on demand, handled internally by MapLocationPicker)
+        const existing =
+            formData.providerType === 'INDIVIDUAL' ? formData.permanentAddress : formData.businessAddress;
+
+        if (existing?.lat && existing?.lng) {
+            setMapInitialGps([existing.lng, existing.lat]);
+        } else if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => setMapInitialGps([pos.coords.longitude, pos.coords.latitude]),
+                () => setMapInitialGps(undefined),
+                { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
+            );
+        }
+
+        setMapPendingLocation(null);
+        setShowMapModal(true);
+    }, [formData.providerType, formData.permanentAddress, formData.businessAddress]);
+
+    const handleMapConfirm = () => {
+        if (!mapPendingLocation) return;
+        applyAddress(mapPendingLocation);
+        setShowMapModal(false);
+    };
+
+    // ── Validation ─────────────────────────────────────────────────────────
     const validate = () => {
         const e: Record<string, string> = {};
         if (!formData.fullName.trim()) e.fullName = t('provider.onboarding.serviceInfo.errors.fullNameRequired');
@@ -129,201 +202,375 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
     ];
 
     return (
-        <div>
-            {/* Basic info card */}
-            <SectionCard title={t('provider.onboarding.serviceInfo.basicInfo.title')}>
-                <div className="space-y-4">
-                    {/* Provider type */}
-                    <div>
-                        <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>{t('provider.onboarding.serviceInfo.basicInfo.providerType')} <span style={{ color: C.red }}>*</span></label>
-                        <div className="grid grid-cols-2 gap-3">
-                            {[{ value: 'INDIVIDUAL', label: t('provider.onboarding.serviceInfo.basicInfo.providerTypeOptions.individual.label'), desc: t('provider.onboarding.serviceInfo.basicInfo.providerTypeOptions.individual.desc') }, { value: 'BUSINESS', label: t('provider.onboarding.serviceInfo.basicInfo.providerTypeOptions.business.label'), desc: t('provider.onboarding.serviceInfo.basicInfo.providerTypeOptions.business.desc') }].map(type => (
-                                <button key={type.value} type="button"
-                                    onClick={() => { setFormData(p => ({ ...p, providerType: type.value as any })); setAddressQuery(''); setAddressSelected(false); }}
-                                    className="p-3 rounded-xl border-2 text-left transition-all"
-                                    style={{ borderColor: formData.providerType === type.value ? C.orange : C.border, background: formData.providerType === type.value ? C.orangeLight : '#fff' }}>
-                                    <p className="text-xs font-bold mb-0.5" style={{ color: formData.providerType === type.value ? C.orange : C.navy }}>{type.label}</p>
-                                    <p className="text-[11px]" style={{ color: C.gray }}>{type.desc}</p>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
+        <>
+            <div>
+                {/* Basic info card */}
+                <SectionCard title={t('provider.onboarding.serviceInfo.basicInfo.title')}>
+                    <div className="space-y-4">
+                        {/* Provider type */}
                         <div>
-                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>{t('provider.onboarding.serviceInfo.basicInfo.fullName')} <span style={{ color: C.red }}>*</span></label>
-                            <input type="text" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} placeholder={t('provider.onboarding.serviceInfo.basicInfo.fullNamePlaceholder')} className={inputCls(!!errors.fullName)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
-                            {errors.fullName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.fullName}</p>}
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>{t('provider.onboarding.serviceInfo.basicInfo.phone')} <span style={{ color: C.red }}>*</span></label>
-                            <input type="tel" value={formData.phoneNumber} onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })} placeholder="0912345678" className={inputCls(!!errors.phoneNumber)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
-                            {errors.phoneNumber && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.phoneNumber}</p>}
-                        </div>
-                    </div>
-
-                    {formData.providerType === 'BUSINESS' && (
-                        <div>
-                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>{t('provider.onboarding.serviceInfo.basicInfo.businessName')} <span style={{ color: C.red }}>*</span></label>
-                            <input type="text" value={formData.businessName} onChange={e => setFormData({ ...formData, businessName: e.target.value })} placeholder={t('provider.onboarding.serviceInfo.basicInfo.businessNamePlaceholder')} className={inputCls(!!errors.businessName)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
-                            {errors.businessName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.businessName}</p>}
-                        </div>
-                    )}
-
-                    {/* Address */}
-                    <div className="relative">
-                        <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>
-                            {formData.providerType === 'INDIVIDUAL' ? t('provider.onboarding.serviceInfo.basicInfo.permanentAddress') : t('provider.onboarding.serviceInfo.basicInfo.businessAddress')} <span style={{ color: C.red }}>*</span>
-                        </label>
-                        <div className="relative">
-                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: C.gray }} />
-                            <input ref={addressInputRef} type="text" value={addressQuery}
-                                onChange={e => { const v = e.target.value; setAddressQuery(v); setAddressSelected(false); if (formData.providerType === 'INDIVIDUAL') setFormData(p => ({ ...p, permanentAddress: { addressText: '', lat: 0, lng: 0 } })); else setFormData(p => ({ ...p, businessAddress: { addressText: '', lat: 0, lng: 0 } })); if (v.trim().length >= 2) setShowSuggestions(true); }}
-                                onFocus={() => { if (addressSuggestions.length > 0 && !addressSelected) setShowSuggestions(true); }}
-                                placeholder={t('provider.onboarding.serviceInfo.basicInfo.addressPlaceholder')} autoComplete="off"
-                                className={inputCls(!!(errors.permanentAddress || errors.businessAddress))} style={{ paddingLeft: '2.25rem', color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
-                        </div>
-                        {showSuggestions && addressSuggestions.length > 0 && (
-                            <div ref={suggestionsRef} className="absolute z-10 w-full mt-1 bg-white rounded-xl border shadow-lg max-h-52 overflow-y-auto" style={{ borderColor: C.border }}>
-                                {addressSuggestions.map((s, i) => (
-                                    <button key={i} type="button" onClick={() => handleSelectAddress(s)} className="w-full px-4 py-2.5 text-left border-b last:border-b-0 hover:bg-orange-50 transition-colors" style={{ borderColor: C.border }}>
-                                        <div className="flex items-start gap-2">
-                                            <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: C.orange }} />
-                                            <p className="text-xs" style={{ color: C.navy }}>{s.displayName}</p>
-                                        </div>
+                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>
+                                {t('provider.onboarding.serviceInfo.basicInfo.providerType')} <span style={{ color: C.red }}>*</span>
+                            </label>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    { value: 'INDIVIDUAL', label: t('provider.onboarding.serviceInfo.basicInfo.providerTypeOptions.individual.label'), desc: t('provider.onboarding.serviceInfo.basicInfo.providerTypeOptions.individual.desc') },
+                                    { value: 'BUSINESS', label: t('provider.onboarding.serviceInfo.basicInfo.providerTypeOptions.business.label'), desc: t('provider.onboarding.serviceInfo.basicInfo.providerTypeOptions.business.desc') },
+                                ].map(type => (
+                                    <button key={type.value} type="button"
+                                        onClick={() => {
+                                            setFormData(p => ({ ...p, providerType: type.value as any }));
+                                            setAddressQuery('');
+                                            setAddressSelected(false);
+                                        }}
+                                        className="p-3 rounded-xl border-2 text-left transition-all"
+                                        style={{ borderColor: formData.providerType === type.value ? C.orange : C.border, background: formData.providerType === type.value ? C.orangeLight : '#fff' }}>
+                                        <p className="text-xs font-bold mb-0.5" style={{ color: formData.providerType === type.value ? C.orange : C.navy }}>{type.label}</p>
+                                        <p className="text-[11px]" style={{ color: C.gray }}>{type.desc}</p>
                                     </button>
                                 ))}
                             </div>
-                        )}
-                        {(errors.permanentAddress || errors.businessAddress) && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.permanentAddress || errors.businessAddress}</p>}
-                        {currentAddr.addressText && (
-                            <div className="mt-1.5 flex items-center gap-1.5">
-                                <CheckCircle className="w-3.5 h-3.5" style={{ color: C.green }} />
-                                <p className="text-xs" style={{ color: C.green }}>{t('provider.onboarding.serviceInfo.basicInfo.addressSelected')}</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </SectionCard>
-
-            {/* Services card */}
-            <SectionCard title={t('provider.onboarding.serviceInfo.services.title')}>
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-semibold mb-2" style={{ color: C.navy }}>{t('provider.onboarding.serviceInfo.services.serviceType')} <span style={{ color: C.red }}>*</span></label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {serviceTypes.map(s => {
-                                const active = formData.serviceTypes.includes(s.value);
-                                return (
-                                    <button key={s.value} type="button" onClick={() => setFormData(p => ({ ...p, serviceTypes: active ? p.serviceTypes.filter((x: string) => x !== s.value) : [...p.serviceTypes, s.value] }))}
-                                        className="p-2.5 rounded-xl border-2 text-center transition-all"
-                                        style={{ borderColor: active ? C.orange : C.border, background: active ? C.orangeLight : '#fff' }}>
-                                        <p className="text-[11px] font-semibold" style={{ color: active ? C.orange : C.navy }}>{s.label}</p>
-                                    </button>
-                                );
-                            })}
                         </div>
-                        {errors.serviceTypes && <p className="mt-1.5 text-xs" style={{ color: C.red }}>{errors.serviceTypes}</p>}
-                    </div>
 
-                    <div>
-                        <label className="block text-xs font-semibold mb-2" style={{ color: C.navy }}>{t('provider.onboarding.serviceInfo.services.customerVehicleType')} <span style={{ color: C.red }}>*</span></label>
                         <div className="grid grid-cols-2 gap-3">
-                            {[{ value: 'CAR', label: t('provider.onboarding.serviceInfo.services.vehicleTypeOptions.car') }, { value: 'MOTORCYCLE', label: t('provider.onboarding.serviceInfo.services.vehicleTypeOptions.motorcycle') }].map(v => {
-                                const active = formData.supportedVehicleTypes.includes(v.value);
-                                return (
-                                    <button key={v.value} type="button" onClick={() => setFormData(p => ({ ...p, supportedVehicleTypes: active ? p.supportedVehicleTypes.filter((x: string) => x !== v.value) : [...p.supportedVehicleTypes, v.value] }))}
-                                        className="flex items-center gap-3 p-3 rounded-xl border-2 transition-all"
-                                        style={{ borderColor: active ? C.orange : C.border, background: active ? C.orangeLight : '#fff' }}>
-                                        <span className="text-sm font-semibold" style={{ color: active ? C.orange : C.navy }}>{v.label}</span>
-                                        {active && <CheckCircle className="w-4 h-4 ml-auto" style={{ color: C.orange }} />}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        {errors.supportedVehicleTypes && <p className="mt-1.5 text-xs" style={{ color: C.red }}>{errors.supportedVehicleTypes}</p>}
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-semibold mb-2" style={{ color: C.navy }}>
-                            {t('provider.onboarding.serviceInfo.services.serviceRadius')}: <span style={{ color: C.orange }}>{formData.serviceRadiusKm} km</span>
-                        </label>
-                        <input type="range" min="5" max="50" step="5" value={formData.serviceRadiusKm}
-                            onChange={e => setFormData({ ...formData, serviceRadiusKm: parseInt(e.target.value) })}
-                            className="w-full cursor-pointer accent-orange-500" />
-                        <div className="flex justify-between text-xs mt-1" style={{ color: C.gray }}><span>5 km</span><span>50 km</span></div>
-                        {errors.serviceRadiusKm && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.serviceRadiusKm}</p>}
-                    </div>
-                </div>
-            </SectionCard>
-
-            {/* Rescue vehicles card */}
-            <SectionCard title={t('provider.onboarding.serviceInfo.rescueVehicles.title')}>
-                <div className="space-y-3">
-                    {formData.rescueVehicles.map((vehicle: any, idx: number) => {
-                        const errKey = `rv_${idx}`;
-                        const plateOk = vehicle.plateNumber && isValidVietnamPlate(vehicle.plateNumber);
-                        return (
-                            <div key={idx} className="p-3 rounded-xl border" style={{ borderColor: C.border, background: C.bg }}>
-                                <div className="flex items-center justify-between mb-2">
-                                    <p className="text-xs font-semibold" style={{ color: C.navy }}>
-                                        {t('provider.onboarding.serviceInfo.rescueVehicles.vehicle')} {idx + 1}
-                                        {vehicle.isPrimary && <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px]" style={{ background: C.orangeLight, color: C.orange }}>{t('provider.onboarding.serviceInfo.rescueVehicles.primary')}</span>}
-                                    </p>
-                                    {formData.rescueVehicles.length > 1 && (
-                                        <button type="button" onClick={() => {
-                                            const nv = formData.rescueVehicles.filter((_: any, i: number) => i !== idx);
-                                            if (vehicle.isPrimary && nv.length > 0) nv[0].isPrimary = true;
-                                            setFormData({ ...formData, rescueVehicles: nv });
-                                        }} className="p-1 rounded-lg hover:bg-red-50" style={{ color: C.red }}>
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="block text-[11px] font-medium mb-1" style={{ color: C.gray }}>{t('provider.onboarding.serviceInfo.rescueVehicles.vehicleType')}</label>
-                                        <select value={vehicle.type}
-                                            onChange={e => { const nv = [...formData.rescueVehicles]; nv[idx].type = e.target.value; setFormData({ ...formData, rescueVehicles: nv }); }}
-                                            className="w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-2 focus:ring-orange-100 bg-white" style={{ borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}>
-                                            <option value="CAR">{t('provider.onboarding.serviceInfo.services.vehicleTypeOptions.car')}</option>
-                                            <option value="MOTORCYCLE">{t('provider.onboarding.serviceInfo.services.vehicleTypeOptions.motorcycle')}</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[11px] font-medium mb-1" style={{ color: C.gray }}>{t('provider.onboarding.serviceInfo.rescueVehicles.plateNumber')}</label>
-                                        <input type="text" value={vehicle.plateNumber}
-                                            onChange={e => { const v = e.target.value.toUpperCase(); const nv = [...formData.rescueVehicles]; nv[idx].plateNumber = v; setFormData({ ...formData, rescueVehicles: nv }); if (errors[errKey]) setErrors(p => { const { [errKey]: _, ...r } = p; return r; }); }}
-                                            onBlur={() => { if (vehicle.plateNumber && isValidVietnamPlate(vehicle.plateNumber)) { const nv = [...formData.rescueVehicles]; nv[idx].plateNumber = formatVietnamPlate(vehicle.plateNumber); setFormData({ ...formData, rescueVehicles: nv }); } }}
-                                            placeholder="29A-12345" className={inputCls(!!errors[errKey])} style={{ fontFamily: 'monospace', textTransform: 'uppercase', color: C.navy, fontSize: '12px' }} />
-                                    </div>
-                                </div>
-                                {errors[errKey] ? <p className="mt-1 text-xs" style={{ color: C.red }}>{errors[errKey]}</p>
-                                    : plateOk ? <div className="mt-1 flex items-center gap-1"><CheckCircle className="w-3 h-3" style={{ color: C.green }} /><p className="text-xs" style={{ color: C.green }}>{t('provider.onboarding.serviceInfo.rescueVehicles.valid')}</p></div> : null}
+                            <div>
+                                <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>
+                                    {t('provider.onboarding.serviceInfo.basicInfo.fullName')} <span style={{ color: C.red }}>*</span>
+                                </label>
+                                <input type="text" value={formData.fullName}
+                                    onChange={e => setFormData({ ...formData, fullName: e.target.value })}
+                                    placeholder={t('provider.onboarding.serviceInfo.basicInfo.fullNamePlaceholder')}
+                                    className={inputCls(!!errors.fullName)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
+                                {errors.fullName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.fullName}</p>}
                             </div>
-                        );
-                    })}
-                    <button type="button"
-                        onClick={() => setFormData({ ...formData, rescueVehicles: [...formData.rescueVehicles, { type: 'CAR', plateNumber: '', isPrimary: false }] })}
-                        className="w-full py-2.5 rounded-xl border-2 border-dashed text-xs font-semibold flex items-center justify-center gap-2 transition-colors hover:border-orange-300 hover:text-orange-500 bg-white"
-                        style={{ borderColor: C.border, color: C.gray }}>
-                        <Plus className="w-3.5 h-3.5" /> {t('provider.onboarding.serviceInfo.rescueVehicles.addVehicle')}
-                    </button>
-                    {errors.rescueVehicles && <p className="text-xs" style={{ color: C.red }}>{errors.rescueVehicles}</p>}
-                </div>
-            </SectionCard>
+                            <div>
+                                <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>
+                                    {t('provider.onboarding.serviceInfo.basicInfo.phone')} <span style={{ color: C.red }}>*</span>
+                                </label>
+                                <input type="tel" value={formData.phoneNumber}
+                                    onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })}
+                                    placeholder="0912345678"
+                                    className={inputCls(!!errors.phoneNumber)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
+                                {errors.phoneNumber && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.phoneNumber}</p>}
+                            </div>
+                        </div>
 
-            {/* Actions */}
-            <div className="flex justify-between items-center pt-2">
-                <button onClick={onBack} className="px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50"
-                    style={{ borderColor: C.border, color: C.gray }}>
-                    {t('provider.onboarding.common.back')}
-                </button>
-                <button onClick={handleSubmit} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2 transition-all"
-                    style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)` }}>
-                    {t('provider.onboarding.common.continue')} →
-                </button>
+                        {formData.providerType === 'BUSINESS' && (
+                            <div>
+                                <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>
+                                    {t('provider.onboarding.serviceInfo.basicInfo.businessName')} <span style={{ color: C.red }}>*</span>
+                                </label>
+                                <input type="text" value={formData.businessName}
+                                    onChange={e => setFormData({ ...formData, businessName: e.target.value })}
+                                    placeholder={t('provider.onboarding.serviceInfo.basicInfo.businessNamePlaceholder')}
+                                    className={inputCls(!!errors.businessName)} style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }} />
+                                {errors.businessName && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.businessName}</p>}
+                            </div>
+                        )}
+
+                        {/* ── Address ── */}
+                        <div>
+                            <label className="block text-xs font-semibold mb-1.5" style={{ color: C.navy }}>
+                                {formData.providerType === 'INDIVIDUAL'
+                                    ? t('provider.onboarding.serviceInfo.basicInfo.permanentAddress')
+                                    : t('provider.onboarding.serviceInfo.basicInfo.businessAddress')}{' '}
+                                <span style={{ color: C.red }}>*</span>
+                            </label>
+
+                            {/* ── Text search ── */}
+                            <div className="relative">
+                                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: C.gray }} />
+                                <input
+                                    ref={addressInputRef}
+                                    type="text"
+                                    value={addressQuery}
+                                    onChange={e => {
+                                        const v = e.target.value;
+                                        setAddressQuery(v);
+                                        setAddressSelected(false);
+                                        if (formData.providerType === 'INDIVIDUAL') {
+                                            setFormData(p => ({ ...p, permanentAddress: { addressText: '', lat: 0, lng: 0 } }));
+                                        } else {
+                                            setFormData(p => ({ ...p, businessAddress: { addressText: '', lat: 0, lng: 0 } }));
+                                        }
+                                        if (v.trim().length >= 2) setShowSuggestions(true);
+                                    }}
+                                    onFocus={() => {
+                                        if (addressSuggestions.length > 0 && !addressSelected) setShowSuggestions(true);
+                                    }}
+                                    placeholder={t('provider.onboarding.serviceInfo.basicInfo.addressPlaceholder')}
+                                    autoComplete="off"
+                                    className={inputCls(!!(errors.permanentAddress || errors.businessAddress))}
+                                    style={{ paddingLeft: '2.25rem', color: C.navy, fontFamily: 'Lexend, sans-serif' }}
+                                />
+                                {showSuggestions && addressSuggestions.length > 0 && (
+                                    <div ref={suggestionsRef} className="absolute z-10 w-full mt-1 bg-white rounded-xl border shadow-lg max-h-52 overflow-y-auto" style={{ borderColor: C.border }}>
+                                        {addressSuggestions.map((s, i) => (
+                                            <button key={i} type="button" onClick={() => handleSelectAddress(s)}
+                                                className="w-full px-4 py-2.5 text-left border-b last:border-b-0 hover:bg-orange-50 transition-colors" style={{ borderColor: C.border }}>
+                                                <div className="flex items-start gap-2">
+                                                    <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: C.orange }} />
+                                                    <p className="text-xs" style={{ color: C.navy }}>{s.displayName}</p>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ── Map picker button ── */}
+                            <button
+                                type="button"
+                                onClick={openMapModal}
+                                className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed text-xs font-semibold transition-all hover:border-orange-400 hover:bg-orange-50"
+                                style={{ borderColor: C.border, color: C.gray }}
+                            >
+                                <Map className="w-3.5 h-3.5" style={{ color: C.orange }} />
+                                <span style={{ color: C.orange }}>Chọn trên bản đồ</span>
+                                <span style={{ color: C.gray }}>– chính xác hơn</span>
+                            </button>
+
+                            {/* Errors & success */}
+                            {(errors.permanentAddress || errors.businessAddress) && (
+                                <p className="mt-1 text-xs" style={{ color: C.red }}>
+                                    {errors.permanentAddress || errors.businessAddress}
+                                </p>
+                            )}
+                            {currentAddr.addressText && (
+                                <div className="mt-1.5 flex items-center gap-1.5">
+                                    <CheckCircle className="w-3.5 h-3.5" style={{ color: C.green }} />
+                                    <p className="text-xs" style={{ color: C.green }}>
+                                        {t('provider.onboarding.serviceInfo.basicInfo.addressSelected')}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </SectionCard>
+
+                {/* Services card */}
+                <SectionCard title={t('provider.onboarding.serviceInfo.services.title')}>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-semibold mb-2" style={{ color: C.navy }}>
+                                {t('provider.onboarding.serviceInfo.services.serviceType')} <span style={{ color: C.red }}>*</span>
+                            </label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {serviceTypes.map(s => {
+                                    const active = formData.serviceTypes.includes(s.value);
+                                    return (
+                                        <button key={s.value} type="button"
+                                            onClick={() => setFormData(p => ({ ...p, serviceTypes: active ? p.serviceTypes.filter((x: string) => x !== s.value) : [...p.serviceTypes, s.value] }))}
+                                            className="p-2.5 rounded-xl border-2 text-center transition-all"
+                                            style={{ borderColor: active ? C.orange : C.border, background: active ? C.orangeLight : '#fff' }}>
+                                            <p className="text-[11px] font-semibold" style={{ color: active ? C.orange : C.navy }}>{s.label}</p>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {errors.serviceTypes && <p className="mt-1.5 text-xs" style={{ color: C.red }}>{errors.serviceTypes}</p>}
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold mb-2" style={{ color: C.navy }}>
+                                {t('provider.onboarding.serviceInfo.services.customerVehicleType')} <span style={{ color: C.red }}>*</span>
+                            </label>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    { value: 'CAR', label: t('provider.onboarding.serviceInfo.services.vehicleTypeOptions.car') },
+                                    { value: 'MOTORCYCLE', label: t('provider.onboarding.serviceInfo.services.vehicleTypeOptions.motorcycle') },
+                                ].map(v => {
+                                    const active = formData.supportedVehicleTypes.includes(v.value);
+                                    return (
+                                        <button key={v.value} type="button"
+                                            onClick={() => setFormData(p => ({ ...p, supportedVehicleTypes: active ? p.supportedVehicleTypes.filter((x: string) => x !== v.value) : [...p.supportedVehicleTypes, v.value] }))}
+                                            className="flex items-center gap-3 p-3 rounded-xl border-2 transition-all"
+                                            style={{ borderColor: active ? C.orange : C.border, background: active ? C.orangeLight : '#fff' }}>
+                                            <span className="text-[11px] font-semibold" style={{ color: active ? C.orange : C.navy }}>{v.label}</span>
+                                            {active && <CheckCircle className="w-4 h-4 ml-auto" style={{ color: C.orange }} />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {errors.supportedVehicleTypes && <p className="mt-1.5 text-xs" style={{ color: C.red }}>{errors.supportedVehicleTypes}</p>}
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold mb-2" style={{ color: C.navy }}>
+                                {t('provider.onboarding.serviceInfo.services.serviceRadius')}: <span style={{ color: C.orange }}>{formData.serviceRadiusKm} km</span>
+                            </label>
+                            <input type="range" min="5" max="50" step="5" value={formData.serviceRadiusKm}
+                                onChange={e => setFormData({ ...formData, serviceRadiusKm: parseInt(e.target.value) })}
+                                className="w-full cursor-pointer accent-orange-500" />
+                            <div className="flex justify-between text-xs mt-1" style={{ color: C.gray }}><span>5 km</span><span>50 km</span></div>
+                            {errors.serviceRadiusKm && <p className="mt-1 text-xs" style={{ color: C.red }}>{errors.serviceRadiusKm}</p>}
+                        </div>
+                    </div>
+                </SectionCard>
+
+                {/* Rescue vehicles card */}
+                <SectionCard title={t('provider.onboarding.serviceInfo.rescueVehicles.title')}>
+                    <div className="space-y-3">
+                        {formData.rescueVehicles.map((vehicle: any, idx: number) => {
+                            const errKey = `rv_${idx}`;
+                            const plateOk = vehicle.plateNumber && isValidVietnamPlate(vehicle.plateNumber);
+                            return (
+                                <div key={idx} className="p-3 rounded-xl border" style={{ borderColor: C.border, background: C.bg }}>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <p className="text-xs font-semibold" style={{ color: C.navy }}>
+                                            {t('provider.onboarding.serviceInfo.rescueVehicles.vehicle')} {idx + 1}
+                                            {vehicle.isPrimary && (
+                                                <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px]" style={{ background: C.orangeLight, color: C.orange }}>
+                                                    {t('provider.onboarding.serviceInfo.rescueVehicles.primary')}
+                                                </span>
+                                            )}
+                                        </p>
+                                        {formData.rescueVehicles.length > 1 && (
+                                            <button type="button" onClick={() => {
+                                                const nv = formData.rescueVehicles.filter((_: any, i: number) => i !== idx);
+                                                if (vehicle.isPrimary && nv.length > 0) nv[0].isPrimary = true;
+                                                setFormData({ ...formData, rescueVehicles: nv });
+                                            }} className="p-1 rounded-lg hover:bg-red-50" style={{ color: C.red }}>
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="block text-[11px] font-medium mb-1" style={{ color: C.gray }}>
+                                                {t('provider.onboarding.serviceInfo.rescueVehicles.vehicleType')}
+                                            </label>
+                                            <select value={vehicle.type}
+                                                onChange={e => {
+                                                    const nv = [...formData.rescueVehicles];
+                                                    nv[idx].type = e.target.value;
+                                                    setFormData({ ...formData, rescueVehicles: nv });
+                                                }}
+                                                className="w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-2 focus:ring-orange-100 bg-white"
+                                                style={{ borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}>
+                                                <option value="CAR">{t('provider.onboarding.serviceInfo.services.vehicleTypeOptions.car')}</option>
+                                                <option value="MOTORCYCLE">{t('provider.onboarding.serviceInfo.services.vehicleTypeOptions.motorcycle')}</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-medium mb-1" style={{ color: C.gray }}>
+                                                {t('provider.onboarding.serviceInfo.rescueVehicles.plateNumber')}
+                                            </label>
+                                            <input type="text" value={vehicle.plateNumber}
+                                                onChange={e => {
+                                                    const v = e.target.value.toUpperCase();
+                                                    const nv = [...formData.rescueVehicles];
+                                                    nv[idx].plateNumber = v;
+                                                    setFormData({ ...formData, rescueVehicles: nv });
+                                                    if (errors[errKey]) setErrors(p => { const { [errKey]: _, ...r } = p; return r; });
+                                                }}
+                                                onBlur={() => {
+                                                    if (vehicle.plateNumber && isValidVietnamPlate(vehicle.plateNumber)) {
+                                                        const nv = [...formData.rescueVehicles];
+                                                        nv[idx].plateNumber = formatVietnamPlate(vehicle.plateNumber);
+                                                        setFormData({ ...formData, rescueVehicles: nv });
+                                                    }
+                                                }}
+                                                placeholder="29A-12345"
+                                                className={inputCls(!!errors[errKey])}
+                                                style={{ fontFamily: 'monospace', textTransform: 'uppercase', color: C.navy, fontSize: '12px' }} />
+                                        </div>
+                                    </div>
+                                    {errors[errKey]
+                                        ? <p className="mt-1 text-xs" style={{ color: C.red }}>{errors[errKey]}</p>
+                                        : plateOk
+                                            ? <div className="mt-1 flex items-center gap-1"><CheckCircle className="w-3 h-3" style={{ color: C.green }} /><p className="text-xs" style={{ color: C.green }}>{t('provider.onboarding.serviceInfo.rescueVehicles.valid')}</p></div>
+                                            : null}
+                                </div>
+                            );
+                        })}
+                        <button type="button"
+                            onClick={() => setFormData({ ...formData, rescueVehicles: [...formData.rescueVehicles, { type: 'CAR', plateNumber: '', isPrimary: false }] })}
+                            className="w-full py-2.5 rounded-xl border-2 border-dashed text-xs font-semibold flex items-center justify-center gap-2 transition-colors hover:border-orange-300 hover:text-orange-500 bg-white"
+                            style={{ borderColor: C.border, color: C.gray }}>
+                            <Plus className="w-3.5 h-3.5" /> {t('provider.onboarding.serviceInfo.rescueVehicles.addVehicle')}
+                        </button>
+                        {errors.rescueVehicles && <p className="text-xs" style={{ color: C.red }}>{errors.rescueVehicles}</p>}
+                    </div>
+                </SectionCard>
+
+                {/* Actions */}
+                <div className="flex justify-between items-center pt-2">
+                    <button onClick={onBack} className="px-5 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50"
+                        style={{ borderColor: C.border, color: C.gray }}>
+                        {t('provider.onboarding.common.back')}
+                    </button>
+                    <button onClick={handleSubmit} className="px-6 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2 transition-all"
+                        style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)` }}>
+                        {t('provider.onboarding.common.continue')} →
+                    </button>
+                </div>
             </div>
-        </div>
+
+            {/* ══════════════════════════════════════════════
+                Map Modal Overlay
+            ══════════════════════════════════════════════ */}
+            {showMapModal && (
+                <div
+                    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+                    style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
+                    onClick={(e) => { if (e.target === e.currentTarget) setShowMapModal(false); }}
+                >
+                    <div
+                        className="w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl overflow-hidden"
+                        style={{ background: 'white', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
+                    >
+                        {/* Modal header */}
+                        <div className="flex items-center justify-between px-4 py-3.5"
+                            style={{ borderBottom: `1px solid ${C.border}` }}>
+                            <div>
+                                <p className="text-sm font-bold" style={{ color: C.navy }}>Chọn vị trí trên bản đồ</p>
+                                <p className="text-xs mt-0.5" style={{ color: C.gray }}>
+                                    {formData.providerType === 'INDIVIDUAL' ? 'Địa chỉ thường trú' : 'Địa chỉ doanh nghiệp'} – kéo bản đồ để tinh chỉnh
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowMapModal(false)}
+                                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-gray-100"
+                                style={{ color: C.gray }}
+                            >
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Map */}
+                        <MapLocationPicker
+                            initialCenter={mapInitialGps}
+                            onLocationChange={(data: MapLocationData) => setMapPendingLocation(data)}
+                            height="320px"
+                        />
+
+                        {/* Modal footer */}
+                        <div className="flex gap-3 px-4 py-3" style={{ borderTop: `1px solid ${C.border}` }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowMapModal(false)}
+                                className="flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50"
+                                style={{ borderColor: C.border, color: C.gray }}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleMapConfirm}
+                                disabled={!mapPendingLocation}
+                                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40 active:scale-[0.98]"
+                                style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
+                            >
+                                Xác nhận vị trí này
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }
