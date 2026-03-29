@@ -17,8 +17,30 @@ declare global {
                 }) => void;
                 remove: () => void;
             };
-            Marker: new (element?: HTMLElement) => {
+            /** Mapbox-style: custom DOM must use `{ element }` — plain `HTMLElement` is not always applied as marker content. */
+            Marker: new (
+                options?:
+                    | HTMLElement
+                    | {
+                          element?: HTMLElement;
+                          anchor?: string;
+                          color?: string;
+                          scale?: number;
+                          draggable?: boolean;
+                      }
+            ) => {
                 setLngLat: (lngLat: [number, number]) => any;
+                addTo: (map: any) => any;
+                remove: () => void;
+            };
+            Popup: new (options?: {
+                closeButton?: boolean;
+                closeOnClick?: boolean;
+                offset?: number;
+                maxWidth?: string;
+            }) => {
+                setLngLat: (lngLat: [number, number]) => any;
+                setHTML: (html: string) => any;
                 addTo: (map: any) => any;
                 remove: () => void;
             };

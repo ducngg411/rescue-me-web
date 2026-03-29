@@ -9,6 +9,9 @@ backup/
 *.env.backend
 *.env.frontend
 
+.claude
+.claude
+
 # OS files
 .DS_Store
 Thumbs.db

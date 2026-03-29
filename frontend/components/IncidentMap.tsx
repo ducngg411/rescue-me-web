@@ -5,13 +5,6 @@ import api from '@/lib/api';
 
 const VIETMAP_API_KEY = process.env.NEXT_PUBLIC_VIETMAP_API_KEY;
 
-// ─── Reuse global singleton từ VietMap.tsx (cùng namespace window) ────────────
-declare global {
-    interface Window {
-        vietmapgl: any;
-    }
-}
-
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const C = {
     orange: '#f97316',
@@ -181,8 +174,9 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
 
     // ── Render markers / heatmap khi map ready + data thay đổi ────────────────
     useEffect(() => {
-        if (!isMapReady || !mapRef.current) return;
+        if (!isMapReady || !mapRef.current || !window.vietmapgl) return;
         const map = mapRef.current;
+        const vgl = window.vietmapgl;
 
         // Clear cũ
         markersRef.current.forEach(m => { try { m.remove(); } catch {} });
@@ -250,7 +244,7 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                 el.onmouseenter = () => { el.style.transform = 'scale(1.35)'; };
                 el.onmouseleave = () => { el.style.transform = 'scale(1)'; };
 
-                const marker = new window.vietmapgl.Marker({ element: el })
+                const marker = new vgl.Marker({ element: el })
                     .setLngLat([p.lng, p.lat])
                     .addTo(map);
 
@@ -260,7 +254,7 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                     e.stopPropagation();
                     if (popupRef.current) { try { popupRef.current.remove(); } catch {} }
 
-                    const popup = new window.vietmapgl.Popup({
+                    const popup = new vgl.Popup({
                         closeButton: true,
                         closeOnClick: false,
                         offset: 16,
