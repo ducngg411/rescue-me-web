@@ -241,7 +241,7 @@ export function formatCtaStateDirective(phase: CustomerCtaPhase): string {
         COMPLAINT_CONFIRM:
             'Lượt này hệ thống đang ở COMPLAINT_CONFIRM. Tóm tắt thông tin khiếu nại (lý do, số tiền, bằng chứng nếu có) và xin xác nhận. Người dùng chỉ cần bấm "Gửi khiếu nại" hoặc "Thay đổi thông tin". KHÔNG hỏi thêm thông tin nào. KHÔNG đề xuất loại sự cố hay CTA tạo đơn cứu hộ.',
         TOPUP_QR:
-            'Lượt này hệ thống đang ở TOPUP_QR. QR nạp tiền đã được tạo và hiển thị cho người dùng. Hướng dẫn ngắn gọn: quét QR hoặc chuyển khoản với đúng nội dung và số tiền. Nhắc QR có hiệu lực 5 phút. Người dùng bấm "Tôi đã chuyển khoản" để kiểm tra. KHÔNG đề xuất bất kỳ luồng nào khác.',
+            'Lượt này hệ thống đang ở TOPUP_QR. Ảnh QR + STK + nội dung CK đã hiển thị trong khung chat. Chỉ nhắc ngắn bằng lời (quét QR hoặc CK đúng nội dung/số tiền, hiệu lực 5 phút). KHÔNG chèn ![...](url) hay link ảnh QR. Người dùng bấm "Tôi đã chuyển khoản" để kiểm tra. KHÔNG đề xuất luồng khác.',
         WITHDRAWAL_CONFIRM:
             'Lượt này hệ thống đang ở WITHDRAWAL_CONFIRM. Tóm tắt thông tin rút tiền (số tiền, ngân hàng, số tài khoản, chủ tài khoản) và xin xác nhận. Người dùng chỉ cần bấm "Xác nhận rút tiền" hoặc "Thay đổi thông tin". Nhắc rằng yêu cầu rút sẽ được xử lý bởi admin trong 1-2 ngày làm việc. KHÔNG hỏi thêm thông tin nào.',
         GENERAL:

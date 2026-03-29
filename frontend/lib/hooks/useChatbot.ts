@@ -12,6 +12,8 @@ export type CustomerCtaPhase =
     | 'LOCATION_CHOICE'
     | 'DESCRIBE_INCIDENT'
     | 'COMPLAINT_CONFIRM'
+    | 'TOPUP_QR'
+    | 'WITHDRAWAL_CONFIRM'
     | 'GENERAL';
 
 export interface ChatbotMessage {

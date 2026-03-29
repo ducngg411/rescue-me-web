@@ -98,6 +98,19 @@ export const PROVIDER_TOOLS: ChatCompletionTool[] = [
     {
         type: 'function',
         function: {
+            name: 'get_withdrawal_accounts',
+            description:
+                'Lấy danh sách tài khoản ngân hàng đã lưu của provider để rút tiền. Gọi tool này trước khi hỏi thông tin ngân hàng khi provider muốn rút tiền.',
+            parameters: {
+                type: 'object',
+                properties: {},
+                required: [],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'initiate_withdrawal',
             description:
                 'Tạo yêu cầu rút tiền từ ví provider về ngân hàng. Tối thiểu 50,000 VND. CHỈ gọi sau khi provider xác nhận thông tin.',

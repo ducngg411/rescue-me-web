@@ -41,6 +41,12 @@ const TOOL_LABELS: Record<string, string> = {
     get_verification_guide: 'Đang kiểm tra trạng thái xác minh...',
     create_rescue_request: 'Đang tạo yêu cầu cứu hộ...',
     estimate_price_range: 'Đang ước tính giá dịch vụ...',
+    lookup_order_for_complaint: 'Đang tra cứu đơn khiếu nại...',
+    open_complaint: 'Đang mở khiếu nại...',
+    initiate_topup: 'Đang tạo QR nạp tiền...',
+    check_topup_status: 'Đang kiểm tra giao dịch...',
+    get_withdrawal_accounts: 'Đang lấy tài khoản ngân hàng...',
+    initiate_withdrawal: 'Đang gửi yêu cầu rút tiền...',
 };
 
 function formatTime(dateStr: string): string {
@@ -70,7 +76,19 @@ type CustomerCtaUiKind =
     | 'createRequest'
     | 'describeIncident'
     | 'complaintConfirm'
+    | 'topupQr'
+    | 'withdrawalConfirm'
     | 'generic';
+
+type TopupQrData = {
+    topupTxId: string;
+    qrUrl: string;
+    amount: number;
+    bankAccount?: string;
+    bankCode?: string;
+    transferCode?: string;
+    expireAt?: string;
+};
 
 /** Fallback when server did not send ctaPhase — keep in sync with backend customer-cta-phase.ts */
 function looksLikeConfirmRecapStep(content: string): boolean {
@@ -210,6 +228,10 @@ function resolveCustomerCtaUi(
                 return 'describeIncident';
             case 'COMPLAINT_CONFIRM':
                 return 'complaintConfirm';
+            case 'TOPUP_QR':
+                return 'topupQr';
+            case 'WITHDRAWAL_CONFIRM':
+                return 'withdrawalConfirm';
             default:
                 break;
         }
@@ -256,6 +278,7 @@ function MessageBubble({
     onOpenFileUpload,
     isSending,
     allowStructuredCustomerCta,
+    topupQrData,
 }: {
     msg: ChatbotMessage;
     isLastAssistant: boolean;
@@ -265,6 +288,7 @@ function MessageBubble({
     onOpenFileUpload: () => void;
     isSending: boolean;
     allowStructuredCustomerCta: boolean;
+    topupQrData?: TopupQrData | null;
 }) {
     const isUser = msg.role === 'USER';
     const displayContent = isUser ? msg.content : assistantPlainTextForChatUi(msg.content);
@@ -591,6 +615,53 @@ function MessageBubble({
                         </button>
                     </div>
                 )}
+                {ctaKind === 'topupQr' && topupQrData && (
+                    <div className="mt-2 rounded-xl border p-3 flex flex-col gap-2" style={{ background: '#f0fdf4', borderColor: '#bbf7d0' }}>
+                        <img src={topupQrData.qrUrl} alt="QR nạp tiền" className="w-36 h-36 mx-auto rounded-lg border border-gray-200" />
+                        <div className="text-xs text-center" style={{ color: '#15803d' }}>
+                            <div className="font-semibold">Chuyển khoản: <span style={{ color: C.navy }}>{topupQrData.amount?.toLocaleString('vi-VN')}₫</span></div>
+                            {topupQrData.bankAccount && <div>STK: {topupQrData.bankAccount} {topupQrData.bankCode ? `(${topupQrData.bankCode})` : ''}</div>}
+                            {topupQrData.transferCode && <div>Nội dung: <span className="font-mono font-semibold">{topupQrData.transferCode}</span></div>}
+                            <div className="mt-0.5 text-[10px]" style={{ color: C.gray }}>QR hiệu lực 5 phút. Hệ thống tự ghi có sau khi nhận tiền.</div>
+                        </div>
+                        <button
+                            onClick={() => onCtaClick('Tôi đã chuyển khoản, kiểm tra giúp tôi')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-50 w-full"
+                            style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white' }}
+                        >
+                            Tôi đã chuyển khoản
+                        </button>
+                    </div>
+                )}
+                {ctaKind === 'withdrawalConfirm' && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                        <button
+                            onClick={() => onCtaClick('Xác nhận rút tiền')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{
+                                background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                                color: 'white',
+                                boxShadow: '0 2px 8px #2563eb40',
+                            }}
+                        >
+                            Xác nhận rút tiền
+                        </button>
+                        <button
+                            onClick={() => onCtaClick('Tôi muốn thay đổi thông tin rút tiền')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{
+                                background: '#eff6ff',
+                                color: '#2563eb',
+                                border: '1px solid #bfdbfe',
+                            }}
+                        >
+                            Thay đổi thông tin
+                        </button>
+                    </div>
+                )}
                 <span className="text-[10px] mt-1 px-1" style={{ color: C.grayLight }}>
                     {formatTime(msg.createdAt)}
                 </span>
@@ -718,6 +789,8 @@ export default function ChatbotWidget() {
         pathname.startsWith('/onboarding') ||
         pathname === '/';
 
+    const [topupQrData, setTopupQrData] = useState<TopupQrData | null>(null);
+
     const chatbot = useChatbot({
         isGuest: isGuestMode,
         onAction: (event) => {
@@ -731,6 +804,23 @@ export default function ChatbotWidget() {
                 const disputeId = event.payload?.disputeId;
                 if (typeof disputeId === 'string' && disputeId.length > 0) {
                     router.push(`/user/disputes/${disputeId}`);
+                }
+            }
+            if (event.action === 'topup_completed') {
+                setTopupQrData(null);
+            }
+            if (event.action === 'show_topup_qr') {
+                const p = event.payload;
+                if (p && typeof p.topupTxId === 'string' && typeof p.qrUrl === 'string') {
+                    setTopupQrData({
+                        topupTxId: p.topupTxId as string,
+                        qrUrl: p.qrUrl as string,
+                        amount: (p.amount as number) ?? 0,
+                        bankAccount: p.bankAccount as string | undefined,
+                        bankCode: p.bankCode as string | undefined,
+                        transferCode: p.transferCode as string | undefined,
+                        expireAt: p.expireAt as string | undefined,
+                    });
                 }
             }
         },
@@ -932,6 +1022,7 @@ export default function ChatbotWidget() {
                 onClose={() => setIsOpen(false)}
                 allowStructuredCustomerCta={userRole === 'USER'}
                 faqOnlyGuest={isGuestMode}
+                topupQrData={topupQrData}
             />}
         </>
     );
@@ -964,6 +1055,8 @@ interface ChatPanelProps {
     allowStructuredCustomerCta: boolean;
     /** Guest: chỉ FAQ, ẩn đính kèm & copy gợi ý tạo đơn trong chat */
     faqOnlyGuest: boolean;
+    /** Active top-up QR data — shown in TOPUP_QR CTA */
+    topupQrData?: TopupQrData | null;
 }
 
 function ChatPanel({
@@ -991,6 +1084,7 @@ function ChatPanel({
     onClose,
     allowStructuredCustomerCta,
     faqOnlyGuest,
+    topupQrData,
 }: ChatPanelProps) {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1103,6 +1197,7 @@ function ChatPanel({
                                     onOpenFileUpload={() => fileInputRef.current?.click()}
                                     isSending={isSending}
                                     allowStructuredCustomerCta={allowStructuredCustomerCta}
+                                    topupQrData={msg.id === lastAssistantId ? topupQrData : null}
                                 />
                             ))}
                             {activeToolName && (

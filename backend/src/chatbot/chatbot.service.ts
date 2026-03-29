@@ -473,8 +473,12 @@ export class ChatbotService {
                 lower === 'ok' ||
                 lower.includes('tiếp tục') ||
                 lower.includes('rút tiền');
-            if (isConfirmation && state.withdrawalDraft?.amount) {
-                return `[Khách hàng xác nhận rút tiền] HÃY GỌI NGAY tool initiate_withdrawal với amount=${state.withdrawalDraft.amount}${state.withdrawalDraft.bankName ? `, bankName="${state.withdrawalDraft.bankName}"` : ''}${state.withdrawalDraft.accountNumber ? `, accountNumber="${state.withdrawalDraft.accountNumber}"` : ''}${state.withdrawalDraft.accountHolderName ? `, accountHolderName="${state.withdrawalDraft.accountHolderName}"` : ''}${state.withdrawalDraft.withdrawalAccountId ? `, withdrawalAccountId="${state.withdrawalDraft.withdrawalAccountId}"` : ''}. TUYỆT ĐỐI không hỏi thêm gì nữa.`;
+            if (isConfirmation) {
+                const draft = state.withdrawalDraft;
+                const draftHint = draft
+                    ? ` Dùng thông tin: amount=${draft.amount ?? '(từ hội thoại)'}${draft.bankName ? `, bankName="${draft.bankName}"` : ''}${draft.accountNumber ? `, accountNumber="${draft.accountNumber}"` : ''}${draft.accountHolderName ? `, accountHolderName="${draft.accountHolderName}"` : ''}${draft.withdrawalAccountId ? `, withdrawalAccountId="${draft.withdrawalAccountId}"` : ''}.`
+                    : ' Dùng toàn bộ thông tin đã thu thập trong cuộc hội thoại.';
+                return `[Khách hàng xác nhận rút tiền] HÃY GỌI NGAY tool initiate_withdrawal.${draftHint} TUYỆT ĐỐI không hỏi thêm gì nữa.`;
             }
         }
 
@@ -841,6 +845,17 @@ ${formatMissingFieldsDirective(missing)}`;
                     }
                 }
 
+                if (tc.name === 'check_topup_status') {
+                    try {
+                        const parsed = JSON.parse(result) as { status?: string };
+                        if (parsed.status === 'COMPLETED' || parsed.status === 'EXPIRED') {
+                            subject.next({ type: 'action', action: 'topup_completed', payload: { status: parsed.status } });
+                        }
+                    } catch {
+                        // no-op
+                    }
+                }
+
                 if (tc.name === 'initiate_topup') {
                     try {
                         const parsed = JSON.parse(result) as {
@@ -960,6 +975,14 @@ ${formatMissingFieldsDirective(missing)}`;
             });
 
             if (caller.userRole === 'USER') {
+                // Sync pendingAction from model-declared state for cross-turn persistence.
+                // This lets the normalizer intercept the user's next confirmation message.
+                if (modelState === 'WITHDRAWAL_CONFIRM') {
+                    const guidedSync = this.getOrCreateGuidedState(conversationId);
+                    if (guidedSync.pendingAction !== 'wallet_withdrawal_confirm') {
+                        guidedSync.pendingAction = 'wallet_withdrawal_confirm';
+                    }
+                }
                 await this.persistGuidedStateToDb(conversationId);
             }
 

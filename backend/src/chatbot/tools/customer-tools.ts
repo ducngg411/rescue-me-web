@@ -212,6 +212,19 @@ export const CUSTOMER_TOOLS: ChatCompletionTool[] = [
     {
         type: 'function',
         function: {
+            name: 'get_withdrawal_accounts',
+            description:
+                'Lấy danh sách tài khoản ngân hàng đã lưu của khách hàng để rút tiền. Gọi tool này trước khi hỏi thông tin ngân hàng khi khách muốn rút tiền.',
+            parameters: {
+                type: 'object',
+                properties: {},
+                required: [],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'initiate_withdrawal',
             description:
                 'Tạo yêu cầu rút tiền từ ví về ngân hàng. Tối thiểu 50,000 VND. CHỈ gọi sau khi người dùng xác nhận đầy đủ thông tin ngân hàng.',

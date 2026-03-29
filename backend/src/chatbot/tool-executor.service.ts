@@ -76,6 +76,8 @@ export class ToolExecutorService {
                     return await this.lookupOrderForComplaint(args, context);
                 case 'open_complaint':
                     return await this.openComplaint(args, context);
+                case 'get_withdrawal_accounts':
+                    return await this.getWithdrawalAccounts(context);
                 case 'initiate_topup':
                     return await this.initiateTopup(args, context);
                 case 'check_topup_status':
@@ -826,6 +828,32 @@ Quy tắc:
         }
     }
 
+    private async getWithdrawalAccounts(context: ToolContext): Promise<string> {
+        if (!context.userId) {
+            return JSON.stringify({ error: 'Không xác định được tài khoản.' });
+        }
+        try {
+            if (context.userRole === 'PROVIDER') {
+                const accounts = await this.prisma.providerWithdrawalAccount.findMany({
+                    where: { providerId: context.userId },
+                    orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+                    select: { id: true, bankName: true, bankCode: true, accountNumber: true, accountHolderName: true, isDefault: true },
+                });
+                return JSON.stringify({ accounts });
+            } else {
+                const accounts = await this.prisma.customerWithdrawalAccount.findMany({
+                    where: { userId: context.userId },
+                    orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+                    select: { id: true, bankName: true, bankCode: true, accountNumber: true, accountHolderName: true, isDefault: true },
+                });
+                return JSON.stringify({ accounts });
+            }
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Không thể lấy danh sách tài khoản.';
+            return JSON.stringify({ error: msg });
+        }
+    }
+
     private async initiateWithdrawal(
         args: Record<string, unknown>,
         context: ToolContext,
@@ -867,6 +895,22 @@ Quy tắc:
                 // Get/create wallet
                 const wallet = await this.walletService.ensureWallet(context.userId);
 
+                // Provider must keep ≥ 100,000₫ to maintain online status
+                const PROVIDER_RESERVE = 100_000;
+                const maxWithdrawal = wallet.availableBalance - PROVIDER_RESERVE;
+                if (maxWithdrawal <= 0) {
+                    return JSON.stringify({
+                        error: `Số dư ví không đủ để rút. Ví cần giữ tối thiểu 100,000₫ để duy trì trạng thái online. Số dư hiện tại: ${wallet.availableBalance.toLocaleString('vi-VN')}₫.`,
+                    });
+                }
+                if (amount > maxWithdrawal) {
+                    return JSON.stringify({
+                        error: `Số tiền rút vượt quá giới hạn. Ví cần giữ tối thiểu 100,000₫ để duy trì trạng thái online. Số dư hiện tại: ${wallet.availableBalance.toLocaleString('vi-VN')}₫, số tiền tối đa có thể rút: ${maxWithdrawal.toLocaleString('vi-VN')}₫.`,
+                        maxWithdrawal,
+                        currentBalance: wallet.availableBalance,
+                    });
+                }
+
                 // Find or create withdrawal account
                 let accountId = withdrawalAccountId;
                 if (!accountId && bankName && accountNumber && accountHolderName) {
@@ -901,6 +945,13 @@ Quy tắc:
             } else {
                 // USER
                 const wallet = await this.userWalletService.ensureWallet(context.userId);
+
+                if (wallet.availableBalance < amount) {
+                    return JSON.stringify({
+                        error: `Số dư ví không đủ. Số dư hiện tại: ${wallet.availableBalance.toLocaleString('vi-VN')}₫, số tiền muốn rút: ${amount.toLocaleString('vi-VN')}₫.`,
+                        currentBalance: wallet.availableBalance,
+                    });
+                }
 
                 let accountId = withdrawalAccountId;
                 if (!accountId && bankName && accountNumber && accountHolderName) {
