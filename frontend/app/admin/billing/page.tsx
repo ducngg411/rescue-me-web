@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import { toast } from 'react-hot-toast';
@@ -143,6 +144,7 @@ function describeAuditEntry(entry: AuditEntry): { label: string; before: string 
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminBillingPage() {
     const { isReady } = useAdminGuard();
+    const { t } = useLanguage();
 
     const [config, setConfig] = useState<BillingConfig | null>(null);
     const [loadingConfig, setLoadingConfig] = useState(true);
@@ -284,7 +286,7 @@ export default function AdminBillingPage() {
 
                 {/* ── Header ── */}
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>Billing & Fee</h1>
+                    <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>{t('admin.nav.billing')}</h1>
                     <p className="text-sm" style={{ color: C.gray }}>
                         Quản lý phí hoa hồng nền tảng và tài khoản nhận tiền.
                     </p>
@@ -462,11 +464,11 @@ export default function AdminBillingPage() {
                                         <ul className="space-y-1.5 text-xs" style={{ color: C.gray }}>
                                             <li className="flex items-start gap-2">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-current mt-1.5 flex-shrink-0" style={{ background: C.navy }} />
-                                                <span><strong style={{ color: C.navy }}>Tiền mặt:</strong> Trừ thẳng vào ví Provider sau khi job hoàn thành.</span>
+                                                <span><strong style={{ color: C.navy }}>Tiền mặt:</strong> Trừ thẳng vào ví cứu hộ viên sau khi job hoàn thành.</span>
                                             </li>
                                             <li className="flex items-start gap-2">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-current mt-1.5 flex-shrink-0" style={{ background: C.blue }} />
-                                                <span><strong style={{ color: C.navy }}>QR / Ví:</strong> Khấu trừ khi giải ngân — Provider nhận số tiền net.</span>
+                                                <span><strong style={{ color: C.navy }}>QR / Ví:</strong> Khấu trừ khi giải ngân — cứu hộ viên nhận số tiền net.</span>
                                             </li>
                                         </ul>
                                     </div>
@@ -579,7 +581,7 @@ export default function AdminBillingPage() {
                                         ))}
                                     </div>
                                     <p className="text-[10px]" style={{ color: C.gray }}>
-                                        💡 SePay dùng để nhận thanh toán QR và tự động đối soát top-up từ Provider.
+                                        💡 SePay dùng để nhận thanh toán QR và tự động đối soát top-up từ cứu hộ viên.
                                     </p>
                                 </div>
                             ) : (

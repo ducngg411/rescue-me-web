@@ -15,6 +15,9 @@ import ArrivalConfirmation from '@/components/ArrivalConfirmation';
 import PaymentRequest from '@/components/PaymentRequest';
 import RescueProgressTimeline from '@/components/RescueProgressTimeline';
 import { matchingQuoteWindowSecondsRemaining } from '@/lib/matchingQuoteWindowCountdown';
+import dynamic from 'next/dynamic';
+
+const ProviderTrackingMap = dynamic(() => import('@/components/ProviderTrackingMap'), { ssr: false });
 
 const C = {
     orange: '#f97316',
@@ -193,9 +196,18 @@ export default function GuestStatusPage() {
     const [statusData, setStatusData] = useState<RequestStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [showRegisterModal, setShowRegisterModal] = useState(false);
+    const [showTrackingMap, setShowTrackingMap] = useState(false);
     const [timeLeft, setTimeLeft] = useState(0);
     const statusRef = useRef(statusData);
     statusRef.current = statusData;
+
+    // ── Auto-close tracking map when provider arrives ─────────────────────────
+    useEffect(() => {
+        if (showTrackingMap && statusData?.status && statusData.status !== 'IN_PROGRESS') {
+            setShowTrackingMap(false);
+            toast.success('Bản đồ đã thu nhỏ, vui lòng xác nhận trạng thái');
+        }
+    }, [statusData?.status, showTrackingMap]);
 
     useEffect(() => {
         const s = statusData;
@@ -458,6 +470,33 @@ export default function GuestStatusPage() {
                     />
                 )}
 
+                {/* ── Live Tracking Map CTA ── */}
+                {statusData.status === 'IN_PROGRESS' && statusData.assignedProvider && statusData.pickupLocation && (
+                    <button
+                        onClick={() => setShowTrackingMap(true)}
+                        className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all active:scale-[0.98]"
+                        style={{
+                            background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
+                            boxShadow: `0 4px 16px ${C.orange}40`,
+                        }}
+                    >
+                        <div className="relative flex-shrink-0">
+                            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white/20">
+                                <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={1.8}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div className="flex-1 text-left">
+                            <p className="font-bold text-sm text-white">Xem Cứu hộ viên trên bản đồ</p>
+                            <p className="text-xs mt-0.5 text-white/80">Theo dõi trực tiếp vị trí & Chat ngay</p>
+                        </div>
+                        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                )}
+
                 {/* ── WORKING card ── */}
                 {statusData.status === 'WORKING' && (
                     <div className="bg-white rounded-2xl p-5 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)', border: '1.5px solid #bbf7d0' }}>
@@ -569,6 +608,23 @@ export default function GuestStatusPage() {
                             toast.success(t('guest.status.arrived.toastDenied'));
                         }
                     }}
+                />
+            )}
+
+            {/* Tracking Map Overlay */}
+            {showTrackingMap && statusData.assignedProvider && statusData.pickupLocation && (
+                <ProviderTrackingMap
+                    requestId={id}
+                    customerLat={statusData.pickupLocation.lat}
+                    customerLng={statusData.pickupLocation.lng}
+                    customerAddress={statusData.pickupLocation.addressText}
+                    providerName={statusData.assignedProvider.name || statusData.assignedProvider.fullName}
+                    providerAvatar={statusData.assignedProvider.avatar}
+                    providerPhone={statusData.assignedProvider.phoneNumber}
+                    matchedEta={statusData.matchedEta}
+                    chatCustomerId={guestSession?.guestSessionId}
+                    chatCustomerName={guestSession?.phone ? ('Khách ' + guestSession.phone) : 'Guest'}
+                    onClose={() => setShowTrackingMap(false)}
                 />
             )}
 

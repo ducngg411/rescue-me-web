@@ -176,6 +176,137 @@ export const CUSTOMER_TOOLS: ChatCompletionTool[] = [
     {
         type: 'function',
         function: {
+            name: 'initiate_topup',
+            description:
+                'Tạo giao dịch nạp tiền vào ví và trả về QR code để chuyển khoản. Hệ thống sẽ tự động ghi có khi nhận được tiền. QR có hiệu lực 5 phút.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    amount: {
+                        type: 'number',
+                        description: 'Số tiền nạp (VND). Tối thiểu 1 VND với khách hàng.',
+                    },
+                },
+                required: ['amount'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'check_topup_status',
+            description:
+                'Kiểm tra trạng thái giao dịch nạp tiền. Gọi khi người dùng báo đã chuyển khoản hoặc yêu cầu kiểm tra.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    topupTxId: {
+                        type: 'string',
+                        description: 'ID giao dịch nạp tiền (từ kết quả initiate_topup)',
+                    },
+                },
+                required: ['topupTxId'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'initiate_withdrawal',
+            description:
+                'Tạo yêu cầu rút tiền từ ví về ngân hàng. Tối thiểu 50,000 VND. CHỈ gọi sau khi người dùng xác nhận đầy đủ thông tin ngân hàng.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    amount: {
+                        type: 'number',
+                        description: 'Số tiền rút (VND). Tối thiểu 50,000.',
+                    },
+                    bankName: {
+                        type: 'string',
+                        description: 'Tên ngân hàng (ví dụ: Vietcombank, Techcombank...)',
+                    },
+                    accountNumber: {
+                        type: 'string',
+                        description: 'Số tài khoản ngân hàng',
+                    },
+                    accountHolderName: {
+                        type: 'string',
+                        description: 'Tên chủ tài khoản (in hoa, đúng như trên thẻ)',
+                    },
+                    withdrawalAccountId: {
+                        type: 'string',
+                        description: 'ID tài khoản rút tiền đã lưu (nếu có, thay thế cho các trường ngân hàng)',
+                    },
+                },
+                required: ['amount'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'lookup_order_for_complaint',
+            description:
+                'Tra cứu đơn cứu hộ đã hoàn thành để chuẩn bị mở khiếu nại. Kiểm tra đơn có đủ điều kiện khiếu nại không (đã hoàn thành, đã thanh toán, chưa có khiếu nại). Trả về requestId, paymentId, và số tiền tối đa có thể khiếu nại.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    orderCode: {
+                        type: 'string',
+                        description: 'Mã đơn hàng (dạng RMO-...) hoặc ID đơn',
+                    },
+                },
+                required: ['orderCode'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'open_complaint',
+            description:
+                'Mở khiếu nại cho đơn cứu hộ đã hoàn thành. CHỈ gọi sau khi đã có requestId và paymentId từ lookup_order_for_complaint VÀ khách đã xác nhận đồng ý gửi khiếu nại.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    requestId: {
+                        type: 'string',
+                        description: 'ID đơn cứu hộ (lấy từ lookup_order_for_complaint)',
+                    },
+                    paymentId: {
+                        type: 'string',
+                        description: 'ID thanh toán (lấy từ lookup_order_for_complaint)',
+                    },
+                    reason: {
+                        type: 'string',
+                        description: 'Lý do khiếu nại (bắt buộc)',
+                    },
+                    targetAmount: {
+                        type: 'number',
+                        description: 'Số tiền yêu cầu bồi thường (VND). Dùng maxDisputeAmount nếu khách không nêu rõ.',
+                    },
+                    description: {
+                        type: 'string',
+                        description: 'Mô tả chi tiết sự việc (tùy chọn)',
+                    },
+                    expectedOutcome: {
+                        type: 'string',
+                        description: 'Kết quả mong muốn, ví dụ: hoàn tiền, xin lỗi công khai (tùy chọn)',
+                    },
+                    attachmentUrls: {
+                        type: 'array',
+                        description: 'Danh sách URL ảnh/video bằng chứng (tùy chọn)',
+                        items: { type: 'string' },
+                    },
+                },
+                required: ['requestId', 'paymentId', 'reason', 'targetAmount'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
             name: 'estimate_price_range',
             description:
                 'Ước tính khoảng giá dịch vụ cứu hộ dựa trên loại sự cố và loại xe. Đây là giá tham khảo, giá thực tế phụ thuộc vào báo giá của provider.',

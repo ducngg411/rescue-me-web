@@ -69,6 +69,7 @@ type CustomerCtaUiKind =
     | 'enterInfo'
     | 'createRequest'
     | 'describeIncident'
+    | 'complaintConfirm'
     | 'generic';
 
 /** Fallback when server did not send ctaPhase — keep in sync with backend customer-cta-phase.ts */
@@ -207,6 +208,8 @@ function resolveCustomerCtaUi(
                 return 'createRequest';
             case 'DESCRIBE_INCIDENT':
                 return 'describeIncident';
+            case 'COMPLAINT_CONFIRM':
+                return 'complaintConfirm';
             default:
                 break;
         }
@@ -560,6 +563,34 @@ function MessageBubble({
                         </button>
                     </div>
                 )}
+                {ctaKind === 'complaintConfirm' && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                        <button
+                            onClick={() => onCtaClick('Xác nhận, gửi khiếu nại ngay')}
+                            disabled={isSending}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{
+                                background: 'linear-gradient(135deg, #dc2626, #b91c1c)',
+                                color: 'white',
+                                boxShadow: '0 2px 8px #dc262640',
+                            }}
+                        >
+                            Gửi khiếu nại
+                        </button>
+                        <button
+                            onClick={() => onCtaClick('Tôi muốn thay đổi thông tin khiếu nại')}
+                            disabled={isSending}
+                            className="px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                            style={{
+                                background: '#fef2f2',
+                                color: '#dc2626',
+                                border: '1px solid #fecaca',
+                            }}
+                        >
+                            Thay đổi thông tin
+                        </button>
+                    </div>
+                )}
                 <span className="text-[10px] mt-1 px-1" style={{ color: C.grayLight }}>
                     {formatTime(msg.createdAt)}
                 </span>
@@ -694,6 +725,12 @@ export default function ChatbotWidget() {
                 const requestId = event.payload?.requestId;
                 if (typeof requestId === 'string' && requestId.length > 0) {
                     router.push(`/user/requests/${requestId}`);
+                }
+            }
+            if (event.action === 'navigate_to_dispute') {
+                const disputeId = event.payload?.disputeId;
+                if (typeof disputeId === 'string' && disputeId.length > 0) {
+                    router.push(`/user/disputes/${disputeId}`);
                 }
             }
         },

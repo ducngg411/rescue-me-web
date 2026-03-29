@@ -11,6 +11,7 @@ export type CustomerCtaPhase =
     | 'CREATE_REQUEST'
     | 'LOCATION_CHOICE'
     | 'DESCRIBE_INCIDENT'
+    | 'COMPLAINT_CONFIRM'
     | 'GENERAL';
 
 export interface ChatbotMessage {

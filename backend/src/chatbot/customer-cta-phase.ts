@@ -9,11 +9,15 @@ export type CustomerCtaPhase =
     | 'CREATE_REQUEST'
     | 'LOCATION_CHOICE'
     | 'DESCRIBE_INCIDENT'
+    | 'COMPLAINT_CONFIRM'
+    | 'TOPUP_QR'
+    | 'WITHDRAWAL_CONFIRM'
     | 'GENERAL';
 
 /** Valid CustomerCtaPhase values for runtime validation. */
 const VALID_CTA_PHASES = new Set<CustomerCtaPhase>([
-    'SELECT_ISSUE', 'ENTER_INFO', 'CONFIRM_INFO', 'CREATE_REQUEST', 'LOCATION_CHOICE', 'DESCRIBE_INCIDENT', 'GENERAL',
+    'SELECT_ISSUE', 'ENTER_INFO', 'CONFIRM_INFO', 'CREATE_REQUEST', 'LOCATION_CHOICE', 'DESCRIBE_INCIDENT',
+    'COMPLAINT_CONFIRM', 'TOPUP_QR', 'WITHDRAWAL_CONFIRM', 'GENERAL',
 ]);
 
 /** The hidden tag the model appends, e.g. <!--STATE:{"s":"CONFIRM_INFO"}--> or <!--STATE:CONFIRM_INFO--> */
@@ -124,8 +128,30 @@ export interface GuidedDraftLike {
 
 export interface GuidedStateLike {
     profileLoaded: boolean;
-    pendingAction?: 'confirm_location' | 'confirm_create' | 'edit_field' | 'describe_incident';
+    pendingAction?: 'confirm_location' | 'confirm_create' | 'edit_field' | 'describe_incident' | 'complaint_confirm' | 'wallet_withdrawal_confirm';
     draftRequest: GuidedDraftLike;
+    /** True immediately after create_rescue_request succeeds — suppresses guided-flow CTAs. */
+    requestCreated?: boolean;
+    /** Set when lookup_order_for_complaint has resolved the order — suppresses rescue-request CTAs. */
+    complaintDraft?: {
+        requestId?: string;
+        paymentId?: string;
+        orderCode?: string;
+        maxDisputeAmount?: number;
+    };
+    /** Set after initiate_topup — tracks the active top-up transaction. */
+    walletTopup?: {
+        topupTxId: string;
+        amount: number;
+    };
+    /** Collects withdrawal info before confirmation. */
+    withdrawalDraft?: {
+        amount?: number;
+        bankName?: string;
+        accountNumber?: string;
+        accountHolderName?: string;
+        withdrawalAccountId?: string;
+    };
 }
 
 export function computeCustomerCtaPhase(
@@ -150,6 +176,14 @@ export function computeCustomerCtaPhase(
 
     // ── Final fallback: guided state ──
     const d = state.draftRequest;
+    // If a request was just created, stay in GENERAL — don't re-enter guided flow.
+    if (state.requestCreated) return 'GENERAL';
+    // Wallet flows take priority over everything else.
+    if (state.pendingAction === 'wallet_withdrawal_confirm') return 'WITHDRAWAL_CONFIRM';
+    if (state.walletTopup?.topupTxId) return 'TOPUP_QR';
+    // Complaint flow takes priority over rescue-request CTAs.
+    if (state.pendingAction === 'complaint_confirm') return 'COMPLAINT_CONFIRM';
+    if (state.complaintDraft?.requestId) return 'GENERAL';
     if (state.pendingAction === 'describe_incident') return 'DESCRIBE_INCIDENT';
     if (state.pendingAction === 'confirm_create' && d.pickupLocation && d.contactPhone) {
         return 'CONFIRM_INFO';
@@ -168,6 +202,14 @@ export function computeCustomerCtaPhase(
 
 /** Phase hint for system prompt before the model replies (after user message, guided state updated). */
 export function inferPromptCtaPhaseForUserMessage(state: GuidedStateLike): CustomerCtaPhase {
+    // If a request was just created, keep GENERAL so the system prompt doesn't re-enter guided flow.
+    if (state.requestCreated) return 'GENERAL';
+    // Wallet flows override everything else.
+    if (state.pendingAction === 'wallet_withdrawal_confirm') return 'WITHDRAWAL_CONFIRM';
+    if (state.walletTopup?.topupTxId) return 'TOPUP_QR';
+    // Complaint flow overrides rescue-request flow.
+    if (state.pendingAction === 'complaint_confirm') return 'COMPLAINT_CONFIRM';
+    if (state.complaintDraft?.requestId) return 'GENERAL';
     const d = state.draftRequest;
     if (state.pendingAction === 'describe_incident') return 'DESCRIBE_INCIDENT';
     if (state.pendingAction === 'confirm_location') return 'LOCATION_CHOICE';
@@ -196,6 +238,12 @@ export function formatCtaStateDirective(phase: CustomerCtaPhase): string {
             'Lượt này hệ thống đang ở LOCATION_CHOICE. Chỉ hỏi vị trí hiện tại hay chọn trên bản đồ. Không gộp thêm danh sách loại sự cố.',
         DESCRIBE_INCIDENT:
             'Lượt này hệ thống đang ở DESCRIBE_INCIDENT. Hỏi thêm mô tả sự cố và ảnh/video một cách nhẹ nhàng — KHÔNG BẮT BUỘC. KHÔNG hỏi lại bất kỳ thông tin nào đã xác nhận (loại xe, SĐT, vị trí…). Sau khi nhận BẤT KỲ phản hồi nào của user (kể cả "bỏ qua" hay im lặng bằng nút CTA), GỌI NGAY tool create_rescue_request với toàn bộ thông tin trong draftRequest, kèm description/mediaUrls nếu user có cung cấp. TUYỆT ĐỐI không hỏi xác nhận thêm lần nào nữa.',
+        COMPLAINT_CONFIRM:
+            'Lượt này hệ thống đang ở COMPLAINT_CONFIRM. Tóm tắt thông tin khiếu nại (lý do, số tiền, bằng chứng nếu có) và xin xác nhận. Người dùng chỉ cần bấm "Gửi khiếu nại" hoặc "Thay đổi thông tin". KHÔNG hỏi thêm thông tin nào. KHÔNG đề xuất loại sự cố hay CTA tạo đơn cứu hộ.',
+        TOPUP_QR:
+            'Lượt này hệ thống đang ở TOPUP_QR. QR nạp tiền đã được tạo và hiển thị cho người dùng. Hướng dẫn ngắn gọn: quét QR hoặc chuyển khoản với đúng nội dung và số tiền. Nhắc QR có hiệu lực 5 phút. Người dùng bấm "Tôi đã chuyển khoản" để kiểm tra. KHÔNG đề xuất bất kỳ luồng nào khác.',
+        WITHDRAWAL_CONFIRM:
+            'Lượt này hệ thống đang ở WITHDRAWAL_CONFIRM. Tóm tắt thông tin rút tiền (số tiền, ngân hàng, số tài khoản, chủ tài khoản) và xin xác nhận. Người dùng chỉ cần bấm "Xác nhận rút tiền" hoặc "Thay đổi thông tin". Nhắc rằng yêu cầu rút sẽ được xử lý bởi admin trong 1-2 ngày làm việc. KHÔNG hỏi thêm thông tin nào.',
         GENERAL:
             'Ngoài luồng tạo đơn có cấu trúc: trả lời tự nhiên; có thể một câu hành động gợi ý ở cuối nếu phù hợp. Không mô tả sai nhóm CTA với bước guided.',
     };

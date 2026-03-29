@@ -5,6 +5,9 @@ import { OpenAIService } from './openai.service';
 import { allocateUniqueOrderCode } from '../common/business-codes';
 import { CustomerProfileDefaultsService } from './customer-profile-defaults.service';
 import { CommissionService } from '../wallet/commission.service';
+import { DisputeService } from '../dispute/dispute.service';
+import { WalletService } from '../wallet/wallet.service';
+import { UserWalletService } from '../user-wallet/user-wallet.service';
 import {
     grossRevenueFromCompletedRequest,
     whereCompletedJobsInTimeRange,
@@ -26,6 +29,9 @@ export class ToolExecutorService {
         private openaiService: OpenAIService,
         private customerProfileDefaults: CustomerProfileDefaultsService,
         private commissionService: CommissionService,
+        private disputeService: DisputeService,
+        private walletService: WalletService,
+        private userWalletService: UserWalletService,
     ) {}
 
     async executeTool(
@@ -66,6 +72,16 @@ export class ToolExecutorService {
                     return await this.createRescueRequest(args, context);
                 case 'estimate_price_range':
                     return this.estimatePriceRange(args);
+                case 'lookup_order_for_complaint':
+                    return await this.lookupOrderForComplaint(args, context);
+                case 'open_complaint':
+                    return await this.openComplaint(args, context);
+                case 'initiate_topup':
+                    return await this.initiateTopup(args, context);
+                case 'check_topup_status':
+                    return await this.checkTopupStatus(args, context);
+                case 'initiate_withdrawal':
+                    return await this.initiateWithdrawal(args, context);
                 default:
                     return JSON.stringify({ error: `Unknown tool: ${toolName}` });
             }
@@ -711,5 +727,350 @@ Quy tắc:
                         ? `Hồ sơ bị từ chối. Lý do: ${user.rejectReasonDetail || user.rejectReasonCode || 'Không rõ'}. Vui lòng cập nhật và gửi lại.`
                         : `Cần hoàn thiện hồ sơ. Giấy tờ còn thiếu: ${missingDocs.join(', ') || 'Không'}. Sau khi đầy đủ, vào trang Xác minh để gửi hồ sơ.`,
         });
+    }
+
+    // ── Wallet tools ─────────────────────────────────────────────────────────
+
+    private async initiateTopup(
+        args: Record<string, unknown>,
+        context: ToolContext,
+    ): Promise<string> {
+        if (context.userRole === 'GUEST') {
+            return JSON.stringify({ error: 'Khách vãng lai không có ví. Vui lòng đăng ký tài khoản.' });
+        }
+        if (!context.userId) {
+            return JSON.stringify({ error: 'Không xác định được tài khoản.' });
+        }
+
+        const amount = args.amount as number;
+        if (!amount || amount <= 0) {
+            return JSON.stringify({ error: 'Vui lòng cung cấp số tiền nạp hợp lệ.' });
+        }
+
+        try {
+            if (context.userRole === 'PROVIDER') {
+                const result = await this.walletService.initTopup(context.userId, amount);
+                return JSON.stringify({
+                    success: true,
+                    topupTxId: result.topupTxId,
+                    transferCode: result.transferCode,
+                    amount: result.amount,
+                    expireAt: result.expireAt,
+                    bankAccount: result.bankAccount,
+                    bankCode: result.bankCode,
+                    qrUrl: result.qrUrl,
+                    isReuse: result.isReuse,
+                    message: `QR nạp tiền đã tạo. Chuyển khoản ${result.amount.toLocaleString('vi-VN')}₫ đến ${result.bankCode} - ${result.bankAccount} với nội dung "${result.transferCode}". Hiệu lực 5 phút.`,
+                });
+            } else {
+                const result = await this.userWalletService.initTopup(context.userId, amount);
+                return JSON.stringify({
+                    success: true,
+                    topupTxId: result.topupTxId,
+                    transferCode: result.transferCode,
+                    amount: result.amount,
+                    expireAt: result.expireAt,
+                    bankAccount: result.bankAccount,
+                    bankCode: result.bankCode,
+                    qrUrl: result.qrUrl,
+                    isReuse: result.isReuse,
+                    message: `QR nạp tiền đã tạo. Chuyển khoản ${result.amount.toLocaleString('vi-VN')}₫ đến ${result.bankCode} - ${result.bankAccount} với nội dung "${result.transferCode}". Hiệu lực 5 phút.`,
+                });
+            }
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Không thể tạo QR nạp tiền.';
+            return JSON.stringify({ error: msg });
+        }
+    }
+
+    private async checkTopupStatus(
+        args: Record<string, unknown>,
+        context: ToolContext,
+    ): Promise<string> {
+        if (!context.userId) {
+            return JSON.stringify({ error: 'Không xác định được tài khoản.' });
+        }
+
+        const topupTxId = args.topupTxId as string;
+        if (!topupTxId) {
+            return JSON.stringify({ error: 'Vui lòng cung cấp topupTxId.' });
+        }
+
+        try {
+            if (context.userRole === 'PROVIDER') {
+                const result = await this.walletService.getTopupStatus(topupTxId, context.userId);
+                return JSON.stringify({
+                    status: result.status,
+                    completedAt: result.completedAt,
+                    message: result.status === 'COMPLETED'
+                        ? 'Nạp tiền thành công! Số dư ví đã được cập nhật.'
+                        : result.status === 'EXPIRED'
+                            ? 'QR đã hết hạn. Vui lòng tạo QR mới để nạp tiền.'
+                            : 'Chưa nhận được tiền. Vui lòng kiểm tra lại sau 1-2 phút.',
+                });
+            } else {
+                const result = await this.userWalletService.getTopupStatus(topupTxId, context.userId);
+                return JSON.stringify({
+                    status: result.status,
+                    completedAt: result.completedAt,
+                    message: result.status === 'COMPLETED'
+                        ? 'Nạp tiền thành công! Số dư ví đã được cập nhật.'
+                        : result.status === 'EXPIRED'
+                            ? 'QR đã hết hạn. Vui lòng tạo QR mới để nạp tiền.'
+                            : 'Chưa nhận được tiền. Vui lòng kiểm tra lại sau 1-2 phút.',
+                });
+            }
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Không thể kiểm tra trạng thái.';
+            return JSON.stringify({ error: msg });
+        }
+    }
+
+    private async initiateWithdrawal(
+        args: Record<string, unknown>,
+        context: ToolContext,
+    ): Promise<string> {
+        if (context.userRole === 'GUEST') {
+            return JSON.stringify({ error: 'Khách vãng lai không có ví.' });
+        }
+        if (!context.userId) {
+            return JSON.stringify({ error: 'Không xác định được tài khoản.' });
+        }
+
+        const amount = args.amount as number;
+        if (!amount || amount < 50_000) {
+            return JSON.stringify({ error: 'Số tiền rút tối thiểu là 50,000₫.' });
+        }
+
+        const bankName = args.bankName as string | undefined;
+        const accountNumber = args.accountNumber as string | undefined;
+        const accountHolderName = args.accountHolderName as string | undefined;
+        const withdrawalAccountId = args.withdrawalAccountId as string | undefined;
+
+        // If no saved account ID and no bank info provided, request it
+        if (!withdrawalAccountId && (!bankName || !accountNumber || !accountHolderName)) {
+            return JSON.stringify({
+                error: 'Thiếu thông tin ngân hàng',
+                message: 'Vui lòng cung cấp: tên ngân hàng, số tài khoản, và tên chủ tài khoản.',
+                missingFields: [
+                    ...(!bankName ? ['bankName'] : []),
+                    ...(!accountNumber ? ['accountNumber'] : []),
+                    ...(!accountHolderName ? ['accountHolderName'] : []),
+                ],
+            });
+        }
+
+        try {
+            const referenceId = `chatbot-withdraw-${context.userId}-${Date.now()}`;
+
+            if (context.userRole === 'PROVIDER') {
+                // Get/create wallet
+                const wallet = await this.walletService.ensureWallet(context.userId);
+
+                // Find or create withdrawal account
+                let accountId = withdrawalAccountId;
+                if (!accountId && bankName && accountNumber && accountHolderName) {
+                    const existing = await this.prisma.providerWithdrawalAccount.findFirst({
+                        where: { providerId: context.userId, accountNumber },
+                    });
+                    if (existing) {
+                        accountId = existing.id;
+                    } else {
+                        const newAccount = await this.prisma.providerWithdrawalAccount.create({
+                            data: {
+                                providerId: context.userId,
+                                bankName,
+                                accountNumber,
+                                accountHolderName,
+                                isDefault: false,
+                            },
+                        });
+                        accountId = newAccount.id;
+                    }
+                }
+
+                const result = await this.walletService.withdraw(wallet.id, amount, referenceId, accountId);
+                return JSON.stringify({
+                    success: true,
+                    txnCode: result.transaction.txnCode,
+                    amount,
+                    status: 'PENDING',
+                    newBalance: result.wallet.availableBalance,
+                    message: `Yêu cầu rút ${amount.toLocaleString('vi-VN')}₫ đã được gửi thành công! Admin sẽ xử lý trong 1-2 ngày làm việc. Mã giao dịch: ${result.transaction.txnCode}.`,
+                });
+            } else {
+                // USER
+                const wallet = await this.userWalletService.ensureWallet(context.userId);
+
+                let accountId = withdrawalAccountId;
+                if (!accountId && bankName && accountNumber && accountHolderName) {
+                    const existing = await this.prisma.customerWithdrawalAccount.findFirst({
+                        where: { userId: context.userId, accountNumber },
+                    });
+                    if (existing) {
+                        accountId = existing.id;
+                    } else {
+                        const newAccount = await this.prisma.customerWithdrawalAccount.create({
+                            data: {
+                                userId: context.userId,
+                                bankName,
+                                accountNumber,
+                                accountHolderName,
+                                isDefault: false,
+                            },
+                        });
+                        accountId = newAccount.id;
+                    }
+                }
+
+                const result = await this.userWalletService.withdraw(wallet.id, amount, referenceId, accountId);
+                return JSON.stringify({
+                    success: true,
+                    txnCode: result.transaction.txnCode,
+                    amount,
+                    status: 'PENDING',
+                    newBalance: result.wallet.availableBalance,
+                    message: `Yêu cầu rút ${amount.toLocaleString('vi-VN')}₫ đã được gửi thành công! Admin sẽ xử lý trong 1-2 ngày làm việc. Mã giao dịch: ${result.transaction.txnCode}.`,
+                });
+            }
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : 'Không thể tạo yêu cầu rút tiền.';
+            return JSON.stringify({ error: msg });
+        }
+    }
+
+    // ── Complaint tools ──────────────────────────────────────────────────────
+
+    private async lookupOrderForComplaint(
+        args: Record<string, unknown>,
+        context: ToolContext,
+    ): Promise<string> {
+        if (context.userRole !== 'USER' || !context.userId) {
+            return JSON.stringify({ error: 'Chỉ người dùng đã đăng nhập mới có thể khiếu nại.' });
+        }
+
+        const orderCode = args.orderCode as string;
+        if (!orderCode) {
+            return JSON.stringify({ error: 'Vui lòng cung cấp mã đơn hàng.' });
+        }
+
+        const request = await this.prisma.rescueRequest.findFirst({
+            where: {
+                OR: [{ id: orderCode }, { orderCode }],
+                userId: context.userId,
+            },
+            select: {
+                id: true,
+                orderCode: true,
+                incidentType: true,
+                status: true,
+                completedAt: true,
+                assignedProvider: { select: { name: true } },
+                payment: {
+                    select: {
+                        id: true,
+                        totalAmount: true,
+                        status: true,
+                        disputeCase: { select: { id: true } },
+                    },
+                },
+            },
+        });
+
+        if (!request) {
+            return JSON.stringify({ error: 'Không tìm thấy đơn hàng này hoặc đơn không thuộc về anh/chị.' });
+        }
+
+        const eligibleStatuses = ['COMPLETED', 'PAID'];
+        if (!eligibleStatuses.includes(request.status)) {
+            return JSON.stringify({
+                error: `Đơn hàng ${request.orderCode || request.id} chưa hoàn thành (trạng thái: ${request.status}). Chỉ có thể khiếu nại đơn đã hoàn thành.`,
+            });
+        }
+
+        if (!request.payment) {
+            return JSON.stringify({ error: 'Đơn hàng này chưa có thông tin thanh toán. Vui lòng liên hệ CSKH.' });
+        }
+
+        if (request.payment.disputeCase) {
+            return JSON.stringify({
+                error: `Đơn hàng ${request.orderCode || request.id} đã có khiếu nại đang xử lý (ID: ${request.payment.disputeCase.id}). Mỗi đơn chỉ được mở một khiếu nại.`,
+            });
+        }
+
+        const commissionRateStr = process.env.COMMISSION_RATE;
+        const commissionRate = commissionRateStr ? parseFloat(commissionRateStr) : 0.1;
+        const maxDisputeAmount = request.payment.totalAmount - Math.round(request.payment.totalAmount * commissionRate);
+
+        return JSON.stringify({
+            success: true,
+            requestId: request.id,
+            paymentId: request.payment.id,
+            orderCode: request.orderCode,
+            incidentType: request.incidentType,
+            providerName: request.assignedProvider?.name || null,
+            completedAt: request.completedAt,
+            totalAmount: request.payment.totalAmount,
+            maxDisputeAmount,
+            message: `Đơn hàng hợp lệ để khiếu nại. Số tiền tối đa có thể yêu cầu bồi thường: ${maxDisputeAmount.toLocaleString('vi-VN')} VND.`,
+        });
+    }
+
+    private async openComplaint(
+        args: Record<string, unknown>,
+        context: ToolContext,
+    ): Promise<string> {
+        if (context.userRole !== 'USER' || !context.userId) {
+            return JSON.stringify({ error: 'Chỉ người dùng đã đăng nhập mới có thể khiếu nại.' });
+        }
+
+        const requestId = args.requestId as string;
+        const paymentId = args.paymentId as string;
+        const reason = args.reason as string;
+        const targetAmount = args.targetAmount as number;
+
+        if (!requestId || !paymentId || !reason || !targetAmount) {
+            const missing: string[] = [];
+            if (!requestId) missing.push('requestId');
+            if (!paymentId) missing.push('paymentId');
+            if (!reason) missing.push('lý do (reason)');
+            if (!targetAmount) missing.push('số tiền (targetAmount)');
+            return JSON.stringify({
+                error: 'Thiếu thông tin bắt buộc',
+                missingFields: missing,
+                message: `Cần bổ sung: ${missing.join(', ')}`,
+            });
+        }
+
+        try {
+            const result = await this.disputeService.openDispute(
+                context.userId,
+                'CUSTOMER',
+                {
+                    orderId: requestId,
+                    paymentId,
+                    targetAmount: Math.round(targetAmount),
+                    reason,
+                    description: (args.description as string) || undefined,
+                    expectedOutcome: (args.expectedOutcome as string) || undefined,
+                    attachmentUrls: Array.isArray(args.attachmentUrls)
+                        ? (args.attachmentUrls as string[])
+                        : undefined,
+                },
+            );
+
+            return JSON.stringify({
+                success: true,
+                disputeId: result.disputeId,
+                status: result.status,
+                firstResponseDueAt: result.firstResponseDueAt,
+                resolutionDueAt: result.resolutionDueAt,
+                message: 'Khiếu nại đã được gửi thành công! Provider sẽ nhận được thông báo và có 24 giờ để phản hồi.',
+            });
+        } catch (error: unknown) {
+            this.logger.error('Failed to open complaint via chatbot', error);
+            const msg = error instanceof Error ? error.message : 'Không thể gửi khiếu nại.';
+            return JSON.stringify({ error: msg });
+        }
     }
 }

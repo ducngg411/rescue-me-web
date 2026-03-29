@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
-import { ChartCard, HorizontalBarChart, DonutChart, VerticalBarChart } from '@/components/AdminCharts';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { DonutChart, VerticalBarChart } from '@/components/AdminCharts';
 import {
     RefreshCw, ArrowRight, Users, ShieldCheck, AlertTriangle,
     TrendingUp, Wallet, FileText, CreditCard, Settings,
@@ -37,22 +38,14 @@ const C = {
 };
 
 // ─── Formatters ────────────────────────────────────────────────────────────────
-function fmtVnd(v?: number | null): string {
+function fmtVnd(v: number | null | undefined, numberLocale: string): string {
     if (v == null) return '—';
-    // Admin money KPIs should show exact VND (no "12.3 tr", "1.2k", … rounding/abbreviation).
-    return new Intl.NumberFormat('vi-VN').format(v);
+    return new Intl.NumberFormat(numberLocale).format(v);
 }
 
-function fmtNum(v?: number | null): string {
+function fmtNum(v: number | null | undefined, numberLocale: string): string {
     if (v == null) return '—';
-    return v.toLocaleString('vi-VN');
-}
-
-function greeting(): string {
-    const h = new Date().getHours();
-    if (h < 12) return 'Chào buổi sáng';
-    if (h < 18) return 'Chào buổi chiều';
-    return 'Chào buổi tối';
+    return v.toLocaleString(numberLocale);
 }
 
 // ─── SVG Donut Chart ───────────────────────────────────────────────────────────
@@ -137,6 +130,8 @@ const EMPTY: AllStats = {
 export default function AdminDashboardPage() {
     const router = useRouter();
     const { isReady } = useAdminGuard();
+    const { t, locale } = useLanguage();
+    const numberLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
     const [stats, setStats] = useState<AllStats>(EMPTY);
     const [loading, setLoading] = useState(true);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -181,7 +176,7 @@ export default function AdminDashboardPage() {
                 <div className="text-center">
                     <div className="w-10 h-10 rounded-full border-[3px] animate-spin mx-auto mb-3"
                         style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
-                    <p className="text-sm" style={{ color: C.gray }}>Đang tải...</p>
+                    <p className="text-sm" style={{ color: C.gray }}>{t('common.loading')}</p>
                 </div>
             </div>
         );
@@ -190,26 +185,30 @@ export default function AdminDashboardPage() {
     const { txSummary, providerStats, disputeStats, userStats, requestStats, withdrawalStats, billingConfig } = stats;
     const commissionRate = billingConfig?.commissionRate ?? 0.2;
 
+    const hour = new Date().getHours();
+    const greet =
+        hour < 12 ? t('admin.dashboard.greetingMorning') : hour < 18 ? t('admin.dashboard.greetingAfternoon') : t('admin.dashboard.greetingEvening');
+
     // ─ Provider donut slices ─
     const providerSlices: { label: string; value: number; color: string }[] = [
-        { label: 'Đã duyệt', value: providerStats?.approved ?? 0, color: C.green },
-        { label: 'Chờ duyệt', value: providerStats?.pending ?? 0, color: C.orange },
-        { label: 'Bị từ chối', value: providerStats?.rejected ?? 0, color: C.red },
-        { label: 'Đình chỉ', value: providerStats?.suspended ?? 0, color: C.yellow },
+        { label: t('admin.dashboard.provApproved'), value: providerStats?.approved ?? 0, color: C.green },
+        { label: t('admin.dashboard.provPending'), value: providerStats?.pending ?? 0, color: C.orange },
+        { label: t('admin.dashboard.provRejected'), value: providerStats?.rejected ?? 0, color: C.red },
+        { label: t('admin.dashboard.provSuspended'), value: providerStats?.suspended ?? 0, color: C.yellow },
     ];
 
     // ─ Dispute donut slices ─
     const disputeSlices: { label: string; value: number; color: string }[] = [
-        { label: 'Đã giải quyết', value: disputeStats?.resolved ?? 0, color: C.green },
-        { label: 'Đang xử lý', value: (disputeStats?.inProgress ?? 0) - (disputeStats?.new ?? 0), color: C.blue },
-        { label: 'Mới', value: disputeStats?.new ?? 0, color: C.orange },
+        { label: t('admin.dashboard.dispResolved'), value: disputeStats?.resolved ?? 0, color: C.green },
+        { label: t('admin.dashboard.dispInProgress'), value: (disputeStats?.inProgress ?? 0) - (disputeStats?.new ?? 0), color: C.blue },
+        { label: t('admin.dashboard.dispNew'), value: disputeStats?.new ?? 0, color: C.orange },
     ];
 
     // ─ Withdrawal mini bars ─
     const wdBars: { label: string; value: number; color: string }[] = [
-        { label: 'Chờ', value: withdrawalStats?.total.pending ?? 0, color: C.orange },
-        { label: 'Hoàn thành', value: withdrawalStats?.total.completed ?? 0, color: C.green },
-        { label: 'Thất bại', value: withdrawalStats?.total.failed ?? 0, color: C.red },
+        { label: t('admin.dashboard.wdShortPending'), value: withdrawalStats?.total.pending ?? 0, color: C.orange },
+        { label: t('admin.dashboard.wdShortCompleted'), value: withdrawalStats?.total.completed ?? 0, color: C.green },
+        { label: t('admin.dashboard.wdShortFailed'), value: withdrawalStats?.total.failed ?? 0, color: C.red },
     ];
 
 
@@ -220,20 +219,22 @@ export default function AdminDashboardPage() {
             <div className="p-6 min-h-screen" style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}>
 
                 {/* ─── Header ─── */}
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                     <div>
-                        <h1 className="text-xl font-bold" style={{ color: C.navy }}>{greeting()}, Admin 👋</h1>
+                        <h1 className="text-xl font-bold" style={{ color: C.navy }}>{t('admin.dashboard.title', { greeting: greet })}</h1>
                         <p className="text-xs mt-0.5" style={{ color: C.gray }}>
                             {lastUpdated
-                                ? `Cập nhật lúc ${lastUpdated.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
-                                : 'Đang tải dữ liệu thời gian thực...'}
+                                ? t('admin.dashboard.updatedAt', {
+                                    time: lastUpdated.toLocaleTimeString(numberLocale, { hour: '2-digit', minute: '2-digit' }),
+                                })
+                                : t('admin.dashboard.loadingLive')}
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
                             style={{ background: C.greenLight, color: C.green }}>
                             <Activity className="w-3.5 h-3.5" />
-                            Hệ thống hoạt động
+                            {t('common.systemOperational')}
                         </div>
                         <button
                             onClick={() => fetchAll(true)}
@@ -242,7 +243,7 @@ export default function AdminDashboardPage() {
                             style={{ background: C.white, borderColor: C.border, color: C.navy }}
                         >
                             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-                            Làm mới
+                            {t('admin.dashboard.refresh')}
                         </button>
                     </div>
                 </div>
@@ -256,35 +257,35 @@ export default function AdminDashboardPage() {
                             {/* Total Revenue – accent */}
                             <KpiCard
                                 accent
-                                label="Tổng doanh thu nền tảng"
-                                value={fmtVnd(txSummary?.totalRevenue) + ' đ'}
-                                sub={`Commission ${(commissionRate * 100).toFixed(0)}% đang áp dụng`}
+                                label={t('admin.dashboard.kpiTotalRevenue')}
+                                value={fmtVnd(txSummary?.totalRevenue, numberLocale) + t('admin.dashboard.vndUnit')}
+                                sub={t('admin.dashboard.kpiCommissionRate', { rate: (commissionRate * 100).toFixed(0) })}
                                 href="/admin/transactions"
                                 icon={<TrendingUp className="w-5 h-5" />}
                             />
                             {/* Commission earned */}
                             <KpiCard
-                                label="Hoa hồng đã thu"
-                                value={fmtVnd(txSummary?.totalCommission) + ' đ'}
-                                sub="Tích lũy tất cả thời gian"
+                                label={t('admin.dashboard.kpiCommissionEarned')}
+                                value={fmtVnd(txSummary?.totalCommission, numberLocale) + t('admin.dashboard.vndUnit')}
+                                sub={t('admin.dashboard.kpiCommissionSub')}
                                 href="/admin/billing"
                                 icon={<Wallet className="w-5 h-5" />}
                                 iconBg={C.greenLight} iconColor={C.green}
                             />
                             {/* Topup today */}
                             <KpiCard
-                                label="Nạp tiền hôm nay"
-                                value={fmtVnd(txSummary?.totalTopupToday) + ' đ'}
-                                sub="Tổng topup trong ngày"
+                                label={t('admin.dashboard.kpiTopupToday')}
+                                value={fmtVnd(txSummary?.totalTopupToday, numberLocale) + t('admin.dashboard.vndUnit')}
+                                sub={t('admin.dashboard.kpiTopupTodaySub')}
                                 href="/admin/transactions"
                                 icon={<CreditCard className="w-5 h-5" />}
                                 iconBg={C.blueLight} iconColor={C.blue}
                             />
                             {/* Pending withdrawals */}
                             <KpiCard
-                                label="Rút tiền chờ duyệt"
-                                value={fmtNum(txSummary?.pendingWithdrawals)}
-                                sub="Cần xử lý thủ công"
+                                label={t('admin.dashboard.kpiPendingWithdrawals')}
+                                value={fmtNum(txSummary?.pendingWithdrawals, numberLocale)}
+                                sub={t('admin.dashboard.kpiPendingWithdrawalsSub')}
                                 href="/admin/withdrawals"
                                 icon={<Clock className="w-5 h-5" />}
                                 iconBg={C.yellowLight} iconColor={C.yellow}
@@ -300,33 +301,33 @@ export default function AdminDashboardPage() {
                     ) : (
                         <>
                             <KpiCard
-                                label="Providers chờ xét duyệt"
-                                value={fmtNum(providerStats?.pending)}
-                                sub={`Tổng: ${fmtNum(providerStats?.total)} providers`}
+                                label={t('admin.dashboard.kpiProvidersPending')}
+                                value={fmtNum(providerStats?.pending, numberLocale)}
+                                sub={t('admin.dashboard.kpiProvidersTotal', { n: fmtNum(providerStats?.total, numberLocale) })}
                                 href="/admin/providers?status=PENDING"
                                 icon={<ShieldCheck className="w-5 h-5" />}
                                 iconBg={C.orangeLight} iconColor={C.orange}
                             />
                             <KpiCard
-                                label="Tranh chấp đang xử lý"
-                                value={fmtNum(disputeStats?.inProgress)}
-                                sub={`Tổng: ${fmtNum(disputeStats?.total)} disputes`}
+                                label={t('admin.dashboard.kpiDisputesOpen')}
+                                value={fmtNum(disputeStats?.inProgress, numberLocale)}
+                                sub={t('admin.dashboard.kpiDisputesTotal', { n: fmtNum(disputeStats?.total, numberLocale) })}
                                 href="/admin/disputes"
                                 icon={<AlertTriangle className="w-5 h-5" />}
                                 iconBg={C.redLight} iconColor={C.red}
                             />
                             <KpiCard
-                                label="Đơn cứu hộ tháng này"
-                                value={fmtNum(requestStats?.newThisMonth)}
-                                sub={`Tổng: ${fmtNum(requestStats?.total)} đơn`}
+                                label={t('admin.dashboard.kpiRescueMonth')}
+                                value={fmtNum(requestStats?.newThisMonth, numberLocale)}
+                                sub={t('admin.dashboard.kpiOrdersTotal', { n: fmtNum(requestStats?.total, numberLocale) })}
                                 href="/admin/requests"
                                 icon={<FileText className="w-5 h-5" />}
                                 iconBg={C.purpleLight} iconColor={C.purple}
                             />
                             <KpiCard
-                                label="Người dùng mới tháng này"
-                                value={fmtNum(userStats?.newThisMonth)}
-                                sub={`Tổng: ${fmtNum(userStats?.total)} users`}
+                                label={t('admin.dashboard.kpiUsersNewMonth')}
+                                value={fmtNum(userStats?.newThisMonth, numberLocale)}
+                                sub={t('admin.dashboard.kpiUsersTotal', { n: fmtNum(userStats?.total, numberLocale) })}
                                 href="/admin/users"
                                 icon={<Users className="w-5 h-5" />}
                                 iconBg={C.blueLight} iconColor={C.blue}
@@ -345,11 +346,11 @@ export default function AdminDashboardPage() {
                                 <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.orangeLight }}>
                                     <ShieldCheck className="w-3.5 h-3.5" style={{ color: C.orange }} />
                                 </div>
-                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Trạng thái Providers</h2>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>{t('admin.dashboard.chartProviders')}</h2>
                             </div>
                             <button onClick={() => router.push('/admin/providers?status=ALL')}
                                 className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: C.orange }}>
-                                Xem tất cả <ArrowRight className="w-3 h-3" />
+                                {t('common.viewAll')} <ArrowRight className="w-3 h-3" />
                             </button>
                         </div>
                         {loading ? (
@@ -360,8 +361,8 @@ export default function AdminDashboardPage() {
                                     <DonutChart 
                                         slices={providerSlices} 
                                         size={110} 
-                                        centerLabel={fmtNum(providerStats?.total)} 
-                                        centerSub="Tổng"
+                                        centerLabel={fmtNum(providerStats?.total, numberLocale)} 
+                                        centerSub={t('admin.dashboard.totalLabel')}
                                     />
                                 </div>
                                 <div className="flex flex-col gap-2 flex-1 min-w-0">
@@ -370,7 +371,7 @@ export default function AdminDashboardPage() {
                                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
                                             <div className="flex items-center justify-between flex-1 min-w-0">
                                                 <span className="text-xs truncate" style={{ color: C.gray }}>{s.label}</span>
-                                                <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: C.navy }}>{fmtNum(s.value)}</span>
+                                                <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: C.navy }}>{fmtNum(s.value, numberLocale)}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -386,11 +387,11 @@ export default function AdminDashboardPage() {
                                 <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.redLight }}>
                                     <AlertTriangle className="w-3.5 h-3.5" style={{ color: C.red }} />
                                 </div>
-                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Trạng thái Disputes</h2>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>{t('admin.dashboard.chartDisputes')}</h2>
                             </div>
                             <button onClick={() => router.push('/admin/disputes')}
                                 className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: C.orange }}>
-                                Xem tất cả <ArrowRight className="w-3 h-3" />
+                                {t('common.viewAll')} <ArrowRight className="w-3 h-3" />
                             </button>
                         </div>
                         {loading ? (
@@ -401,8 +402,8 @@ export default function AdminDashboardPage() {
                                     <DonutChart 
                                         slices={disputeSlices} 
                                         size={110} 
-                                        centerLabel={fmtNum(disputeStats?.total)} 
-                                        centerSub="Tổng"
+                                        centerLabel={fmtNum(disputeStats?.total, numberLocale)} 
+                                        centerSub={t('admin.dashboard.totalLabel')}
                                     />
                                 </div>
                                 <div className="flex flex-col gap-2 flex-1 min-w-0">
@@ -411,7 +412,7 @@ export default function AdminDashboardPage() {
                                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
                                             <div className="flex items-center justify-between flex-1 min-w-0">
                                                 <span className="text-xs truncate" style={{ color: C.gray }}>{s.label}</span>
-                                                <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: C.navy }}>{fmtNum(s.value)}</span>
+                                                <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: C.navy }}>{fmtNum(s.value, numberLocale)}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -419,8 +420,8 @@ export default function AdminDashboardPage() {
                                         <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: C.grayLight }} />
                                             <div className="flex items-center justify-between flex-1 min-w-0">
-                                                <span className="text-xs truncate" style={{ color: C.gray }}>Đã giải quyết</span>
-                                                <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: C.green }}>{fmtNum(disputeStats?.resolved)}</span>
+                                                <span className="text-xs truncate" style={{ color: C.gray }}>{t('admin.dashboard.dispResolved')}</span>
+                                                <span className="text-xs font-bold ml-2 flex-shrink-0" style={{ color: C.green }}>{fmtNum(disputeStats?.resolved, numberLocale)}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -436,11 +437,11 @@ export default function AdminDashboardPage() {
                                 <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.purpleLight }}>
                                     <FileText className="w-3.5 h-3.5" style={{ color: C.purple }} />
                                 </div>
-                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Đơn cứu hộ</h2>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>{t('admin.dashboard.chartRequests')}</h2>
                             </div>
                             <button onClick={() => router.push('/admin/requests')}
                                 className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: C.orange }}>
-                                Xem tất cả <ArrowRight className="w-3 h-3" />
+                                {t('common.viewAll')} <ArrowRight className="w-3 h-3" />
                             </button>
                         </div>
                         {loading ? (
@@ -450,10 +451,10 @@ export default function AdminDashboardPage() {
                         ) : (
                             <div className="space-y-3">
                                 {[
-                                    { label: 'Tổng đơn', value: requestStats?.total ?? 0, color: C.navy, icon: <FileText className="w-3.5 h-3.5" /> },
-                                    { label: 'Hoàn thành', value: requestStats?.completed ?? 0, color: C.green, icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
-                                    { label: 'Đã hủy', value: requestStats?.cancelled ?? 0, color: C.red, icon: <XCircle className="w-3.5 h-3.5" /> },
-                                    { label: 'Có tranh chấp', value: requestStats?.disputed ?? 0, color: C.yellow, icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+                                    { label: t('admin.dashboard.reqTotal'), value: requestStats?.total ?? 0, color: C.navy, icon: <FileText className="w-3.5 h-3.5" /> },
+                                    { label: t('admin.dashboard.reqCompleted'), value: requestStats?.completed ?? 0, color: C.green, icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+                                    { label: t('admin.dashboard.reqCancelled'), value: requestStats?.cancelled ?? 0, color: C.red, icon: <XCircle className="w-3.5 h-3.5" /> },
+                                    { label: t('admin.dashboard.reqDisputed'), value: requestStats?.disputed ?? 0, color: C.yellow, icon: <AlertTriangle className="w-3.5 h-3.5" /> },
                                 ].map((row) => {
                                     const total = requestStats?.total ?? 1;
                                     const pct = total > 0 ? Math.min(100, Math.round((row.value / total) * 100)) : 0;
@@ -464,7 +465,7 @@ export default function AdminDashboardPage() {
                                                     {row.icon}
                                                     <span className="text-xs font-medium" style={{ color: C.gray }}>{row.label}</span>
                                                 </div>
-                                                <span className="text-xs font-bold" style={{ color: C.navy }}>{fmtNum(row.value)}</span>
+                                                <span className="text-xs font-bold" style={{ color: C.navy }}>{fmtNum(row.value, numberLocale)}</span>
                                             </div>
                                             <div className="h-1.5 rounded-full overflow-hidden" style={{ background: C.bg }}>
                                                 <div className="h-full rounded-full transition-all duration-700"
@@ -488,11 +489,11 @@ export default function AdminDashboardPage() {
                                 <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.blueLight }}>
                                     <Users className="w-3.5 h-3.5" style={{ color: C.blue }} />
                                 </div>
-                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Người dùng</h2>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>{t('admin.dashboard.chartUsers')}</h2>
                             </div>
                             <button onClick={() => router.push('/admin/users')}
                                 className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: C.orange }}>
-                                Quản lý <ArrowRight className="w-3 h-3" />
+                                {t('admin.dashboard.manage')} <ArrowRight className="w-3 h-3" />
                             </button>
                         </div>
                         {loading ? (
@@ -502,14 +503,14 @@ export default function AdminDashboardPage() {
                         ) : (
                             <div className="grid grid-cols-2 gap-3">
                                 {[
-                                    { label: 'Tổng users', value: userStats?.total ?? 0, color: C.navy, bg: C.bg },
-                                    { label: 'Hoạt động', value: userStats?.active ?? 0, color: C.green, bg: C.greenLight },
-                                    { label: 'Đã khóa', value: userStats?.inactive ?? 0, color: C.red, bg: C.redLight },
-                                    { label: 'Mới tháng này', value: userStats?.newThisMonth ?? 0, color: C.blue, bg: C.blueLight },
+                                    { label: t('admin.dashboard.userTotal'), value: userStats?.total ?? 0, color: C.navy, bg: C.bg },
+                                    { label: t('admin.dashboard.userActive'), value: userStats?.active ?? 0, color: C.green, bg: C.greenLight },
+                                    { label: t('admin.dashboard.userLocked'), value: userStats?.inactive ?? 0, color: C.red, bg: C.redLight },
+                                    { label: t('admin.dashboard.userNewMonth'), value: userStats?.newThisMonth ?? 0, color: C.blue, bg: C.blueLight },
                                 ].map((s) => (
                                     <div key={s.label} className="p-3 rounded-xl flex items-center gap-3" style={{ background: s.bg }}>
                                         <div>
-                                            <p className="text-xl font-bold" style={{ color: s.color }}>{fmtNum(s.value)}</p>
+                                            <p className="text-xl font-bold" style={{ color: s.color }}>{fmtNum(s.value, numberLocale)}</p>
                                             <p className="text-[11px]" style={{ color: C.gray }}>{s.label}</p>
                                         </div>
                                     </div>
@@ -525,11 +526,11 @@ export default function AdminDashboardPage() {
                                 <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: C.greenLight }}>
                                     <Banknote className="w-3.5 h-3.5" style={{ color: C.green }} />
                                 </div>
-                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Rút tiền</h2>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>{t('admin.dashboard.chartWithdrawals')}</h2>
                             </div>
                             <button onClick={() => router.push('/admin/withdrawals')}
                                 className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: C.orange }}>
-                                Quản lý <ArrowRight className="w-3 h-3" />
+                                {t('admin.dashboard.manage')} <ArrowRight className="w-3 h-3" />
                             </button>
                         </div>
                         {loading ? (
@@ -550,13 +551,13 @@ export default function AdminDashboardPage() {
                                 {/* Stats */}
                                 <div className="flex-1 space-y-2">
                                     {[
-                                        { label: 'Chờ duyệt', value: withdrawalStats?.total.pending ?? 0, color: C.orange, bg: C.orangeLight },
-                                        { label: 'Hoàn thành', value: withdrawalStats?.total.completed ?? 0, color: C.green, bg: C.greenLight },
-                                        { label: 'Thất bại', value: withdrawalStats?.total.failed ?? 0, color: C.red, bg: C.redLight },
+                                        { label: t('admin.dashboard.wdPendingReview'), value: withdrawalStats?.total.pending ?? 0, color: C.orange, bg: C.orangeLight },
+                                        { label: t('admin.dashboard.wdCompletedLong'), value: withdrawalStats?.total.completed ?? 0, color: C.green, bg: C.greenLight },
+                                        { label: t('admin.dashboard.wdFailedLong'), value: withdrawalStats?.total.failed ?? 0, color: C.red, bg: C.redLight },
                                     ].map((s) => (
                                         <div key={s.label} className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: s.bg }}>
                                             <span className="text-xs font-medium" style={{ color: C.gray }}>{s.label}</span>
-                                            <span className="text-sm font-bold" style={{ color: s.color }}>{fmtNum(s.value)}</span>
+                                            <span className="text-sm font-bold" style={{ color: s.color }}>{fmtNum(s.value, numberLocale)}</span>
                                         </div>
                                     ))}
                                 </div>

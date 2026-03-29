@@ -68,8 +68,30 @@ interface GuidedDraftRequest {
 
 interface GuidedConversationState {
     profileLoaded: boolean;
-    pendingAction?: 'confirm_location' | 'confirm_create' | 'edit_field' | 'describe_incident';
+    pendingAction?: 'confirm_location' | 'confirm_create' | 'edit_field' | 'describe_incident' | 'complaint_confirm' | 'wallet_withdrawal_confirm';
     draftRequest: GuidedDraftRequest;
+    /** True immediately after create_rescue_request succeeds — suppresses guided-flow CTAs. */
+    requestCreated?: boolean;
+    /** Populated once lookup_order_for_complaint succeeds; suppresses rescue-request CTAs. */
+    complaintDraft?: {
+        requestId?: string;
+        paymentId?: string;
+        orderCode?: string;
+        maxDisputeAmount?: number;
+    };
+    /** Set after initiate_topup — tracks the active top-up transaction. */
+    walletTopup?: {
+        topupTxId: string;
+        amount: number;
+    };
+    /** Collects withdrawal info before confirmation. */
+    withdrawalDraft?: {
+        amount?: number;
+        bankName?: string;
+        accountNumber?: string;
+        accountHolderName?: string;
+        withdrawalAccountId?: string;
+    };
 }
 
 const CTA_COOLDOWN_MESSAGES = 3;
@@ -326,11 +348,27 @@ export class ChatbotService {
                 : {};
         const pa = o.pendingAction;
         const pendingOk =
-            pa === 'confirm_location' || pa === 'confirm_create' || pa === 'edit_field' || pa === 'describe_incident' ? pa : undefined;
+            pa === 'confirm_location' || pa === 'confirm_create' || pa === 'edit_field' || pa === 'describe_incident' || pa === 'complaint_confirm' || pa === 'wallet_withdrawal_confirm'
+                ? pa
+                : undefined;
+        const cdRaw = o.complaintDraft;
+        const complaintDraft =
+            cdRaw && typeof cdRaw === 'object' && !Array.isArray(cdRaw)
+                ? (cdRaw as GuidedConversationState['complaintDraft'])
+                : undefined;
+        const wtRaw = o.walletTopup;
+        const walletTopup =
+            wtRaw && typeof wtRaw === 'object' && !Array.isArray(wtRaw) &&
+            typeof (wtRaw as Record<string, unknown>).topupTxId === 'string'
+                ? (wtRaw as GuidedConversationState['walletTopup'])
+                : undefined;
         this.guidedState.set(conversationId, {
             profileLoaded: !!o.profileLoaded,
             pendingAction: pendingOk,
             draftRequest: draft,
+            requestCreated: !!o.requestCreated,
+            complaintDraft,
+            walletTopup,
         });
     }
 
@@ -346,6 +384,9 @@ export class ChatbotService {
                             profileLoaded: state.profileLoaded,
                             pendingAction: state.pendingAction ?? null,
                             draftRequest: state.draftRequest,
+                            requestCreated: state.requestCreated ?? false,
+                            complaintDraft: state.complaintDraft ?? null,
+                            walletTopup: state.walletTopup ?? null,
                         }),
                     ),
                 },
@@ -406,6 +447,36 @@ export class ChatbotService {
         const content = rawContent.trim();
         
         const mediaToUse = originalMediaUrls?.length ? originalMediaUrls : imageUrls;
+
+        // ── COMPLAINT_CONFIRM: user is confirming they want to submit the complaint ──
+        if (state.pendingAction === 'complaint_confirm') {
+            const lower = content.toLowerCase();
+            const isConfirmation =
+                lower.includes('xác nhận') ||
+                lower.includes('gửi khiếu nại') ||
+                lower.includes('đồng ý') ||
+                lower === 'ok' ||
+                lower.includes('tiếp tục') ||
+                lower.includes('gửi đi');
+            if (isConfirmation && state.complaintDraft?.requestId && state.complaintDraft?.paymentId) {
+                return `[Khách hàng xác nhận gửi khiếu nại] HÃY GỌI NGAY tool open_complaint với requestId="${state.complaintDraft.requestId}", paymentId="${state.complaintDraft.paymentId}", và các thông tin đã thu thập trong cuộc hội thoại (reason, targetAmount, description, expectedOutcome, attachmentUrls). TUYỆT ĐỐI không hỏi thêm gì nữa.`;
+            }
+        }
+
+        // ── WALLET_WITHDRAWAL_CONFIRM: user is confirming the withdrawal request ──
+        if (state.pendingAction === 'wallet_withdrawal_confirm') {
+            const lower = content.toLowerCase();
+            const isConfirmation =
+                lower.includes('xác nhận') ||
+                lower.includes('xác nhận rút') ||
+                lower.includes('đồng ý') ||
+                lower === 'ok' ||
+                lower.includes('tiếp tục') ||
+                lower.includes('rút tiền');
+            if (isConfirmation && state.withdrawalDraft?.amount) {
+                return `[Khách hàng xác nhận rút tiền] HÃY GỌI NGAY tool initiate_withdrawal với amount=${state.withdrawalDraft.amount}${state.withdrawalDraft.bankName ? `, bankName="${state.withdrawalDraft.bankName}"` : ''}${state.withdrawalDraft.accountNumber ? `, accountNumber="${state.withdrawalDraft.accountNumber}"` : ''}${state.withdrawalDraft.accountHolderName ? `, accountHolderName="${state.withdrawalDraft.accountHolderName}"` : ''}${state.withdrawalDraft.withdrawalAccountId ? `, withdrawalAccountId="${state.withdrawalDraft.withdrawalAccountId}"` : ''}. TUYỆT ĐỐI không hỏi thêm gì nữa.`;
+            }
+        }
 
         // ── DESCRIBE_INCIDENT: user is responding to the optional media/description prompt ──
         // Any response (skip, text, or media) → just record and let AI call create_rescue_request
@@ -543,6 +614,10 @@ ${formatMissingFieldsDirective(missing)}`;
             profileLoaded: state.profileLoaded,
             pendingAction: state.pendingAction,
             draftRequest: state.draftRequest,
+            requestCreated: state.requestCreated,
+            complaintDraft: state.complaintDraft,
+            walletTopup: state.walletTopup,
+            withdrawalDraft: state.withdrawalDraft,
         });
         return formatCtaStateDirective(phase);
     }
@@ -748,6 +823,56 @@ ${formatMissingFieldsDirective(missing)}`;
                     }
                 }
 
+                if (tc.name === 'open_complaint') {
+                    try {
+                        const parsed = JSON.parse(result) as {
+                            success?: boolean;
+                            disputeId?: string;
+                        };
+                        if (parsed.success && parsed.disputeId) {
+                            subject.next({
+                                type: 'action',
+                                action: 'navigate_to_dispute',
+                                payload: { disputeId: parsed.disputeId },
+                            });
+                        }
+                    } catch {
+                        // no-op
+                    }
+                }
+
+                if (tc.name === 'initiate_topup') {
+                    try {
+                        const parsed = JSON.parse(result) as {
+                            success?: boolean;
+                            topupTxId?: string;
+                            qrUrl?: string;
+                            amount?: number;
+                            bankAccount?: string;
+                            bankCode?: string;
+                            transferCode?: string;
+                            expireAt?: string;
+                        };
+                        if (parsed.success && parsed.topupTxId && parsed.qrUrl) {
+                            subject.next({
+                                type: 'action',
+                                action: 'show_topup_qr',
+                                payload: {
+                                    topupTxId: parsed.topupTxId,
+                                    qrUrl: parsed.qrUrl,
+                                    amount: parsed.amount,
+                                    bankAccount: parsed.bankAccount,
+                                    bankCode: parsed.bankCode,
+                                    transferCode: parsed.transferCode,
+                                    expireAt: parsed.expireAt,
+                                },
+                            });
+                        }
+                    } catch {
+                        // no-op
+                    }
+                }
+
                 messages.push({
                     role: 'tool',
                     tool_call_id: tc.id,
@@ -803,6 +928,10 @@ ${formatMissingFieldsDirective(missing)}`;
                               profileLoaded: guidedForCta.profileLoaded,
                               pendingAction: guidedForCta.pendingAction,
                               draftRequest: guidedForCta.draftRequest,
+                              requestCreated: guidedForCta.requestCreated,
+                              complaintDraft: guidedForCta.complaintDraft,
+                              walletTopup: guidedForCta.walletTopup,
+                              withdrawalDraft: guidedForCta.withdrawalDraft,
                           },
                           caller.userRole,
                           modelState,
@@ -922,6 +1051,7 @@ ${formatMissingFieldsDirective(missing)}`;
                 const result = JSON.parse(rawResult) as { success?: boolean };
                 if (result.success) {
                     state.draftRequest = {};
+                    state.requestCreated = true;
                 }
             } catch {
                 // no-op
@@ -929,12 +1059,95 @@ ${formatMissingFieldsDirective(missing)}`;
             return;
         }
 
-        if (toolName === 'create_rescue_request' || toolName === 'estimate_price_range') {
+        if (toolName === 'lookup_order_for_complaint') {
+            try {
+                const result = JSON.parse(rawResult) as {
+                    success?: boolean;
+                    requestId?: string;
+                    paymentId?: string;
+                    orderCode?: string;
+                    maxDisputeAmount?: number;
+                };
+                if (result.success && result.requestId && result.paymentId) {
+                    state.complaintDraft = {
+                        requestId: result.requestId,
+                        paymentId: result.paymentId,
+                        orderCode: result.orderCode,
+                        maxDisputeAmount: result.maxDisputeAmount,
+                    };
+                    state.pendingAction = 'complaint_confirm';
+                }
+            } catch {
+                // no-op
+            }
+            return;
+        }
+
+        if (toolName === 'open_complaint') {
+            try {
+                const result = JSON.parse(rawResult) as { success?: boolean };
+                if (result.success) {
+                    state.complaintDraft = undefined;
+                    state.pendingAction = undefined;
+                }
+            } catch {
+                // no-op
+            }
+            return;
+        }
+
+        if (toolName === 'initiate_topup') {
+            try {
+                const result = JSON.parse(rawResult) as {
+                    success?: boolean;
+                    topupTxId?: string;
+                    amount?: number;
+                };
+                if (result.success && result.topupTxId) {
+                    state.walletTopup = {
+                        topupTxId: result.topupTxId,
+                        amount: result.amount ?? (args.amount as number) ?? 0,
+                    };
+                }
+            } catch {
+                // no-op
+            }
+            return;
+        }
+
+        if (toolName === 'check_topup_status') {
+            try {
+                const result = JSON.parse(rawResult) as { status?: string };
+                if (result.status === 'COMPLETED' || result.status === 'CANCELLED') {
+                    state.walletTopup = undefined;
+                }
+            } catch {
+                // no-op
+            }
+            return;
+        }
+
+        if (toolName === 'initiate_withdrawal') {
+            try {
+                const result = JSON.parse(rawResult) as { success?: boolean };
+                if (result.success) {
+                    state.withdrawalDraft = undefined;
+                    state.pendingAction = undefined;
+                }
+            } catch {
+                // no-op
+            }
+            return;
+        }
+
+        if (toolName === 'estimate_price_range') {
             return;
         }
 
         if (args.incidentType && typeof args.incidentType === 'string') {
             state.draftRequest.incidentType = args.incidentType;
+            // Starting a new order flow — clear the post-creation flag.
+            state.requestCreated = false;
         }
     }
 

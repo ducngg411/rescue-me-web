@@ -5,6 +5,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Menu, X } from 'lucide-react';
 import RescueMeLogo from '@/components/RescueMeLogo';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { useLanguage } from '@/contexts/LanguageContext';
 import api from '@/lib/api';
 
 const C = {
@@ -23,13 +25,16 @@ interface AdminLayoutProps {
     activeTab?: string;
 }
 
-const navGroups = [
+type NavItemDef = { href: string; labelPath: string; icon: React.ReactNode };
+type NavGroupDef = { groupLabelPath: string | null; items: NavItemDef[] };
+
+const NAV_GROUP_DEFS: NavGroupDef[] = [
     {
-        label: null,
+        groupLabelPath: null,
         items: [
             {
-                label: 'Dashboard',
                 href: '/admin/dashboard',
+                labelPath: 'common.dashboard',
                 icon: (
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <rect x="3" y="3" width="7" height="7" rx="1" strokeLinecap="round" strokeLinejoin="round" />
@@ -40,8 +45,8 @@ const navGroups = [
                 ),
             },
             {
-                label: 'Provider Approval',
                 href: '/admin/providers',
+                labelPath: 'admin.nav.providerApproval',
                 icon: (
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -49,8 +54,8 @@ const navGroups = [
                 ),
             },
             {
-                label: 'Disputes',
                 href: '/admin/disputes',
+                labelPath: 'admin.disputes.nav',
                 icon: (
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -58,8 +63,8 @@ const navGroups = [
                 ),
             },
             {
-                label: 'Service Requests',
                 href: '/admin/requests',
+                labelPath: 'admin.nav.serviceRequests',
                 icon: (
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -67,8 +72,8 @@ const navGroups = [
                 ),
             },
             {
-                label: 'Users',
                 href: '/admin/users',
+                labelPath: 'admin.nav.users',
                 icon: (
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -78,11 +83,11 @@ const navGroups = [
         ],
     },
     {
-        label: 'MANAGEMENT',
+        groupLabelPath: 'admin.nav.management',
         items: [
             {
-                label: 'Transactions',
                 href: '/admin/transactions',
+                labelPath: 'admin.transactions.title',
                 icon: (
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -90,8 +95,8 @@ const navGroups = [
                 ),
             },
             {
-                label: 'Withdrawals',
                 href: '/admin/withdrawals',
+                labelPath: 'admin.nav.withdrawals',
                 icon: (
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -99,8 +104,8 @@ const navGroups = [
                 ),
             },
             {
-                label: 'Billing & Fee',
                 href: '/admin/billing',
+                labelPath: 'admin.nav.billing',
                 icon: (
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 2.5 2 2.5-2 3.5 2z" />
@@ -108,8 +113,8 @@ const navGroups = [
                 ),
             },
             {
-                label: 'Settings',
                 href: '/admin/settings',
+                labelPath: 'common.settings',
                 icon: (
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -121,9 +126,25 @@ const navGroups = [
     },
 ];
 
+type NavItem = { href: string; label: string; icon: React.ReactNode };
+type NavGroup = { label: string | null; items: NavItem[] };
+
+function buildNavGroups(t: (path: string) => string): NavGroup[] {
+    return NAV_GROUP_DEFS.map((group) => ({
+        label: group.groupLabelPath ? t(group.groupLabelPath) : null,
+        items: group.items.map((item) => ({
+            href: item.href,
+            label: t(item.labelPath),
+            icon: item.icon,
+        })),
+    }));
+}
+
 export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
     const router = useRouter();
     const pathname = usePathname();
+    const { t } = useLanguage();
+    const navGroups = buildNavGroups(t);
     const { user, logout } = useAuth();
     const [disputeBadge, setDisputeBadge] = useState(0);
     const [latestDisputeTotal, setLatestDisputeTotal] = useState(0);
@@ -206,7 +227,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
                     {/* Logo */}
                     <div className="flex flex-col items-start gap-1 mb-8 px-2">
                         <RescueMeLogo size={32} textClass="text-sm" />
-                        <p className="text-[10px] font-bold uppercase tracking-widest pl-[40px]" style={{ color: C.orange }}>Admin Panel</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest pl-[40px]" style={{ color: C.orange }}>{t('admin.nav.panelSubtitle')}</p>
                     </div>
 
                     {/* Nav Groups */}
@@ -274,13 +295,13 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
                         </div>
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
-                            <p className="text-xs" style={{ color: C.gray }}>Super Admin</p>
+                            <p className="text-xs" style={{ color: C.gray }}>{t('admin.nav.superAdmin')}</p>
                         </div>
                         <button
                             onClick={logout}
                             className="p-1.5 rounded-lg transition-colors hover:bg-red-50"
                             style={{ color: C.gray }}
-                            title="Đăng xuất"
+                            title={t('common.logout')}
                         >
                             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -294,13 +315,23 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative pb-[60px] md:pb-0">
                 {/* Mobile Top Header */}
                 <div 
-                    className="md:hidden flex flex-shrink-0 items-center justify-between px-4 py-3 z-20 shadow-sm"
+                    className="md:hidden flex flex-shrink-0 items-center justify-between gap-2 px-4 py-3 z-20 shadow-sm"
                     style={{ background: '#ffffff', borderBottom: `1px solid ${C.border}` }}
                 >
                     <RescueMeLogo size={24} textClass="text-sm font-bold" />
-                    <div className="w-8 h-8 flex-shrink-0 rounded-full bg-cover bg-center border flex items-center justify-center overflow-hidden" style={{ background: user?.avatar ? `url(${user.avatar}) center/cover` : C.orangeLight, borderColor: C.border }}>
-                        {!user?.avatar && <span className="text-[10px] font-bold" style={{ color: C.orange }}>{initials}</span>}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        <LanguageSwitcher />
+                        <div className="w-8 h-8 flex-shrink-0 rounded-full bg-cover bg-center border flex items-center justify-center overflow-hidden" style={{ background: user?.avatar ? `url(${user.avatar}) center/cover` : C.orangeLight, borderColor: C.border }}>
+                            {!user?.avatar && <span className="text-[10px] font-bold" style={{ color: C.orange }}>{initials}</span>}
+                        </div>
                     </div>
+                </div>
+
+                <div
+                    className="hidden md:flex flex-shrink-0 items-center justify-end px-6 py-2.5 gap-3"
+                    style={{ background: '#ffffff', borderBottom: `1px solid ${C.border}` }}
+                >
+                    <LanguageSwitcher />
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
@@ -314,14 +345,16 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
                 style={{ background: '#ffffff', borderTop: `1px solid ${C.border}`, height: '60px' }}
             >
                 {[
-                    navGroups[0].items.find(i => i.href === '/admin/dashboard'),
-                    navGroups[0].items.find(i => i.href === '/admin/requests'),
-                    navGroups[0].items.find(i => i.href === '/admin/disputes'),
-                ].filter(Boolean).map((item: any) => {
+                    navGroups[0].items.find((i) => i.href === '/admin/dashboard'),
+                    navGroups[0].items.find((i) => i.href === '/admin/requests'),
+                    navGroups[0].items.find((i) => i.href === '/admin/disputes'),
+                ]
+                    .filter((i): i is NavItem => i != null)
+                    .map((item) => {
                     const active = isActive(item.href);
                     return (
                         <button
-                            key={item.label}
+                            key={item.href}
                             onClick={() => {
                                 if (item.href === '/admin/disputes') {
                                     localStorage.setItem('admin.disputes.badgeCount', '0');
@@ -350,7 +383,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
                     style={{ color: isMobileMenuOpen ? C.orange : '#94a3b8' }}
                 >
                     <Menu className="w-[18px] h-[18px]" />
-                    <span className="text-[9px] font-medium">Menu</span>
+                    <span className="text-[9px] font-medium">{t('admin.nav.menu')}</span>
                 </button>
             </nav>
 
@@ -367,7 +400,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
                 className={`fixed inset-y-0 right-0 z-50 w-72 bg-white shadow-xl transform transition-transform duration-300 ease-in-out md:hidden flex flex-col ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
             >
                 <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <h2 className="text-sm font-bold" style={{ color: C.navy }}>Menu Chức Năng</h2>
+                    <h2 className="text-sm font-bold" style={{ color: C.navy }}>{t('admin.nav.menuTitle')}</h2>
                     <button onClick={() => setIsMobileMenuOpen(false)} className="p-1 rounded-full bg-gray-100 hover:bg-gray-200" style={{ color: C.gray }}>
                         <X className="w-5 h-5" />
                     </button>
@@ -425,7 +458,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
                         </div>
                         <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold truncate" style={{ color: C.navy }}>{displayName}</p>
-                            <p className="text-xs" style={{ color: C.gray }}>Super Admin</p>
+                            <p className="text-xs" style={{ color: C.gray }}>{t('admin.nav.superAdmin')}</p>
                         </div>
                     </div>
                     <button
@@ -436,7 +469,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
                         <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                         </svg>
-                        Đăng xuất
+                        {t('common.logout')}
                     </button>
                 </div>
             </div>

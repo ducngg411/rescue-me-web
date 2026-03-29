@@ -1,14 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import AvatarImage from '@/components/AvatarImage';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     Search, ChevronLeft, ChevronRight, Filter, Calendar, Eye, Users,
-    X, Wallet, Car, Star, Clock, AlertTriangle, CheckCircle, XCircle, FileText, Download, UserCheck, Shield, BarChart2
+    Clock, CheckCircle, XCircle, Car, BarChart2,
 } from 'lucide-react';
 import { ChartCard, VerticalBarChart, DonutChart } from '@/components/AdminCharts';
 
@@ -32,6 +33,18 @@ const C = {
 
 type TabType = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'ALL';
 
+function serviceTypeLabel(t: (path: string) => string, key: string): string {
+    const path = `admin.providers.service.${key}`;
+    const tr = t(path);
+    return tr === path ? key : tr;
+}
+
+function vehicleChartLabel(t: (path: string) => string, label: string): string {
+    if (label === 'Car') return t('admin.providers.vehicleCar');
+    if (label === 'Motorcycle') return t('admin.providers.vehicleMotorcycle');
+    return label;
+}
+
 interface Provider {
     id: string;
     fullName: string;
@@ -45,23 +58,6 @@ interface Provider {
     submittedAt: string | null;
 }
 
-const TABS: { key: TabType; label: string }[] = [
-    { key: 'PENDING', label: 'Pending' },
-    { key: 'APPROVED', label: 'Approved' },
-    { key: 'REJECTED', label: 'Rejected' },
-    { key: 'SUSPENDED', label: 'Suspended' },
-    { key: 'ALL', label: 'All' },
-];
-
-const SERVICE_LABELS: Record<string, string> = {
-    TOWING: 'Towing',
-    BATTERY_JUMP: 'Battery',
-    TIRE_CHANGE: 'Tire Change',
-    FUEL_DELIVERY: 'Fuel Delivery',
-    LOCKOUT: 'Lockout',
-    BREAKDOWN_REPAIR: 'Full Recovery',
-};
-
 const SERVICE_COLORS: Record<string, { bg: string; text: string }> = {
     TOWING: { bg: '#fff7ed', text: '#ea580c' },
     BATTERY_JUMP: { bg: '#fef9c3', text: '#854d0e' },
@@ -72,18 +68,19 @@ const SERVICE_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 function StatusBadge({ status }: { status: Provider['verificationStatus'] }) {
-    const configs: Record<string, { label: string; bg: string; color: string; dot: string }> = {
-        PENDING: { label: 'Pending', bg: C.yellowLight, color: C.yellow, dot: '#facc15' },
-        APPROVED: { label: 'Approved', bg: C.greenLight, color: C.green, dot: C.green },
-        REJECTED: { label: 'Rejected', bg: C.redLight, color: C.red, dot: C.red },
-        SUSPENDED: { label: 'Suspended', bg: C.orangeLight, color: C.orange, dot: C.orange },
-        DRAFT: { label: 'Draft', bg: '#f8fafc', color: C.gray, dot: C.gray },
+    const { t } = useLanguage();
+    const configs: Record<string, { labelKey: string; bg: string; color: string; dot: string }> = {
+        PENDING: { labelKey: 'admin.providers.verification.pending', bg: C.yellowLight, color: C.yellow, dot: '#facc15' },
+        APPROVED: { labelKey: 'admin.providers.verification.approved', bg: C.greenLight, color: C.green, dot: C.green },
+        REJECTED: { labelKey: 'admin.providers.verification.rejected', bg: C.redLight, color: C.red, dot: C.red },
+        SUSPENDED: { labelKey: 'admin.providers.verification.suspended', bg: C.orangeLight, color: C.orange, dot: C.orange },
+        DRAFT: { labelKey: 'admin.providers.verification.draft', bg: '#f8fafc', color: C.gray, dot: C.gray },
     };
     const cfg = configs[status] || configs.DRAFT;
     return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: cfg.bg, color: cfg.color }}>
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: cfg.dot }} />
-            {cfg.label}
+            {t(cfg.labelKey)}
         </span>
     );
 }
@@ -93,6 +90,19 @@ const PAGE_SIZE = 10;
 export default function ProviderApprovalPage() {
     const router = useRouter();
     const { isReady } = useAdminGuard();
+    const { t, locale } = useLanguage();
+    const dateLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
+
+    const tabs = useMemo(
+        (): { key: TabType; label: string }[] => [
+            { key: 'PENDING', label: t('admin.providers.tabPending') },
+            { key: 'APPROVED', label: t('admin.providers.tabApproved') },
+            { key: 'REJECTED', label: t('admin.providers.tabRejected') },
+            { key: 'SUSPENDED', label: t('admin.providers.tabSuspended') },
+            { key: 'ALL', label: t('admin.providers.tabAll') },
+        ],
+        [t],
+    );
     const [activeTab, setActiveTab] = useState<TabType>('PENDING');
     const [search, setSearch] = useState('');
     const [providerTypeFilter, setProviderTypeFilter] = useState('ALL');
@@ -118,7 +128,7 @@ export default function ProviderApprovalPage() {
     const loadProviders = async () => {
         try {
             setLoading(true);
-            const params: any = {};
+            const params: Record<string, string> = {};
             if (activeTab !== 'ALL') params.status = activeTab;
             
             const [data, statsData] = await Promise.all([
@@ -171,17 +181,17 @@ export default function ProviderApprovalPage() {
 
                 {/* Page Header */}
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>Provider Approval</h1>
-                    <p className="text-sm" style={{ color: C.gray }}>Review and manage rescue provider applications across all regions.</p>
+                    <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>{t('admin.providers.title')}</h1>
+                    <p className="text-sm" style={{ color: C.gray }}>{t('admin.providers.subtitle')}</p>
                 </div>
 
                 {/* ─── Stats Cards Row ─── */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
                     {[
-                        { label: 'TỔNG YÊU CẦU', value: total, color: C.navy, accent: false, icon: <Users className="w-4 h-4" /> },
-                        { label: 'CHỜ DUYỆT', value: pending, color: C.orange, accent: false, icon: <Clock className="w-4 h-4" /> },
-                        { label: 'ĐÃ DUYỆT', value: approved, color: C.green, accent: false, icon: <CheckCircle className="w-4 h-4" /> },
-                        { label: 'TỪ CHỐI', value: rejected, color: C.red, accent: false, icon: <XCircle className="w-4 h-4" /> },
+                        { label: t('admin.providers.statTotal'), value: total, color: C.navy, accent: false, icon: <Users className="w-4 h-4" /> },
+                        { label: t('admin.providers.statPending'), value: pending, color: C.orange, accent: false, icon: <Clock className="w-4 h-4" /> },
+                        { label: t('admin.providers.statApproved'), value: approved, color: C.green, accent: false, icon: <CheckCircle className="w-4 h-4" /> },
+                        { label: t('admin.providers.statRejected'), value: rejected, color: C.red, accent: false, icon: <XCircle className="w-4 h-4" /> },
                     ].map(stat => (
                         <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
                             <div className="flex items-center justify-between mb-2">
@@ -196,7 +206,7 @@ export default function ProviderApprovalPage() {
                 {/* ─── Chart Row ─── */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
                     <ChartCard
-                        title="Phân bổ dịch vụ Providers"
+                        title={t('admin.providers.chartService')}
                         icon={<BarChart2 className="w-3.5 h-3.5" />}
                         iconBg="#fff7ed" iconColor="#f97316"
                     >
@@ -204,29 +214,34 @@ export default function ProviderApprovalPage() {
                             loading={chartsLoading}
                             height={130}
                             items={chartServiceDist.map(d => ({
-                                label: d.label, value: d.value,
+                                label: d.key ? serviceTypeLabel(t, d.key) : d.label,
+                                value: d.value,
                                 color: '#f97316',
                                 displayValue: d.value.toString(),
                             }))}
                         />
                     </ChartCard>
                     <ChartCard
-                        title="Phương tiện cứu hộ"
+                        title={t('admin.providers.chartVehicle')}
                         icon={<Car className="w-3.5 h-3.5" />}
                         iconBg="#f0fdf4" iconColor="#16a34a"
                     >
                         <div className="flex items-center gap-4">
                             <DonutChart
                                 size={110}
-                                slices={chartVehicleDist.map(d => ({ label: d.label, value: d.value, color: d.color }))}
+                                slices={chartVehicleDist.map(d => ({
+                                    label: vehicleChartLabel(t, d.label),
+                                    value: d.value,
+                                    color: d.color,
+                                }))}
                                 centerLabel={String(chartVehicleDist.reduce((s, d) => s + d.value, 0))}
-                                centerSub="Tổng"
+                                centerSub={t('admin.providers.totalLabel')}
                             />
                             <div className="space-y-2">
                                 {chartVehicleDist.map(s => (
                                     <div key={s.label} className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
-                                        <span className="text-xs" style={{ color: '#6b7280' }}>{s.label}</span>
+                                        <span className="text-xs" style={{ color: '#6b7280' }}>{vehicleChartLabel(t, s.label)}</span>
                                         <span className="text-xs font-bold ml-auto pl-2" style={{ color: '#1a1a2e' }}>{s.value}</span>
                                     </div>
                                 ))}
@@ -240,7 +255,7 @@ export default function ProviderApprovalPage() {
 
                     {/* Tabs */}
                     <div className="flex items-center px-5 border-b" style={{ borderColor: C.border }}>
-                        {TABS.map(tab => (
+                        {tabs.map(tab => (
                             <button
                                 key={tab.key}
                                 onClick={() => { setActiveTab(tab.key); setPage(1); }}
@@ -265,7 +280,7 @@ export default function ProviderApprovalPage() {
                                 type="text"
                                 value={search}
                                 onChange={e => { setSearch(e.target.value); setPage(1); }}
-                                placeholder="Search by name, email or identity..."
+                                placeholder={t('admin.providers.searchPlaceholder')}
                                 className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border focus:outline-none focus:ring-2"
                                 style={{ borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                             />
@@ -280,9 +295,9 @@ export default function ProviderApprovalPage() {
                                 className="bg-transparent text-sm focus:outline-none cursor-pointer pr-1"
                                 style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                             >
-                                <option value="ALL">Provider Type</option>
-                                <option value="INDIVIDUAL">Individual</option>
-                                <option value="BUSINESS">Business</option>
+                                <option value="ALL">{t('admin.providers.filterTypeLabel')}</option>
+                                <option value="INDIVIDUAL">{t('admin.providers.typeIndividual')}</option>
+                                <option value="BUSINESS">{t('admin.providers.typeBusiness')}</option>
                             </select>
                         </div>
 
@@ -319,7 +334,15 @@ export default function ProviderApprovalPage() {
                         <table className="w-full">
                             <thead>
                                 <tr style={{ background: C.bg }}>
-                                    {['IDENTITY', 'TYPE', 'SERVICES', 'VEHICLE', 'SUBMITTED AT', 'STATUS', 'AC'].map(h => (
+                                    {[
+                                        t('admin.providers.colIdentity'),
+                                        t('admin.providers.colType'),
+                                        t('admin.providers.colServices'),
+                                        t('admin.providers.colVehicle'),
+                                        t('admin.providers.colSubmitted'),
+                                        t('admin.providers.colStatus'),
+                                        t('admin.providers.colActions'),
+                                    ].map((h) => (
                                         <th key={h} className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>
                                             {h}
                                         </th>
@@ -340,7 +363,7 @@ export default function ProviderApprovalPage() {
                                                 <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke={C.border} strokeWidth={1.5}>
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                                                 </svg>
-                                                <p className="text-sm" style={{ color: C.gray }}>Không tìm thấy nhà cung cấp nào</p>
+                                                <p className="text-sm" style={{ color: C.gray }}>{t('admin.providers.empty')}</p>
                                             </div>
                                         </td>
                                     </tr>
@@ -352,7 +375,7 @@ export default function ProviderApprovalPage() {
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-3">
                                                     <AvatarImage
-                                                        name={provider.fullName || provider.businessName || 'Provider'}
+                                                        name={provider.fullName || provider.businessName || t('admin.providers.defaultName')}
                                                         avatar={provider.avatar}
                                                         className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
                                                         fallbackBackground={C.orange}
@@ -368,7 +391,7 @@ export default function ProviderApprovalPage() {
                                             </td>
                                             {/* Type */}
                                             <td className="px-4 py-3 text-xs" style={{ color: C.gray }}>
-                                                {provider.providerType === 'INDIVIDUAL' ? 'Individual' : 'Business'}
+                                                {provider.providerType === 'INDIVIDUAL' ? t('admin.providers.typeIndividual') : t('admin.providers.typeBusiness')}
                                             </td>
                                             {/* Services */}
                                             <td className="px-4 py-3">
@@ -377,7 +400,7 @@ export default function ProviderApprovalPage() {
                                                         const col = SERVICE_COLORS[s] || { bg: C.bg, text: C.gray };
                                                         return (
                                                             <span key={s} className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: col.bg, color: col.text }}>
-                                                                {SERVICE_LABELS[s] || s}
+                                                                {serviceTypeLabel(t, s)}
                                                             </span>
                                                         );
                                                     })}
@@ -393,7 +416,7 @@ export default function ProviderApprovalPage() {
                                                 {primaryVehicle ? (
                                                     <div>
                                                         <p className="text-xs font-medium" style={{ color: C.navy }}>
-                                                            {primaryVehicle.type === 'CAR' ? 'Car' : 'Motorcycle'}
+                                                            {primaryVehicle.type === 'CAR' ? t('admin.providers.vehicleCar') : t('admin.providers.vehicleMotorcycle')}
                                                         </p>
                                                         <p className="text-[11px] font-mono" style={{ color: C.gray }}>{primaryVehicle.plateNumber}</p>
                                                     </div>
@@ -404,7 +427,7 @@ export default function ProviderApprovalPage() {
                                             {/* Submitted At */}
                                             <td className="px-4 py-3 text-xs" style={{ color: C.gray }}>
                                                 {provider.submittedAt
-                                                    ? new Date(provider.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                                    ? new Date(provider.submittedAt).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })
                                                     : '—'}
                                             </td>
                                             {/* Status */}
@@ -418,7 +441,7 @@ export default function ProviderApprovalPage() {
                                                         onClick={() => router.push(`/admin/providers/${provider.id}`)}
                                                         className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
                                                         style={{ color: C.gray }}
-                                                        title="Xem chi tiết"
+                                                        title={t('admin.providers.tooltipView')}
                                                     >
                                                         <Eye className="w-4 h-4" />
                                                     </button>
@@ -427,7 +450,7 @@ export default function ProviderApprovalPage() {
                                                             onClick={() => router.push(`/admin/providers/${provider.id}`)}
                                                             className="p-1.5 rounded-lg hover:bg-green-50 transition-colors"
                                                             style={{ color: C.green }}
-                                                            title="Duyệt nhanh"
+                                                            title={t('admin.providers.tooltipQuickApprove')}
                                                         >
                                                             <CheckCircle className="w-4 h-4" />
                                                         </button>
@@ -444,13 +467,12 @@ export default function ProviderApprovalPage() {
                     {/* Pagination Footer */}
                     <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
                         <p className="text-xs" style={{ color: C.gray }}>
-                            Showing <span className="font-semibold" style={{ color: C.navy }}>
-                                {filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
-                            </span> to <span className="font-semibold" style={{ color: C.navy }}>
-                                {Math.min(page * PAGE_SIZE, filtered.length)}
-                            </span> of <span className="font-semibold" style={{ color: C.navy }}>
-                                {filtered.length}
-                            </span> {activeTab === 'PENDING' ? 'pending requests' : 'providers'}
+                            {t('admin.providers.pagination', {
+                                from: filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1,
+                                to: Math.min(page * PAGE_SIZE, filtered.length),
+                                total: filtered.length,
+                                unit: activeTab === 'PENDING' ? t('admin.providers.unitPending') : t('admin.providers.unitProviders'),
+                            })}
                         </p>
                         <div className="flex items-center gap-1">
                             <button
