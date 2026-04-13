@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getMessaging, type Messaging } from 'firebase/messaging';
 import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
@@ -31,3 +32,17 @@ try {
 export { db };
 export const auth = getAuth(app);
 export default app;
+
+/**
+ * Returns a Firebase Messaging instance, or null in unsupported environments
+ * (SSR, or browsers without service worker support).
+ */
+export function getFirebaseMessaging(): Messaging | null {
+    if (typeof window === 'undefined') return null;
+    if (!('serviceWorker' in navigator)) return null;
+    try {
+        return getMessaging(app);
+    } catch {
+        return null;
+    }
+}

@@ -2,14 +2,17 @@
 backup_*/
 backup/
 
-# Environment files
+# Environment files - never commit real secrets
 .env
 .env.local
 .env.*.local
 *.env.backend
 *.env.frontend
+# Production env files (filled from .example templates on server)
+.env.production
+backend/.env.production
+frontend/.env.production
 
-.claude
 .claude
 
 # OS files
@@ -25,6 +28,10 @@ yarn-error.log*
 
 # Dependencies
 node_modules/
+node_modules
+
+# Docs
+docs/
 
 # Build outputs
 dist/
@@ -42,3 +49,13 @@ postgres_data/
 *.swp
 *.swo
 *~
+
+# Docker / deployment
+*.tar
+
+# SSL certificates (generated on server)
+nginx/certs/
+certbot/certs/
+
+# TypeScript build cache
+tsconfig.tsbuildinfo

@@ -324,6 +324,24 @@ export class ProviderService {
         };
     }
 
+    async updateFcmToken(userId: string, fcmToken: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { fcmToken },
+        });
+
+        this.logger.log(`[Provider ${userId}] FCM token registered`);
+        return { success: true };
+    }
+
     async getPendingRequests(userId: string) {
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
@@ -476,19 +494,22 @@ export class ProviderService {
             pendingQuoteCountByRequest[row.rescueRequestId] = row._count.id;
         }
 
-        // Step 2: Calculate REAL routes using VietMap API (with ETA!)
+        // Step 2: Calculate REAL routes using VietMap API (with ETA!) — parallel to avoid N×latency
+        const routeMap = await this.vietMapService.calculateRoutesParallel(
+            providerLat,
+            providerLng,
+            candidateRequests.map((r) => {
+                const loc = r.pickupLocation as any;
+                return { lat: loc.lat, lng: loc.lng, id: r.id };
+            }),
+            'car',
+        );
+
         const matchedRequests: any[] = [];
         for (const request of candidateRequests) {
             const pickupLocation = request.pickupLocation as any;
-
-            // Call VietMap Route API to get REAL distance and ETA
-            const routeInfo = await this.vietMapService.calculateRoute(
-                providerLat,
-                providerLng,
-                pickupLocation.lat,
-                pickupLocation.lng,
-                'car', // Default to car, could be dynamic based on provider vehicle
-            );
+            const routeInfo = routeMap.get(request.id);
+            if (!routeInfo) continue;
 
             // Check if route is successful and within service radius
             if (routeInfo.success && routeInfo.distance <= radiusKm) {
@@ -561,8 +582,7 @@ export class ProviderService {
                     createdAt: request.createdAt,
                 });
             } else if (!routeInfo.success) {
-                console.warn(` VietMap route failed for request ${request.id}: ${routeInfo.error}`);
-                // Could fallback to Haversine here if needed
+                console.warn(`VietMap route failed for request ${request.id}: ${routeInfo.error}`);
             }
         }
 

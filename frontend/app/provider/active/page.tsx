@@ -7,6 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useProviderStatus } from '@/lib/hooks/useProviderStatus';
 import { usePendingRequests } from '@/lib/hooks/usePendingRequests';
 import { useProviderLocation } from '@/lib/hooks/useProviderLocation';
+import { useFcmToken } from '@/lib/hooks/useFcmToken';
 import IncomingRequestModal from '@/components/provider/IncomingRequestModal';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import api from '@/lib/api';
@@ -249,8 +250,14 @@ export default function ProviderActivePage() {
     const { user, loading: authLoading, logout } = useAuth();
     const { t } = useLanguage();
     const { isOnline, isLoading: statusLoading, toggleOnlineStatus, setIsOnline } = useProviderStatus();
-    const { requests } = usePendingRequests({ enabled: isOnline, pollInterval: 5000 });
+    const { requests, fetchRequests } = usePendingRequests({ enabled: isOnline, pollInterval: 2000 });
     const { location } = useProviderLocation({ enabled: isOnline, updateInterval: 30000 });
+
+    // FCM push notifications — register token when online, refresh request list on foreground message
+    useFcmToken({
+        enabled: isOnline,
+        onNewRequest: () => fetchRequests(),
+    });
 
     // Wallet balance — required to go online
     const MIN_DEPOSIT = 100_000;

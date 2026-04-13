@@ -50,6 +50,11 @@ export class VietMapService {
     private readonly apiKey: string;
     private readonly baseUrl = 'https://maps.vietmap.vn/api/route/v3';
 
+    // In-memory route cache: key → { result, expiresAt }
+    // TTL: 2 minutes — provider/request positions don't change meaningfully in that window
+    private readonly routeCache = new Map<string, { result: RouteInfo; expiresAt: number }>();
+    private static readonly ROUTE_CACHE_TTL_MS = 120_000;
+
     constructor(private configService: ConfigService) {
         this.apiKey = this.configService.get<string>('VIETMAP_API_KEY') || '';
         if (!this.apiKey) {
@@ -81,6 +86,14 @@ export class VietMapService {
                 success: false,
                 error: 'VietMap API key not configured',
             };
+        }
+
+        // Round to 3 decimal places (~110m precision) for cache key
+        const cacheKey = `${fromLat.toFixed(3)},${fromLng.toFixed(3)}-${toLat.toFixed(3)},${toLng.toFixed(3)}-${vehicle}`;
+        const cached = this.routeCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            this.logger.debug(`Route cache hit: ${cacheKey}`);
+            return cached.result;
         }
 
         try {
@@ -117,12 +130,14 @@ export class VietMapService {
                 ` Route: ${distanceKm.toFixed(3)}km (${route.distance}m), ETA: ${durationMinutes.toFixed(1)} minutes`,
             );
 
-            return {
+            const result: RouteInfo = {
                 distance: Math.round(distanceKm * 100) / 100, // Round to 2 decimals for accuracy
                 duration: Math.ceil(durationMinutes), // Round up minutes
                 durationSeconds: Math.round(durationSeconds),
                 success: true,
             };
+            this.routeCache.set(cacheKey, { result, expiresAt: Date.now() + VietMapService.ROUTE_CACHE_TTL_MS });
+            return result;
         } catch (error) {
             this.logger.error(`VietMap API call failed: ${error.message}`, error.stack);
             return {

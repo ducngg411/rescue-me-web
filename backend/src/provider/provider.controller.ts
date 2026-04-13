@@ -35,6 +35,11 @@ export class ProviderController {
         return this.providerService.updateCurrentLocation(req.user.id, body.lat, body.lng);
     }
 
+    @Patch('fcm-token')
+    async updateFcmToken(@Request() req, @Body() body: { fcmToken: string }) {
+        return this.providerService.updateFcmToken(req.user.id, body.fcmToken);
+    }
+
     @Get('pending-requests')
     async getPendingRequests(@Request() req) {
         return this.providerService.getPendingRequests(req.user.id);

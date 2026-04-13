@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, UnauthorizedException, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRescueRequestDto } from './dto/create-rescue-request.dto';
@@ -17,10 +17,13 @@ import {
     formatOrderLabelForSupport,
 } from '../common/business-codes';
 import { VietMapService } from '../vietmap/vietmap.service';
+import { FirebaseService } from '../firebase/firebase.service';
 
 
 @Injectable()
 export class RescueRequestService {
+    private readonly logger = new Logger(RescueRequestService.name);
+
     constructor(
         private prisma: PrismaService,
         private commissionService: CommissionService,
@@ -28,6 +31,7 @@ export class RescueRequestService {
         private mailService: MailService,
         private disputeService: DisputeService,
         private vietMapService: VietMapService,
+        private firebaseService: FirebaseService,
     ) { }
 
     /**
@@ -99,6 +103,95 @@ export class RescueRequestService {
         if (result.closed > 0) {
             console.log(`⏰ [Cron] Closed ${result.closed} quote windows (time expired)`);
         }
+    }
+
+    /**
+     * Find online providers within Haversine radius and FCM-push a new rescue request to them.
+     * No VietMap calls — Haversine is O(1) per provider and free.
+     * Called fire-and-forget after createRescueRequest (+ guest variant).
+     */
+    private async broadcastToProviders(rescueRequest: any): Promise<void> {
+        const pickupLocation = rescueRequest.pickupLocation as { lat: number; lng: number };
+        if (!pickupLocation?.lat || !pickupLocation?.lng) {
+            this.logger.warn('[FCM] Cannot broadcast — missing pickup location');
+            return;
+        }
+
+        // Find all approved, online providers who have an FCM token
+        const onlineProviders = await this.prisma.user.findMany({
+            where: {
+                role: 'PROVIDER',
+                isOnline: true,
+                verificationStatus: 'APPROVED',
+                fcmToken: { not: null },
+            },
+            select: {
+                id: true,
+                fcmToken: true,
+                currentLocation: true,
+                permanentAddress: true,
+                businessAddress: true,
+                serviceRadiusKm: true,
+                serviceTypes: true,
+                supportedVehicleTypes: true,
+            },
+        });
+
+        if (onlineProviders.length === 0) {
+            this.logger.debug('[FCM] No online providers with FCM tokens found');
+            return;
+        }
+
+        // Haversine filter: only notify providers whose service radius covers the pickup point
+        const eligibleTokens: string[] = [];
+        for (const provider of onlineProviders) {
+            const location = (provider.currentLocation as any) ??
+                (provider.permanentAddress as any) ??
+                (provider.businessAddress as any);
+            if (!location?.lat || !location?.lng) continue;
+
+            const radiusKm = provider.serviceRadiusKm ?? 15;
+            const straightLine = this.vietMapService.calculateHaversineDistance(
+                location.lat, location.lng,
+                pickupLocation.lat, pickupLocation.lng,
+            );
+
+            // Use 1.5× multiplier (same as getPendingRequests pre-filter)
+            if (straightLine <= radiusKm * 1.5 && provider.fcmToken) {
+                eligibleTokens.push(provider.fcmToken);
+            }
+        }
+
+        if (eligibleTokens.length === 0) {
+            this.logger.debug('[FCM] No eligible providers in radius');
+            return;
+        }
+
+        const incidentLabels: Record<string, string> = {
+            BREAKDOWN: 'Xe bị hỏng',
+            ACCIDENT: 'Tai nạn',
+            FLAT_TIRE: 'Xịt lốp',
+            BATTERY_DEAD: 'Hết pin',
+            OUT_OF_FUEL: 'Hết xăng',
+            LOCKED_OUT: 'Khóa cửa',
+            OTHER: 'Sự cố khác',
+        };
+        const incidentLabel = incidentLabels[rescueRequest.incidentType] ?? rescueRequest.incidentType;
+        const address = (rescueRequest.pickupLocation as any)?.addressText ||
+            (rescueRequest.pickupLocation as any)?.address ||
+            'Vị trí không xác định';
+
+        const sent = await this.firebaseService.sendMulticast(eligibleTokens, {
+            title: `🚨 Yêu cầu cứu hộ mới — ${incidentLabel}`,
+            body: `📍 ${address}`,
+            data: {
+                requestId: rescueRequest.id,
+                type: 'NEW_RESCUE_REQUEST',
+                url: `/provider/requests/${rescueRequest.id}`,
+            },
+        });
+
+        this.logger.log(`[FCM] Broadcast to ${sent}/${eligibleTokens.length} providers for request ${rescueRequest.id}`);
     }
 
     async createRescueRequest(userId: string, dto: CreateRescueRequestDto) {
@@ -257,8 +350,12 @@ export class RescueRequestService {
         console.log('🔍 [RescueRequest] Phase 1: MATCHING (normal radius), phase expires at:', phaseExpiresAt.toISOString());
         console.log('📋 [RescueRequest] Quote window expires at:', quoteWindowExpiresAt.toISOString());
 
-        // TODO: Broadcast to providers in normal radius (P2 - Provider side)
-        // this.broadcastToProviders(rescueRequest, { radiusKm: 10 });
+        // Broadcast FCM push to nearby online providers (fire-and-forget, non-blocking)
+        setImmediate(() => {
+            this.broadcastToProviders(rescueRequest).catch(err =>
+                this.logger.error(`[FCM] broadcastToProviders failed: ${err.message}`)
+            );
+        });
 
         return rescueRequest;
     }

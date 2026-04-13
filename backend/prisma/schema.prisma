@@ -54,6 +54,7 @@ model User {
   rescueVehicles        Json?
   currentLocation       Json?
   lastLocationUpdate    DateTime?
+  fcmToken              String?   // FCM device token for push notifications
   averageRating         Float?
   reviewCount           Int                @default(0)
   providerWallet        ProviderWallet?    @relation("ProviderWallet")

@@ -224,9 +224,13 @@ function ResetPasswordContent() {
 export default function ResetPasswordPage() {
     return (
         <div className="min-h-screen flex" style={{ fontFamily: 'Lexend, sans-serif' }}>
-            <div className="hidden lg:flex flex-1 relative overflow-hidden bg-gray-50">
-                <div className="absolute inset-0">
-                    <img src="/illustration_background_car.svg" alt="RescueMe" className="w-full h-full object-cover" />
+            <div className="hidden lg:flex flex-1 relative min-h-0 overflow-hidden bg-gradient-to-br from-orange-50/80 via-gray-50 to-slate-50">
+                <div className="absolute inset-0 flex items-center justify-center p-8 lg:p-12 xl:p-16">
+                    <img
+                        src="/illustration_route_planning.svg"
+                        alt="Rescue Me Background"
+                        className="max-w-full max-h-full w-auto h-auto object-contain object-center select-none"
+                    />
                 </div>
             </div>
             <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-12">

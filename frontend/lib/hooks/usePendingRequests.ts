@@ -43,9 +43,14 @@ interface UsePendingRequestsOptions {
     pollInterval?: number; // milliseconds
 }
 
+// Adaptive backoff config: if no requests found, gradually slow down polling to save battery/server
+const MIN_POLL_INTERVAL = 2_000;  // 2s — base rate (FCM handles instant delivery; poll is fallback)
+const MAX_POLL_INTERVAL = 30_000; // 30s — idle ceiling
+const BACKOFF_STEP = 5_000;       // +5s per consecutive empty response
+
 export function usePendingRequests({
     enabled = true,
-    pollInterval = 5000, // 5 seconds
+    pollInterval = MIN_POLL_INTERVAL,
 }: UsePendingRequestsOptions = {}) {
     const [requests, setRequests] = useState<PendingRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -55,6 +60,9 @@ export function usePendingRequests({
     // or when VietMap API is slow and the next poll fires before the previous one finishes).
     const isFetchingRef = useRef(false);
     const abortControllerRef = useRef<AbortController | null>(null);
+    // Adaptive backoff: track current effective interval
+    const currentIntervalRef = useRef(pollInterval);
+    const consecutiveEmptyRef = useRef(0);
 
     const fetchRequests = useCallback(async () => {
         // Skip if a previous request is still in-flight
@@ -73,6 +81,19 @@ export function usePendingRequests({
             });
             setRequests(response.data);
             setError(null);
+
+            // Adaptive backoff: reset to fast polling when requests are found
+            if (response.data.length > 0) {
+                consecutiveEmptyRef.current = 0;
+                currentIntervalRef.current = pollInterval;
+            } else {
+                consecutiveEmptyRef.current += 1;
+                currentIntervalRef.current = Math.min(
+                    pollInterval + consecutiveEmptyRef.current * BACKOFF_STEP,
+                    MAX_POLL_INTERVAL,
+                );
+            }
+
             return response.data;
         } catch (err: any) {
             if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
@@ -87,11 +108,11 @@ export function usePendingRequests({
             isFetchingRef.current = false;
             setIsLoading(false);
         }
-    }, []);
+    }, [pollInterval]);
 
     const stopPolling = useCallback(() => {
         if (pollIntervalRef.current) {
-            clearInterval(pollIntervalRef.current);
+            clearTimeout(pollIntervalRef.current);
             pollIntervalRef.current = null;
         }
         // Cancel any in-flight request
@@ -100,19 +121,26 @@ export function usePendingRequests({
             abortControllerRef.current = null;
         }
         isFetchingRef.current = false;
-    }, []);
+        consecutiveEmptyRef.current = 0;
+        currentIntervalRef.current = pollInterval;
+    }, [pollInterval]);
+
+    // Adaptive polling via recursive setTimeout so we can vary the delay after each response
+    const scheduleNextPoll = useCallback(() => {
+        pollIntervalRef.current = setTimeout(async () => {
+            await fetchRequests();
+            scheduleNextPoll(); // re-schedule with the latest (possibly backed-off) interval
+        }, currentIntervalRef.current);
+    }, [fetchRequests]);
 
     const startPolling = useCallback(() => {
         stopPolling();
+        consecutiveEmptyRef.current = 0;
+        currentIntervalRef.current = pollInterval;
 
-        // Initial fetch
-        fetchRequests();
-
-        // Setup polling
-        pollIntervalRef.current = setInterval(() => {
-            fetchRequests();
-        }, pollInterval);
-    }, [fetchRequests, pollInterval, stopPolling]);
+        // Initial fetch then kick off the adaptive loop
+        fetchRequests().then(() => scheduleNextPoll());
+    }, [fetchRequests, pollInterval, stopPolling, scheduleNextPoll]);
 
     useEffect(() => {
         if (enabled) {
@@ -126,6 +154,29 @@ export function usePendingRequests({
             stopPolling();
         };
     }, [enabled, startPolling, stopPolling]);
+
+    // Re-fetch immediately when the browser tab becomes visible again (e.g. provider switches tabs
+    // then comes back). This makes the UX feel instant without relying solely on the poll interval.
+    useEffect(() => {
+        if (!enabled) return;
+
+        const handleVisible = () => {
+            if (document.visibilityState === 'visible') {
+                // Reset backoff so next automatic poll is also fast
+                consecutiveEmptyRef.current = 0;
+                currentIntervalRef.current = pollInterval;
+                fetchRequests();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisible);
+        window.addEventListener('focus', handleVisible);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisible);
+            window.removeEventListener('focus', handleVisible);
+        };
+    }, [enabled, fetchRequests, pollInterval]);
 
     /**
      * @deprecated This function calls a deprecated endpoint that bypasses the quote system.
