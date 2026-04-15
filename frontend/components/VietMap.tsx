@@ -154,24 +154,35 @@ export default function VietMap({
             map.current = null;
 
             if (mapInstance) {
-                // map.remove() aborts pending tile/style fetches internally.
-                // Those fetch-promise rejections are async and escape a synchronous
-                // try/catch — suppress them for 500ms while removal settles.
+                // map.remove() cancels pending tile/style fetches internally.
+                // Those fetch-promise rejections are ASYNC — they escape the synchronous try/catch
+                // below and become unhandled promise rejections.
+                // We suppress them for 1s while the map teardown settles.
                 const suppressAbort = (e: PromiseRejectionEvent) => {
-                    if (e.reason?.name === 'AbortError') e.preventDefault();
+                    const r = e.reason;
+                    // "signal is aborted without reason" → r is undefined or a DOMException
+                    // r?.name === 'AbortError' misses the case where r is undefined
+                    if (
+                        r == null ||
+                        r?.name === 'AbortError' ||
+                        r instanceof DOMException ||
+                        (typeof r?.message === 'string' && r.message.toLowerCase().includes('abort'))
+                    ) {
+                        e.preventDefault();
+                    }
                 };
                 window.addEventListener('unhandledrejection', suppressAbort);
 
                 try {
                     mapInstance.remove();
                 } catch (error: any) {
-                    if (error?.name !== 'AbortError') {
+                    if (error?.name !== 'AbortError' && !(error instanceof DOMException)) {
                         console.warn('Error removing map:', error);
                     }
                 } finally {
                     setTimeout(
                         () => window.removeEventListener('unhandledrejection', suppressAbort),
-                        500, // increased from 200ms — tiles can take longer to abort
+                        1000, // 1s — enough for all pending tile fetches to abort
                     );
                 }
             }

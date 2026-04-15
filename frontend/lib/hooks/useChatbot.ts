@@ -14,6 +14,7 @@ export type CustomerCtaPhase =
     | 'COMPLAINT_CONFIRM'
     | 'TOPUP_QR'
     | 'WITHDRAWAL_CONFIRM'
+    | 'SUGGEST_RESCUE'
     | 'GENERAL';
 
 export interface ChatbotMessage {

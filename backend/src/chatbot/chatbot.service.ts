@@ -1040,7 +1040,7 @@ ${formatMissingFieldsDirective(missing)}`;
             return `${text}\n\nHành động đề xuất: Anh/chị muốn em hướng dẫn thao tác nạp ví nhanh trong 1 phút không ạ?`;
         }
 
-        return `${text}\n\nHành động đề xuất: Anh/chị muốn em xử lý tiếp ngay bước tiếp theo cho anh/chị không ạ?`;
+        return text;
     }
 
     private updateGuidedStateFromTool(

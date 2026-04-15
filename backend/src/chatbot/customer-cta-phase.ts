@@ -12,12 +12,13 @@ export type CustomerCtaPhase =
     | 'COMPLAINT_CONFIRM'
     | 'TOPUP_QR'
     | 'WITHDRAWAL_CONFIRM'
+    | 'SUGGEST_RESCUE'
     | 'GENERAL';
 
 /** Valid CustomerCtaPhase values for runtime validation. */
 const VALID_CTA_PHASES = new Set<CustomerCtaPhase>([
     'SELECT_ISSUE', 'ENTER_INFO', 'CONFIRM_INFO', 'CREATE_REQUEST', 'LOCATION_CHOICE', 'DESCRIBE_INCIDENT',
-    'COMPLAINT_CONFIRM', 'TOPUP_QR', 'WITHDRAWAL_CONFIRM', 'GENERAL',
+    'COMPLAINT_CONFIRM', 'TOPUP_QR', 'WITHDRAWAL_CONFIRM', 'SUGGEST_RESCUE', 'GENERAL',
 ]);
 
 /** The hidden tag the model appends, e.g. <!--STATE:{"s":"CONFIRM_INFO"}--> or <!--STATE:CONFIRM_INFO--> */
@@ -162,10 +163,29 @@ export function computeCustomerCtaPhase(
 ): CustomerCtaPhase {
     if (userRole !== 'USER') return 'GENERAL';
 
-    // ── Primary signal: model-declared state ──
-    if (modelState) return modelState;
+    // ── Primary signal: model-declared state (validate against text to catch blind hint-following) ──
+    if (modelState && modelState !== 'GENERAL') {
+        const lower = assistantPlainText.toLowerCase();
+        // If the model tagged a structured phase but the text doesn't support it, the model blindly
+        // echoed the [CTA-STATE] hint (e.g. out-of-scope reply tagged LOCATION_CHOICE). Override.
+        const stateIsSupported =
+            (modelState === 'LOCATION_CHOICE' && assistantTextImpliesLocationChoice(lower)) ||
+            (modelState === 'SELECT_ISSUE' && assistantTextImpliesSelectIssue(lower)) ||
+            (modelState === 'ENTER_INFO' && assistantTextImpliesEnterInfo(lower)) ||
+            (modelState === 'CONFIRM_INFO' && assistantTextImpliesConfirmRecap(lower)) ||
+            (modelState === 'CREATE_REQUEST' && assistantTextImpliesCreateRequest(lower)) ||
+            // These phases have no dedicated regex — trust the model for them.
+            modelState === 'DESCRIBE_INCIDENT' ||
+            modelState === 'COMPLAINT_CONFIRM' ||
+            modelState === 'TOPUP_QR' ||
+            modelState === 'WITHDRAWAL_CONFIRM' ||
+            modelState === 'SUGGEST_RESCUE';
+        if (stateIsSupported) return modelState;
+        // Model mislabelled — fall through to regex then safe default.
+    }
+    if (modelState === 'GENERAL') return 'GENERAL';
 
-    // ── Fallback: regex / keyword detection on text ──
+    // ── Fallback: regex / keyword detection on text (for messages without a valid tag) ──
     const lower = assistantPlainText.toLowerCase();
 
     if (assistantTextImpliesConfirmRecap(lower)) return 'CONFIRM_INFO';
@@ -174,29 +194,23 @@ export function computeCustomerCtaPhase(
     if (assistantTextImpliesSelectIssue(lower)) return 'SELECT_ISSUE';
     if (assistantTextImpliesEnterInfo(lower)) return 'ENTER_INFO';
 
-    // ── Final fallback: guided state ──
+    // ── Final fallback: explicit pendingAction only (never infer from profile state alone) ──
+    // NOTE: pendingAction is used here only for flows where ANY reply warrants showing the CTA
+    // (e.g. wallet, complaint, describe_incident). LOCATION_CHOICE is intentionally excluded:
+    // 'confirm_location' is set as soon as profile loads and persists until user picks a location,
+    // so using it as a CTA fallback causes location buttons to appear on every off-topic reply.
+    // LOCATION_CHOICE CTA is already handled above by assistantTextImpliesLocationChoice().
     const d = state.draftRequest;
-    // If a request was just created, stay in GENERAL — don't re-enter guided flow.
     if (state.requestCreated) return 'GENERAL';
-    // Wallet flows take priority over everything else.
     if (state.pendingAction === 'wallet_withdrawal_confirm') return 'WITHDRAWAL_CONFIRM';
     if (state.walletTopup?.topupTxId) return 'TOPUP_QR';
-    // Complaint flow takes priority over rescue-request CTAs.
     if (state.pendingAction === 'complaint_confirm') return 'COMPLAINT_CONFIRM';
     if (state.complaintDraft?.requestId) return 'GENERAL';
     if (state.pendingAction === 'describe_incident') return 'DESCRIBE_INCIDENT';
     if (state.pendingAction === 'confirm_create' && d.pickupLocation && d.contactPhone) {
         return 'CONFIRM_INFO';
     }
-    if (state.pendingAction === 'confirm_location') {
-        return 'LOCATION_CHOICE';
-    }
-    if (!d.incidentType && state.profileLoaded) {
-        return 'SELECT_ISSUE';
-    }
-    if (state.profileLoaded && !d.pickupLocation) {
-        return 'LOCATION_CHOICE';
-    }
+    // 'confirm_location' is NOT used as a CTA fallback — see note above.
     return 'GENERAL';
 }
 
@@ -217,10 +231,8 @@ export function inferPromptCtaPhaseForUserMessage(state: GuidedStateLike): Custo
         return 'CONFIRM_INFO';
     }
     if (state.pendingAction === 'edit_field') return 'ENTER_INFO';
-    if (!d.incidentType && state.profileLoaded) return 'SELECT_ISSUE';
-    if (!d.vehicleType || !d.contactPhone) return 'ENTER_INFO';
-    if (state.profileLoaded && !d.pickupLocation) return 'LOCATION_CHOICE';
-    if (!d.pickupLocation) return 'LOCATION_CHOICE';
+    // NOTE: broad profile-state hints removed — they caused the model to tag structured phases
+    // even when replying to out-of-scope or FAQ messages. pendingAction is the reliable signal.
     return 'GENERAL';
 }
 
@@ -244,8 +256,10 @@ export function formatCtaStateDirective(phase: CustomerCtaPhase): string {
             'Lượt này hệ thống đang ở TOPUP_QR. Ảnh QR + STK + nội dung CK đã hiển thị trong khung chat. Chỉ nhắc ngắn bằng lời (quét QR hoặc CK đúng nội dung/số tiền, hiệu lực 5 phút). KHÔNG chèn ![...](url) hay link ảnh QR. Người dùng bấm "Tôi đã chuyển khoản" để kiểm tra. KHÔNG đề xuất luồng khác.',
         WITHDRAWAL_CONFIRM:
             'Lượt này hệ thống đang ở WITHDRAWAL_CONFIRM. Tóm tắt thông tin rút tiền (số tiền, ngân hàng, số tài khoản, chủ tài khoản) và xin xác nhận. Người dùng chỉ cần bấm "Xác nhận rút tiền" hoặc "Thay đổi thông tin". Nhắc rằng yêu cầu rút sẽ được xử lý bởi admin trong 1-2 ngày làm việc. KHÔNG hỏi thêm thông tin nào.',
+        SUGGEST_RESCUE:
+            'Lượt này hệ thống đang ở SUGGEST_RESCUE. Bot vừa tư vấn/phân tích sự cố và đang mời khách tạo yêu cầu cứu hộ hoặc ước giá. Kết thúc bằng một câu mời rõ ràng (ví dụ: "Anh/chị muốn em tạo đơn cứu hộ ngay không?"). KHÔNG dùng state này cho FAQ thuần hoặc khi khách chưa đề cập sự cố.',
         GENERAL:
-            'Ngoài luồng tạo đơn có cấu trúc: trả lời tự nhiên; có thể một câu hành động gợi ý ở cuối nếu phù hợp. Không mô tả sai nhóm CTA với bước guided.',
+            'Ngoài luồng tạo đơn có cấu trúc và ngoài tư vấn sự cố: trả lời tự nhiên, KHÔNG thêm CTA tạo đơn. Không mô tả sai nhóm CTA với bước guided.',
     };
     return `[CTA-STATE] ${hints[phase]}`;
 }

@@ -212,41 +212,33 @@ function resolveCustomerCtaUi(
 ): CustomerCtaUiKind {
     if (!allowStructuredCustomerCta || !isLastAssistant || !content) return 'none';
 
-    if (ctaPhase && ctaPhase !== 'GENERAL') {
+    // Backend is authoritative: if any ctaPhase was returned, trust it completely.
+    // Never run regex fallbacks when the backend has provided a signal.
+    if (ctaPhase !== null && ctaPhase !== undefined) {
         switch (ctaPhase) {
-            case 'CONFIRM_INFO':
-                return 'confirm';
-            case 'LOCATION_CHOICE':
-                return 'location';
-            case 'SELECT_ISSUE':
-                return 'incident';
-            case 'ENTER_INFO':
-                return 'enterInfo';
-            case 'CREATE_REQUEST':
-                return 'createRequest';
-            case 'DESCRIBE_INCIDENT':
-                return 'describeIncident';
-            case 'COMPLAINT_CONFIRM':
-                return 'complaintConfirm';
-            case 'TOPUP_QR':
-                return 'topupQr';
-            case 'WITHDRAWAL_CONFIRM':
-                return 'withdrawalConfirm';
-            default:
-                break;
+            case 'CONFIRM_INFO':       return 'confirm';
+            case 'LOCATION_CHOICE':    return 'location';
+            case 'SELECT_ISSUE':       return 'incident';
+            case 'ENTER_INFO':         return 'enterInfo';
+            case 'CREATE_REQUEST':     return 'createRequest';
+            case 'DESCRIBE_INCIDENT':  return 'describeIncident';
+            case 'COMPLAINT_CONFIRM':  return 'complaintConfirm';
+            case 'TOPUP_QR':           return 'topupQr';
+            case 'WITHDRAWAL_CONFIRM': return 'withdrawalConfirm';
+            case 'SUGGEST_RESCUE':     return 'generic';
+            case 'GENERAL':
+            default:                   return 'none';
         }
     }
 
+    // Regex fallback only for old messages loaded from history that have no ctaPhase stored.
     if (looksLikeConfirmRecapStep(content)) return 'confirm';
     if (looksLikeDescribeIncidentStep(content)) return 'describeIncident';
     if (looksLikeLocationChoiceStep(content)) return 'location';
     if (looksLikeCreateRequestStep(content)) return 'createRequest';
     if (looksLikeSelectIssueStep(content)) return 'incident';
     if (looksLikeEnterInfoStep(content)) return 'enterInfo';
-
-    if (ctaPhase === 'GENERAL' || ctaPhase === null || ctaPhase === undefined) {
-        if (detectShouldShowCta(content, true)) return 'generic';
-    }
+    if (detectShouldShowCta(content, true)) return 'generic';
     return 'none';
 }
 
@@ -301,11 +293,8 @@ function MessageBubble({
     return (
         <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
             {!isUser && (
-                <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mr-2 self-end"
-                    style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
-                >
-                    AI
+                <div className="w-8 h-8 rounded-full flex-shrink-0 mr-2 self-end overflow-hidden bg-white shadow-sm border border-orange-100">
+                    <img src="/chatbot-icon.png" alt="Rescue Me Bot" className="w-full h-full object-cover" />
                 </div>
             )}
             <div className={`max-w-[80%] flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
@@ -981,19 +970,9 @@ export default function ChatbotWidget() {
             {!isOpen && (
                 <button
                     onClick={handleOpen}
-                    className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-105 active:scale-95"
-                    style={{
-                        background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
-                        boxShadow: `0 4px 20px ${C.orange}50`,
-                    }}
+                    className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 w-16 h-16 rounded-full overflow-hidden bg-transparent transition-all hover:scale-110 active:scale-95"
                 >
-                    <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={1.8}>
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
-                    </svg>
+                    <img src="/chatbot-icon.png" alt="Rescue Me Bot" className="w-full h-full object-cover" />
                 </button>
             )}
 
@@ -1122,8 +1101,8 @@ function ChatPanel({
                         background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})`,
                     }}
                 >
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center bg-white/20 text-white font-bold text-sm flex-shrink-0">
-                        AI
+                    <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden bg-white shadow-sm border-2 border-white/30">
+                        <img src="/chatbot-icon.png" alt="Rescue Me Bot" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-white truncate">Rescue Me Assistant</p>
@@ -1145,17 +1124,8 @@ function ChatPanel({
                 <div className="flex-1 overflow-y-auto px-4 py-4" style={{ scrollBehavior: 'smooth' }}>
                     {messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full gap-4">
-                            <div
-                                className="w-16 h-16 rounded-full flex items-center justify-center"
-                                style={{ background: C.orangeLight }}
-                            >
-                                <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke={C.orange} strokeWidth={1.5}>
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"
-                                    />
-                                </svg>
+                            <div className="w-20 h-20 rounded-full overflow-hidden shadow-md border-2 border-orange-100">
+                                <img src="/chatbot-icon.png" alt="Rescue Me Bot" className="w-full h-full object-cover" />
                             </div>
                             <div className="text-center">
                                 <p className="text-sm font-semibold" style={{ color: C.navy }}>
