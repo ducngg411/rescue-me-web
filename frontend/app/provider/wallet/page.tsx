@@ -195,7 +195,7 @@ function TopupModal({ availableBalance, minTopup, initialQrData, onClose, onSucc
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl" style={{ maxHeight: '90vh', overflowY: 'auto', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl" style={{ maxHeight: '90vh', overflowY: 'auto', paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }}>
                 {/* Drag handle (mobile) */}
                 <div className="flex justify-center pt-3 pb-1 sm:hidden">
                     <div className="w-10 h-1 rounded-full bg-gray-200" />
@@ -505,7 +505,7 @@ function WithdrawModal({ availableBalance, withdrawalAccounts = [], onClose, onS
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl">
+            <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl" style={{ maxHeight: '90vh', overflowY: 'auto', paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }}>
                 <div className="flex justify-center pt-3 pb-1 sm:hidden">
                     <div className="w-10 h-1 rounded-full bg-gray-200" />
                 </div>
