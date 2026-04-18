@@ -254,12 +254,18 @@ export class ProviderService {
         if (isOnline) {
             const wallet = await this.prisma.providerWallet.findUnique({
                 where: { providerId: userId },
-                select: { availableBalance: true },
+                select: {
+                    availableBalance: true,
+                    topupTransactions: { where: { status: 'COMPLETED' }, take: 1, select: { id: true } },
+                },
             });
             const availableBalance = wallet?.availableBalance ?? 0;
             if (availableBalance < ProviderService.MIN_PROVIDER_DEPOSIT_VND) {
+                const isReturning = (wallet?.topupTransactions?.length ?? 0) > 0;
                 throw new ForbiddenException(
-                    `Số dư ví tối thiểu ${ProviderService.MIN_PROVIDER_DEPOSIT_VND.toLocaleString('vi-VN')} VND để bật hoạt động`,
+                    isReturning
+                        ? `Số dư ví đang dưới ngưỡng tối thiểu ${ProviderService.MIN_PROVIDER_DEPOSIT_VND.toLocaleString('vi-VN')} VND. Vui lòng nạp thêm để tiếp tục hoạt động`
+                        : `Cần nạp tối thiểu ${ProviderService.MIN_PROVIDER_DEPOSIT_VND.toLocaleString('vi-VN')} VND lần đầu để kích hoạt tài khoản`,
                 );
             }
         }

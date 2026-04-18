@@ -15,9 +15,10 @@ function fmtVnd(n: number) {
 
 interface DepositGateScreenProps {
     currentBalance: number;
+    isReturning?: boolean;
 }
 
-export default function DepositGateScreen({ currentBalance }: DepositGateScreenProps) {
+export default function DepositGateScreen({ currentBalance, isReturning = false }: DepositGateScreenProps) {
     const router = useRouter();
     const needed = Math.max(0, MIN_DEPOSIT - currentBalance);
     const commissionRatePct = Math.round((Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.2) * 100);
@@ -27,7 +28,6 @@ export default function DepositGateScreen({ currentBalance }: DepositGateScreenP
             className="min-h-screen flex flex-col items-center justify-center p-4"
             style={{ background: C.bg, fontFamily: 'Lexend, sans-serif' }}
         >
-            {/* Card */}
             <div
                 className="bg-white rounded-3xl w-full max-w-sm"
                 style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.10)' }}
@@ -37,7 +37,6 @@ export default function DepositGateScreen({ currentBalance }: DepositGateScreenP
                     className="rounded-t-3xl px-6 pt-8 pb-6 text-center"
                     style={{ background: `linear-gradient(145deg, ${C.navy} 0%, #2d2d4e 100%)` }}
                 >
-                    {/* Checkmark badge */}
                     <div
                         className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
                         style={{ background: 'rgba(34,197,94,0.15)', border: '2px solid rgba(34,197,94,0.4)' }}
@@ -52,16 +51,18 @@ export default function DepositGateScreen({ currentBalance }: DepositGateScreenP
                     >
                         Hồ sơ đã được duyệt ✓
                     </span>
-                    <h1 className="text-xl font-bold text-white mb-1">Chỉ còn 1 bước nữa!</h1>
+                    <h1 className="text-xl font-bold text-white mb-1">
+                        {isReturning ? 'Số dư cần được bổ sung' : 'Chỉ còn 1 bước nữa!'}
+                    </h1>
                     <p className="text-sm" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                        Tài khoản của bạn đã được xác minh thành công
+                        {isReturning
+                            ? `Duy trì tối thiểu ${fmtVnd(MIN_DEPOSIT)} để tiếp tục nhận đơn`
+                            : 'Tài khoản của bạn đã được xác minh thành công'}
                     </p>
                 </div>
 
-                {/* Body */}
+                {/* Body — giữ nguyên cho cả 2 case */}
                 <div className="px-6 py-5 space-y-4">
-
-                    {/* Policy card */}
                     <div
                         className="rounded-2xl p-4"
                         style={{ background: C.orangeLight, border: `1.5px solid #fed7aa` }}
@@ -77,7 +78,7 @@ export default function DepositGateScreen({ currentBalance }: DepositGateScreenP
                             ].map(s => (
                                 <div key={s} className="flex items-start gap-2">
                                     <div
-                                        className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5"
+                                        className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5"
                                         style={{ background: C.orange }}
                                     />
                                     <p className="text-xs leading-relaxed" style={{ color: '#92400e' }}>{s}</p>
@@ -86,7 +87,6 @@ export default function DepositGateScreen({ currentBalance }: DepositGateScreenP
                         </div>
                     </div>
 
-                    {/* Amount required */}
                     <div
                         className="rounded-2xl p-4 flex items-center justify-between"
                         style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0' }}
@@ -106,7 +106,6 @@ export default function DepositGateScreen({ currentBalance }: DepositGateScreenP
                         )}
                     </div>
 
-                    {/* CTAs */}
                     <button
                         onClick={() => router.push('/provider/wallet')}
                         className="w-full py-3.5 rounded-2xl text-white text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
@@ -132,11 +131,6 @@ export default function DepositGateScreen({ currentBalance }: DepositGateScreenP
                     </a>
                 </div>
             </div>
-
-            {/* Bottom note */}
-            <p className="mt-6 text-xs text-center max-w-xs" style={{ color: '#94a3b8' }}>
-
-            </p>
         </div>
     );
 }

@@ -87,7 +87,7 @@ describe('ProviderService', () => {
     mockPrisma.rescueRequest.count.mockResolvedValue(0);
     mockPrisma.review.aggregate.mockResolvedValue({ _avg: { rating: null }, _count: { rating: 0 } });
     mockPrisma.review.findMany.mockResolvedValue([]);
-    mockPrisma.providerWallet.findUnique.mockResolvedValue({ availableBalance: 500000 });
+    mockPrisma.providerWallet.findUnique.mockResolvedValue({ depositBalance: 500000, availableBalance: 400000 });
   });
 
   // ── updateProfile ──────────────────────────────────────────────────────────

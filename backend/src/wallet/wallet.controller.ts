@@ -33,7 +33,7 @@ export class WalletController {
     @Get('me')
     @UseGuards(JwtAuthGuard)
     async getMyWallet(@Request() req) {
-        return this.walletService.ensureWallet(req.user.id);
+        return this.walletService.getWalletInfo(req.user.id);
     }
 
     /**

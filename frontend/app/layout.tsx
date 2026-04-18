@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Lexend } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -13,10 +13,30 @@ const lexend = Lexend({
   weight: ["300", "400", "500", "600", "700"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,   // Prevents iOS Safari auto-zoom when focusing inputs
+  userScalable: false,
+  themeColor: "#f97316",
+};
+
 export const metadata: Metadata = {
   title: "Rescue Me - Dịch vụ Cứu hộ",
-  description: "Nền tảng cứu hộ khẩn cấp",
+  description: "Nền tảng cứu hộ khẩn cấp kết nối tài xế với nhà cứu hộ gần nhất",
+  manifest: "/favicon/site.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon/favicon.ico" },
+      { url: "/favicon/favicon-96x96.png", sizes: "96x96", type: "image/png" },
+      { url: "/favicon/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/favicon/apple-touch-icon.png", sizes: "180x180" },
+    ],
+  },
 };
+
 
 export default function RootLayout({
   children,

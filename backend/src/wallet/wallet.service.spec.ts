@@ -41,6 +41,7 @@ const mockPrisma = {
     create: jest.fn(),
     update: jest.fn(),
     updateMany: jest.fn(),
+    count: jest.fn().mockResolvedValue(0),
   },
   userTopupTransaction: {
     findFirst: jest.fn(),

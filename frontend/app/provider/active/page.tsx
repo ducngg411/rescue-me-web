@@ -262,10 +262,14 @@ export default function ProviderActivePage() {
     // Wallet balance — required to go online
     const MIN_DEPOSIT = 100_000;
     const [walletBalance, setWalletBalance] = useState<number | null>(null);
+    const [hasActivated, setHasActivated] = useState(false);
     useEffect(() => {
         if (user?.verificationStatus === 'APPROVED') {
             api.get('/wallet/me')
-                .then(r => setWalletBalance(r.data.availableBalance ?? 0))
+                .then(r => {
+                    setWalletBalance(r.data.availableBalance ?? 0);
+                    setHasActivated(r.data.hasActivated ?? false);
+                })
                 .catch(() => setWalletBalance(0));
         }
     }, [user?.verificationStatus]);
@@ -432,7 +436,7 @@ export default function ProviderActivePage() {
 
     // Deposit gate: APPROVED but insufficient balance (wait until balance loaded)
     if (walletBalance !== null && walletBalance < MIN_DEPOSIT) {
-        return <DepositGateScreen currentBalance={walletBalance} />;
+        return <DepositGateScreen currentBalance={walletBalance} isReturning={hasActivated} />;
     }
 
     // ── Handlers ──────────────────────────────────────────────────────────────

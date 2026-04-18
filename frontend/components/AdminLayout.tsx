@@ -227,7 +227,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
     }, [pathname]);
 
     return (
-        <div className="h-screen overflow-hidden flex" style={{ fontFamily: 'Lexend, sans-serif', background: C.bg }}>
+        <div className="h-dvh overflow-hidden flex" style={{ fontFamily: 'Lexend, sans-serif', background: C.bg }}>
             {/* Sidebar */}
             <aside
                 className="hidden md:flex flex-col flex-shrink-0"
@@ -322,7 +322,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative pb-[60px] md:pb-0">
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative" style={{ paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }} >
                 {/* Mobile Top Header */}
                 <div 
                     className="md:hidden flex flex-shrink-0 items-center justify-between gap-2 px-4 py-3 z-20 shadow-sm"
@@ -352,7 +352,7 @@ export default function AdminLayout({ children, activeTab }: AdminLayoutProps) {
             {/* Mobile Bottom Navigation */}
             <nav
                 className="fixed bottom-0 left-0 right-0 md:hidden z-30 flex items-stretch shadow-[0_-2px_10px_rgba(0,0,0,0.05)]"
-                style={{ background: '#ffffff', borderTop: `1px solid ${C.border}`, height: '60px' }}
+                style={{ background: '#ffffff', borderTop: `1px solid ${C.border}`, height: 'calc(60px + env(safe-area-inset-bottom, 0px))', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             >
                 {[
                     navGroups[0].items.find((i) => i.href === '/admin/dashboard'),

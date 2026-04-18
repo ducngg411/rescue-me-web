@@ -87,7 +87,7 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
 
 
     return (
-        <div className="h-screen overflow-hidden flex" style={{ fontFamily: 'Lexend, sans-serif', background: C.bg }}>
+        <div className="h-dvh overflow-hidden flex" style={{ fontFamily: 'Lexend, sans-serif', background: C.bg }}>
             {/* ═══ DESKTOP Sidebar ═══ */}
             <aside
                 className="hidden md:flex flex-col py-6 px-4 flex-shrink-0"
@@ -170,7 +170,7 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
             </aside>
 
             {/* ═══ Main Area ═══ */}
-            <div className="flex-1 flex flex-col min-w-0" style={{ paddingBottom: '60px' }}>
+            <div className="flex-1 flex flex-col min-w-0" style={{ paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }}>
                 {/* Mobile Online Toggle Strip */}
                 <div
                     className="flex md:hidden items-center gap-3 px-4 py-2.5 sticky top-0 z-20"
@@ -197,7 +197,7 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
             {/* ═══ Mobile Bottom Nav ═══ */}
             <nav
                 className="fixed bottom-0 left-0 right-0 md:hidden z-30 flex items-stretch shadow-[0_-2px_10px_rgba(0,0,0,0.05)]"
-                style={{ background: '#ffffff', borderTop: `1px solid ${C.border}`, height: '60px' }}
+                style={{ background: '#ffffff', borderTop: `1px solid ${C.border}`, height: 'calc(60px + env(safe-area-inset-bottom, 0px))', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             >
                 {navItems.map(item => {
                     const active = isActive(item);

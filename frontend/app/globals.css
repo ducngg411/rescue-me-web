@@ -24,3 +24,27 @@ body {
   color: var(--foreground);
   font-family: var(--font-lexend), Helvetica, Arial, sans-serif;
 }
+
+/* ─── iOS Mobile Fixes ─────────────────────────────────────────────────────── */
+
+/* Prevent iOS Safari auto-zoom when focusing inputs (requires font-size >= 16px) */
+input,
+textarea,
+select {
+  font-size: max(16px, 1em);
+}
+
+/* Smooth momentum scrolling on iOS for scrollable containers */
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-auto,
+[style*="overflow-y: auto"],
+[style*="overflow-y:auto"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent double-tap zoom on buttons/links */
+button,
+a {
+  touch-action: manipulation;
+}

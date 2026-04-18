@@ -96,6 +96,7 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
     const [error, setError] = useState<string | null>(null);
     const [mapMode, setMapMode] = useState<MapMode>('normal');
     const [selectedType, setSelectedType] = useState<string | null>(null);
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
     // ── Fetch data ────────────────────────────────────────────────────────────
     const fetchData = useCallback(async () => {
@@ -341,10 +342,10 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
             </div>
 
             {/* ── Body ── */}
-            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
 
                 {/* ── Sidebar legend (desktop) ── */}
-                <div style={{ width: '200px', flexShrink: 0, background: C.white, borderRight: `1px solid ${C.border}`, overflowY: 'auto', display: 'flex', flexDirection: 'column' }} className="hidden md:flex">
+                <div style={{ width: '200px', flexShrink: 0, background: C.white, borderRight: `1px solid ${C.border}`, overflowY: 'auto', flexDirection: 'column' }} className="hidden md:flex">
                     <div style={{ padding: '16px 12px' }}>
                         <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.grayLight, margin: '0 0 10px' }}>Loại sự cố</p>
 
@@ -415,11 +416,87 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                     </div>
                 </div>
 
+                {/* ── Mobile Sidebar Drawer ── */}
+                {isMobileSidebarOpen && (
+                    <div
+                        className="md:hidden"
+                        style={{ position: 'absolute', inset: 0, zIndex: 40, background: 'rgba(0,0,0,0.4)' }}
+                        onClick={() => setIsMobileSidebarOpen(false)}
+                    />
+                )}
+                <div
+                    className="md:hidden"
+                    style={{
+                        position: 'absolute', top: 0, left: 0, bottom: 0, zIndex: 50,
+                        width: '220px', background: C.white, boxShadow: '4px 0 24px rgba(0,0,0,0.15)',
+                        overflowY: 'auto', flexDirection: 'column', display: 'flex',
+                        transform: isMobileSidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+                        transition: 'transform 0.28s cubic-bezier(0.4,0,0.2,1)',
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
+                        <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: C.navy }}>Bộ lọc</p>
+                        <button
+                            onClick={() => setIsMobileSidebarOpen(false)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gray, padding: '2px', lineHeight: 1 }}
+                            aria-label="Đóng bộ lọc"
+                        >
+                            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div style={{ padding: '14px 12px', flex: 1 }}>
+                        <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.grayLight, margin: '0 0 10px' }}>Loại sự cố</p>
+                        <button
+                            onClick={() => setSelectedType(null)}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', marginBottom: '2px', background: selectedType === null ? C.orangeLight : 'transparent', color: selectedType === null ? C.orange : C.gray, fontSize: '12px', fontWeight: 500, textAlign: 'left' }}
+                        >
+                            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#94a3b8', flexShrink: 0 }} />
+                            <span style={{ flex: 1 }}>Tất cả</span>
+                            <span style={{ fontWeight: 700, color: C.navy }}>{points.length}</span>
+                        </button>
+                        {Object.entries(INCIDENT_TYPES).map(([type, info]) => {
+                            const count = points.filter(p => p.incidentType === type).length;
+                            const active = selectedType === type;
+                            return (
+                                <button
+                                    key={type}
+                                    onClick={() => { setSelectedType(active ? null : type); }}
+                                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', marginBottom: '2px', background: active ? `${info.color}18` : 'transparent', color: active ? info.color : C.gray, fontSize: '12px', fontWeight: 500, textAlign: 'left' }}
+                                >
+                                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: info.color, flexShrink: 0 }} />
+                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.label}</span>
+                                    <span style={{ fontWeight: 700, color: count > 0 ? C.navy : C.grayLight }}>{count}</span>
+                                </button>
+                            );
+                        })}
+                        <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.grayLight, margin: '16px 0 8px', paddingTop: '12px', borderTop: `1px solid ${C.border}` }}>Trạng thái</p>
+                        {Object.entries(STATUS_LABELS).map(([status, info]) => (
+                            <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 10px' }}>
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: info.color, flexShrink: 0 }} />
+                                <span style={{ flex: 1, fontSize: '12px', color: C.gray }}>{info.label}</span>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: C.navy }}>{points.filter(p => p.status === status).length}</span>
+                            </div>
+                        ))}
+                        <button
+                            onClick={() => { fetchData(); }}
+                            disabled={loading}
+                            style={{ width: '100%', marginTop: '16px', padding: '8px', borderRadius: '8px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', background: C.orangeLight, color: C.orange, fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                        >
+                            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Làm mới
+                        </button>
+                    </div>
+                </div>
+
                 {/* ── Map area ── */}
                 <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
                     {/* Mobile filter chips */}
-                    <div className="md:hidden" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, display: 'flex', gap: '6px', padding: '8px 10px', overflowX: 'auto', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)', borderBottom: `1px solid ${C.border}` }}>
+                    <div className="md:hidden flex" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, gap: '6px', padding: '8px 10px', overflowX: 'auto', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)', borderBottom: `1px solid ${C.border}` }}>
                         <button onClick={() => setSelectedType(null)} style={{ flexShrink: 0, padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, border: `1px solid ${selectedType === null ? C.orange : C.border}`, background: selectedType === null ? C.orange : C.white, color: selectedType === null ? C.white : C.gray, cursor: 'pointer' }}>
                             Tất cả ({points.length})
                         </button>
@@ -457,6 +534,27 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                             <p style={{ fontSize: '12px', color: C.gray, margin: 0 }}>{selectedType ? 'Thử chọn loại khác' : 'Chưa có đơn hoàn thành hoặc đã hủy'}</p>
                         </div>
                     )}
+
+                    {/* Mobile: sticky filter toggle button */}
+                    <button
+                        className="md:hidden"
+                        onClick={() => setIsMobileSidebarOpen(true)}
+                        style={{
+                            position: 'absolute', bottom: '80px', left: '12px', zIndex: 30,
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            padding: '8px 14px', borderRadius: '24px',
+                            background: C.orange, color: C.white,
+                            border: 'none', cursor: 'pointer',
+                            fontSize: '12px', fontWeight: 700,
+                            boxShadow: '0 4px 16px rgba(249,115,22,0.45)',
+                        }}
+                        aria-label="Mở bộ lọc"
+                    >
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M7 12h10M11 20h2" />
+                        </svg>
+                        Bộ lọc{selectedType ? ' ●' : ''}
+                    </button>
 
                     {/* Heatmap legend */}
                     {mapMode === 'heatmap' && isMapReady && (

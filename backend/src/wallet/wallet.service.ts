@@ -97,6 +97,20 @@ export class WalletService {
     }
 
     /**
+     * GET /wallet/me — returns wallet + hasActivated flag.
+     * hasActivated = true when the provider has at least one completed topup.
+     * Used by the frontend to distinguish first-time deposit screen vs
+     * "balance dropped below threshold, please top up" screen.
+     */
+    async getWalletInfo(providerId: string) {
+        const wallet = await this.ensureWallet(providerId);
+        const hasActivated = await this.prisma.topupTransaction.count({
+            where: { walletId: wallet.id, status: 'COMPLETED' },
+        }).then(n => n > 0);
+        return { ...wallet, hasActivated };
+    }
+
+    /**
      * Return the wallet by its primary key, throwing if not found.
      */
     async getWalletById(walletId: string) {
@@ -735,13 +749,24 @@ export class WalletService {
      * Creates a new one with expireAt = now + 5min otherwise.
      */
     async initTopup(providerId: string, amount: number) {
-        if (amount < MIN_TOPUP) {
+        const wallet = await this.ensureWallet(providerId);
+
+        // First topup requires MIN_TOPUP (100k) to activate. Subsequent topups
+        // only require MIN_TOPUP_RETURNING (10k) — allows provider to refill after
+        // fees drain their balance below the 100k operating threshold.
+        const MIN_TOPUP_RETURNING = 10_000;
+        const hasActivated = await this.prisma.topupTransaction.count({
+            where: { walletId: wallet.id, status: 'COMPLETED' },
+        }).then(n => n > 0);
+        const effectiveMin = hasActivated ? MIN_TOPUP_RETURNING : MIN_TOPUP;
+
+        if (amount < effectiveMin) {
             throw new BadRequestException(
-                `Số tiền nạp tối thiểu là ${MIN_TOPUP.toLocaleString('vi-VN')}₫`,
+                hasActivated
+                    ? `Số tiền nạp tối thiểu là ${MIN_TOPUP_RETURNING.toLocaleString('vi-VN')}₫`
+                    : `Lần đầu kích hoạt cần nạp tối thiểu ${MIN_TOPUP.toLocaleString('vi-VN')}₫`,
             );
         }
-
-        const wallet = await this.ensureWallet(providerId);
 
         const bankAccount = this.config.get('SEPAY_BANK_ACCOUNT', '07729096901');
         const bankCode = this.config.get('SEPAY_BANK_CODE', 'TPBank');
