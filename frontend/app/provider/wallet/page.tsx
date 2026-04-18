@@ -195,7 +195,7 @@ function TopupModal({ availableBalance, minTopup, initialQrData, onClose, onSucc
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl" style={{ maxHeight: '90vh', overflowY: 'auto', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
                 {/* Drag handle (mobile) */}
                 <div className="flex justify-center pt-3 pb-1 sm:hidden">
                     <div className="w-10 h-1 rounded-full bg-gray-200" />
@@ -286,7 +286,7 @@ function TopupModal({ availableBalance, minTopup, initialQrData, onClose, onSucc
                             {t('provider.topup.autoConfirm')}
                         </div>
 
-                        <div className="flex gap-3">
+                        <div className="flex gap-3 pb-6 sm:pb-0">
                             <button type="button" onClick={handleClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium border" style={{ borderColor: '#e2e8f0', color: C.gray }}>
                                 {t('provider.topup.cancel')}
                             </button>
@@ -629,7 +629,7 @@ function WithdrawModal({ availableBalance, withdrawalAccounts = [], onClose, onS
                         Bạn cần duy trì ít nhất {formatVndFull(MIN_REQUIRED_BALANCE)} trong ví để có thể tiếp tục nhận cuốc xe cẩu mới.
                     </div>
 
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 pb-6 sm:pb-0">
                         <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors" style={{ borderColor: '#e2e8f0', color: C.gray }}>
                             {t('provider.wallet.withdrawModal.cancel')}
                         </button>

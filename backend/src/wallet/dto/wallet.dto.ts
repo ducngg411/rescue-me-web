@@ -16,9 +16,9 @@ export class WithdrawDto {
 }
 
 export class TopupInitDto {
-    @ApiProperty({ example: 200000, description: 'Số tiền nạp (tối thiểu 100,000 VND)' })
+    @ApiProperty({ example: 200000, description: 'Số tiền nạp (VND)' })
     @Type(() => Number)
     @IsNumber()
-    @Min(100_000)
+    @Min(1)
     amount: number;
 }
