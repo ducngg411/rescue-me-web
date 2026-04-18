@@ -10,12 +10,14 @@ import {
     HttpCode,
     HttpStatus,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { GuestJwtGuard } from '../guest-auth/guards/guest-jwt.guard';
 import { GuestRescueService } from './guest-rescue.service';
 import { CreateRescueRequestDto } from '../rescue-request/dto/create-rescue-request.dto';
 import { RespondQuoteDto } from '../rescue-request/dto/respond-quote.dto';
 import { UploadsService } from '../uploads/uploads.service';
 
+@ApiTags('GuestRescue')
 @Controller('guest')
 @UseGuards(GuestJwtGuard)
 export class GuestRescueController {

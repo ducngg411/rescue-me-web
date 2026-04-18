@@ -8,6 +8,7 @@ import {
     UseGuards,
     Request,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RescueRequestService } from './rescue-request.service';
 import { CreateRescueRequestDto } from './dto/create-rescue-request.dto';
@@ -17,6 +18,8 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 
 
+@ApiTags('RescueRequest')
+@ApiBearerAuth('JWT')
 @Controller('rescue-requests')
 @UseGuards(JwtAuthGuard)
 export class RescueRequestController {

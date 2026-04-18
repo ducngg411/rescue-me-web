@@ -9,10 +9,12 @@ import {
     HttpStatus,
     Ip,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { GuestAuthService } from './guest-auth.service';
 import { GuestJwtGuard } from './guards/guest-jwt.guard';
 import { VerifyPhoneDto, ConvertGuestDto } from './dto/guest-auth.dto';
 
+@ApiTags('GuestAuth')
 @Controller('guest/auth')
 export class GuestAuthController {
     constructor(private guestAuthService: GuestAuthService) {}

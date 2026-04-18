@@ -1,9 +1,12 @@
 import { Controller, Put, Get, Post, Patch, Param, Body, UseGuards, Request, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ProviderService } from './provider.service';
 import { UpdateProviderProfileDto } from '../auth/dto/auth.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SubmitVerificationResponseDto } from './dto/submit-verification.dto';
 
+@ApiTags('Provider')
+@ApiBearerAuth('JWT')
 @Controller('me/provider')
 @UseGuards(JwtAuthGuard)
 export class ProviderController {

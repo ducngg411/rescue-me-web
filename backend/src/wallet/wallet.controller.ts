@@ -10,35 +10,18 @@ import {
     Headers,
     ParseIntPipe,
     DefaultValuePipe,
-    BadRequestException,
     HttpCode,
     HttpStatus,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { WalletService } from './wallet.service';
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import { WithdrawDto, TopupInitDto } from './dto/wallet.dto';
 
-class WithdrawDto {
-    @Type(() => Number)
-    @IsNumber()
-    @Min(1)
-    amount: number;
-
-    @IsOptional()
-    @IsString()
-    withdrawalAccountId?: string;
-}
-
-class TopupInitDto {
-    @Type(() => Number)
-    @IsNumber()
-    @Min(100_000) // TODO: restore @Min(100_000) after SePay testing
-    amount: number;
-}
-
+@ApiTags('Wallet')
+@ApiBearerAuth('JWT')
 @Controller('wallet')
 export class WalletController {
     constructor(private readonly walletService: WalletService) { }

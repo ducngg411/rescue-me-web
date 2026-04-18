@@ -7,6 +7,7 @@ import {
     UseGuards,
     Request,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DisputeService, OpenDisputeDto, SendMessageDto } from './dispute.service';
 import { IsNumber, IsString, IsOptional, Min, IsEnum } from 'class-validator';
@@ -59,6 +60,8 @@ class SendMessageBodyDto implements SendMessageDto {
     attachmentUrls?: string[];
 }
 
+@ApiTags('Dispute')
+@ApiBearerAuth('JWT')
 @Controller('disputes')
 @UseGuards(JwtAuthGuard)
 export class DisputeController {

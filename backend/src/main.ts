@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import * as bodyParser from 'body-parser';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -29,6 +30,22 @@ async function bootstrap() {
 
   // API prefix
   app.setGlobalPrefix('api');
+
+  // ─── Swagger ──────────────────────────────────────────────────────────────
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('RescueMe API')
+    .setDescription('RescueMe – roadside assistance platform API documentation')
+    .setVersion('1.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'JWT',
+    )
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
+  // ─── End Swagger ─────────────────────────────────────────────────────────
 
   // ─── DEBUG: detect double-response per request ───────────────────────────
   const expressApp = app.getHttpAdapter().getInstance();

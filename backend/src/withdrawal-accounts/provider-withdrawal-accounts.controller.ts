@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards, Request } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -6,6 +7,8 @@ import { WithdrawalAccountsService } from './withdrawal-accounts.service';
 import { CreateWithdrawalAccountDto } from './dto/create-withdrawal-account.dto';
 import { UpdateWithdrawalAccountDto } from './dto/update-withdrawal-account.dto';
 
+@ApiTags('WithdrawalAccounts')
+@ApiBearerAuth('JWT')
 @Controller('me/provider/withdrawal-accounts')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('PROVIDER')

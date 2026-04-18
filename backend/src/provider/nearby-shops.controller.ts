@@ -1,10 +1,12 @@
 import { Controller, Get, Query, ParseFloatPipe, DefaultValuePipe, ParseIntPipe } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { NearbyShopsService } from './nearby-shops.service';
 
 /**
  * Public endpoint – no JWT required so users in distress (even unauthenticated)
  * can look up nearby repair shops.
  */
+@ApiTags('NearbyShops')
 @Controller('nearby-shops')
 export class NearbyShopsController {
     constructor(private readonly nearbyShopsService: NearbyShopsService) {}

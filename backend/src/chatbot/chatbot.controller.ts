@@ -11,6 +11,7 @@ import {
     HttpCode,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GuestJwtGuard } from '../guest-auth/guards/guest-jwt.guard';
 import { ChatbotService } from './chatbot.service';
@@ -35,6 +36,8 @@ function resolveCallerIdentity(req: any) {
     };
 }
 
+@ApiTags('Chatbot')
+@ApiBearerAuth('JWT')
 @Controller('chatbot')
 export class ChatbotController {
     constructor(private chatbotService: ChatbotService) {}

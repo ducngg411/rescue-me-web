@@ -1,10 +1,13 @@
 import { Controller, Post, Body, UseGuards, Req, Get, Query, Delete, Param } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UploadsService } from './uploads.service';
 import { PresignUploadDto, PresignUploadResponseDto, UploadPurpose } from './dto/presign-upload.dto';
 import { ConfirmUploadDto, ConfirmUploadResponseDto } from './dto/confirm-upload.dto';
 import { TrackCloudinaryUploadDto, TrackCloudinaryUploadResponseDto } from './dto/cloudinary-upload.dto';
 
+@ApiTags('Uploads')
+@ApiBearerAuth('JWT')
 @Controller('uploads')
 @UseGuards(JwtAuthGuard)
 export class UploadsController {

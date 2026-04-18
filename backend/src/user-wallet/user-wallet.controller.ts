@@ -14,6 +14,7 @@ import {
     HttpCode,
     HttpStatus,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserWalletService } from './user-wallet.service';
 import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
@@ -37,6 +38,8 @@ class TopupInitDto {
     amount: number;
 }
 
+@ApiTags('UserWallet')
+@ApiBearerAuth('JWT')
 @Controller('user-wallet')
 export class UserWalletController {
     constructor(private readonly userWalletService: UserWalletService) { }
