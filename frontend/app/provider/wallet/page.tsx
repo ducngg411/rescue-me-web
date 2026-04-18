@@ -39,6 +39,7 @@ interface WalletData {
     id: string;
     availableBalance: number;
     pendingBalance: number;
+    hasActivated: boolean;
     createdAt: string;
     updatedAt: string;
 }
@@ -87,8 +88,9 @@ function formatDate(iso: string) {
 
 
 // ─── Topup Modal (SePay VietQR – 3 step) ─────────────────────────────────────
-function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
+function TopupModal({ availableBalance, minTopup, initialQrData, onClose, onSuccess }: {
     availableBalance: number;
+    minTopup: number;
     initialQrData?: {
         topupTxId: string; topupTxnCode?: string; transferCode: string; qrUrl: string;
         bankAccount: string; bankCode: string; amount: number; expireAt: string;
@@ -112,8 +114,8 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
     const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const numeric = parseInt(amount.replace(/\D/g, ''), 10) || 0;
-    const isBelowMin = numeric > 0 && numeric < MIN_TOPUP;
-    const isDisabled = loading || numeric < MIN_TOPUP;
+    const isBelowMin = numeric > 0 && numeric < minTopup;
+    const isDisabled = loading || numeric < minTopup;
 
     const stopAll = () => {
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -243,7 +245,7 @@ function TopupModal({ availableBalance, initialQrData, onClose, onSuccess }: {
                             </div>
                             {isBelowMin ? (
                                 <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
-                                    <AlertCircle className="w-3 h-3" />{t('provider.topup.belowMin').replace('{amount}', formatVndFull(MIN_TOPUP))}
+                                    <AlertCircle className="w-3 h-3" />{t('provider.topup.belowMin').replace('{amount}', formatVndFull(minTopup))}
                                 </p>
                             ) : numeric > 0 ? (
                                 <p className="mt-1.5 text-xs flex items-center gap-1 font-medium" style={{ color: '#16a34a' }}>
@@ -1272,6 +1274,7 @@ export default function ProviderWalletPage() {
             {showTopup && (
                 <TopupModal
                     availableBalance={available}
+                    minTopup={wallet?.hasActivated ? 10_000 : MIN_TOPUP}
                     initialQrData={pendingTopup ?? undefined}
                     onClose={() => {
                         setShowTopup(false);
