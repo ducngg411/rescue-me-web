@@ -1,0 +1,76 @@
+services:
+  # ─── Backend (NestJS) ───────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rescueme_backend
+    restart: always
+    env_file:
+      - ./backend/.env.production
+    environment:
+      NODE_ENV: production
+    # Backend talks to Managed PostgreSQL (external host, private network on DO)
+    # DATABASE_URL is set in .env.production
+    ports:
+      - "3001:3001"
+    networks:
+      - rescueme_net
+    # Run Prisma migrations then start the app
+    command: >
+      sh -c "npx prisma migrate deploy && npm run start:prod"
+
+  # ─── Frontend (Next.js standalone) ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+        NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}
+        NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: ${NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET}
+        NEXT_PUBLIC_FIREBASE_API_KEY: ${NEXT_PUBLIC_FIREBASE_API_KEY}
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${NEXT_PUBLIC_FIREBASE_PROJECT_ID}
+        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}
+        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}
+        NEXT_PUBLIC_FIREBASE_APP_ID: ${NEXT_PUBLIC_FIREBASE_APP_ID}
+        NEXT_PUBLIC_FIREBASE_VAPID_KEY: ${NEXT_PUBLIC_FIREBASE_VAPID_KEY}
+        NEXT_PUBLIC_R2_PUBLIC_DOMAIN: ${NEXT_PUBLIC_R2_PUBLIC_DOMAIN}
+        NEXT_PUBLIC_VIETMAP_API_KEY: ${NEXT_PUBLIC_VIETMAP_API_KEY}
+    container_name: rescueme_frontend
+    restart: always
+    environment:
+      NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - rescueme_net
+
+  # ─── Nginx (Reverse Proxy + SSL) ────────────────────────────────────────────
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: rescueme_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # SSL certificates from Let's Encrypt (managed on host by certbot)
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - rescueme_net
+
+networks:
+  rescueme_net:
+    driver: bridge

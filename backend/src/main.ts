@@ -6,16 +6,14 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
   // Chatbot can send extracted video frames as base64 images; raise JSON/body limits.
   app.use(bodyParser.json({ limit: '25mb' }));
   app.use(bodyParser.urlencoded({ limit: '25mb', extended: true }));
 
-  // Enable CORS
+  // Enable CORS — only allow the configured frontend origin
   app.enableCors({
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:3000',
-      'http://localhost:3002', // Thêm port 3002
-    ],
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true,
   });
 
@@ -31,42 +29,28 @@ async function bootstrap() {
   // API prefix
   app.setGlobalPrefix('api');
 
-  // ─── Swagger ──────────────────────────────────────────────────────────────
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('RescueMe API')
-    .setDescription('RescueMe – roadside assistance platform API documentation')
-    .setVersion('1.0')
-    .addBearerAuth(
-      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-      'JWT',
-    )
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document, {
-    swaggerOptions: { persistAuthorization: true },
-  });
+  // ─── Swagger (development only) ──────────────────────────────────────────
+  if (process.env.NODE_ENV !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('RescueMe API')
+      .setDescription(
+        'RescueMe – roadside assistance platform API documentation',
+      )
+      .setVersion('1.0')
+      .addBearerAuth(
+        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        'JWT',
+      )
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+  }
   // ─── End Swagger ─────────────────────────────────────────────────────────
-
-  // ─── DEBUG: detect double-response per request ───────────────────────────
-  const expressApp = app.getHttpAdapter().getInstance();
-  expressApp.use((req, res, next) => {
-    const originalJson = res.json.bind(res);
-    let sent = false;
-    res.json = function (...args) {
-      if (sent) {
-        console.error(`🔴 DOUBLE-RESPONSE on ${req.method} ${req.url}`);
-        console.trace(); // prints stack so we know WHO is sending the 2nd response
-        return res; // swallow the second call instead of crashing
-      }
-      sent = true;
-      return originalJson(...args);
-    };
-    next();
-  });
-  // ─── END DEBUG ──────────────────────────────────────────────────────────────
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
-  console.log(`🚀 Backend server running on http://localhost:${port}`);
+  console.log(`🚀 Backend running on port ${port} [${process.env.NODE_ENV}]`);
 }
 bootstrap();
