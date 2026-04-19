@@ -150,15 +150,20 @@ export class WalletService {
         const todayRequests = await this.prisma.rescueRequest.findMany({
             where: whereCompletedJobsInLocalDay(providerId, startOfDay, startOfTomorrow),
             include: {
-                payment: { select: { totalAmount: true } },
+                payment: { select: { totalAmount: true, commissionRate: true } },
                 quotes: { where: { status: 'ACCEPTED' }, select: { price: true } },
             },
         });
 
-        const todayRevenue = todayRequests.reduce((s, req) => s + grossRevenueFromCompletedRequest(req), 0);
-        // Apply platform commission rate to get provider's net earnings
-        const commissionRate = await this.getEffectiveCommissionRate();
-        const todayEarnings = Math.round(todayRevenue * (1 - commissionRate));
+        // Use stored commissionRate per job so admin rate changes don't retroactively alter stats
+        const fallbackRate = await this.getEffectiveCommissionRate();
+        const todayEarnings = Math.round(
+            todayRequests.reduce((sum, req) => {
+                const gross = grossRevenueFromCompletedRequest(req);
+                const rate = (req.payment as any)?.commissionRate ?? fallbackRate;
+                return sum + gross * (1 - rate);
+            }, 0),
+        );
         return { todayEarnings, todayJobCount: todayRequests.length };
     }
 
@@ -536,7 +541,7 @@ export class WalletService {
                         createdAt: request.payment.createdAt,
                         userConfirmedAt: (request.payment as any).userConfirmedAt,
                         providerConfirmedAt: (request.payment as any).providerConfirmedAt,
-                        commissionRate: await this.getEffectiveCommissionRate(),
+                        commissionRate: request.payment.commissionRate ?? await this.getEffectiveCommissionRate(),
                     } : null,
                     review: request.review ? {
                         rating: request.review.rating,
