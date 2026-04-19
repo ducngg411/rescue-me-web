@@ -41,15 +41,16 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 // ── Provider ───────────────────────────────────────────────────────────────────
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-    const [locale, setLocaleState] = useState<Locale>(() => {
-        // Initialize synchronously from localStorage so language is consistent
-        // across all pages from the very first render (no flash)
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem(STORAGE_KEY) as Locale | null;
-            if (saved === 'vi' || saved === 'en') return saved;
+    // Always start with defaultLocale so server HTML matches the client's first
+    // paint (hydration). Persisted locale is applied in useEffect after mount.
+    const [locale, setLocaleState] = useState<Locale>(defaultLocale);
+
+    useEffect(() => {
+        const saved = localStorage.getItem(STORAGE_KEY) as Locale | null;
+        if (saved === 'vi' || saved === 'en') {
+            setLocaleState(saved);
         }
-        return defaultLocale;
-    });
+    }, []);
 
     // Update <html lang> whenever locale changes
     useEffect(() => {

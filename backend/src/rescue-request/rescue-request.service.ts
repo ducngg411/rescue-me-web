@@ -110,7 +110,7 @@ export class RescueRequestService {
      * No VietMap calls — Haversine is O(1) per provider and free.
      * Called fire-and-forget after createRescueRequest (+ guest variant).
      */
-    private async broadcastToProviders(rescueRequest: any): Promise<void> {
+    async broadcastToProviders(rescueRequest: any): Promise<void> {
         const pickupLocation = rescueRequest.pickupLocation as { lat: number; lng: number };
         if (!pickupLocation?.lat || !pickupLocation?.lng) {
             this.logger.warn('[FCM] Cannot broadcast — missing pickup location');
@@ -454,6 +454,18 @@ export class RescueRequestService {
 
         if (!request) {
             throw new NotFoundException('Rescue request not found');
+        }
+
+        // Inject authoritative commission rate into payment so the dispute cap
+        // shown on the frontend always matches the server-side calculation.
+        // Priority: rate frozen on the payment record at settlement time → current effective platform rate.
+        if (request.payment) {
+            const storedRate = (request.payment as any).commissionRate;
+            const effectiveRate =
+                typeof storedRate === 'number' && Number.isFinite(storedRate) && storedRate >= 0 && storedRate <= 1
+                    ? storedRate
+                    : await this.commissionService.getEffectiveCommissionRate();
+            (request as any).payment = { ...request.payment, commissionRate: effectiveRate };
         }
 
         return request;
@@ -950,7 +962,8 @@ export class RescueRequestService {
             throw new BadRequestException('QUOTE_WINDOW_CLOSED');
         }
 
-        console.log(` [Quote] Window check passed. Expires at: ${rescueRequest.quoteWindowExpiresAt.toISOString()}, now: ${now.toISOString()}, remaining: ${Math.floor((rescueRequest.quoteWindowExpiresAt.getTime() - now.getTime()) / 1000)}s`);
+        console.log(` [Quote] Window check passed. Expires at: ${rescueRequest.quoteWindowExpiresAt.toISOString()}, now: ${now.toISOString()}, 
+        remaining: ${Math.floor((rescueRequest.quoteWindowExpiresAt.getTime() - now.getTime()) / 1000)}s`);
 
         // Validate provider
         const provider = await this.prisma.user.findUnique({

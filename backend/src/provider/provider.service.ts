@@ -959,6 +959,12 @@ export class ProviderService {
         return { success: true, message: 'Đổi mật khẩu thành công' };
     }
 
+    /** Returns platform config values relevant to providers (commission rate, etc.). */
+    async getProviderConfig() {
+        const commissionRate = await this.commissionService.getEffectiveCommissionRate();
+        return { commissionRate };
+    }
+
     /**
      * GET /me/provider/history-stats?days=7
      * Returns revenue/profit stats, success rate, and avg rating for the history dashboard.

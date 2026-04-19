@@ -326,8 +326,8 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
                                 style={{ borderColor: C.border, color: C.gray }}
                             >
                                 <Map className="w-3.5 h-3.5" style={{ color: C.orange }} />
-                                <span style={{ color: C.orange }}>Chọn trên bản đồ</span>
-                                <span style={{ color: C.gray }}>– chính xác hơn</span>
+                                <span style={{ color: C.orange }}>{t('provider.onboarding.serviceInfo.basicInfo.map.pickOnMap')}</span>
+                                <span style={{ color: C.gray }}>{t('provider.onboarding.serviceInfo.basicInfo.map.pickOnMapHint')}</span>
                             </button>
 
                             {/* Errors & success */}
@@ -524,9 +524,11 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
                         <div className="flex items-center justify-between px-4 py-3.5"
                             style={{ borderBottom: `1px solid ${C.border}` }}>
                             <div>
-                                <p className="text-sm font-bold" style={{ color: C.navy }}>Chọn vị trí trên bản đồ</p>
+                                <p className="text-sm font-bold" style={{ color: C.navy }}>{t('provider.onboarding.serviceInfo.basicInfo.map.modalTitle')}</p>
                                 <p className="text-xs mt-0.5" style={{ color: C.gray }}>
-                                    {formData.providerType === 'INDIVIDUAL' ? 'Địa chỉ thường trú' : 'Địa chỉ doanh nghiệp'} – kéo bản đồ để tinh chỉnh
+                                    {formData.providerType === 'INDIVIDUAL'
+                                        ? t('provider.onboarding.serviceInfo.basicInfo.map.modalSubtitleIndividual')
+                                        : t('provider.onboarding.serviceInfo.basicInfo.map.modalSubtitleBusiness')}
                                 </p>
                             </div>
                             <button
@@ -556,7 +558,7 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
                                 className="flex-1 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:bg-gray-50"
                                 style={{ borderColor: C.border, color: C.gray }}
                             >
-                                Hủy
+                                {t('provider.onboarding.serviceInfo.basicInfo.map.cancel')}
                             </button>
                             <button
                                 type="button"
@@ -565,7 +567,7 @@ export default function ServiceInfoStep({ initialData, onComplete, onBack, isShe
                                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40 active:scale-[0.98]"
                                 style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
                             >
-                                Xác nhận vị trí này
+                                {t('provider.onboarding.serviceInfo.basicInfo.map.confirm')}
                             </button>
                         </div>
                     </div>

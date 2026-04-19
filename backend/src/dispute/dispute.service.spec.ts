@@ -3,6 +3,7 @@ import { NotFoundException, ForbiddenException, BadRequestException } from '@nes
 import { DisputeService } from './dispute.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { CommissionService } from '../wallet/commission.service';
 
 jest.mock('../common/business-codes', () => ({
   formatOrderLabelForSupport: jest.fn().mockReturnValue('#RMO-001'),
@@ -44,6 +45,10 @@ const mockMailService = {
   sendPaymentDispute: jest.fn().mockResolvedValue(undefined),
 };
 
+const mockCommissionService = {
+  getEffectiveCommissionRate: jest.fn().mockResolvedValue(0.1),
+};
+
 const mockPayment = {
   id: 'payment-001',
   requestId: 'req-001',
@@ -77,6 +82,7 @@ describe('DisputeService', () => {
         DisputeService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: MailService, useValue: mockMailService },
+        { provide: CommissionService, useValue: mockCommissionService },
       ],
     }).compile();
 

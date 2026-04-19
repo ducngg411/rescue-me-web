@@ -16,6 +16,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { formatOrderLabelForSupport } from '../common/business-codes';
+import { CommissionService } from '../wallet/commission.service';
 
 const FIRST_RESPONSE_SLA_HOURS = 24;
 const RESOLUTION_SLA_HOURS = 72;
@@ -44,7 +45,19 @@ export class DisputeService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly mailService: MailService,
+        private readonly commissionService: CommissionService,
     ) { }
+
+    /** Rate frozen on the payment when the job was settled; otherwise current platform rate. */
+    private async resolveCommissionRateForPayment(payment: {
+        commissionRate?: number | null;
+    }): Promise<number> {
+        const r = payment.commissionRate;
+        if (typeof r === 'number' && Number.isFinite(r) && r >= 0 && r <= 1) {
+            return r;
+        }
+        return this.commissionService.getEffectiveCommissionRate();
+    }
 
     @Cron(CronExpression.EVERY_5_MINUTES)
     async handleProviderNoResponseTimeout() {
@@ -120,8 +133,7 @@ export class DisputeService {
             throw new BadRequestException('A dispute already exists for this payment');
         }
 
-        const commissionRateStr = process.env.COMMISSION_RATE;
-        const commissionRate = commissionRateStr ? parseFloat(commissionRateStr) : 0.1;
+        const commissionRate = await this.resolveCommissionRateForPayment(payment);
         const maxTargetAmount = payment.totalAmount - Math.round(payment.totalAmount * commissionRate);
         const finalTargetAmount = Math.min(dto.targetAmount, maxTargetAmount);
 
@@ -520,8 +532,7 @@ export class DisputeService {
             throw new BadRequestException('A dispute already exists for this payment');
         }
 
-        const commissionRateStr = process.env.COMMISSION_RATE;
-        const commissionRate = commissionRateStr ? parseFloat(commissionRateStr) : 0.1;
+        const commissionRate = await this.resolveCommissionRateForPayment(payment);
         const netAmount = payment.totalAmount - Math.round(payment.totalAmount * commissionRate);
 
         return this.openDispute(userId, 'CUSTOMER', {

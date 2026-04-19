@@ -160,13 +160,13 @@ export default function UserSettingsPage() {
     };
 
     const handleDeleteAccount = async (accountId: string) => {
-        if (!confirm('Bạn có chắc muốn xóa tài khoản rút tiền này không?')) return;
+        if (!confirm(t('user.settings.withdrawalAccounts.deleteConfirm'))) return;
         try {
             await api.delete(`/me/withdrawal-accounts/${accountId}`);
-            toast.success('Đã xóa tài khoản rút tiền');
+            toast.success(t('user.settings.withdrawalAccounts.toastDeleted'));
             await fetchWithdrawalAccounts();
         } catch (err: any) {
-            toast.error(err?.response?.data?.message || 'Không thể xóa tài khoản');
+            toast.error(err?.response?.data?.message || t('user.settings.withdrawalAccounts.toastDeleteError'));
         }
     };
 
@@ -183,7 +183,7 @@ export default function UserSettingsPage() {
         };
 
         if (!payload.accountNumber || !payload.bankName || !payload.accountHolderName) {
-            toast.error('Vui lòng điền đầy đủ: Số tài khoản, Ngân hàng, Chủ tài khoản');
+            toast.error(t('user.settings.withdrawalAccounts.validationRequired'));
             return;
         }
 
@@ -191,16 +191,16 @@ export default function UserSettingsPage() {
         try {
             if (editingAccountId) {
                 await api.patch(`/me/withdrawal-accounts/${editingAccountId}`, payload);
-                toast.success('Đã cập nhật tài khoản rút tiền');
+                toast.success(t('user.settings.withdrawalAccounts.toastUpdated'));
             } else {
                 await api.post('/me/withdrawal-accounts', payload);
-                toast.success('Đã thêm tài khoản rút tiền');
+                toast.success(t('user.settings.withdrawalAccounts.toastAdded'));
             }
             setIsAccountModalOpen(false);
             setEditingAccountId(null);
             await fetchWithdrawalAccounts();
         } catch (err: any) {
-            toast.error(err?.response?.data?.message || 'Không thể lưu tài khoản rút tiền');
+            toast.error(err?.response?.data?.message || t('user.settings.withdrawalAccounts.toastSaveError'));
         } finally {
             setIsAccountSaving(false);
         }
@@ -641,9 +641,9 @@ export default function UserSettingsPage() {
                         </section>
 
                         {/* Withdrawal Accounts Section */}
-                        <section>
+                        <section id="withdrawal-accounts">
                             <div className="flex items-center justify-between mb-3 px-1">
-                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Tài khoản rút tiền</h2>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>{t('user.settings.withdrawalAccounts.title')}</h2>
                                 <button
                                     type="button"
                                     onClick={openAddAccountModal}
@@ -651,15 +651,15 @@ export default function UserSettingsPage() {
                                     style={{ color: C.orange, background: C.orangeLight }}
                                 >
                                     <Plus size={14} />
-                                    Thêm
+                                    {t('user.settings.withdrawalAccounts.addBtn')}
                                 </button>
                             </div>
 
                             <div className="bg-white rounded-2xl p-2 space-y-2 border" style={{ borderColor: C.border, boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
                                 {withdrawalAccountsLoading ? (
-                                    <div className="p-4 text-center text-xs text-gray-500">Đang tải...</div>
+                                    <div className="p-4 text-center text-xs text-gray-500">{t('user.settings.withdrawalAccounts.loading')}</div>
                                 ) : withdrawalAccounts.length === 0 ? (
-                                    <div className="p-4 text-center text-xs text-gray-500">Chưa có tài khoản rút tiền.</div>
+                                    <div className="p-4 text-center text-xs text-gray-500">{t('user.settings.withdrawalAccounts.empty')}</div>
                                 ) : (
                                     withdrawalAccounts.map(acc => (
                                         <div
@@ -670,11 +670,14 @@ export default function UserSettingsPage() {
                                             <div className="min-w-0 flex-1">
                                                 <p className="text-sm font-bold truncate" style={{ color: C.navy }}>{acc.bankName}</p>
                                                 <p className="text-xs mt-1" style={{ color: C.gray }}>
-                                                    STK: {displayAccountNumber(acc.accountNumber)} · Chủ TK: {acc.accountHolderName}
+                                                    {t('user.settings.withdrawalAccounts.accountSummary', {
+                                                        number: displayAccountNumber(acc.accountNumber),
+                                                        name: acc.accountHolderName,
+                                                    })}
                                                 </p>
                                                 {acc.branchName && (
                                                     <p className="text-xs mt-1" style={{ color: C.gray }}>
-                                                        Chi nhánh: {acc.branchName}
+                                                        {t('user.settings.withdrawalAccounts.branchLine', { name: acc.branchName })}
                                                     </p>
                                                 )}
                                             </div>
@@ -684,7 +687,7 @@ export default function UserSettingsPage() {
                                                     onClick={() => openEditAccountModal(acc)}
                                                     className="p-2 rounded-lg hover:bg-slate-50 transition-colors"
                                                     style={{ color: C.orange, border: `1.5px solid ${C.border}` }}
-                                                    aria-label="Chỉnh sửa"
+                                                    aria-label={t('user.settings.withdrawalAccounts.editAriaLabel')}
                                                 >
                                                     <Edit3 size={16} />
                                                 </button>
@@ -693,7 +696,7 @@ export default function UserSettingsPage() {
                                                     onClick={() => handleDeleteAccount(acc.id)}
                                                     className="p-2 rounded-lg hover:bg-slate-50 transition-colors"
                                                     style={{ color: C.danger, border: `1.5px solid ${C.border}` }}
-                                                    aria-label="Xóa"
+                                                    aria-label={t('user.settings.withdrawalAccounts.deleteAriaLabel')}
                                                 >
                                                     <Trash2 size={16} />
                                                 </button>
@@ -798,23 +801,23 @@ export default function UserSettingsPage() {
             <SettingsModal
                 isOpen={isAccountModalOpen}
                 onClose={() => setIsAccountModalOpen(false)}
-                title={editingAccountId ? 'Chỉnh sửa tài khoản rút tiền' : 'Thêm tài khoản rút tiền'}
+                title={editingAccountId ? t('user.settings.withdrawalAccounts.modalEditTitle') : t('user.settings.withdrawalAccounts.modalAddTitle')}
             >
                 <form onSubmit={handleSubmitAccount} className="space-y-4">
                     <div>
-                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Số tài khoản</label>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>{t('user.settings.withdrawalAccounts.accountNumberLabel')}</label>
                         <input
                             type="text"
                             value={accountForm.accountNumber}
                             onChange={e => setAccountForm(s => ({ ...s, accountNumber: e.target.value.replace(/\D/g, '') }))}
                             className="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-orange-500"
                             style={{ borderColor: C.border, color: C.navy }}
-                            placeholder="Ví dụ: 123456789"
+                            placeholder={t('user.settings.withdrawalAccounts.accountNumberPlaceholder')}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Ngân hàng</label>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>{t('user.settings.withdrawalAccounts.bankLabel')}</label>
                         <BankSelect
                             value={accountForm.bankCode ?? ''}
                             onChange={(nextCode, option) => {
@@ -838,38 +841,38 @@ export default function UserSettingsPage() {
                     </div>
 
                     <div>
-                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Tên ngân hàng</label>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>{t('user.settings.withdrawalAccounts.bankNameLabel')}</label>
                         <input
                             type="text"
                             value={accountForm.bankName}
                             onChange={e => setAccountForm(s => ({ ...s, bankName: e.target.value }))}
                             className="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-orange-500"
                             style={{ borderColor: C.border, color: C.navy }}
-                            placeholder="Nhập tên ngân hàng"
+                            placeholder={t('user.settings.withdrawalAccounts.bankNamePlaceholder')}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Chi nhánh (optional)</label>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>{t('user.settings.withdrawalAccounts.branchLabel')}</label>
                         <input
                             type="text"
                             value={accountForm.branchName}
                             onChange={e => setAccountForm(s => ({ ...s, branchName: e.target.value }))}
                             className="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-orange-500"
                             style={{ borderColor: C.border, color: C.navy }}
-                            placeholder="Ví dụ: Chi nhánh HCM"
+                            placeholder={t('user.settings.withdrawalAccounts.branchPlaceholder')}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>Chủ tài khoản</label>
+                        <label className="block text-xs font-semibold mb-1" style={{ color: C.navy }}>{t('user.settings.withdrawalAccounts.accountHolderLabel')}</label>
                         <input
                             type="text"
                             value={accountForm.accountHolderName}
                             onChange={e => setAccountForm(s => ({ ...s, accountHolderName: e.target.value }))}
                             className="w-full px-3 py-2 border rounded-xl text-sm outline-none focus:border-orange-500"
                             style={{ borderColor: C.border, color: C.navy }}
-                            placeholder="Nhập tên chủ tài khoản"
+                            placeholder={t('user.settings.withdrawalAccounts.accountHolderPlaceholder')}
                         />
                     </div>
 
@@ -881,7 +884,7 @@ export default function UserSettingsPage() {
                             style={{ color: C.gray }}
                             disabled={isAccountSaving}
                         >
-                            Hủy
+                            {t('user.settings.withdrawalAccounts.cancelBtn')}
                         </button>
                         <button
                             type="submit"
@@ -889,7 +892,7 @@ export default function UserSettingsPage() {
                             className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-opacity disabled:opacity-50"
                             style={{ backgroundColor: C.orange }}
                         >
-                            {isAccountSaving ? 'Đang lưu...' : 'Lưu'}
+                            {isAccountSaving ? t('user.settings.withdrawalAccounts.savingBtn') : t('user.settings.withdrawalAccounts.saveBtn')}
                         </button>
                     </div>
                 </form>

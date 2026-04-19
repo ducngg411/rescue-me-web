@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { useAdminGuard } from '@/lib/guards';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -44,6 +44,10 @@ const C = {
     purpleLight: '#faf5ff',
 };
 
+function localeTag(locale: string) {
+    return locale === 'vi' ? 'vi-VN' : 'en-US';
+}
+
 interface TransactionSummary {
     totalRevenue: number;
     totalCommission: number;
@@ -55,8 +59,11 @@ interface TransactionSummary {
 export default function AdminTransactionsPage() {
     const { isReady } = useAdminGuard();
     const router = useRouter();
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
+    const loc = localeTag(locale);
     const tp = (key: string) => t(`admin.transactions.${key}`);
+    const tlp = (key: string, params?: Record<string, string | number>) =>
+        t(`admin.transactions.listPage.${key}`, params);
     const referenceLabel = (referenceType: string | undefined) => {
         if (!referenceType) return '—';
         const path = `admin.transactions.references.${referenceType}`;
@@ -135,7 +142,7 @@ export default function AdminTransactionsPage() {
             setTotal(res.total || 0);
         } catch (error) {
             console.error('Failed to fetch data', error);
-            toast.error(tp('empty'));
+            toast.error(t('admin.transactions.walletDetail.fetchError'));
         } finally {
             setLoading(false);
             setInitialLoad(false);
@@ -165,31 +172,37 @@ export default function AdminTransactionsPage() {
     const totalPages = Math.ceil(total / LIMIT) || 1;
 
     const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('vi-VN').format(amount) + '₫';
+        return new Intl.NumberFormat(loc).format(amount) + '₫';
     };
 
     const renderStatusBadge = (statusStr: string) => {
-        let bg, color, dot, label;
+        const path = `status.${statusStr}`;
+        const translated = tp(path);
+        const label =
+            translated === `admin.transactions.${path}` ? statusStr || '—' : translated;
+        let bg: string;
+        let color: string;
+        let dot: string;
         switch (statusStr) {
             case 'COMPLETED':
-                bg = C.greenLight; color = C.green; dot = C.green; label = 'Hoàn thành'; break;
+                bg = C.greenLight; color = C.green; dot = C.green; break;
             case 'PENDING':
-                bg = C.yellowLight; color = C.yellow; dot = '#facc15'; label = 'Chờ xử lý'; break;
+                bg = C.yellowLight; color = C.yellow; dot = '#facc15'; break;
             case 'FAILED':
-                bg = C.redLight; color = C.red; dot = C.red; label = 'Thất bại'; break;
+                bg = C.redLight; color = C.red; dot = C.red; break;
             case 'EXPIRED':
             case 'CANCELLED':
-                bg = '#f8fafc'; color = C.gray; dot = C.gray; label = 'Đã huỷ'; break;
+                bg = '#f8fafc'; color = C.gray; dot = C.gray; break;
             case 'USER_CONFIRMED':
-                bg = '#eff6ff'; color = '#2563eb'; dot = '#3b82f6'; label = 'User đã xác nhận'; break;
+                bg = '#eff6ff'; color = '#2563eb'; dot = '#3b82f6'; break;
             case 'PROVIDER_CONFIRMED':
-                bg = '#f0fdf4'; color = '#15803d'; dot = '#22c55e'; label = 'Provider đã xác nhận'; break;
+                bg = '#f0fdf4'; color = '#15803d'; dot = '#22c55e'; break;
             case 'REFUNDED':
-                bg = '#fdf4ff'; color = '#a21caf'; dot = '#d946ef'; label = 'Đã hoàn tiền'; break;
+                bg = '#fdf4ff'; color = '#a21caf'; dot = '#d946ef'; break;
             case 'DISPUTED':
-                bg = C.redLight; color = C.red; dot = C.red; label = 'Đang tranh chấp'; break;
+                bg = C.redLight; color = C.red; dot = C.red; break;
             default:
-                bg = '#f8fafc'; color = C.gray; dot = C.gray; label = statusStr || '—'; break;
+                bg = '#f8fafc'; color = C.gray; dot = C.gray; break;
         }
         return (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: bg, color }}>
@@ -199,15 +212,18 @@ export default function AdminTransactionsPage() {
         );
     };
 
-    const tabItems = [
-        { id: 'providerWallets', label: 'Ví Đối Tác (Provider)' },
-        { id: 'userWallets', label: 'Ví Khách Hàng (User)' },
-        { id: 'providerTopup', label: 'Lịch sử nạp tiền (Provider)' },
-        { id: 'userTopup', label: 'Lịch sử nạp tiền (User)' },
-        { id: 'withdrawals', label: 'Lịch sử Rút tiền' },
-        { id: 'jobPayment', label: 'Thanh toán Job' },
-        { id: 'payment', label: 'Giao dịch hệ thống' },
-    ];
+    const tabItems = useMemo(
+        () => [
+            { id: 'providerWallets', label: tlp('tabs.providerWallets') },
+            { id: 'userWallets', label: tlp('tabs.userWallets') },
+            { id: 'providerTopup', label: tlp('tabs.providerTopup') },
+            { id: 'userTopup', label: tlp('tabs.userTopup') },
+            { id: 'withdrawals', label: tlp('tabs.withdrawals') },
+            { id: 'jobPayment', label: tlp('tabs.jobPayment') },
+            { id: 'payment', label: tlp('tabs.payment') },
+        ],
+        [t],
+    );
 
     if (!isReady) {
         return (
@@ -250,7 +266,7 @@ export default function AdminTransactionsPage() {
                 {/* ─── Chart Row ─── */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
                     <ChartCard
-                        title="Top 10 Providers đem lại hoa hồng nhiều nhất"
+                        title={tlp('chartTopProvidersCommission')}
                         icon={<BarChart2 className="w-3.5 h-3.5" />}
                         iconBg="#f0fdf4" iconColor="#16a34a"
                     >
@@ -261,7 +277,7 @@ export default function AdminTransactionsPage() {
                         />
                     </ChartCard>
                     <ChartCard
-                        title="Xu hướng đơn dịch vụ (14 ngày)"
+                        title={tlp('chartRequestTrend14d')}
                         icon={<BarChart2 className="w-3.5 h-3.5" />}
                         iconBg="#fff7ed" iconColor="#f97316"
                     >
@@ -320,9 +336,9 @@ export default function AdminTransactionsPage() {
                                     className="bg-transparent text-sm focus:outline-none cursor-pointer pr-1"
                                     style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                                 >
-                                    <option value="balance_desc">Số dư giảm ↓</option>
-                                    <option value="balance_asc">Số dư tăng ↑</option>
-                                    <option value="updated_desc">Mới cập nhật</option>
+                                    <option value="balance_desc">{tlp('sortBalanceDesc')}</option>
+                                    <option value="balance_asc">{tlp('sortBalanceAsc')}</option>
+                                    <option value="updated_desc">{tlp('sortUpdatedDesc')}</option>
                                 </select>
                             </div>
                         )}
@@ -356,11 +372,16 @@ export default function AdminTransactionsPage() {
                         <div className="mx-4 mb-3 mt-3 flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
                             <svg className="mt-0.5 shrink-0 w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             <div>
-                                <p className="text-xs font-semibold text-blue-700 mb-0.5">Chỉ theo dõi giao dịch QR</p>
+                                <p className="text-xs font-semibold text-blue-700 mb-0.5">{tlp('jobPaymentHelpTitle')}</p>
+                                <p className="text-[11px] text-blue-600 leading-relaxed mb-1">{tlp('jobPaymentHelpP1')}</p>
+                                <p className="text-[11px] text-blue-600 leading-relaxed mb-1">
+                                    {tlp('jobPaymentHelpP2', { tabSystem: tlp('tabs.payment') })}
+                                </p>
                                 <p className="text-[11px] text-blue-600 leading-relaxed">
-                                    Tab này ghi nhận các giao dịch QR SePay tạo ra khi khách hàng chọn thanh toán bằng mã QR. 
-                                    Các đơn thanh toán bằng <strong>Tiền mặt</strong> hoặc <strong>Ví</strong> sẽ không xuất hiện ở đây mà chỉ xem được ở tab <strong>Giao dịch hệ thống</strong>.
-                                    Các đơn hoàn tiền (REFUND) sẽ phản ánh trong tab <strong>Ví Đối Tác</strong> và <strong>Ví Khách Hàng</strong>.
+                                    {tlp('jobPaymentHelpP3', {
+                                        tabProvider: tlp('tabs.providerWallets'),
+                                        tabUser: tlp('tabs.userWallets'),
+                                    })}
                                 </p>
                             </div>
                         </div>
@@ -376,24 +397,24 @@ export default function AdminTransactionsPage() {
                                                 {tp('columns.user')}
                                             </th>
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
-                                                Số dư khả dụng
+                                                {tlp('walletColAvailable')}
                                             </th>
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
-                                                Đóng băng
+                                                {tlp('walletColFrozen')}
                                             </th>
                                             {activeTab === 'providerWallets' && (
                                                 <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
-                                                    Tổng hoa hồng
+                                                    {tlp('walletColCommission')}
                                                 </th>
                                             )}
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
-                                                Thống kê
+                                                {tlp('walletColStats')}
                                             </th>
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                                 {tp('columns.createdAt')}
                                             </th>
                                             <th className="text-right text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
-                                                Chi tiết
+                                                {tlp('walletColActions')}
                                             </th>
                                         </>
                                     ) : (
@@ -416,12 +437,12 @@ export default function AdminTransactionsPage() {
                                             </th>
                                             {['payment'].includes(activeTab) && (
                                                 <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
-                                                    Hoa hồng
+                                                    {tlp('colCommission')}
                                                 </th>
                                             )}
                                             {['withdrawals'].includes(activeTab) && (
                                                 <th className="text-center text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
-                                                    Đối soát ví
+                                                    {tlp('colWalletReconcile')}
                                                 </th>
                                             )}
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
@@ -429,7 +450,7 @@ export default function AdminTransactionsPage() {
                                             </th>
                                             {['payment'].includes(activeTab) && (
                                                 <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
-                                                    Phương thức
+                                                    {tp('columns.paymentMethod')}
                                                 </th>
                                             )}
                                             <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
@@ -462,7 +483,7 @@ export default function AdminTransactionsPage() {
                                                 <>
                                                     <td className="px-4 py-3">
                                                         <div className="font-semibold text-sm" style={{ color: C.navy }}>
-                                                            {item.provider?.fullName || item.user?.fullName || 'Unknown'}
+                                                            {item.provider?.fullName || item.user?.fullName || tlp('unknownUser')}
                                                         </div>
                                                         <div className="text-xs" style={{ color: C.gray }}>
                                                             {item.provider?.email || item.user?.email || ''}
@@ -479,19 +500,19 @@ export default function AdminTransactionsPage() {
                                                             <div className="font-semibold text-sm" style={{ color: '#a21caf' }}>
                                                                 {formatCurrency(item.totalCommission ?? 0)}
                                                             </div>
-                                                            <div className="text-[10px]" style={{ color: C.gray }}>Thu hộ platform</div>
+                                                            <div className="text-[10px]" style={{ color: C.gray }}>{tlp('commissionPlatformSubtitle')}</div>
                                                         </td>
                                                     )}
                                                     <td className="px-4 py-3">
                                                         <div className="text-xs font-semibold" style={{ color: C.navy }}>
-                                                            {item._count?.transactions || 0} Giao dịch
+                                                            {tlp('walletStatTransactions', { count: item._count?.transactions || 0 })}
                                                         </div>
                                                         <div className="text-xs" style={{ color: C.gray }}>
-                                                            {item._count?.topupTransactions || item._count?.topupTxs || 0} Lần nạp
+                                                            {tlp('walletStatTopups', { count: item._count?.topupTransactions || item._count?.topupTxs || 0 })}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-3 whitespace-nowrap text-sm" style={{ color: C.gray }}>
-                                                        {new Date(item.updatedAt).toLocaleString('vi-VN')}
+                                                        {new Date(item.updatedAt).toLocaleString(loc)}
                                                     </td>
                                                     <td className="px-4 py-3 text-right">
                                                         <button 
@@ -503,7 +524,7 @@ export default function AdminTransactionsPage() {
                                                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-orange-50 transition-colors"
                                                             style={{ color: C.orange }}
                                                         >
-                                                            Xem ví <ExternalLink className="w-3.5 h-3.5" />
+                                                            {tlp('viewWallet')} <ExternalLink className="w-3.5 h-3.5" />
                                                         </button>
                                                     </td>
                                                 </>
@@ -514,20 +535,20 @@ export default function AdminTransactionsPage() {
                                                             {item.txnCode || (item.id ? item.id.slice(-8).toUpperCase() : '—')}
                                                         </div>
                                                         {['providerTopup', 'userTopup', 'withdrawals'].includes(activeTab) && item.transferCode && (
-                                                            <div className="text-[10px] font-normal mt-0.5" style={{ color: C.gray }}>CK: {item.transferCode}</div>
+                                                            <div className="text-[10px] font-normal mt-0.5" style={{ color: C.gray }}>{tlp('labelTransfer')} {item.transferCode}</div>
                                                         )}
                                                         {['providerTopup', 'userTopup', 'withdrawals'].includes(activeTab) && item.sepayReferenceCode && (
-                                                            <div className="text-[10px] font-normal mt-0.5" style={{ color: C.gray }}>Bank: {item.sepayReferenceCode}</div>
+                                                            <div className="text-[10px] font-normal mt-0.5" style={{ color: C.gray }}>{tlp('labelBank')} {item.sepayReferenceCode}</div>
                                                         )}
                                                         {activeTab === 'jobPayment' && item.transferCode && (
-                                                            <div className="text-[10px] font-normal mt-0.5" style={{ color: C.gray }}>CK: {item.transferCode}</div>
+                                                            <div className="text-[10px] font-normal mt-0.5" style={{ color: C.gray }}>{tlp('labelTransfer')} {item.transferCode}</div>
                                                         )}
                                                     </td>
 
                                                     {['providerTopup', 'userTopup', 'withdrawals'].includes(activeTab) && (
                                                         <td className="px-4 py-3">
                                                             <div className="font-semibold text-sm" style={{ color: C.navy }}>
-                                                                {item.wallet?.provider?.fullName || item.wallet?.user?.fullName || item.user?.fullName || 'Unknown'}
+                                                                {item.wallet?.provider?.fullName || item.wallet?.user?.fullName || item.user?.fullName || tlp('unknownUser')}
                                                             </div>
                                                             <div className="text-xs" style={{ color: C.gray }}>
                                                                 {item.wallet?.provider?.email || item.wallet?.user?.email || item.user?.email || ''}
@@ -538,21 +559,29 @@ export default function AdminTransactionsPage() {
                                                     {['payment'].includes(activeTab) && (
                                                         <td className="px-4 py-3">
                                                             <div className="font-semibold text-xs" style={{ color: C.navy }}>
-                                                                Đơn: {item.requestId ? displayOrderCode(item.request?.orderCode, item.requestId) : '—'}
+                                                                {tlp('orderLabel')}{' '}
+                                                                {item.requestId ? displayOrderCode(item.request?.orderCode, item.requestId) : '—'}
                                                             </div>
                                                             <div className="mt-1 flex flex-col gap-0.5">
                                                                 <div className="text-[11px] flex items-center gap-1" style={{ color: C.gray }}>
-                                                                    <span className="font-semibold" style={{ color: C.navy, minWidth: 20 }}>KH:</span>
-                                                                    <span>{item.request?.user?.fullName ?? 'Khách vãng lai'}</span>
+                                                                    <span className="font-semibold" style={{ color: C.navy, minWidth: 20 }}>{tlp('customerShort')}</span>
+                                                                    <span>{item.request?.user?.fullName ?? t('admin.requests.guestWalkIn')}</span>
                                                                 </div>
                                                                 <div className="text-[11px] flex items-center gap-1" style={{ color: C.gray }}>
-                                                                    <span className="font-semibold" style={{ color: C.navy, minWidth: 20 }}>ĐT:</span>
+                                                                    <span className="font-semibold" style={{ color: C.navy, minWidth: 20 }}>{tlp('providerShort')}</span>
                                                                     <span>{item.request?.assignedProvider?.fullName ?? '—'}</span>
                                                                 </div>
                                                             </div>
                                                             {item.paymentMethod && (
                                                                 <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide" style={{ background: '#f1f5f9', color: C.navy }}>
-                                                                    {item.paymentMethod === 'CASH' ? 'Tiền mặt' : item.paymentMethod === 'QR' ? 'QR' : 'Ví'} · Thanh toán job
+                                                                    {tlp('paymentMethodJobLine', {
+                                                                        method:
+                                                                            item.paymentMethod === 'CASH'
+                                                                                ? t('admin.requests.paymentCash')
+                                                                                : item.paymentMethod === 'QR'
+                                                                                  ? t('admin.requests.paymentQr')
+                                                                                  : t('admin.requests.paymentWallet'),
+                                                                    })}
                                                                 </span>
                                                             )}
                                                             {item.disputeCase && (
@@ -562,10 +591,10 @@ export default function AdminTransactionsPage() {
                                                                     style={{ background: '#fef2f2', color: C.red }}
                                                                 >
                                                                     <span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
-                                                                    Khiếu nại
-                                                                    {item.disputeCase.status === 'RESOLVED' && ' · Đã giải quyết'}
-                                                                    {item.disputeCase.status === 'REJECTED' && ' · Từ chối'}
-                                                                    {['WAITING_FOR_PROVIDER', 'WAITING_FOR_CUSTOMER', 'INVESTIGATING'].includes(item.disputeCase.status) && ' · Đang xử lý'}
+                                                                    {tlp('disputeLink')}
+                                                                    {item.disputeCase.status === 'RESOLVED' && tlp('disputeSuffixResolved')}
+                                                                    {item.disputeCase.status === 'REJECTED' && tlp('disputeSuffixRejected')}
+                                                                    {['WAITING_FOR_PROVIDER', 'WAITING_FOR_CUSTOMER', 'INVESTIGATING'].includes(item.disputeCase.status) && tlp('disputeSuffixPending')}
                                                                     <ExternalLink className="w-2.5 h-2.5" />
                                                                 </button>
                                                             )}
@@ -575,14 +604,15 @@ export default function AdminTransactionsPage() {
                                                     {['jobPayment'].includes(activeTab) && (
                                                         <td className="px-4 py-3">
                                                             <div className="text-xs font-semibold" style={{ color: C.navy }}>
-                                                                Đơn: <span className="font-mono">{item.requestId ? displayOrderCode(item.request?.orderCode, item.requestId) : '—'}</span>
+                                                                {tlp('orderLabel')}{' '}
+                                                                <span className="font-mono">{item.requestId ? displayOrderCode(item.request?.orderCode, item.requestId) : '—'}</span>
                                                             </div>
                                                             {item.txnCode && (
-                                                                <div className="text-[10px] mt-1" style={{ color: C.gray }}>Mã GD: {item.txnCode}</div>
+                                                                <div className="text-[10px] mt-1" style={{ color: C.gray }}>{tlp('labelTxnCode')} {item.txnCode}</div>
                                                             )}
                                                             {item.transferCode && (
                                                                 <div className="text-xs mt-1" style={{ color: C.gray }}>
-                                                                    Ref: {item.transferCode}
+                                                                    {tlp('labelRef')} {item.transferCode}
                                                                 </div>
                                                             )}
                                                         </td>
@@ -600,11 +630,15 @@ export default function AdminTransactionsPage() {
                                                                         {formatCurrency(item.commissionAmount)}
                                                                     </div>
                                                                     <div className="text-[10px]" style={{ color: C.gray }}>
-                                                                        {item.commissionRate != null ? `${(item.commissionRate * 100).toFixed(0)}% phí` : ''}
+                                                                        {item.commissionRate != null
+                                                                            ? tlp('commissionRateLabel', {
+                                                                                  rate: (item.commissionRate * 100).toFixed(0),
+                                                                              })
+                                                                            : ''}
                                                                     </div>
                                                                 </>
                                                             ) : (
-                                                                <span className="text-xs italic" style={{ color: C.gray }}>Ch\u01b0a thu</span>
+                                                                <span className="text-xs italic" style={{ color: C.gray }}>{tlp('commissionNotCollected')}</span>
                                                             )}
                                                         </td>
                                                     )}
@@ -624,9 +658,9 @@ export default function AdminTransactionsPage() {
                                                                         if (uid) router.push(`/admin/transactions/${r}/${uid}`);
                                                                     }}
                                                                     className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-[10px] font-medium transition-colors border border-blue-100"
-                                                                    title="Kiểm tra dòng tiền trong ví"
+                                                                    title={tlp('openWalletHistoryTitle')}
                                                                 >
-                                                                    <ExternalLink className="w-3 h-3" /> Lịch sử Ví
+                                                                    <ExternalLink className="w-3 h-3" /> {tlp('openWalletHistory')}
                                                                 </button>
                                                             ) : (
                                                                 <span className="text-xs text-gray-400 italic">---</span>
@@ -638,20 +672,20 @@ export default function AdminTransactionsPage() {
 {['payment'].includes(activeTab) && (
                                                         <td className="px-4 py-3">
                                                             {item.paymentMethod === 'CASH' && (
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100" style={{ color: C.navy }}>Tiền mặt</span>
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100" style={{ color: C.navy }}>{t('admin.requests.paymentCash')}</span>
                                                             )}
                                                             {item.paymentMethod === 'QR' && (
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">QR</span>
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">{t('admin.requests.paymentQr')}</span>
                                                             )}
                                                             {item.paymentMethod === 'WALLET' && (
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-50" style={{ color: C.orange }}>Ví</span>
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-50" style={{ color: C.orange }}>{t('admin.requests.paymentWallet')}</span>
                                                             )}
                                                             {!item.paymentMethod && <span style={{ color: C.gray }}>—</span>}
                                                         </td>
                                                     )}
 
                                                     <td className="px-4 py-3 whitespace-nowrap text-sm" style={{ color: C.gray }}>
-                                                        {new Date(item.createdAt).toLocaleString('vi-VN')}
+                                                        {new Date(item.createdAt).toLocaleString(loc)}
                                                     </td>
                                                 </>
                                             )}
@@ -666,13 +700,17 @@ export default function AdminTransactionsPage() {
                     {!loading && total > 0 && (
                         <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
                             <p className="text-xs" style={{ color: C.gray }}>
-                                Showing <span className="font-semibold" style={{ color: C.navy }}>
-                                    {data.length === 0 ? 0 : (page - 1) * LIMIT + 1}
-                                </span> to <span className="font-semibold" style={{ color: C.navy }}>
-                                    {Math.min(page * LIMIT, total)}
-                                </span> of <span className="font-semibold" style={{ color: C.navy }}>
-                                    {total}
-                                </span> {isWalletTab ? 'ví' : 'giao dịch'}
+                                {isWalletTab
+                                    ? tlp('paginationWallets', {
+                                          from: data.length === 0 ? 0 : (page - 1) * LIMIT + 1,
+                                          to: Math.min(page * LIMIT, total),
+                                          total,
+                                      })
+                                    : tlp('paginationTransactions', {
+                                          from: data.length === 0 ? 0 : (page - 1) * LIMIT + 1,
+                                          to: Math.min(page * LIMIT, total),
+                                          total,
+                                      })}
                             </p>
                             <div className="flex items-center gap-1">
                                 <button

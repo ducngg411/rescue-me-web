@@ -33,12 +33,19 @@ const C = {
     yellowLight: '#fefce8',
 };
 
+function localeTag(locale: string) {
+    return locale === 'vi' ? 'vi-VN' : 'en-US';
+}
+
 export default function UserWalletDetailPage() {
     const { isReady } = useAdminGuard();
     const router = useRouter();
     const params = useParams();
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
+    const loc = localeTag(locale);
     const tp = (key: string) => t(`admin.transactions.${key}`);
+    const wd = (key: string, params?: Record<string, string | number>) =>
+        t(`admin.transactions.walletDetail.${key}`, params);
     
     const [wallet, setWallet] = useState<any>(null);
     const [activeTab, setActiveTab] = useState<'transactions' | 'topups'>('transactions');
@@ -58,7 +65,7 @@ export default function UserWalletDetailPage() {
             setWallet(res);
         } catch (error) {
             console.error('Failed to fetch wallet info', error);
-            toast.error(t('admin.transactions.empty'));
+            toast.error(t('admin.transactions.walletDetail.fetchError'));
         }
     }, [params.id, t]);
 
@@ -85,7 +92,7 @@ export default function UserWalletDetailPage() {
             }
         } catch (error) {
             console.error('Failed to fetch transactions', error);
-            toast.error(t('admin.transactions.empty'));
+            toast.error(t('admin.transactions.walletDetail.fetchError'));
         } finally {
             setLoading(false);
         }
@@ -104,7 +111,7 @@ export default function UserWalletDetailPage() {
     }, [isReady, params.id, fetchData]);
 
     const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('vi-VN').format(amount) + '₫';
+        return new Intl.NumberFormat(loc).format(amount) + '₫';
     };
 
     const renderStatusBadge = (statusStr: string) => {
@@ -163,8 +170,8 @@ export default function UserWalletDetailPage() {
                         <ChevronLeft className="w-5 h-5" />
                     </button>
                     <div>
-                        <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>Chi tiết Ví Khách Hàng</h1>
-                        <p className="text-sm" style={{ color: C.gray }}>{wallet.user?.fullName || 'Khách hàng'}</p>
+                        <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>{wd('userTitle')}</h1>
+                        <p className="text-sm" style={{ color: C.gray }}>{wallet.user?.fullName || wd('customerFallback')}</p>
                     </div>
                 </div>
 
@@ -173,24 +180,24 @@ export default function UserWalletDetailPage() {
                     <div className="flex items-center gap-4">
                         <img 
                             src={wallet.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(wallet.user?.fullName || 'U')}&background=2563eb&color=fff`} 
-                            alt="Avatar" 
+                            alt={wd('avatarAlt')} 
                             className="w-16 h-16 rounded-full object-cover border-2" 
                             style={{ borderColor: C.border }}
                         />
                         <div>
                             <h2 className="text-xl font-bold" style={{ color: C.navy }}>{wallet.user?.fullName}</h2>
                             <p className="text-sm font-medium mt-0.5" style={{ color: C.gray }}>{wallet.user?.email}</p>
-                            <p className="text-xs mt-0.5" style={{ color: C.gray }}>{wallet.user?.phoneNumber || 'Không có SĐT'}</p>
+                            <p className="text-xs mt-0.5" style={{ color: C.gray }}>{wallet.user?.phoneNumber || wd('noPhone')}</p>
                         </div>
                     </div>
 
                     <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
                         <div className="bg-gray-50 rounded-xl p-4 border min-w-[160px]" style={{ borderColor: C.border }}>
-                            <p className="text-xs uppercase font-semibold tracking-wider mb-1" style={{ color: C.gray }}>Khả dụng</p>
+                            <p className="text-xs uppercase font-semibold tracking-wider mb-1" style={{ color: C.gray }}>{wd('balanceAvailable')}</p>
                             <p className="text-2xl font-bold" style={{ color: C.navy }}>{formatCurrency(wallet.availableBalance)}</p>
                         </div>
                         <div className="bg-orange-50 rounded-xl p-4 border min-w-[160px]" style={{ borderColor: C.border }}>
-                            <p className="text-xs uppercase font-semibold tracking-wider mb-1" style={{ color: C.orangeDark }}>Đóng băng</p>
+                            <p className="text-xs uppercase font-semibold tracking-wider mb-1" style={{ color: C.orangeDark }}>{wd('balanceFrozen')}</p>
                             <p className="text-2xl font-bold" style={{ color: C.orange }}>{formatCurrency(wallet.pendingBalance)}</p>
                         </div>
                     </div>
@@ -209,7 +216,7 @@ export default function UserWalletDetailPage() {
                             }}
                         >
                             <Wallet className="w-4 h-4 inline-block mr-1.5" />
-                            Giao dịch ví
+                            {wd('tabWalletTx')}
                         </button>
                         <button
                             onClick={() => { setActiveTab('topups'); setPage(1); }}
@@ -221,7 +228,7 @@ export default function UserWalletDetailPage() {
                             }}
                         >
                             <TrendingUp className="w-4 h-4 inline-block mr-1.5" />
-                            Lịch sử nạp tiền
+                            {wd('tabTopups')}
                         </button>
                     </div>
 
@@ -234,7 +241,7 @@ export default function UserWalletDetailPage() {
                                 className="bg-transparent text-sm focus:outline-none cursor-pointer pr-1"
                                 style={{ color: C.navy }}
                             >
-                                <option value="ALL">{tp('filters.all')} TT</option>
+                                <option value="ALL">{wd('filterAllStatuses')}</option>
                                 <option value="COMPLETED">{tp('status.COMPLETED')}</option>
                                 <option value="PENDING">{tp('status.PENDING')}</option>
                                 <option value="FAILED">{tp('status.FAILED')}</option>
@@ -251,7 +258,7 @@ export default function UserWalletDetailPage() {
                                         className="bg-transparent text-sm focus:outline-none cursor-pointer pr-1"
                                         style={{ color: C.navy }}
                                     >
-                                        <option value="ALL">{tp('filters.all')} Loại</option>
+                                        <option value="ALL">{wd('filterAllTypes')}</option>
                                         <option value="CREDIT">{tp('types.CREDIT')}</option>
                                         <option value="DEBIT">{tp('types.DEBIT')}</option>
                                     </select>
@@ -264,7 +271,7 @@ export default function UserWalletDetailPage() {
                                         className="bg-transparent text-sm focus:outline-none cursor-pointer pr-1"
                                         style={{ color: C.navy }}
                                     >
-                                        <option value="ALL">{tp('filters.all')} Ref</option>
+                                        <option value="ALL">{wd('filterAllRefs')}</option>
                                         <option value="TOPUP">TOPUP</option>
                                         <option value="WITHDRAW">WITHDRAW</option>
                                         <option value="JOB_PAYMENT">JOB_PAYMENT</option>
@@ -280,16 +287,16 @@ export default function UserWalletDetailPage() {
                         <table className="w-full text-left">
                             <thead style={{ background: C.bg }}>
                                 <tr>
-                                    <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>ID</th>
+                                    <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>{tp('columns.transactionId')}</th>
                                     {activeTab === 'transactions' && (
-                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>Change</th>
+                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>{wd('colChange')}</th>
                                     )}
                                     {activeTab === 'transactions' && (
-                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>Ref</th>
+                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>{wd('colRefShort')}</th>
                                     )}
                                     <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>{tp('columns.amount')}</th>
-                                    <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>Status</th>
-                                    <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>Created At</th>
+                                    <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>{tp('columns.status')}</th>
+                                    <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>{tp('columns.createdAt')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -301,7 +308,7 @@ export default function UserWalletDetailPage() {
                                     </tr>
                                 ) : data.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="text-center py-12 text-sm text-gray-500">Chưa có giao dịch nào</td>
+                                        <td colSpan={6} className="text-center py-12 text-sm text-gray-500">{wd('emptyList')}</td>
                                     </tr>
                                 ) : (
                                     data.map((item) => (
@@ -312,9 +319,11 @@ export default function UserWalletDetailPage() {
                                             )}
                                             {activeTab === 'transactions' && (
                                                 <td className="px-4 py-3 font-semibold text-sm" style={{ color: C.navy }}>
-                                                    {tp(`references.${item.referenceType}`) !== `admin.transactions.references.${item.referenceType}` 
-                                                        ? tp(`references.${item.referenceType}`) 
-                                                        : item.referenceType}
+                                                    {(() => {
+                                                        const refPath = `references.${item.referenceType}`;
+                                                        const refLabel = tp(refPath);
+                                                        return refLabel === `admin.transactions.${refPath}` ? item.referenceType : refLabel;
+                                                    })()}
                                                 </td>
                                             )}
                                             <td className="px-4 py-3 font-bold text-sm" style={{ color: C.navy }}>
@@ -324,7 +333,7 @@ export default function UserWalletDetailPage() {
                                                 {renderStatusBadge(item.status)}
                                             </td>
                                             <td className="px-4 py-3 text-sm whitespace-nowrap" style={{ color: C.gray }}>
-                                                {new Date(item.createdAt).toLocaleString('vi-VN')}
+                                                {new Date(item.createdAt).toLocaleString(loc)}
                                             </td>
                                         </tr>
                                     ))
@@ -336,7 +345,11 @@ export default function UserWalletDetailPage() {
                     {!loading && total > 0 && (
                         <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
                             <p className="text-xs" style={{ color: C.gray }}>
-                                Showing {(page - 1) * LIMIT + 1} to {Math.min(page * LIMIT, total)} of {total} items
+                                {wd('paginationLine', {
+                                    from: (page - 1) * LIMIT + 1,
+                                    to: Math.min(page * LIMIT, total),
+                                    total,
+                                })}
                             </p>
                             <div className="flex items-center gap-1">
                                 <button

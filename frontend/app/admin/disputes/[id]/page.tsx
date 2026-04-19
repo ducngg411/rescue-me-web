@@ -12,14 +12,17 @@ import AvatarImage from '@/components/AvatarImage';
 import { DisputeSLACountdown } from '@/components/DisputeSLACountdown';
 import { displayOrderCode, displayDisputeCaseRef } from '@/lib/reconciliation';
 
-function fmtVnd(n: number) {
-    if (n == null) return '0đ';
-    return new Intl.NumberFormat('vi-VN').format(n) + 'đ';
+function fmtVnd(n: number, locale: string) {
+    if (n == null) return locale === 'vi' ? '0đ' : '0 VND';
+    const loc = locale === 'vi' ? 'vi-VN' : 'en-US';
+    const s = new Intl.NumberFormat(loc).format(n);
+    return locale === 'vi' ? `${s}đ` : `${s} VND`;
 }
 
-function fmtDateTime(iso: string) {
+function fmtDateTime(iso: string, locale: string) {
     if (!iso) return '—';
-    return new Date(iso).toLocaleString('vi-VN', {
+    const loc = locale === 'vi' ? 'vi-VN' : 'en-US';
+    return new Date(iso).toLocaleString(loc, {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
     });
@@ -82,27 +85,33 @@ const C = {
     purpleLight: '#faf5ff',
 };
 
-/** Khớp `DisputeCaseStatus` trong Prisma — tránh hiển thị raw enum trên UI */
-const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
-    WAITING_FOR_PROVIDER: { label: 'Chờ Provider phản hồi', bg: C.yellowLight, color: C.yellow },
-    WAITING_FOR_CUSTOMER: { label: 'Chờ khách phản hồi', bg: C.blueLight, color: C.blue },
-    INVESTIGATING: { label: 'Đang điều tra', bg: C.purpleLight, color: C.purple },
-    RESOLVED: { label: 'Đã giải quyết', bg: C.greenLight, color: C.green },
-    REJECTED: { label: 'Đã từ chối', bg: C.redLight, color: C.red },
-};
+function getDisputeCaseStatusMeta(
+    status: string,
+    t: (path: string) => string,
+): { label: string; bg: string; color: string } {
+    const meta: Record<string, { labelKey: string; bg: string; color: string }> = {
+        WAITING_FOR_PROVIDER: { labelKey: 'admin.disputes.detailPage.badgeWaitProvider', bg: C.yellowLight, color: C.yellow },
+        WAITING_FOR_CUSTOMER: { labelKey: 'admin.disputes.detailPage.badgeWaitCustomer', bg: C.blueLight, color: C.blue },
+        INVESTIGATING: { labelKey: 'admin.disputes.detailPage.badgeInvestigating', bg: C.purpleLight, color: C.purple },
+        RESOLVED: { labelKey: 'admin.disputes.detailPage.badgeResolved', bg: C.greenLight, color: C.green },
+        REJECTED: { labelKey: 'admin.disputes.detailPage.badgeRejected', bg: C.redLight, color: C.red },
+    };
+    const m = meta[status];
+    return m ? { label: t(m.labelKey), bg: m.bg, color: m.color } : { label: status, bg: '#f1f5f9', color: C.gray };
+}
 
-function ProgressTimeline({ status }: { status: string }) {
+function ProgressTimeline({ status, t }: { status: string; t: (path: string) => string }) {
     const steps = [
-        { id: 'created', label: 'Đã gửi khiếu nại', active: false, done: true },
+        { id: 'created', label: t('admin.disputes.detailPage.timelineSubmitted'), active: false, done: true },
         {
             id: 'processing',
-            label: 'Đang xử lý',
+            label: t('admin.disputes.detailPage.timelineProcessing'),
             active: ['WAITING_FOR_PROVIDER', 'WAITING_FOR_CUSTOMER', 'INVESTIGATING'].includes(status),
             done: ['RESOLVED', 'REJECTED'].includes(status),
         },
         {
             id: 'closed',
-            label: status === 'REJECTED' ? 'Bị từ chối' : 'Có kết quả',
+            label: status === 'REJECTED' ? t('admin.disputes.detailPage.timelineRejected') : t('admin.disputes.detailPage.timelineOutcome'),
             active: ['RESOLVED', 'REJECTED'].includes(status),
             done: ['RESOLVED', 'REJECTED'].includes(status),
             isReject: status === 'REJECTED',
@@ -196,6 +205,7 @@ export default function AdminDisputeDetailPage() {
     const id = params.id as string;
     const router = useRouter();
     const { t, locale } = useLanguage();
+    const dateLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
     const { isReady, user } = useAdminGuard();
     
     const [detail, setDetail] = useState<any>(null);
@@ -290,8 +300,8 @@ export default function AdminDisputeDetailPage() {
             <AdminLayout activeTab="/admin/disputes">
                 <div className="min-h-screen flex items-center justify-center px-4" style={{ background: C.bg }}>
                     <div className="bg-white p-6 rounded-2xl text-center w-full max-w-sm border" style={{ borderColor: C.border }}>
-                        <p className="font-semibold mb-2" style={{ color: C.navy }}>Không tìm thấy khiếu nại</p>
-                        <button onClick={() => router.push('/admin/disputes')} className="px-4 py-2 rounded-xl text-sm font-semibold text-white w-full" style={{ background: C.orange }}>Quay lại</button>
+                        <p className="font-semibold mb-2" style={{ color: C.navy }}>{t('admin.disputes.detailPage.notFound')}</p>
+                        <button onClick={() => router.push('/admin/disputes')} className="px-4 py-2 rounded-xl text-sm font-semibold text-white w-full" style={{ background: C.orange }}>{t('admin.disputes.backToList')}</button>
                     </div>
                 </div>
             </AdminLayout>
@@ -299,7 +309,7 @@ export default function AdminDisputeDetailPage() {
     }
 
     const status = detail.status ?? '';
-    const sm = STATUS_META[status] ?? { label: status, bg: '#f1f5f9', color: C.gray };
+    const sm = getDisputeCaseStatusMeta(status, t);
     const isClosed = status === 'RESOLVED' || status === 'REJECTED';
     const refundableCap = Number(detail?.refundableCap ?? detail?.payment?.totalAmount ?? 0);
     const safeRefundInput = Math.max(0, parseInt(refundAmount.replace(/\D/g, ''), 10) || 0);
@@ -392,7 +402,7 @@ export default function AdminDisputeDetailPage() {
             await refreshDetail();
             setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         } catch {
-            toast.error('Gửi không thành công');
+            toast.error(t('admin.disputes.detailPage.sendFailed'));
         } finally {
             setSending(false);
         }
@@ -425,11 +435,15 @@ export default function AdminDisputeDetailPage() {
         if (resolveResolution === 'PARTIAL_REFUND') {
             const n = parseInt(refundAmount.replace(/\D/g, ''), 10);
             if (!n || n <= 0) {
-                toast.error(t('admin.disputes.refundAmountLabel'));
+                toast.error(t('admin.disputes.detailPage.partialRefundRequired'));
                 return;
             }
             if (n > refundableCap) {
-                toast.error(`Số tiền hoàn không được vượt quá ${refundableCap.toLocaleString('vi-VN')}đ`);
+                toast.error(
+                    t('admin.disputes.detailPage.refundExceedsCap', {
+                        amount: refundableCap.toLocaleString(dateLocale),
+                    }),
+                );
                 return;
             }
             body.resolutionAmountCustomer = n;
@@ -450,18 +464,22 @@ export default function AdminDisputeDetailPage() {
     const senderLabel = (msg: any) => {
         if (msg.senderRole === 'ADMIN' || msg.actor === 'ADMIN') return 'ADMIN';
         if (msg.senderRole === 'CUSTOMER' || msg.actor === 'USER') {
-            const name = msg.author?.fullName || detail?.payment?.request?.user?.fullName || detail?.request?.user?.fullName || 'User';
-            return `${name} (User)`;
+            const name =
+                msg.author?.fullName ||
+                detail?.payment?.request?.user?.fullName ||
+                detail?.request?.user?.fullName ||
+                t('admin.disputes.actorUser');
+            return `${name} (${t('admin.disputes.actorUser')})`;
         }
         if (msg.senderRole === 'PROVIDER' || msg.actor === 'PROVIDER') {
             const name =
                 msg.author?.fullName ||
                 detail?.payment?.request?.assignedProvider?.fullName ||
                 detail?.request?.assignedProvider?.fullName ||
-                'Provider';
-            return `${name} (Provider)`;
+                t('admin.disputes.detailPage.roleProviderOpt');
+            return `${name} (${t('admin.disputes.detailPage.roleProviderOpt')})`;
         }
-        return msg.senderRole || msg.actor || 'SYSTEM';
+        return msg.senderRole || msg.actor || t('admin.disputes.actorSystem');
     };
 
     return (
@@ -475,16 +493,21 @@ export default function AdminDisputeDetailPage() {
                             className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4 transition-colors"
                         >
                             <ArrowLeft className="w-4 h-4" />
-                            Quay lại danh sách
+                            {t('admin.disputes.detailPage.backList')}
                         </button>
                         <div className="flex items-start justify-between gap-4">
                             <div>
-                                <h1 className="text-3xl font-semibold text-gray-900">Chi tiết khiếu nại</h1>
+                                <h1 className="text-3xl font-semibold text-gray-900">{t('admin.disputes.detailPage.headerTitle')}</h1>
                                 <p className="text-lg text-gray-600 mt-1">
-                                    Đơn #{displayOrderCode(detail?.request?.orderCode ?? detail?.payment?.request?.orderCode, detail?.payment?.requestId ?? detail?.request?.id ?? detail.id)}
+                                    {t('admin.disputes.detailPage.orderLine', {
+                                        code: displayOrderCode(
+                                            detail?.request?.orderCode ?? detail?.payment?.request?.orderCode,
+                                            detail?.payment?.requestId ?? detail?.request?.id ?? detail.id,
+                                        ),
+                                    })}
                                 </p>
                                 <p className="text-sm font-semibold mt-0.5" style={{ color: C.gray }}>
-                                    Case #{displayDisputeCaseRef(String(detail.id))}
+                                    {t('admin.disputes.detailPage.caseLine', { code: displayDisputeCaseRef(String(detail.id)) })}
                                 </p>
                             </div>
                             <div className="flex flex-col items-end gap-2">
@@ -505,21 +528,21 @@ export default function AdminDisputeDetailPage() {
                             className={`flex-1 min-w-[100px] py-3 text-sm font-bold text-center border-b-2 transition-colors relative ${activeTab === 'overview' ? 'border-orange-500' : 'border-transparent'}`}
                             style={{ color: activeTab === 'overview' ? C.orange : C.gray, borderColor: activeTab === 'overview' ? C.orange : 'transparent' }}
                         >
-                            Thông tin chi tiết
+                            {t('admin.disputes.detailPage.tabOverview')}
                         </button>
                         <button
                             onClick={() => setActiveTab('order')}
                             className={`flex-1 min-w-[100px] py-3 text-sm font-bold text-center border-b-2 transition-colors relative ${activeTab === 'order' ? 'border-orange-500' : 'border-transparent'}`}
                             style={{ color: activeTab === 'order' ? C.orange : C.gray, borderColor: activeTab === 'order' ? C.orange : 'transparent' }}
                         >
-                            Chi tiết đơn
+                            {t('admin.disputes.detailPage.tabOrder')}
                         </button>
                         <button
                             onClick={() => setActiveTab('messages')}
                             className={`flex-1 min-w-[100px] py-3 text-sm font-bold text-center border-b-2 transition-colors relative ${activeTab === 'messages' ? 'border-orange-500' : 'border-transparent'}`}
                             style={{ color: activeTab === 'messages' ? C.orange : C.gray, borderColor: activeTab === 'messages' ? C.orange : 'transparent' }}
                         >
-                            Trao đổi
+                            {t('admin.disputes.detailPage.tabMessages')}
                         </button>
                     </div>
                 </div>
@@ -535,7 +558,7 @@ export default function AdminDisputeDetailPage() {
                                         <DisputeSLACountdown dueAt={detail.firstResponseDueAt} />
                                     </div>
                                 )}
-                                <ProgressTimeline status={status} />
+                                <ProgressTimeline status={status} t={t} />
 
                                 {isClosed && (
                                     <div className="rounded-xl p-4 mb-6 border" style={{ background: '#f8fafc', borderColor: C.border }}>
@@ -549,16 +572,16 @@ export default function AdminDisputeDetailPage() {
                                         </div>
                                         <div className="space-y-2 bg-white p-3 rounded-lg border" style={{ borderColor: C.border }}>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-xs" style={{ color: C.gray }}>Quyết định:</span>
+                                                <span className="text-xs" style={{ color: C.gray }}>{t('admin.disputes.detailPage.resolutionDecision')}:</span>
                                                 <span className="text-sm font-semibold" style={{ color: C.navy }}>
-                                                    {detail.resolutionType === 'NO_REFUND' ? 'Không hoàn tiền' :
-                                                     detail.resolutionType === 'FULL_REFUND' ? 'Hoàn tiền 100%' :
-                                                     detail.resolutionType === 'PARTIAL_REFUND' ? 'Hoàn tiền một phần' : 'Không xác định'}
+                                                    {detail.resolutionType === 'NO_REFUND' ? t('admin.disputes.resolutionDisplayNoRefund') :
+                                                     detail.resolutionType === 'FULL_REFUND' ? t('admin.disputes.resolutionDisplayFullRefund') :
+                                                     detail.resolutionType === 'PARTIAL_REFUND' ? t('admin.disputes.resolutionDisplayPartialRefund') : t('admin.disputes.detailPage.unknownOutcome')}
                                                 </span>
                                             </div>
                                             {detail.resolutionType !== 'NO_REFUND' && (
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-xs" style={{ color: C.gray }}>Khách hàng nhận lại:</span>
+                                                    <span className="text-xs" style={{ color: C.gray }}>{t('admin.disputes.detailPage.customerRefund')}:</span>
                                                     <span className="text-sm font-bold" style={{ color: C.orange }}>
                                                         {(detail.resolutionAmountCustomer ?? detail.refundAmount ?? 0).toLocaleString()}₫
                                                     </span>
@@ -566,7 +589,7 @@ export default function AdminDisputeDetailPage() {
                                             )}
                                             {detail.resolutionType !== 'FULL_REFUND' && (
                                                 <div className="flex justify-between items-center">
-                                                    <span className="text-xs" style={{ color: C.gray }}>Cứu hộ viên nhận:</span>
+                                                    <span className="text-xs" style={{ color: C.gray }}>{t('admin.disputes.detailPage.providerReceives')}:</span>
                                                     <span className="text-sm font-bold" style={{ color: C.blue }}>
                                                         {(detail.resolutionAmountProvider ?? 0).toLocaleString()}₫
                                                     </span>
@@ -574,7 +597,7 @@ export default function AdminDisputeDetailPage() {
                                             )}
                                             {detail.resolutionNote && (
                                                 <div className="pt-2 mt-2 border-t" style={{ borderColor: C.border }}>
-                                                    <span className="text-xs block mb-1" style={{ color: C.gray }}>Ghi chú xử lý:</span>
+                                                    <span className="text-xs block mb-1" style={{ color: C.gray }}>{t('admin.disputes.detailPage.processingNote')}:</span>
                                                     <p className="text-sm whitespace-pre-wrap" style={{ color: C.navy }}>{detail.resolutionNote}</p>
                                                 </div>
                                             )}
@@ -582,25 +605,25 @@ export default function AdminDisputeDetailPage() {
                                     </div>
                                 )}
 
-                                <SectionCard title="Nội dung khiếu nại" icon={<ShieldAlert size={16} style={{ color: C.red }} />}>
-                                    <InfoRow label="Lý do chung" value={detail.reason || detail?.payment?.disputeReason} />
-                                    {detail.description && <InfoRow label="Mô tả cụ thể" value={detail.description} />}
-                                    {detail.expectedOutcome && <InfoRow label="Mong muốn KH" value={detail.expectedOutcome} />}
-                                    <InfoRow label="Yêu cầu hoàn/bồi thường" value={
+                                <SectionCard title={t('admin.disputes.detailPage.sectionDisputeBody')} icon={<ShieldAlert size={16} style={{ color: C.red }} />}>
+                                    <InfoRow label={t('admin.disputes.detailPage.reasonSummary')} value={detail.reason || detail?.payment?.disputeReason} />
+                                    {detail.description && <InfoRow label={t('admin.disputes.detailPage.descriptionDetail')} value={detail.description} />}
+                                    {detail.expectedOutcome && <InfoRow label={t('admin.disputes.detailPage.customerExpectation')} value={detail.expectedOutcome} />}
+                                    <InfoRow label={t('admin.disputes.detailPage.refundRequested')} value={
                                         <span style={{ color: C.orange, fontSize: '14px' }}>
-                                            {(detail.targetAmount ?? 0).toLocaleString()}₫
+                                            {(detail.targetAmount ?? 0).toLocaleString(dateLocale)}₫
                                         </span>
                                     } />
-                                    <InfoRow label="Người mở" value={detail.openedBy?.fullName || detail.request?.user?.fullName || 'N/A'} />
+                                    <InfoRow label={t('admin.disputes.detailPage.openedBy')} value={detail.openedBy?.fullName || detail.request?.user?.fullName || 'N/A'} />
                                 </SectionCard>
 
-                                <SectionCard title="Tóm tắt thanh toán" icon={<Receipt size={16} style={{ color: C.blue }} />}>
-                                    <InfoRow label="Phương thức" value={detail.payment?.paymentMethod || 'N/A'} />
-                                    <InfoRow label="Tổng thanh toán dịch vụ" value={`${(detail.payment?.totalAmount ?? 0).toLocaleString()}₫`} />
+                                <SectionCard title={t('admin.disputes.detailPage.sectionPaymentBrief')} icon={<Receipt size={16} style={{ color: C.blue }} />}>
+                                    <InfoRow label={t('admin.disputes.detailPage.paymentMethodRow')} value={detail.payment?.paymentMethod || 'N/A'} />
+                                    <InfoRow label={t('admin.disputes.detailPage.totalServicePayment')} value={`${(detail.payment?.totalAmount ?? 0).toLocaleString(dateLocale)}₫`} />
                                 </SectionCard>
 
                                 {(detail.evidence?.length ?? 0) > 0 && (
-                                    <SectionCard title="Bằng chứng đính kèm" icon={<ImageIcon size={16} style={{ color: C.green }} />}>
+                                    <SectionCard title={t('admin.disputes.detailPage.sectionEvidenceAttach')} icon={<ImageIcon size={16} style={{ color: C.green }} />}>
                                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                             {detail.evidence.map((e: any) => {
                                                 const video = isVideo(e.url);
@@ -614,7 +637,7 @@ export default function AdminDisputeDetailPage() {
                                                         {video ? (
                                                             <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
                                                                 <Film size={24} className="mb-1" />
-                                                                <span className="text-[10px] uppercase font-bold">Video</span>
+                                                                <span className="text-[10px] uppercase font-bold">{t('admin.disputes.detailPage.videoLabel')}</span>
                                                             </div>
                                                         ) : (
                                                             <img src={e.url} alt="evidence" className="w-full h-full object-cover group-active:opacity-80 transition-opacity" />
@@ -652,7 +675,7 @@ export default function AdminDisputeDetailPage() {
 
                                         {/* Provider Info */}
                                         {orderDetail.req.assignedProvider && (
-                                            <SectionCard title="Thông tin Cứu hộ viên" icon={<Wrench size={16} style={{ color: C.blue }} />}>
+                                            <SectionCard title={t('admin.disputes.detailPage.providerSectionTitle')} icon={<Wrench size={16} style={{ color: C.blue }} />}>
                                                 <div className="flex items-center gap-3">
                                                     <AvatarImage
                                                         name={orderDetail.req.assignedProvider.fullName || 'Provider'}
@@ -673,7 +696,7 @@ export default function AdminDisputeDetailPage() {
 
                                         {/* Rescue details */}
                                         <SectionCard title={t('provider.historyDetail.sections2.rescueDetails')} icon={<Wrench size={16} style={{ color: C.orange }} />}>
-                                            <InfoRow label="Trạng thái đơn gốc" value={<StatusBadge status={orderDetail.req.status} t={t} />} />
+                                            <InfoRow label={t('admin.disputes.requestStatus')} value={<StatusBadge status={orderDetail.req.status} t={t} />} />
                                             {orderDetail.req.incidentType && (
                                                 <InfoRow
                                                     label={t('provider.historyDetail.labels.incidentType')}
@@ -718,13 +741,13 @@ export default function AdminDisputeDetailPage() {
                                             )}
                                             <InfoRow
                                                 label={t('provider.historyDetail.labels.createdAt')}
-                                                value={fmtDateTime(orderDetail.req.createdAt)}
+                                                value={fmtDateTime(orderDetail.req.createdAt, locale)}
                                             />
                                         </SectionCard>
 
                                         {/* Media from original rescue request */}
                                         {Array.isArray(orderDetail.req.media) && orderDetail.req.media.length > 0 && (
-                                            <SectionCard title="Hình ảnh/Video lúc tạo đơn" icon={<ImageIcon size={16} style={{ color: C.blue }} />}>
+                                            <SectionCard title={t('admin.disputes.detailPage.mediaAtCreateOrder')} icon={<ImageIcon size={16} style={{ color: C.blue }} />}>
                                                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                                     {orderDetail.req.media.map((e: any) => {
                                                         const isVid = e.mediaType === 'VIDEO' || isVideo(e.publicUrl || e.url);
@@ -739,7 +762,7 @@ export default function AdminDisputeDetailPage() {
                                                                 {isVid ? (
                                                                     <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
                                                                         <Film size={24} className="mb-1" />
-                                                                        <span className="text-[10px] uppercase font-bold">Video</span>
+                                                                        <span className="text-[10px] uppercase font-bold">{t('admin.disputes.detailPage.videoLabel')}</span>
                                                                     </div>
                                                                 ) : (
                                                                     <img src={src} alt="media" className="w-full h-full object-cover group-active:opacity-80 transition-opacity" />
@@ -753,15 +776,15 @@ export default function AdminDisputeDetailPage() {
 
                                         {/* Quotes Data if available */}
                                         {Array.isArray(orderDetail.quotes) && orderDetail.quotes.length > 0 && (
-                                            <SectionCard title="Các báo giá đã tham gia" icon={<Banknote size={16} style={{ color: C.green }} />}>
+                                            <SectionCard title={t('admin.disputes.detailPage.quotesParticipated')} icon={<Banknote size={16} style={{ color: C.green }} />}>
                                                 <div className="space-y-3">
                                                     {orderDetail.quotes.map((q: any) => (
                                                         <div key={q.id} className="rounded-xl p-3 border" style={{ borderColor: q.id === orderDetail.req.acceptedQuoteId ? C.green : C.border, background: q.id === orderDetail.req.acceptedQuoteId ? C.greenLight : C.bg }}>
                                                             <div className="flex justify-between items-center mb-1">
-                                                                <span className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(q.price)}</span>
+                                                                <span className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(q.price, locale)}</span>
                                                                 <StatusBadge status={q.status} t={t} />
                                                             </div>
-                                                            <p className="text-xs" style={{ color: C.gray }}>ETA: {q.estimatedArrivalMinutes} phút</p>
+                                                            <p className="text-xs" style={{ color: C.gray }}>{t('admin.disputes.detailPage.quoteEta', { minutes: q.estimatedArrivalMinutes })}</p>
                                                             {q.message && <p className="text-xs mt-1 italic" style={{ color: C.navy }}>"{q.message}"</p>}
                                                         </div>
                                                     ))}
@@ -774,11 +797,11 @@ export default function AdminDisputeDetailPage() {
                                             <SectionCard title={t('provider.historyDetail.sections2.payment')} icon={<Banknote size={16} style={{ color: C.orange }} />}>
                                                 <div className="grid grid-cols-2 gap-3 mb-4">
                                                     <div className="rounded-xl p-3 col-span-2" style={{ background: C.bg }}>
-                                                        <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: C.gray }}>Tiền vào ví Cứu hộ viên</p>
+                                                        <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: C.gray }}>{t('admin.disputes.detailPage.walletCreditTitle')}</p>
                                                         {orderDetail.payment.walletTxStatus === 'COMPLETED'
                                                             ? (
                                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold" style={{ background: C.greenLight, color: C.green }}>
-                                                                    <CheckCircle2 size={12} /> Đã nhận tiền vào ví
+                                                                    <CheckCircle2 size={12} /> {t('admin.disputes.detailPage.walletReceivedBadge')}
                                                                 </span>
                                                             )
                                                             : orderDetail.payment.walletTxStatus === 'PENDING'
@@ -786,7 +809,7 @@ export default function AdminDisputeDetailPage() {
                                                                     <div className="rounded-xl p-3" style={{ background: '#f5f3ff', border: '1.5px solid #ddd6fe' }}>
                                                                         <div className="flex items-center gap-2 mb-1">
                                                                             <Clock size={13} style={{ color: '#7c3aed' }} />
-                                                                            <span className="text-xs font-bold" style={{ color: '#7c3aed' }}>Hệ thống đang giải ngân</span>
+                                                                            <span className="text-xs font-bold" style={{ color: '#7c3aed' }}>{t('admin.disputes.detailPage.walletReleasing')}</span>
                                                                         </div>
                                                                     </div>
                                                                 )
@@ -799,13 +822,13 @@ export default function AdminDisputeDetailPage() {
                                                             {orderDetail.payment.paymentMethod === 'CASH'
                                                                 ? t('provider.historyDetail.labels.cash')
                                                                 : orderDetail.payment.paymentMethod === 'WALLET'
-                                                                    ? 'Ví điện tử RescueMe'
+                                                                    ? t('admin.disputes.detailPage.walletRescueMeMethod')
                                                                     : t('provider.historyDetail.labels.transfer')}
                                                         </p>
                                                     </div>
                                                     <div className="rounded-xl p-3" style={{ background: C.bg }}>
                                                         <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('provider.historyDetail.payment.total')}</p>
-                                                        <p className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(orderDetail.payment.totalAmount)}</p>
+                                                        <p className="text-sm font-bold" style={{ color: C.navy }}>{fmtVnd(orderDetail.payment.totalAmount, locale)}</p>
                                                     </div>
                                                 </div>
                                                 {/* Fee breakdown */}
@@ -819,13 +842,13 @@ export default function AdminDisputeDetailPage() {
                                                         <div key={i} className="flex items-center justify-between px-4 py-2.5"
                                                             style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                                                             <span className="text-xs" style={{ color: C.gray }}>{row.label}</span>
-                                                            <span className="text-xs font-semibold" style={{ color: C.navy }}>{fmtVnd(row.val)}</span>
+                                                            <span className="text-xs font-semibold" style={{ color: C.navy }}>{fmtVnd(row.val, locale)}</span>
                                                         </div>
                                                     ))}
                                                     <div className="flex items-center justify-between px-4 py-3"
                                                         style={{ background: '#f8fafc', borderTop: `1px solid ${C.border}` }}>
                                                         <span className="text-sm font-bold" style={{ color: C.navy }}>{t('provider.historyDetail.feeItems.total')}</span>
-                                                        <span className="text-sm font-bold" style={{ color: C.orange }}>{fmtVnd(orderDetail.payment.totalAmount)}</span>
+                                                        <span className="text-sm font-bold" style={{ color: C.orange }}>{fmtVnd(orderDetail.payment.totalAmount, locale)}</span>
                                                     </div>
                                                 </div>
 
@@ -865,7 +888,7 @@ export default function AdminDisputeDetailPage() {
                                                                 <div key={i} className="flex items-center justify-between px-3 py-2"
                                                                     style={{ borderTop: i > 0 ? `1px solid ${C.border}` : 'none' }}>
                                                                     <span className="text-xs" style={{ color: C.gray }}>{item.label || '—'}</span>
-                                                                    <span className="text-xs font-semibold" style={{ color: C.navy }}>{fmtVnd(item.amount)}</span>
+                                                                    <span className="text-xs font-semibold" style={{ color: C.navy }}>{fmtVnd(item.amount, locale)}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -883,7 +906,7 @@ export default function AdminDisputeDetailPage() {
                                                                 <button key={i} onClick={() => setEvidencePreview({ url: src, type: 'image' })}
                                                                     className="aspect-square rounded-xl overflow-hidden"
                                                                     style={{ background: '#f1f5f9' }}>
-                                                                    <img src={src} alt={`Ảnh thanh toán ${i + 1}`} className="w-full h-full object-cover" />
+                                                                    <img src={src} alt={t('admin.disputes.detailPage.paymentPhotoAlt', { n: i + 1 })} className="w-full h-full object-cover" />
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -938,7 +961,7 @@ export default function AdminDisputeDetailPage() {
                                                                 {step.label}
                                                             </p>
                                                             {step.time ? (
-                                                                <p className="text-xs mt-0.5" style={{ color: C.gray }}>{fmtDateTime(step.time)}</p>
+                                                                <p className="text-xs mt-0.5" style={{ color: C.gray }}>{fmtDateTime(step.time, locale)}</p>
                                                             ) : (
                                                                 <p className="text-xs mt-0.5" style={{ color: '#d1d5db' }}>{t('provider.historyDetail.timeline.notDone')}</p>
                                                             )}
@@ -949,9 +972,9 @@ export default function AdminDisputeDetailPage() {
                                         </SectionCard>
                                     </>
                                 ) : (
-                                    <SectionCard title="Chi tiết dịch vụ gốc" icon={<Clock size={16} style={{ color: C.blue }} />}>
+                                    <SectionCard title={t('admin.disputes.sectionRequest')} icon={<Clock size={16} style={{ color: C.blue }} />}>
                                         <div className="text-center py-6">
-                                            <p className="text-sm font-medium" style={{ color: C.gray }}>Đang tải hoặc không có sẵn chi tiết đơn...</p>
+                                            <p className="text-sm font-medium" style={{ color: C.gray }}>{t('admin.disputes.detailPage.orderTabLoading')}</p>
                                         </div>
                                     </SectionCard>
                                 )}
@@ -963,7 +986,7 @@ export default function AdminDisputeDetailPage() {
                                     {(!detail.messages || detail.messages.length === 0) && (
                                         <div className="text-center mt-10">
                                             <MessageSquare size={32} className="mx-auto mb-3" style={{ color: '#cbd5e1' }} />
-                                            <p className="text-sm font-semibold" style={{ color: C.gray }}>Chưa có tin nhắn nào</p>
+                                            <p className="text-sm font-semibold" style={{ color: C.gray }}>{t('admin.disputes.detailPage.messagesEmpty')}</p>
                                         </div>
                                     )}
                                     {(detail.messages as any[]).map((msg: any) => {
@@ -1008,7 +1031,7 @@ export default function AdminDisputeDetailPage() {
                                                         </div>
                                                     )}
                                                     <span className={`text-[9px] font-semibold px-1 ${isMe ? 'text-right' : 'text-left'}`} style={{ color: '#cbd5e1' }}>
-                                                        {new Date(msg.createdAt).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}
+                                                        {new Date(msg.createdAt).toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })}
                                                     </span>
                                                 </div>
                                             </div>
@@ -1021,14 +1044,14 @@ export default function AdminDisputeDetailPage() {
                                     <div className="sticky bottom-0 left-0 right-0 px-4 py-3 bg-white border-t rounded-b-2xl z-10" style={{ borderColor: C.border }}>
                                         <div className="flex items-end gap-2">
                                             <div className="flex-1 bg-gray-50 rounded-2xl border flex flex-col pt-1 overflow-hidden focus-within:bg-white focus-within:border-orange-500 transition-colors" style={{ borderColor: C.border }}>
-                                                <textarea onFocus={() => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 300)} value={msgBody} onChange={e => setMsgBody(e.target.value)} placeholder="Nhập tin nhắn với tư cách Admin..." className="w-full bg-transparent px-3 py-2 text-[13px] outline-none resize-none max-h-32 min-h-[44px]" rows={Math.min(4, msgBody.split('\n').length || 1)} />
+                                                <textarea onFocus={() => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 300)} value={msgBody} onChange={e => setMsgBody(e.target.value)} placeholder={t('admin.disputes.detailPage.chatPlaceholder')} className="w-full bg-transparent px-3 py-2 text-[13px] outline-none resize-none max-h-32 min-h-[44px]" rows={Math.min(4, msgBody.split('\n').length || 1)} />
                                                 <div className="flex items-center px-2 pb-2 gap-2">
                                                     <button type="button" onClick={() => fileRef.current?.click()} className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors" style={{ color: C.gray }}><ImageIcon size={18} /></button>
                                                     <button type="button" onClick={() => videoRef.current?.click()} disabled={uploadedVideoCount >= 2} className="p-1.5 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-40" style={{ color: C.gray }}><Film size={18} /></button>
                                                 </div>
                                             </div>
                                             <button onClick={sendMsg} disabled={sending || (!msgBody.trim() && uploads.length === 0)} className="h-[44px] px-5 rounded-2xl text-sm font-bold text-white transition-opacity active:scale-95 disabled:opacity-50" style={{ background: C.navy, boxShadow: `0 4px 12px ${C.navy}40` }}>
-                                                {sending ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Gửi'}
+                                                {sending ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : t('admin.disputes.detailPage.sendBtn')}
                                             </button>
                                         </div>
                                         <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(e) => void onSelectEvidence(e.target.files, 'image')} />
@@ -1037,7 +1060,7 @@ export default function AdminDisputeDetailPage() {
                                 )}
                                 {isClosed && (
                                      <div className="sticky bottom-0 left-0 right-0 px-4 py-4 bg-white border-t text-center text-xs lg:rounded-b-2xl z-10" style={{ borderColor: C.border, color: C.gray }}>
-                                         Cuộc hội thoại này đã kết thúc vì khiếu nại đã được giải quyết.
+                                         {t('admin.disputes.detailPage.chatClosed')}
                                      </div>
                                 )}
                             </div>
@@ -1051,17 +1074,17 @@ export default function AdminDisputeDetailPage() {
                                 {/* Request Evidence from User/Provider */}
                                 <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: C.border }}>
                                     <h3 className="text-sm font-bold mb-3 uppercase tracking-wide" style={{ color: C.navy }}>{t('admin.disputes.requestEvidenceBtn')}</h3>
-                                    <p className="text-[11px] mb-3" style={{ color: C.gray }}>Gửi yêu cầu cung cấp thêm thông tin tới Khách hoặc Đối tác.</p>
+                                    <p className="text-[11px] mb-3" style={{ color: C.gray }}>{t('admin.disputes.detailPage.evidenceHelp')}</p>
                                     <div className="mb-3">
-                                        <label className="block text-xs font-bold mb-1.5" style={{ color: C.gray }}>Yêu cầu gửi đến</label>
+                                        <label className="block text-xs font-bold mb-1.5" style={{ color: C.gray }}>{t('admin.disputes.detailPage.evidenceSendTo')}</label>
                                         <select
                                             className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none focus:border-orange-500"
                                             style={{ borderColor: C.border, color: C.navy }}
                                             value={evidenceTargetRole}
                                             onChange={(e) => setEvidenceTargetRole(e.target.value as 'PROVIDER' | 'CUSTOMER')}
                                         >
-                                            <option value="PROVIDER">Provider</option>
-                                            <option value="CUSTOMER">Customer</option>
+                                            <option value="PROVIDER">{t('admin.disputes.detailPage.roleProviderOpt')}</option>
+                                            <option value="CUSTOMER">{t('admin.disputes.detailPage.roleCustomerOpt')}</option>
                                         </select>
                                     </div>
                                     <textarea
@@ -1071,61 +1094,65 @@ export default function AdminDisputeDetailPage() {
                                         value={evidenceMsg}
                                         onChange={(e) => setEvidenceMsg(e.target.value)}
                                     />
-                                    <button disabled={busy || !evidenceMsg.trim()} onClick={onRequestEvidence} className="mt-3 w-full py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50" style={{ background: C.orange }}>Gửi yêu cầu</button>
+                                    <button disabled={busy || !evidenceMsg.trim()} onClick={onRequestEvidence} className="mt-3 w-full py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50" style={{ background: C.orange }}>{t('admin.disputes.detailPage.sendEvidenceRequestBtn')}</button>
                                 </div>
 
                                 {/* Resolution Panel */}
                                 <div className="bg-white rounded-2xl border p-5 shadow-sm" style={{ borderColor: C.border }}>
-                                    <h3 className="text-lg font-bold mb-4" style={{ color: C.navy }}>Phán Quyết Giải Quyết</h3>
+                                    <h3 className="text-lg font-bold mb-4" style={{ color: C.navy }}>{t('admin.disputes.detailPage.rulingTitle')}</h3>
                                     
                                     <div className="space-y-4">
                                         <div>
-                                            <label className="block text-xs font-bold mb-1.5" style={{ color: C.gray }}>Kết quả</label>
+                                            <label className="block text-xs font-bold mb-1.5" style={{ color: C.gray }}>{t('admin.disputes.detailPage.outcomeSelectLabel')}</label>
                                             <select
                                                 className="w-full rounded-xl border px-3 py-2 text-sm font-semibold outline-none focus:border-orange-500"
                                                 style={{ borderColor: C.border, color: C.navy }}
                                                 value={resolveResolution}
                                                 onChange={(e) => setResolveResolution(e.target.value)}
                                             >
-                                                <option value="NO_REFUND">{t('admin.disputes.resolutionNoChange')} (Không hoàn tiền)</option>
-                                                <option value="FULL_REFUND">{t('admin.disputes.resolutionFullRefund')} (Hoàn 100%)</option>
-                                                <option value="PARTIAL_REFUND">{t('admin.disputes.resolutionPartialRefund')} (Hoàn 1 phần)</option>
+                                                <option value="NO_REFUND">{t('admin.disputes.resolutionNoChange')}</option>
+                                                <option value="FULL_REFUND">{t('admin.disputes.resolutionFullRefund')}</option>
+                                                <option value="PARTIAL_REFUND">{t('admin.disputes.resolutionPartialRefund')}</option>
                                             </select>
                                             <p className="text-[11px] mt-1.5" style={{ color: C.gray }}>
-                                                Mức hoàn tối đa theo tiền net của provider: {refundableCap.toLocaleString('vi-VN')}đ
+                                                {t('admin.disputes.detailPage.outcomeHintMax', { amount: refundableCap.toLocaleString(dateLocale) })}
                                             </p>
                                         </div>
 
                                         {resolveResolution === 'PARTIAL_REFUND' && (
                                             <div>
-                                                <label className="block text-xs font-bold mb-1.5" style={{ color: C.gray }}>Số tiền hoàn cho User (VNĐ)</label>
+                                                <label className="block text-xs font-bold mb-1.5" style={{ color: C.gray }}>{t('admin.disputes.detailPage.partialRefundForUser')}</label>
                                                 <input
                                                     type="text"
                                                     className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-orange-500"
                                                     style={{ borderColor: C.border, color: C.navy }}
-                                                    placeholder={`Tối đa ${refundableCap.toLocaleString('vi-VN')}`}
+                                                    placeholder={t('admin.disputes.detailPage.partialRefundPlaceholderMax', {
+                                                        amount: refundableCap.toLocaleString(dateLocale),
+                                                    })}
                                                     value={refundAmount}
                                                     onChange={(e) => setRefundAmount(e.target.value.replace(/\D/g, ''))}
                                                 />
                                                 <p className="text-[11px] mt-1.5" style={{ color: C.gray }}>
-                                                    Provider nhận: {providerReceiveAmount.toLocaleString('vi-VN')}đ
+                                                    {t('admin.disputes.detailPage.providerGetsLine', {
+                                                        amount: providerReceiveAmount.toLocaleString(dateLocale),
+                                                    })}
                                                 </p>
                                             </div>
                                         )}
 
                                         <div>
-                                            <label className="block text-xs font-bold mb-1.5" style={{ color: C.gray }}>Lý do (Sẽ hiển thị cho user)</label>
+                                            <label className="block text-xs font-bold mb-1.5" style={{ color: C.gray }}>{t('admin.disputes.detailPage.resolutionNoteUserVisible')}</label>
                                             <textarea
                                                 className="w-full rounded-xl border px-3 py-2 text-sm min-h-[80px] outline-none focus:border-orange-500"
                                                 style={{ borderColor: C.border, color: C.navy }}
-                                                placeholder="Lý do kết thúc khiếu nại..."
+                                                placeholder={t('admin.disputes.detailPage.resolutionNotePlaceholder')}
                                                 value={resolutionNote}
                                                 onChange={(e) => setResolutionNote(e.target.value)}
                                             />
                                         </div>
 
                                         <button disabled={busy} onClick={onResolve} className="w-full py-3 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50" style={{ background: C.green }}>
-                                            {busy ? t('admin.disputes.submitting') : 'Kết thúc Khiếu nại'}
+                                            {busy ? t('admin.disputes.submitting') : t('admin.disputes.detailPage.closeDisputeCta')}
                                         </button>
                                     </div>
                                 </div>
@@ -1134,8 +1161,8 @@ export default function AdminDisputeDetailPage() {
                         {isClosed && (
                             <div className="bg-white rounded-2xl border p-5 shadow-sm flex flex-col items-center text-center text-sm" style={{ borderColor: C.border, color: C.gray }}>
                                 <CheckCircle2 size={48} className="text-green-500 mb-3" />
-                                <p className="font-bold text-base mb-1" style={{ color: C.navy }}>Khiếu nại đã đóng</p>
-                                <p>Không thể thao tác thay đổi ở trạng thái này nữa.</p>
+                                <p className="font-bold text-base mb-1" style={{ color: C.navy }}>{t('admin.disputes.detailPage.sidebarClosedTitle')}</p>
+                                <p>{t('admin.disputes.detailPage.sidebarClosedBody')}</p>
                             </div>
                         )}
                     </div>
@@ -1158,7 +1185,7 @@ export default function AdminDisputeDetailPage() {
                             {evidencePreview.type === 'video' ? (
                                 <video src={evidencePreview.url} controls autoPlay className="max-w-full max-h-[90vh] object-contain rounded-xl" />
                             ) : (
-                                <img src={evidencePreview.url} alt="Bằng chứng" className="max-w-full max-h-[90vh] object-contain rounded-xl" />
+                                <img src={evidencePreview.url} alt={t('admin.disputes.detailPage.altEvidence')} className="max-w-full max-h-[90vh] object-contain rounded-xl" />
                             )}
                         </div>
                     </div>

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { RescueRequestService } from './rescue-request.service';
+import { IncidentType, VehicleType } from './dto/create-rescue-request.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommissionService } from '../wallet/commission.service';
 import { UserWalletService } from '../user-wallet/user-wallet.service';
@@ -136,8 +137,8 @@ describe('RescueRequestService', () => {
       mockPrisma.user.findMany.mockResolvedValue([]);
 
       const result = await service.createRescueRequest('user-123', {
-        incidentType: 'FLAT_TIRE',
-        vehicleType: 'CAR',
+        incidentType: IncidentType.FLAT_TIRE,
+        vehicleType: VehicleType.CAR,
         pickupLocation: { lat: 10.77, lng: 106.7, addressText: '123 Main St' } as any,
         contactPhone: '0901234567',
         mediaObjectKeys: [],
@@ -282,8 +283,8 @@ describe('RescueRequestService', () => {
 
       const result = await service.createQuote('req-001', 'provider-456', {
         price: 150000,
-        estimatedTime: 20,
-        note: 'On my way',
+        estimatedArrivalMinutes: 20,
+        message: 'On my way',
       });
 
       expect(result.status).toBe('PENDING');

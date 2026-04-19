@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import api from '@/lib/api';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const VIETMAP_API_KEY = process.env.NEXT_PUBLIC_VIETMAP_API_KEY;
 
@@ -18,20 +19,20 @@ const C = {
     white: '#ffffff',
 };
 
-// ─── Incident Types ───────────────────────────────────────────────────────────
-export const INCIDENT_TYPES: Record<string, { label: string; color: string }> = {
-    BREAKDOWN:    { label: 'Hỏng xe',        color: '#ef4444' },
-    ACCIDENT:     { label: 'Tai nạn',        color: '#f97316' },
-    FLAT_TIRE:    { label: 'Lốp hỏng',       color: '#eab308' },
-    BATTERY_DEAD: { label: 'Hết bình điện',  color: '#3b82f6' },
-    OUT_OF_FUEL:  { label: 'Hết nhiên liệu', color: '#a855f7' },
-    LOCKED_OUT:   { label: 'Khóa xe',        color: '#22c55e' },
-    OTHER:        { label: 'Khác',            color: '#6b7280' },
+// ─── Incident type colors (labels via i18n `provider.incidents.*`) ───────────
+export const INCIDENT_TYPE_COLORS: Record<string, string> = {
+    BREAKDOWN: '#ef4444',
+    ACCIDENT: '#f97316',
+    FLAT_TIRE: '#eab308',
+    BATTERY_DEAD: '#3b82f6',
+    OUT_OF_FUEL: '#a855f7',
+    LOCKED_OUT: '#22c55e',
+    OTHER: '#6b7280',
 };
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-    COMPLETED: { label: 'Hoàn thành', color: '#16a34a' },
-    CANCELLED: { label: 'Đã hủy',     color: '#ef4444' },
+const REQUEST_STATUS_STYLES: Record<string, { color: string }> = {
+    COMPLETED: { color: '#16a34a' },
+    CANCELLED: { color: '#ef4444' },
 };
 
 type MapMode = 'normal' | 'heatmap';
@@ -83,7 +84,29 @@ const loadVietMapScript = (): Promise<void> => {
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự cố', className = '', compactToolbar = false }: IncidentMapProps) {
+export default function IncidentMap({ apiEndpoint, title, className = '', compactToolbar = false }: IncidentMapProps) {
+    const { t, locale } = useLanguage();
+    const timeLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
+    const displayTitle = title ?? t('user.incidentMap.mapTitle');
+
+    const incidentTypeLabel = useCallback(
+        (type: string) => {
+            const key = `provider.incidents.${type}`;
+            const label = t(key);
+            return label === key ? type : label;
+        },
+        [t],
+    );
+
+    const requestStatusLabel = useCallback(
+        (status: string) => {
+            const key = `user.incidentMap.requestStatus.${status}`;
+            const label = t(key);
+            return label === key ? status : label;
+        },
+        [t],
+    );
+
     const mapContainer = useRef<HTMLDivElement>(null);
     const mapRef = useRef<any>(null);
     const markersRef = useRef<any[]>([]);
@@ -106,7 +129,7 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
             const res = await api.get(apiEndpoint);
             setPoints(res.data || []);
         } catch {
-            setError('Không thể tải dữ liệu bản đồ.');
+            setError(t('user.incidentMap.errorLoadData'));
         } finally {
             setLoading(false);
         }
@@ -118,8 +141,8 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
     useEffect(() => {
         loadVietMapScript()
             .then(() => setIsScriptLoaded(true))
-            .catch(() => setError('Không tải được script bản đồ.'));
-    }, []);
+            .catch(() => setError(t('user.incidentMap.errorScript')));
+    }, [t]);
 
     // ── Init map (cùng pattern với VietMap.tsx) ───────────────────────────────
     useEffect(() => {
@@ -230,14 +253,16 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
         } else {
             // ── Markers ──
             filteredPoints.forEach(p => {
-                const typeInfo = INCIDENT_TYPES[p.incidentType] || INCIDENT_TYPES.OTHER;
-                const statusInfo = STATUS_LABELS[p.status] || { label: p.status, color: '#6b7280' };
+                const typeColor = INCIDENT_TYPE_COLORS[p.incidentType] || INCIDENT_TYPE_COLORS.OTHER;
+                const statusStyle = REQUEST_STATUS_STYLES[p.status] || { color: '#6b7280' };
+                const typeLabel = incidentTypeLabel(p.incidentType);
+                const statusL = requestStatusLabel(p.status);
 
                 const el = document.createElement('div');
                 el.style.width = '22px';
                 el.style.height = '22px';
                 el.style.borderRadius = '50%';
-                el.style.background = typeInfo.color;
+                el.style.background = typeColor;
                 el.style.border = '2.5px solid white';
                 el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.28)';
                 el.style.cursor = 'pointer';
@@ -249,11 +274,14 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                     .setLngLat([p.lng, p.lat])
                     .addTo(map);
 
-                const date = new Date(p.createdAt).toLocaleDateString('vi-VN');
+                const date = new Date(p.createdAt).toLocaleDateString(timeLocale);
 
                 el.addEventListener('click', (e) => {
                     e.stopPropagation();
                     if (popupRef.current) { try { popupRef.current.remove(); } catch {} }
+
+                    const popupStatus = t('user.incidentMap.popupStatus');
+                    const popupDate = t('user.incidentMap.popupDate');
 
                     const popup = new vgl.Popup({
                         closeButton: true,
@@ -265,11 +293,11 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                         .setHTML(`
                             <div style="font-family:Lexend,sans-serif;padding:4px 2px;">
                                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-                                    <span style="width:10px;height:10px;border-radius:50%;background:${typeInfo.color};display:inline-block;flex-shrink:0;"></span>
-                                    <span style="font-size:13px;font-weight:700;color:#1a1a2e;">${typeInfo.label}</span>
+                                    <span style="width:10px;height:10px;border-radius:50%;background:${typeColor};display:inline-block;flex-shrink:0;"></span>
+                                    <span style="font-size:13px;font-weight:700;color:#1a1a2e;">${typeLabel}</span>
                                 </div>
-                                <div style="font-size:11px;color:#6b7280;margin-bottom:3px;">Trạng thái: <span style="color:${statusInfo.color};font-weight:600;">${statusInfo.label}</span></div>
-                                <div style="font-size:11px;color:#6b7280;">Ngày: <span style="color:#1a1a2e;">${date}</span></div>
+                                <div style="font-size:11px;color:#6b7280;margin-bottom:3px;">${popupStatus} <span style="color:${statusStyle.color};font-weight:600;">${statusL}</span></div>
+                                <div style="font-size:11px;color:#6b7280;">${popupDate} <span style="color:#1a1a2e;">${date}</span></div>
                                 ${p.addressText ? `<div style="font-size:11px;color:#6b7280;margin-top:4px;word-break:break-word;">📍 ${p.addressText}</div>` : ''}
                             </div>
                         `)
@@ -281,9 +309,9 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                 markersRef.current.push(marker);
             });
         }
-    }, [isMapReady, filteredPoints, mapMode]);
+    }, [isMapReady, filteredPoints, mapMode, t, timeLocale, incidentTypeLabel, requestStatusLabel]);
 
-    const statsPerType = Object.keys(INCIDENT_TYPES).map(type => ({
+    const statsPerType = Object.keys(INCIDENT_TYPE_COLORS).map(type => ({
         type,
         count: points.filter(p => p.incidentType === type).length,
     })).filter(s => s.count > 0);
@@ -310,13 +338,17 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
             >
                 {compactToolbar ? (
                     <p style={{ margin: 0, fontSize: '12px', color: C.gray, fontWeight: 500 }}>
-                        {loading ? 'Đang tải...' : `${points.length} sự cố • Hiển thị ${filteredPoints.length} điểm`}
+                        {loading
+                            ? t('user.incidentMap.loadingShort')
+                            : t('user.incidentMap.statsLine', { total: String(points.length), filtered: String(filteredPoints.length) })}
                     </p>
                 ) : (
                     <div>
-                        <h1 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: C.navy }}>{title}</h1>
+                        <h1 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: C.navy }}>{displayTitle}</h1>
                         <p style={{ margin: '2px 0 0', fontSize: '12px', color: C.gray }}>
-                            {loading ? 'Đang tải...' : `${points.length} sự cố • Hiển thị ${filteredPoints.length} điểm`}
+                            {loading
+                                ? t('user.incidentMap.loadingShort')
+                                : t('user.incidentMap.statsLine', { total: String(points.length), filtered: String(filteredPoints.length) })}
                         </p>
                     </div>
                 )}
@@ -335,7 +367,7 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                                 boxShadow: mapMode === mode ? '0 2px 6px rgba(249,115,22,0.3)' : 'none',
                             }}
                         >
-                            {mode === 'normal' ? 'Bình thường' : 'Nhiệt độ'}
+                            {mode === 'normal' ? t('user.incidentMap.modeNormal') : t('user.incidentMap.modeHeatmap')}
                         </button>
                     ))}
                 </div>
@@ -347,7 +379,7 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                 {/* ── Sidebar legend (desktop) ── */}
                 <div style={{ width: '200px', flexShrink: 0, background: C.white, borderRight: `1px solid ${C.border}`, overflowY: 'auto', flexDirection: 'column' }} className="hidden md:flex">
                     <div style={{ padding: '16px 12px' }}>
-                        <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.grayLight, margin: '0 0 10px' }}>Loại sự cố</p>
+                        <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.grayLight, margin: '0 0 10px' }}>{t('user.incidentMap.sectionIncidentTypes')}</p>
 
                         {/* All */}
                         <button
@@ -361,11 +393,11 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                             }}
                         >
                             <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#94a3b8', flexShrink: 0 }} />
-                            <span style={{ flex: 1 }}>Tất cả</span>
+                            <span style={{ flex: 1 }}>{t('user.incidentMap.allTypes')}</span>
                             <span style={{ fontWeight: 700, color: C.navy }}>{points.length}</span>
                         </button>
 
-                        {Object.entries(INCIDENT_TYPES).map(([type, info]) => {
+                        {Object.entries(INCIDENT_TYPE_COLORS).map(([type, color]) => {
                             const count = points.filter(p => p.incidentType === type).length;
                             const active = selectedType === type;
                             return (
@@ -375,24 +407,24 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                                     style={{
                                         width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
                                         padding: '7px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', marginBottom: '2px',
-                                        background: active ? `${info.color}18` : 'transparent',
-                                        color: active ? info.color : C.gray,
+                                        background: active ? `${color}18` : 'transparent',
+                                        color: active ? color : C.gray,
                                         fontSize: '12px', fontWeight: 500, textAlign: 'left',
                                     }}
                                 >
-                                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: info.color, flexShrink: 0 }} />
-                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.label}</span>
+                                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{incidentTypeLabel(type)}</span>
                                     <span style={{ fontWeight: 700, color: count > 0 ? C.navy : C.grayLight }}>{count}</span>
                                 </button>
                             );
                         })}
 
                         {/* Status */}
-                        <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.grayLight, margin: '16px 0 8px', paddingTop: '12px', borderTop: `1px solid ${C.border}` }}>Trạng thái</p>
-                        {Object.entries(STATUS_LABELS).map(([status, info]) => (
+                        <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.grayLight, margin: '16px 0 8px', paddingTop: '12px', borderTop: `1px solid ${C.border}` }}>{t('user.incidentMap.sectionStatus')}</p>
+                        {Object.entries(REQUEST_STATUS_STYLES).map(([status, info]) => (
                             <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 10px' }}>
                                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: info.color, flexShrink: 0 }} />
-                                <span style={{ flex: 1, fontSize: '12px', color: C.gray }}>{info.label}</span>
+                                <span style={{ flex: 1, fontSize: '12px', color: C.gray }}>{requestStatusLabel(status)}</span>
                                 <span style={{ fontSize: '12px', fontWeight: 700, color: C.navy }}>{points.filter(p => p.status === status).length}</span>
                             </div>
                         ))}
@@ -411,7 +443,7 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                             <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
-                            Làm mới
+                            {t('user.incidentMap.refresh')}
                         </button>
                     </div>
                 </div>
@@ -435,11 +467,11 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                     }}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
-                        <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: C.navy }}>Bộ lọc</p>
+                        <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: C.navy }}>{t('user.incidentMap.mobileFilterTitle')}</p>
                         <button
                             onClick={() => setIsMobileSidebarOpen(false)}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gray, padding: '2px', lineHeight: 1 }}
-                            aria-label="Đóng bộ lọc"
+                            aria-label={t('user.incidentMap.closeFilterAria')}
                         >
                             <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -447,35 +479,35 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                         </button>
                     </div>
                     <div style={{ padding: '14px 12px', flex: 1 }}>
-                        <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.grayLight, margin: '0 0 10px' }}>Loại sự cố</p>
+                        <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.grayLight, margin: '0 0 10px' }}>{t('user.incidentMap.sectionIncidentTypes')}</p>
                         <button
                             onClick={() => setSelectedType(null)}
                             style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', marginBottom: '2px', background: selectedType === null ? C.orangeLight : 'transparent', color: selectedType === null ? C.orange : C.gray, fontSize: '12px', fontWeight: 500, textAlign: 'left' }}
                         >
                             <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#94a3b8', flexShrink: 0 }} />
-                            <span style={{ flex: 1 }}>Tất cả</span>
+                            <span style={{ flex: 1 }}>{t('user.incidentMap.allTypes')}</span>
                             <span style={{ fontWeight: 700, color: C.navy }}>{points.length}</span>
                         </button>
-                        {Object.entries(INCIDENT_TYPES).map(([type, info]) => {
+                        {Object.entries(INCIDENT_TYPE_COLORS).map(([type, color]) => {
                             const count = points.filter(p => p.incidentType === type).length;
                             const active = selectedType === type;
                             return (
                                 <button
                                     key={type}
                                     onClick={() => { setSelectedType(active ? null : type); }}
-                                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', marginBottom: '2px', background: active ? `${info.color}18` : 'transparent', color: active ? info.color : C.gray, fontSize: '12px', fontWeight: 500, textAlign: 'left' }}
+                                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer', marginBottom: '2px', background: active ? `${color}18` : 'transparent', color: active ? color : C.gray, fontSize: '12px', fontWeight: 500, textAlign: 'left' }}
                                 >
-                                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: info.color, flexShrink: 0 }} />
-                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{info.label}</span>
+                                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{incidentTypeLabel(type)}</span>
                                     <span style={{ fontWeight: 700, color: count > 0 ? C.navy : C.grayLight }}>{count}</span>
                                 </button>
                             );
                         })}
-                        <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.grayLight, margin: '16px 0 8px', paddingTop: '12px', borderTop: `1px solid ${C.border}` }}>Trạng thái</p>
-                        {Object.entries(STATUS_LABELS).map(([status, info]) => (
+                        <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: C.grayLight, margin: '16px 0 8px', paddingTop: '12px', borderTop: `1px solid ${C.border}` }}>{t('user.incidentMap.sectionStatus')}</p>
+                        {Object.entries(REQUEST_STATUS_STYLES).map(([status, info]) => (
                             <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 10px' }}>
                                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: info.color, flexShrink: 0 }} />
-                                <span style={{ flex: 1, fontSize: '12px', color: C.gray }}>{info.label}</span>
+                                <span style={{ flex: 1, fontSize: '12px', color: C.gray }}>{requestStatusLabel(status)}</span>
                                 <span style={{ fontSize: '12px', fontWeight: 700, color: C.navy }}>{points.filter(p => p.status === status).length}</span>
                             </div>
                         ))}
@@ -487,7 +519,7 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                             <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
-                            Làm mới
+                            {t('user.incidentMap.refresh')}
                         </button>
                     </div>
                 </div>
@@ -498,14 +530,14 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                     {/* Mobile filter chips */}
                     <div className="md:hidden flex" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, gap: '6px', padding: '8px 10px', overflowX: 'auto', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)', borderBottom: `1px solid ${C.border}` }}>
                         <button onClick={() => setSelectedType(null)} style={{ flexShrink: 0, padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, border: `1px solid ${selectedType === null ? C.orange : C.border}`, background: selectedType === null ? C.orange : C.white, color: selectedType === null ? C.white : C.gray, cursor: 'pointer' }}>
-                            Tất cả ({points.length})
+                            {t('user.incidentMap.allTypes')} ({points.length})
                         </button>
                         {statsPerType.map(({ type, count }) => {
-                            const info = INCIDENT_TYPES[type];
+                            const color = INCIDENT_TYPE_COLORS[type] || INCIDENT_TYPE_COLORS.OTHER;
                             const active = selectedType === type;
                             return (
-                                <button key={type} onClick={() => setSelectedType(active ? null : type)} style={{ flexShrink: 0, padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, border: `1px solid ${active ? info.color : C.border}`, background: active ? info.color : C.white, color: active ? C.white : C.gray, cursor: 'pointer' }}>
-                                    {info.label} ({count})
+                                <button key={type} onClick={() => setSelectedType(active ? null : type)} style={{ flexShrink: 0, padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, border: `1px solid ${active ? color : C.border}`, background: active ? color : C.white, color: active ? C.white : C.gray, cursor: 'pointer' }}>
+                                    {incidentTypeLabel(type)} ({count})
                                 </button>
                             );
                         })}
@@ -515,7 +547,7 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                     {!isScriptLoaded && (
                         <div style={{ position: 'absolute', inset: 0, zIndex: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', background: C.bg }}>
                             <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: `3px solid ${C.orange}`, borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
-                            <p style={{ fontSize: '13px', color: C.gray, margin: 0 }}>Đang tải bản đồ...</p>
+                            <p style={{ fontSize: '13px', color: C.gray, margin: 0 }}>{t('user.incidentMap.loadingMap')}</p>
                         </div>
                     )}
 
@@ -530,8 +562,8 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                     {!loading && !error && filteredPoints.length === 0 && isMapReady && (
                         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 5, padding: '20px 28px', borderRadius: '16px', background: C.white, boxShadow: '0 4px 24px rgba(0,0,0,0.1)', textAlign: 'center', pointerEvents: 'none' }}>
                             <p style={{ fontSize: '24px', margin: '0 0 6px' }}>🗺️</p>
-                            <p style={{ fontSize: '13px', fontWeight: 600, color: C.navy, margin: '0 0 4px' }}>Chưa có dữ liệu sự cố</p>
-                            <p style={{ fontSize: '12px', color: C.gray, margin: 0 }}>{selectedType ? 'Thử chọn loại khác' : 'Chưa có đơn hoàn thành hoặc đã hủy'}</p>
+                            <p style={{ fontSize: '13px', fontWeight: 600, color: C.navy, margin: '0 0 4px' }}>{t('user.incidentMap.emptyTitle')}</p>
+                            <p style={{ fontSize: '12px', color: C.gray, margin: 0 }}>{selectedType ? t('user.incidentMap.emptyHintFiltered') : t('user.incidentMap.emptyHintAll')}</p>
                         </div>
                     )}
 
@@ -548,22 +580,22 @@ export default function IncidentMap({ apiEndpoint, title = 'Bản đồ sự c�
                             fontSize: '12px', fontWeight: 700,
                             boxShadow: '0 4px 16px rgba(249,115,22,0.45)',
                         }}
-                        aria-label="Mở bộ lọc"
+                        aria-label={t('user.incidentMap.openFilterAria')}
                     >
                         <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M7 12h10M11 20h2" />
                         </svg>
-                        Bộ lọc{selectedType ? ' ●' : ''}
+                        {t('user.incidentMap.filterBtn')}{selectedType ? ' ●' : ''}
                     </button>
 
                     {/* Heatmap legend */}
                     {mapMode === 'heatmap' && isMapReady && (
                         <div style={{ position: 'absolute', bottom: '16px', right: '16px', zIndex: 10, padding: '8px 12px', borderRadius: '12px', background: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-                            <p style={{ fontSize: '10px', fontWeight: 600, color: C.gray, margin: '0 0 6px' }}>Mật độ sự cố</p>
+                            <p style={{ fontSize: '10px', fontWeight: 600, color: C.gray, margin: '0 0 6px' }}>{t('user.incidentMap.heatmapDensity')}</p>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontSize: '9px', color: C.gray }}>Thấp</span>
+                                <span style={{ fontSize: '9px', color: C.gray }}>{t('user.incidentMap.heatmapLow')}</span>
                                 <div style={{ width: '72px', height: '8px', borderRadius: '4px', background: 'linear-gradient(to right,rgba(103,169,207,1),rgba(253,219,199,1),rgba(249,115,22,1))' }} />
-                                <span style={{ fontSize: '9px', color: C.gray }}>Cao</span>
+                                <span style={{ fontSize: '9px', color: C.gray }}>{t('user.incidentMap.heatmapHigh')}</span>
                             </div>
                         </div>
                     )}

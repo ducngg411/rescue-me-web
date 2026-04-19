@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useParams, useRouter } from 'next/navigation';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
@@ -23,37 +24,52 @@ const C = {
     purple: '#7c3aed', purpleLight: '#faf5ff',
 };
 
-const INCIDENT_LABELS: Record<string, string> = {
-    BREAKDOWN: 'Hỏng xe', ACCIDENT: 'Tai nạn', FLAT_TIRE: 'Xì lốp',
-    BATTERY_DEAD: 'Hết pin', OUT_OF_FUEL: 'Hết xăng', LOCKED_OUT: 'Khóa xe', OTHER: 'Khác',
+const STATUS_STYLE: Record<string, { color: string; bg: string }> = {
+    CREATED: { color: C.blue, bg: C.blueLight },
+    SEARCHING: { color: C.blue, bg: C.blueLight },
+    MATCHING: { color: C.blue, bg: C.blueLight },
+    MATCHED: { color: C.yellow, bg: C.yellowLight },
+    ACCEPTED: { color: C.yellow, bg: C.yellowLight },
+    ASSIGNED: { color: C.yellow, bg: C.yellowLight },
+    IN_PROGRESS: { color: C.orange, bg: C.orangeLight },
+    ARRIVED: { color: C.orange, bg: C.orangeLight },
+    WORKING: { color: C.orange, bg: C.orangeLight },
+    PAYMENT_PENDING: { color: C.purple, bg: C.purpleLight },
+    COMPLETED: { color: C.green, bg: C.greenLight },
+    PAID: { color: C.green, bg: C.greenLight },
+    CANCELLED: { color: C.gray, bg: '#f3f4f6' },
+    REJECTED: { color: C.red, bg: C.redLight },
+    EXPIRED: { color: C.gray, bg: '#f3f4f6' },
 };
 
-const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
-    CREATED: { label: 'Mới tạo', color: C.blue, bg: C.blueLight },
-    SEARCHING: { label: 'Đang tìm', color: C.blue, bg: C.blueLight },
-    MATCHING: { label: 'Đang ghép', color: C.blue, bg: C.blueLight },
-    MATCHED: { label: 'Đã ghép', color: C.yellow, bg: C.yellowLight },
-    ACCEPTED: { label: 'Đã nhận', color: C.yellow, bg: C.yellowLight },
-    ASSIGNED: { label: 'Đã phân công', color: C.yellow, bg: C.yellowLight },
-    IN_PROGRESS: { label: 'Đang thực hiện', color: C.orange, bg: C.orangeLight },
-    ARRIVED: { label: 'Đã đến nơi', color: C.orange, bg: C.orangeLight },
-    WORKING: { label: 'Đang làm', color: C.orange, bg: C.orangeLight },
-    PAYMENT_PENDING: { label: 'Chờ thanh toán', color: C.purple, bg: C.purpleLight },
-    COMPLETED: { label: 'Hoàn thành', color: C.green, bg: C.greenLight },
-    PAID: { label: 'Đã thanh toán', color: C.green, bg: C.greenLight },
-    CANCELLED: { label: 'Đã hủy', color: C.gray, bg: '#f3f4f6' },
-    REJECTED: { label: 'Bị từ chối', color: C.red, bg: C.redLight },
-    EXPIRED: { label: 'Hết hạn', color: C.gray, bg: '#f3f4f6' },
-};
-
-const PM_LABELS: Record<string, string> = { CASH: 'Tiền mặt', WALLET: 'Ví RescueMe', QR: 'QR / Chuyển khoản' };
-
-function fmtVnd(n: number) {
-    return new Intl.NumberFormat('vi-VN').format(n ?? 0) + '₫';
+function incidentTypeLabel(t: (path: string) => string, key: string) {
+    const path = `admin.requests.incident.${key}`;
+    const tr = t(path);
+    return tr === path ? key : tr;
 }
-function fmtDt(iso: string) {
+
+function requestStatusLabel(t: (path: string) => string, status: string) {
+    const path = `admin.requests.status.${status}`;
+    const tr = t(path);
+    return tr === path ? status : tr;
+}
+
+function paymentMethodDetailLabel(t: (path: string) => string, method: string) {
+    if (method === 'CASH') return t('admin.requests.paymentCash');
+    if (method === 'WALLET') return t('admin.requests.detail.paymentMethodWalletRm');
+    if (method === 'QR') return t('admin.requests.detail.paymentMethodQr');
+    return method;
+}
+
+function fmtVnd(n: number, locale: string) {
+    const loc = locale === 'vi' ? 'vi-VN' : 'en-US';
+    const s = new Intl.NumberFormat(loc).format(n ?? 0);
+    return locale === 'vi' ? `${s}₫` : `${s} VND`;
+}
+function fmtDt(iso: string, locale: string) {
     if (!iso) return '—';
-    return new Date(iso).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const loc = locale === 'vi' ? 'vi-VN' : 'en-US';
+    return new Date(iso).toLocaleString(loc, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -88,12 +104,12 @@ function Stars({ rating }: { rating: number }) {
     );
 }
 
-function ProgressTimeline({ status }: { status: string }) {
+function ProgressTimeline({ status, t }: { status: string; t: (path: string) => string }) {
     const groups = [
-        { label: 'Tạo đơn', statuses: ['CREATED'] },
-        { label: 'Tìm & ghép', statuses: ['SEARCHING', 'MATCHING', 'MATCHED', 'ACCEPTED', 'ASSIGNED'] },
-        { label: 'Thực hiện', statuses: ['IN_PROGRESS', 'ARRIVED', 'WORKING'] },
-        { label: 'Hoàn tất', statuses: ['PAYMENT_PENDING', 'COMPLETED', 'PAID'] },
+        { label: t('admin.requests.detail.timelineCreate'), statuses: ['CREATED'] },
+        { label: t('admin.requests.detail.timelineMatch'), statuses: ['SEARCHING', 'MATCHING', 'MATCHED', 'ACCEPTED', 'ASSIGNED'] },
+        { label: t('admin.requests.detail.timelineWork'), statuses: ['IN_PROGRESS', 'ARRIVED', 'WORKING'] },
+        { label: t('admin.requests.detail.timelineDone'), statuses: ['PAYMENT_PENDING', 'COMPLETED', 'PAID'] },
     ];
     const allStatuses = groups.flatMap(g => g.statuses);
     const currentIdx = allStatuses.indexOf(status);
@@ -143,6 +159,7 @@ export default function AdminRequestDetailPage() {
     const id = params.id as string;
     const router = useRouter();
     const { isReady } = useAdminGuard();
+    const { t, locale } = useLanguage();
 
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -179,10 +196,10 @@ export default function AdminRequestDetailPage() {
                 <div className="min-h-screen flex items-center justify-center px-4" style={{ background: C.bg }}>
                     <div className="bg-white p-6 rounded-2xl text-center w-full max-w-sm border" style={{ borderColor: C.border }}>
                         <AlertCircle className="w-8 h-8 mx-auto mb-2" style={{ color: C.red }} />
-                        <p className="font-semibold mb-3" style={{ color: C.navy }}>Không tìm thấy đơn</p>
+                        <p className="font-semibold mb-3" style={{ color: C.navy }}>{t('admin.requests.detail.notFound')}</p>
                         <button onClick={() => router.push('/admin/requests')}
                             className="px-4 py-2 rounded-xl text-sm font-semibold text-white w-full"
-                            style={{ background: C.orange }}>Quay lại</button>
+                            style={{ background: C.orange }}>{t('admin.requests.detail.backList')}</button>
                     </div>
                 </div>
             </AdminLayout>
@@ -190,7 +207,8 @@ export default function AdminRequestDetailPage() {
     }
 
     const { req, quotes, payment } = data;
-    const sm = STATUS_META[req.status] ?? { label: req.status, color: C.gray, bg: '#f3f4f6' };
+    const smStyle = STATUS_STYLE[req.status] ?? { color: C.gray, bg: '#f3f4f6' };
+    const sm = { label: requestStatusLabel(t, req.status), ...smStyle };
     const isVideo = (url: string) => /\.(mp4|webm|mkv|mov)(\?.*)?$/i.test(url) || url.includes('/video/upload/');
     const orderCode = `#${displayOrderCode(req.orderCode, req.id)}`;
 
@@ -206,13 +224,13 @@ export default function AdminRequestDetailPage() {
                         style={{ color: C.gray }}
                     >
                         <ArrowLeft className="w-4 h-4" />
-                        Quay lại danh sách
+                        {t('admin.requests.detail.backList')}
                     </button>
 
                     <div className="flex items-start justify-between gap-4 mb-6">
                         <div>
-                            <h1 className="text-2xl font-bold" style={{ color: C.navy }}>Chi tiết đơn cứu hộ</h1>
-                            <p className="text-sm mt-1" style={{ color: C.gray }}>Mã đơn: <span className="font-mono font-bold" style={{ color: C.navy }}>{orderCode}</span></p>
+                            <h1 className="text-2xl font-bold" style={{ color: C.navy }}>{t('admin.requests.detail.headerTitle')}</h1>
+                            <p className="text-sm mt-1" style={{ color: C.gray }}>{t('admin.requests.detail.orderCodeLabel', { code: orderCode })}</p>
                         </div>
                         <span className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold flex-shrink-0"
                             style={{ background: sm.bg, color: sm.color }}>
@@ -225,20 +243,20 @@ export default function AdminRequestDetailPage() {
                     <div className="bg-white rounded-2xl border mb-4 overflow-hidden" style={{ borderColor: C.border }}>
                         <div className="flex border-b" style={{ borderColor: C.border }}>
                             {[
-                                { key: 'overview', label: 'Thông tin đơn' },
-                                { key: 'order', label: 'Chi tiết dịch vụ' },
-                            ].map(t => (
+                                { key: 'overview' as const, label: t('admin.requests.detail.tabOverview') },
+                                { key: 'order' as const, label: t('admin.requests.detail.tabOrder') },
+                            ].map((tabItem) => (
                                 <button
-                                    key={t.key}
-                                    onClick={() => setTab(t.key as any)}
+                                    key={tabItem.key}
+                                    onClick={() => setTab(tabItem.key)}
                                     className="flex-1 py-3.5 text-sm font-bold transition-colors"
                                     style={{
-                                        color: tab === t.key ? C.orange : C.gray,
-                                        borderBottom: tab === t.key ? `2px solid ${C.orange}` : '2px solid transparent',
+                                        color: tab === tabItem.key ? C.orange : C.gray,
+                                        borderBottom: tab === tabItem.key ? `2px solid ${C.orange}` : '2px solid transparent',
                                         marginBottom: '-1px',
                                     }}
                                 >
-                                    {t.label}
+                                    {tabItem.label}
                                 </button>
                             ))}
                         </div>
@@ -248,15 +266,15 @@ export default function AdminRequestDetailPage() {
                     {tab === 'overview' && (
                         <>
                             {/* Progress */}
-                            <ProgressTimeline status={req.status} />
+                            <ProgressTimeline status={req.status} t={t} />
 
                             {/* Quick info */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                                 {[
-                                    { label: 'Sự cố', value: INCIDENT_LABELS[req.incidentType] || req.incidentType },
-                                    { label: 'Phương tiện', value: req.vehicleType === 'CAR' ? 'Ô tô' : 'Xe máy' },
-                                    { label: 'Biển số', value: req.licensePlate || '—' },
-                                    { label: 'Ngày tạo', value: fmtDt(req.createdAt) },
+                                    { label: t('admin.requests.detail.quickIncident'), value: incidentTypeLabel(t, req.incidentType) },
+                                    { label: t('admin.requests.detail.quickVehicle'), value: req.vehicleType === 'CAR' ? t('admin.requests.vehicleCar') : t('admin.requests.vehicleMotorcycle') },
+                                    { label: t('admin.requests.detail.quickPlate'), value: req.licensePlate || '—' },
+                                    { label: t('admin.requests.detail.quickCreated'), value: fmtDt(req.createdAt, locale) },
                                 ].map(s => (
                                     <div key={s.label} className="bg-white rounded-xl border p-3" style={{ borderColor: C.border }}>
                                         <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: C.gray }}>{s.label}</p>
@@ -266,7 +284,7 @@ export default function AdminRequestDetailPage() {
                             </div>
 
                             {/* Customer */}
-                            <SectionCard title="Khách hàng" icon={<User size={15} style={{ color: C.blue }} />}>
+                            <SectionCard title={t('admin.requests.detail.sectionCustomer')} icon={<User size={15} style={{ color: C.blue }} />}>
                                 {req.user ? (
                                     <div className="flex items-center gap-4">
                                         <AvatarImage
@@ -277,19 +295,19 @@ export default function AdminRequestDetailPage() {
                                             initialsCount={1}
                                         />
                                         <div>
-                                            <p className="font-bold" style={{ color: C.navy }}>{req.user.fullName || '(Khách)'}</p>
+                                            <p className="font-bold" style={{ color: C.navy }}>{req.user.fullName || `(${t('admin.requests.customerFallback')})`}</p>
                                             <p className="text-sm mt-0.5" style={{ color: C.gray }}>{req.user.phoneNumber}</p>
                                             <p className="text-xs mt-0.5" style={{ color: C.gray }}>{req.user.email}</p>
                                         </div>
                                     </div>
                                 ) : (
-                                    <p className="text-sm" style={{ color: C.gray }}>Khách vãng lai (không có tài khoản)</p>
+                                    <p className="text-sm" style={{ color: C.gray }}>{t('admin.requests.detail.guestNoAccount')}</p>
                                 )}
                             </SectionCard>
 
                             {/* Provider */}
                             {req.assignedProvider && (
-                                <SectionCard title="Cứu hộ viên" icon={<Wrench size={15} style={{ color: C.orange }} />}>
+                                <SectionCard title={t('admin.requests.detail.sectionProvider')} icon={<Wrench size={15} style={{ color: C.orange }} />}>
                                     <div className="flex items-center gap-4">
                                         <AvatarImage
                                             name={req.assignedProvider.fullName || 'P'}
@@ -311,40 +329,46 @@ export default function AdminRequestDetailPage() {
                             )}
 
                             {/* Location */}
-                            <SectionCard title="Địa điểm" icon={<MapPin size={15} style={{ color: C.red }} />}>
-                                <InfoRow label="Điểm đón" value={(req.pickupLocation as any)?.addressText || '—'} />
+                            <SectionCard title={t('admin.requests.detail.sectionLocation')} icon={<MapPin size={15} style={{ color: C.red }} />}>
+                                <InfoRow label={t('admin.requests.detail.pickup')} value={(req.pickupLocation as any)?.addressText || '—'} />
                                 {(req.dropoffLocation as any)?.addressText && (
-                                    <InfoRow label="Điểm đến" value={(req.dropoffLocation as any).addressText} />
+                                    <InfoRow label={t('admin.requests.detail.dropoff')} value={(req.dropoffLocation as any).addressText} />
                                 )}
                                 {req.matchedDistance && (
-                                    <InfoRow label="Khoảng cách ETA" value={`${(req.matchedDistance / 1000).toFixed(1)} km · ${req.matchedEta} phút`} />
+                                    <InfoRow
+                                        label={t('admin.requests.detail.etaLabel')}
+                                        value={t('admin.requests.detail.etaDistance', {
+                                            km: (req.matchedDistance / 1000).toFixed(1),
+                                            minutes: req.matchedEta,
+                                        })}
+                                    />
                                 )}
                             </SectionCard>
 
                             {/* Timeline */}
-                            <SectionCard title="Thời gian" icon={<Calendar size={15} style={{ color: C.purple }} />}>
-                                <InfoRow label="Tạo lúc" value={fmtDt(req.createdAt)} />
-                                {req.assignedAt && <InfoRow label="Phân công lúc" value={fmtDt(req.assignedAt)} />}
-                                {req.completedAt && <InfoRow label="Hoàn thành lúc" value={fmtDt(req.completedAt)} />}
+                            <SectionCard title={t('admin.requests.detail.sectionWhen')} icon={<Calendar size={15} style={{ color: C.purple }} />}>
+                                <InfoRow label={t('admin.requests.detail.createdAt')} value={fmtDt(req.createdAt, locale)} />
+                                {req.assignedAt && <InfoRow label={t('admin.requests.detail.assignedAt')} value={fmtDt(req.assignedAt, locale)} />}
+                                {req.completedAt && <InfoRow label={t('admin.requests.detail.completedAt')} value={fmtDt(req.completedAt, locale)} />}
                             </SectionCard>
 
                             {/* Disputes */}
                             {req.disputeCases?.length > 0 && (
-                                <SectionCard title="Khiếu nại liên quan" icon={<ShieldAlert size={15} style={{ color: C.red }} />}>
+                                <SectionCard title={t('admin.requests.detail.sectionRelatedDisputes')} icon={<ShieldAlert size={15} style={{ color: C.red }} />}>
                                     {req.disputeCases.map((d: any) => (
                                         <div key={d.id} className="flex items-center justify-between p-3 rounded-xl border" style={{ borderColor: C.border }}>
                                             <div>
                                                 <p className="text-xs font-semibold" style={{ color: C.navy }}>{d.reason}</p>
-                                                <p className="text-[10px] mt-0.5" style={{ color: C.gray }}>{fmtDt(d.createdAt)}</p>
+                                                <p className="text-[10px] mt-0.5" style={{ color: C.gray }}>{fmtDt(d.createdAt, locale)}</p>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold" style={{ color: C.orange }}>{fmtVnd(d.targetAmount)}</span>
+                                                <span className="text-xs font-bold" style={{ color: C.orange }}>{fmtVnd(d.targetAmount, locale)}</span>
                                                 <button
                                                     onClick={() => router.push(`/admin/disputes/${d.id}`)}
                                                     className="text-[10px] font-bold px-2 py-1 rounded-lg"
                                                     style={{ background: C.blueLight, color: C.blue }}
                                                 >
-                                                    Xem
+                                                    {t('admin.requests.detail.view')}
                                                 </button>
                                             </div>
                                         </div>
@@ -354,7 +378,7 @@ export default function AdminRequestDetailPage() {
 
                             {/* Review */}
                             {req.review && (
-                                <SectionCard title="Đánh giá" icon={<Star size={15} style={{ color: C.yellow }} />}>
+                                <SectionCard title={t('admin.requests.detail.sectionReview')} icon={<Star size={15} style={{ color: C.yellow }} />}>
                                     <div className="flex items-center gap-3 mb-2">
                                         <Stars rating={req.review.rating} />
                                         <span className="text-sm font-bold" style={{ color: C.navy }}>{req.review.rating}/5</span>
@@ -371,38 +395,38 @@ export default function AdminRequestDetailPage() {
                     {tab === 'order' && (
                         <>
                             {/* Rescue Details */}
-                            <SectionCard title="Chi tiết cứu hộ" icon={<Wrench size={15} style={{ color: C.orange }} />}>
-                                <InfoRow label="Loại sự cố" value={INCIDENT_LABELS[req.incidentType] || req.incidentType} />
-                                <InfoRow label="Loại phương tiện" value={req.vehicleType === 'CAR' ? 'Ô tô' : 'Xe máy'} />
-                                {req.licensePlate && <InfoRow label="Biển số xe" value={req.licensePlate} />}
-                                {req.vehicleColor && <InfoRow label="Màu xe" value={req.vehicleColor} />}
-                                {req.description && <InfoRow label="Mô tả sự cố" value={req.description} />}
-                                <InfoRow label="Số điện thoại liên hệ" value={req.contactPhone || req.user?.phoneNumber || '—'} />
-                                <InfoRow label="Số lần cố ghép" value={req.matchAttempts} />
+                            <SectionCard title={t('admin.requests.detail.sectionRescueDetail')} icon={<Wrench size={15} style={{ color: C.orange }} />}>
+                                <InfoRow label={t('admin.requests.detail.incidentType')} value={incidentTypeLabel(t, req.incidentType)} />
+                                <InfoRow label={t('admin.requests.detail.vehicleType')} value={req.vehicleType === 'CAR' ? t('admin.requests.vehicleCar') : t('admin.requests.vehicleMotorcycle')} />
+                                {req.licensePlate && <InfoRow label={t('admin.requests.detail.licensePlate')} value={req.licensePlate} />}
+                                {req.vehicleColor && <InfoRow label={t('admin.requests.detail.vehicleColor')} value={req.vehicleColor} />}
+                                {req.description && <InfoRow label={t('admin.requests.detail.description')} value={req.description} />}
+                                <InfoRow label={t('admin.requests.detail.contactPhone')} value={req.contactPhone || req.user?.phoneNumber || '—'} />
+                                <InfoRow label={t('admin.requests.detail.matchAttempts')} value={req.matchAttempts} />
                             </SectionCard>
 
                             {/* Payment */}
                             {payment && (
-                                <SectionCard title="Thanh toán" icon={<Receipt size={15} style={{ color: C.green }} />}>
-                                    <InfoRow label="Phương thức" value={PM_LABELS[payment.paymentMethod] || payment.paymentMethod} />
-                                    <InfoRow label="Phí cơ bản" value={fmtVnd(payment.baseFee)} />
-                                    {payment.distanceFee > 0 && <InfoRow label="Phí khoảng cách" value={fmtVnd(payment.distanceFee)} />}
-                                    {payment.overtimeFee > 0 && <InfoRow label="Phí thêm giờ" value={fmtVnd(payment.overtimeFee)} />}
-                                    {payment.otherFee > 0 && <InfoRow label="Phí khác" value={fmtVnd(payment.otherFee)} />}
+                                <SectionCard title={t('admin.requests.detail.sectionPayment')} icon={<Receipt size={15} style={{ color: C.green }} />}>
+                                    <InfoRow label={t('admin.requests.detail.paymentMethod')} value={paymentMethodDetailLabel(t, payment.paymentMethod)} />
+                                    <InfoRow label={t('admin.requests.detail.baseFee')} value={fmtVnd(payment.baseFee, locale)} />
+                                    {payment.distanceFee > 0 && <InfoRow label={t('admin.requests.detail.distanceFee')} value={fmtVnd(payment.distanceFee, locale)} />}
+                                    {payment.overtimeFee > 0 && <InfoRow label={t('admin.requests.detail.overtimeFee')} value={fmtVnd(payment.overtimeFee, locale)} />}
+                                    {payment.otherFee > 0 && <InfoRow label={t('admin.requests.detail.otherFee')} value={fmtVnd(payment.otherFee, locale)} />}
                                     <div className="pt-2 mt-2 border-t" style={{ borderColor: C.border }}>
                                         <div className="flex justify-between items-center">
-                                            <span className="text-sm font-bold" style={{ color: C.gray }}>Tổng cộng</span>
-                                            <span className="text-lg font-bold" style={{ color: C.orange }}>{fmtVnd(payment.totalAmount)}</span>
+                                            <span className="text-sm font-bold" style={{ color: C.gray }}>{t('admin.requests.detail.grandTotal')}</span>
+                                            <span className="text-lg font-bold" style={{ color: C.orange }}>{fmtVnd(payment.totalAmount, locale)}</span>
                                         </div>
                                     </div>
-                                    {payment.note && <InfoRow label="Ghi chú" value={payment.note} />}
-                                    {payment.surchargeNote && <InfoRow label="Ghi chú phụ thu" value={payment.surchargeNote} />}
+                                    {payment.note && <InfoRow label={t('admin.requests.detail.note')} value={payment.note} />}
+                                    {payment.surchargeNote && <InfoRow label={t('admin.requests.detail.surchargeNote')} value={payment.surchargeNote} />}
                                 </SectionCard>
                             )}
 
                             {/* Quotes */}
                             {quotes?.length > 0 && (
-                                <SectionCard title={`Báo giá (${quotes.length})`} icon={<Banknote size={15} style={{ color: C.blue }} />}>
+                                <SectionCard title={t('admin.requests.detail.quotesTitle', { count: quotes.length })} icon={<Banknote size={15} style={{ color: C.blue }} />}>
                                     <div className="space-y-3">
                                         {quotes.map((q: any) => {
                                             const isAccepted = q.status === 'ACCEPTED';
@@ -416,11 +440,11 @@ export default function AdminRequestDetailPage() {
                                                                 fallbackBackground={C.blue} initialsCount={1} />
                                                             <span className="text-xs font-semibold" style={{ color: C.navy }}>{q.provider?.fullName}</span>
                                                         </div>
-                                                        <span className="text-sm font-bold" style={{ color: isAccepted ? C.green : C.navy }}>{fmtVnd(q.price)}</span>
+                                                        <span className="text-sm font-bold" style={{ color: isAccepted ? C.green : C.navy }}>{fmtVnd(q.price, locale)}</span>
                                                     </div>
                                                     <p className="text-[10px]" style={{ color: C.gray }}>
-                                                        ETA: {q.estimatedArrivalMinutes} phút
-                                                        {isAccepted && ' · ✓ Đã được chọn'}
+                                                        {t('admin.requests.detail.quoteEta', { minutes: q.estimatedArrivalMinutes })}
+                                                        {isAccepted && t('admin.requests.detail.quoteAccepted')}
                                                     </p>
                                                     {q.message && <p className="text-xs mt-1 italic" style={{ color: C.gray }}>"{q.message}"</p>}
                                                 </div>
@@ -432,7 +456,7 @@ export default function AdminRequestDetailPage() {
 
                             {/* Media */}
                             {req.media?.length > 0 && (
-                                <SectionCard title="Hình ảnh / Video lúc tạo đơn" icon={<ImageIcon size={15} style={{ color: C.blue }} />}>
+                                <SectionCard title={t('admin.requests.detail.sectionMedia')} icon={<ImageIcon size={15} style={{ color: C.blue }} />}>
                                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                         {req.media.map((m: any) => {
                                             const vid = m.mediaType === 'VIDEO' || isVideo(m.publicUrl || '');
@@ -444,10 +468,10 @@ export default function AdminRequestDetailPage() {
                                                     {vid ? (
                                                         <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
                                                             <Film size={22} className="mb-1" />
-                                                            <span className="text-[10px] uppercase font-bold">Video</span>
+                                                            <span className="text-[10px] uppercase font-bold">{t('admin.requests.detail.videoLabel')}</span>
                                                         </div>
                                                     ) : (
-                                                        <img src={m.publicUrl} alt="media" className="w-full h-full object-cover transition-opacity group-hover:opacity-80" />
+                                                        <img src={m.publicUrl} alt={t('admin.requests.detail.altMedia')} className="w-full h-full object-cover transition-opacity group-hover:opacity-80" />
                                                     )}
                                                 </button>
                                             );
@@ -458,14 +482,14 @@ export default function AdminRequestDetailPage() {
 
                             {/* Payment photos */}
                             {payment?.photoUrls?.length > 0 && (
-                                <SectionCard title="Ảnh xác nhận thanh toán" icon={<ImageIcon size={15} style={{ color: C.green }} />}>
+                                <SectionCard title={t('admin.requests.detail.sectionPaymentPhotos')} icon={<ImageIcon size={15} style={{ color: C.green }} />}>
                                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                         {payment.photoUrls.map((url: string, i: number) => (
                                             <button key={i}
                                                 onClick={() => setMediaPreview({ url, type: 'image' })}
                                                 className="aspect-square overflow-hidden rounded-xl border"
                                                 style={{ borderColor: C.border }}>
-                                                <img src={url} alt="payment" className="w-full h-full object-cover" />
+                                                <img src={url} alt={t('admin.requests.detail.altPayment')} className="w-full h-full object-cover" />
                                             </button>
                                         ))}
                                     </div>
@@ -485,7 +509,7 @@ export default function AdminRequestDetailPage() {
                     {mediaPreview.type === 'video' ? (
                         <video src={mediaPreview.url} controls className="max-w-full max-h-[80vh] rounded-xl" onClick={e => e.stopPropagation()} />
                     ) : (
-                        <img src={mediaPreview.url} alt="preview" className="max-w-full max-h-[80vh] rounded-xl object-contain" onClick={e => e.stopPropagation()} />
+                        <img src={mediaPreview.url} alt={t('admin.requests.detail.altPreview')} className="max-w-full max-h-[80vh] rounded-xl object-contain" onClick={e => e.stopPropagation()} />
                     )}
                 </div>
             )}

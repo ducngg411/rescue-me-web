@@ -1049,8 +1049,7 @@ Quy tắc:
             });
         }
 
-        const commissionRateStr = process.env.COMMISSION_RATE;
-        const commissionRate = commissionRateStr ? parseFloat(commissionRateStr) : 0.1;
+        const commissionRate = await this.commissionService.getEffectiveCommissionRate();
         const maxDisputeAmount = request.payment.totalAmount - Math.round(request.payment.totalAmount * commissionRate);
 
         return JSON.stringify({

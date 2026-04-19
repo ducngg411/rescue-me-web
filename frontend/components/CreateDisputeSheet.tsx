@@ -24,6 +24,8 @@ export type CreateDisputeSheetProps = {
     requestId: string;
     paymentId: string;
     totalAmount: number;
+    /** Frozen on payment when settled; matches server dispute cap. */
+    commissionRate?: number | null;
 };
 
 /**
@@ -36,11 +38,24 @@ export default function CreateDisputeSheet({
     requestId,
     paymentId,
     totalAmount,
+    commissionRate: commissionRateProp,
 }: CreateDisputeSheetProps) {
     const { t, locale } = useLanguage();
     const router = useRouter();
-    const commissionRate = Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.2;
-    const maxAmount = Math.max(0, Math.floor(totalAmount - (totalAmount * commissionRate)));
+    const envRate = Number(process.env.NEXT_PUBLIC_COMMISSION_RATE);
+    const commissionRate =
+        typeof commissionRateProp === 'number' &&
+        Number.isFinite(commissionRateProp) &&
+        commissionRateProp >= 0 &&
+        commissionRateProp <= 1
+            ? commissionRateProp
+            : (Number.isFinite(envRate) && envRate >= 0 && envRate <= 1 ? envRate : 0.1);
+    const platformFeeVnd = Math.round(totalAmount * commissionRate);
+    const maxAmount = Math.max(0, totalAmount - platformFeeVnd);
+    const feePctRounded =
+        totalAmount > 0 ? Math.round((platformFeeVnd / totalAmount) * 100) : Math.round(commissionRate * 100);
+    const eligiblePctRounded =
+        totalAmount > 0 ? Math.round((maxAmount / totalAmount) * 100) : Math.round((1 - commissionRate) * 100);
 
     const [reason, setReason] = useState('');
     const [description, setDescription] = useState('');
@@ -169,9 +184,18 @@ export default function CreateDisputeSheet({
                         className="w-full py-2.5 px-3 rounded-xl text-sm outline-none mb-1 tabular-nums border cursor-not-allowed"
                         style={{ background: '#f1f5f9', borderColor: C.border, color: C.gray }}
                     />
-                    <p className="text-[10px] mb-3" style={{ color: C.gray }}>
+                    <p className="text-[10px] mb-3 leading-relaxed" style={{ color: C.gray }}>
                         {t('user.disputes.create.targetAmountHint', {
                             amount: maxAmount.toLocaleString(loc),
+                        })}
+                    </p>
+                    <p className="text-[10px] mb-3 leading-relaxed rounded-xl px-3 py-2.5" style={{ background: '#fff7ed', color: '#92400e', border: '1px solid #fed7aa' }}>
+                        {t('user.disputes.create.targetAmountFeeExplainer', {
+                            paidAmount: totalAmount.toLocaleString(loc),
+                            maxRefund: maxAmount.toLocaleString(loc),
+                            feeAmount: platformFeeVnd.toLocaleString(loc),
+                            feePct: String(feePctRounded),
+                            eligiblePct: String(eligiblePctRounded),
                         })}
                     </p>
 
@@ -188,7 +212,7 @@ export default function CreateDisputeSheet({
                     />
 
                     <label className="block text-xs font-semibold mt-4 mb-3" style={{ color: C.navy }}>
-                        {t('user.disputes.create.evidenceLabel')} (Tuỳ chọn)
+                        {t('user.disputes.create.evidenceLabel')}
                     </label>
                     <div className="space-y-4 mb-6">
                         <ImageUpload
@@ -201,10 +225,10 @@ export default function CreateDisputeSheet({
                             onRemove={(objectKey) => {
                                 setUploadedImages((prev) => prev.filter((img) => img.objectKey !== objectKey));
                             }}
-                            label="Ảnh bằng chứng"
+                            label={t('user.disputes.create.evidencePhotosLabel')}
                         />
                         <VideoUpload
-                            label="Video bằng chứng"
+                            label={t('user.disputes.create.evidenceVideoLabel')}
                             maxVideos={2}
                             cloudinaryCloudName={process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || ''}
                             cloudinaryUploadPreset={process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || ''}

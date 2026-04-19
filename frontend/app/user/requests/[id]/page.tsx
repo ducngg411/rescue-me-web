@@ -37,24 +37,6 @@ const C = {
     greenLight: '#f0fdf4',
 };
 
-const STATUS_LABELS: Record<string, string> = {
-    CREATED: 'Đã tạo',
-    MATCHING: 'Đang tìm provider',
-    SEARCHING: 'Đang tìm provider',
-    MATCHED: 'Đã ghép đôi',
-    ASSIGNED: 'Đã có provider',
-    ACCEPTED: 'Đã chấp nhận',
-    IN_PROGRESS: 'Đang di chuyển',
-    ARRIVED: 'Provider đã đến',
-    WORKING: 'Đang làm việc',
-    PAYMENT_PENDING: 'Chờ thanh toán',
-    PAID: 'Đã thanh toán',
-    COMPLETED: 'Hoàn thành',
-    CANCELLED: 'Đã hủy',
-    REJECTED: 'Bị từ chối',
-    EXPIRED: 'Hết hạn',
-};
-
 const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
     MATCHING: { bg: C.orangeLight, text: C.orange, dot: C.orange },
     SEARCHING: { bg: C.orangeLight, text: C.orange, dot: C.orange },
@@ -69,16 +51,6 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> =
     CANCELLED: { bg: '#fef2f2', text: '#dc2626', dot: '#ef4444' },
     EXPIRED: { bg: '#fefce8', text: '#ca8a04', dot: '#eab308' },
     MATCHED: { bg: '#f5f3ff', text: '#7c3aed', dot: '#8b5cf6' },
-};
-
-const INCIDENT_LABELS: Record<string, string> = {
-    BREAKDOWN: 'Hỏng xe',
-    ACCIDENT: 'Tai nạn',
-    FLAT_TIRE: 'Lốp xe hỏng',
-    BATTERY_DEAD: 'Hết bình điện',
-    OUT_OF_FUEL: 'Hết nhiên liệu',
-    LOCKED_OUT: 'Khóa xe',
-    OTHER: 'Khác',
 };
 
 interface Quote {
@@ -108,7 +80,9 @@ function LiveQuoteCard({
     isAccepting: boolean;
     isAnyAccepting: boolean;
 }) {
-    const providerName = quote.provider.serviceName || quote.provider.name || 'Provider';
+    const { t, locale } = useLanguage();
+    const numLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
+    const providerName = quote.provider.serviceName || quote.provider.name || t('user.tracking.paymentRequest.providerFallback');
     const initials = providerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
 
     return (
@@ -133,11 +107,11 @@ function LiveQuoteCard({
                     <p className="text-sm font-bold truncate" style={{ color: C.navy }}>{providerName}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-sm font-bold" style={{ color: C.orange }}>
-                            {quote.price.toLocaleString('vi-VN')}₫
+                            {quote.price.toLocaleString(numLocale)}₫
                         </span>
                         <span className="text-[11px]" style={{ color: C.gray }}>·</span>
                         <span className="text-[11px]" style={{ color: C.gray }}>
-                            ~{quote.estimatedArrivalMinutes} phút
+                            {t('user.tracking.quotes.approxMinutes', { minutes: quote.estimatedArrivalMinutes })}
                         </span>
                     </div>
                 </div>
@@ -163,7 +137,7 @@ function LiveQuoteCard({
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                             </svg>
                         </span>
-                    ) : 'Chọn ngay'}
+                    ) : t('user.tracking.quotes.acceptBtn')}
                 </button>
             </div>
 
@@ -180,6 +154,7 @@ function LiveQuoteCard({
 
 // Fetches payment details and renders PaymentRequest for the user
 function PaymentRequestFetcher({ requestId, providerName }: { requestId: string; providerName: string }) {
+    const { t } = useLanguage();
     const [payment, setPayment] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -194,27 +169,24 @@ function PaymentRequestFetcher({ requestId, providerName }: { requestId: string;
         };
         load();
         // Re-poll every 5s so userConfirmedAt refreshes after user confirms
-        const t = setInterval(load, 5000);
-        return () => { active = false; clearInterval(t); };
+        const pollId = setInterval(load, 5000);
+        return () => { active = false; clearInterval(pollId); };
     }, [requestId]);
 
     if (loading) return (
         <div className="bg-white rounded-2xl p-6 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-            <p className="text-sm" style={{ color: '#6b7280' }}>Đang tải thông tin thanh toán...</p>
+            <p className="text-sm" style={{ color: '#6b7280' }}>{t('user.tracking.page.paymentLoading')}</p>
         </div>
     );
     if (!payment) return (
         <div className="bg-white rounded-2xl p-6 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-            <p className="text-sm" style={{ color: '#6b7280' }}>Chưa có yêu cầu thanh toán</p>
+            <p className="text-sm" style={{ color: '#6b7280' }}>{t('user.tracking.page.paymentPendingEmpty')}</p>
         </div>
     );
     return <PaymentRequest requestId={requestId} payment={payment} providerName={providerName} />;
 }
 
 // ── Completed Card shown after job is COMPLETED ────────────────────────────
-const QUICK_TAGS = [
-    'Sạch sẽ', 'Chuyên nghiệp', 'Thân thiện', 'Nhanh chóng', 'Đúng giờ', 'Giá hợp lý',
-];
 
 // ── Layout Components ──
 function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
@@ -253,7 +225,9 @@ function StarIcon({ filled, size = 32 }: { filled: boolean; size?: number }) {
 
 function CompletedCard({ requestId }: { requestId: string }) {
     const router = useRouter();
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
+    const numLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
+    const timeLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
     const [request, setRequest] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     // State for viewing photos in full-screen modal
@@ -298,7 +272,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
         return (
             <div className="px-5 py-8 text-center bg-white">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-3" style={{ borderColor: C.orange }}></div>
-                <p className="text-sm font-medium" style={{ color: C.gray }}>Đang tải chi tiết đơn...</p>
+                <p className="text-sm font-medium" style={{ color: C.gray }}>{t('user.tracking.completed.loadingDetails')}</p>
             </div>
         );
     }
@@ -310,14 +284,16 @@ function CompletedCard({ requestId }: { requestId: string }) {
     const images = (request?.media ?? []).filter((m: any) => m.mediaType === 'IMAGE').map((m: any) => m.publicUrl);
     const videos = (request?.media ?? []).filter((m: any) => m.mediaType === 'VIDEO').map((m: any) => m.publicUrl);
 
+    const quickTags: string[] = t('user.tracking.review.quickTags') as unknown as string[];
+
     const toggleTag = (tag: string) => {
         setSelectedTags(prev =>
-            prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+            prev.includes(tag) ? prev.filter(tg => tg !== tag) : [...prev, tag]
         );
     };
 
     const handleReviewSubmit = async () => {
-        if (selectedStar === 0) { toast.error('Vui lòng chọn ít nhất 1 sao'); return; }
+        if (selectedStar === 0) { toast.error(t('user.tracking.review.requireStars')); return; }
         setIsSubmitting(true);
         try {
             await api.post(`/rescue-requests/${requestId}/review`, {
@@ -326,9 +302,9 @@ function CompletedCard({ requestId }: { requestId: string }) {
                 tags: selectedTags,
             });
             setReviewSubmitted(true);
-            toast.success('Đã gửi đánh giá! Cảm ơn bạn ♥️');
+            toast.success(t('user.tracking.review.successToast'));
         } catch (err: any) {
-            const msg = err.response?.data?.message || 'Gửi đánh giá thất bại';
+            const msg = err.response?.data?.message || t('user.tracking.review.errorToast');
             toast.error(msg);
         } finally {
             setIsSubmitting(false);
@@ -348,9 +324,9 @@ function CompletedCard({ requestId }: { requestId: string }) {
                     >
                         <span style={{ fontSize: '38px' }}>🎉</span>
                     </div>
-                    <h3 className="text-lg font-bold mb-1" style={{ color: '#15803d' }}>Dịch vụ hoàn thành!</h3>
+                    <h3 className="text-lg font-bold mb-1" style={{ color: '#15803d' }}>{t('user.tracking.completed.title')}</h3>
                     <p className="text-sm" style={{ color: '#166534' }}>
-                        Cảm ơn bạn đã sử dụng dịch vụ RescueMe.
+                        {t('user.tracking.completed.subtitle')}
                     </p>
                 </div>
 
@@ -358,13 +334,13 @@ function CompletedCard({ requestId }: { requestId: string }) {
                 <div className="px-5 py-4 space-y-4 bg-white" style={{ borderBottom: `1px solid ${C.border}` }}>
 
                     {/* ── Timeline ── */}
-                    <SectionCard title="Dòng thời gian" icon={<Clock size={16} style={{ color: C.blue }} />}>
+                    <SectionCard title={t('user.tracking.timeline.title')} icon={<Clock size={16} style={{ color: C.blue }} />}>
                         <div className="space-y-0">
                             {[
-                                { label: 'Tạo yêu cầu', time: request?.createdAt, done: true },
-                                { label: 'Cứu hộ viên nhận đơn', time: request?.assignedAt, done: !!request?.assignedAt },
-                                { label: 'Thanh toán', time: payment?.createdAt, done: !!payment },
-                                { label: 'Hoàn thành dịch vụ', time: request?.completedAt || request?.updatedAt, done: true },
+                                { label: t('user.tracking.timeline.created'), time: request?.createdAt, done: true },
+                                { label: t('user.tracking.timeline.assigned'), time: request?.assignedAt, done: !!request?.assignedAt },
+                                { label: t('user.tracking.timeline.payment'), time: payment?.createdAt, done: !!payment },
+                                { label: t('user.tracking.timeline.completed'), time: request?.completedAt || request?.updatedAt, done: true },
                             ].map((step, i, arr) => (
                                 <div key={i} className="flex gap-3">
                                     <div className="flex flex-col items-center">
@@ -388,10 +364,10 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                             {step.label}
                                         </p>
                                         <p className="text-xs mt-0.5" style={{ color: step.time ? C.gray : '#d1d5db' }}>
-                                            {step.time ? new Date(step.time).toLocaleString('vi-VN', {
+                                            {step.time ? new Date(step.time).toLocaleString(timeLocale, {
                                                 day: '2-digit', month: '2-digit', year: 'numeric',
                                                 hour: '2-digit', minute: '2-digit',
-                                            }) : 'Chưa thực hiện'}
+                                            }) : t('user.tracking.timeline.pending')}
                                         </p>
                                     </div>
                                 </div>
@@ -401,7 +377,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
 
                     {/* ── Provider Info ── */}
                     {request?.assignedProvider && (
-                        <SectionCard title="Thông tin Cứu hộ viên" icon={<User size={16} style={{ color: C.blue }} />}>
+                        <SectionCard title={t('user.tracking.providerInfo.title')} icon={<User size={16} style={{ color: C.blue }} />}>
                             <div className="flex items-center gap-3">
                                 <AvatarImage
                                     name={request.assignedProvider.name}
@@ -427,14 +403,14 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                 {request.assignedProvider.licensePlate && (
                                     <InfoRow
                                         icon={<span style={{ color: C.orange, fontSize: 11, fontWeight: 700 }}>BSX</span>}
-                                        label="Biển số xe"
+                                        label={t('user.tracking.providerInfo.licensePlate')}
                                         value={request.assignedProvider.licensePlate}
                                     />
                                 )}
                                 {(request.assignedProvider.vehicleColor || request.assignedProvider.vehicleType) && (
                                     <InfoRow
                                         icon={<span style={{ color: C.orange, fontSize: 11, fontWeight: 700 }}>XE</span>}
-                                        label="Phương tiện"
+                                        label={t('user.tracking.providerInfo.vehicle')}
                                         value={[request.assignedProvider.vehicleColor, request.assignedProvider.vehicleType].filter(Boolean).join(' - ')}
                                     />
                                 )}
@@ -444,20 +420,20 @@ function CompletedCard({ requestId }: { requestId: string }) {
 
                     {/* ── Quote Info ── */}
                     {acceptedQuote && (
-                        <SectionCard title="Báo giá của Provider" icon={<Wrench size={16} style={{ color: C.orange }} />}>
+                        <SectionCard title={t('user.tracking.providerQuote.title')} icon={<Wrench size={16} style={{ color: C.orange }} />}>
                             <div className="grid grid-cols-2 gap-3 mb-3">
                                 <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Giá báo</p>
-                                    <p className="text-lg font-bold" style={{ color: C.navy }}>{acceptedQuote.price.toLocaleString('vi-VN')} đ</p>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('user.tracking.providerQuote.price')}</p>
+                                    <p className="text-lg font-bold" style={{ color: C.navy }}>{acceptedQuote.price.toLocaleString(numLocale)} đ</p>
                                 </div>
                                 <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>TG dự kiến</p>
-                                    <p className="text-lg font-bold" style={{ color: C.navy }}>{acceptedQuote.estimatedArrivalMinutes} Phút</p>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('user.tracking.providerQuote.eta')}</p>
+                                    <p className="text-lg font-bold" style={{ color: C.navy }}>{t('user.tracking.providerQuote.etaMinutes', { minutes: acceptedQuote.estimatedArrivalMinutes })}</p>
                                 </div>
                             </div>
                             {acceptedQuote.message && (
                                 <div className="rounded-xl p-3" style={{ background: '#fff7ed', border: `1px solid #fed7aa` }}>
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.orange }}>Lời nhắn từ Cứu hộ viên</p>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.orange }}>{t('user.tracking.providerQuote.message')}</p>
                                     <p className="text-sm" style={{ color: C.navy }}>"{acceptedQuote.message}"</p>
                                 </div>
                             )}
@@ -466,36 +442,40 @@ function CompletedCard({ requestId }: { requestId: string }) {
 
                     {/* ── Payment Info ── */}
                     {payment && (
-                        <SectionCard title="Thanh Toán" icon={<Banknote size={16} style={{ color: C.orange }} />}>
+                        <SectionCard title={t('user.tracking.paymentInfo.title')} icon={<Banknote size={16} style={{ color: C.orange }} />}>
                             <div className="grid grid-cols-2 gap-3 mb-3">
                                 <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Phương thức</p>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('user.tracking.paymentInfo.methodLabel')}</p>
                                     <p className="text-sm font-bold" style={{ color: C.navy }}>
-                                        {payment.paymentMethod === 'WALLET' ? 'Ví điện tử' : payment.paymentMethod === 'CASH' ? 'Tiền mặt' : 'Chuyển khoản QR'}
+                                        {payment.paymentMethod === 'WALLET'
+                                            ? t('user.tracking.paymentInfo.methodWallet')
+                                            : payment.paymentMethod === 'CASH'
+                                                ? t('user.tracking.paymentInfo.methodCash')
+                                                : t('user.tracking.paymentInfo.methodQR')}
                                     </p>
                                 </div>
                                 <div className="rounded-xl p-3" style={{ background: C.bg }}>
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>Tổng tiền</p>
-                                    <p className="text-sm font-bold" style={{ color: C.orange }}>{payment.totalAmount.toLocaleString('vi-VN')} đ</p>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.gray }}>{t('user.tracking.paymentInfo.totalLabel')}</p>
+                                    <p className="text-sm font-bold" style={{ color: C.orange }}>{payment.totalAmount.toLocaleString(numLocale)} đ</p>
                                 </div>
                             </div>
                             <div className="rounded-xl overflow-hidden border" style={{ borderColor: C.border }}>
                                 {[
-                                    { label: 'Phí dịch vụ cơ bản', val: payment.baseFee },
-                                    { label: 'Phí di chuyển', val: payment.distanceFee },
-                                    (payment.overtimeFee || 0) > 0 && { label: 'Phụ phí ngoài giờ', val: payment.overtimeFee },
-                                    (payment.otherFee || 0) > 0 && { label: 'Chi phí phát sinh khác', val: payment.otherFee },
+                                    { label: t('user.tracking.paymentInfo.baseFee'), val: payment.baseFee },
+                                    { label: t('user.tracking.paymentInfo.distanceFee'), val: payment.distanceFee },
+                                    (payment.overtimeFee || 0) > 0 && { label: t('user.tracking.paymentInfo.overtimeFee'), val: payment.overtimeFee },
+                                    (payment.otherFee || 0) > 0 && { label: t('user.tracking.paymentInfo.otherFee'), val: payment.otherFee },
                                 ].filter(Boolean).map((row: any, i: number, arr) => (
                                     <div key={i} className="flex items-center justify-between px-4 py-2.5"
                                         style={{ borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                                         <span className="text-xs" style={{ color: C.gray }}>{row.label}</span>
-                                        <span className="text-xs font-semibold" style={{ color: C.navy }}>{(row.val || 0).toLocaleString('vi-VN')} đ</span>
+                                        <span className="text-xs font-semibold" style={{ color: C.navy }}>{(row.val || 0).toLocaleString(numLocale)} đ</span>
                                     </div>
                                 ))}
                                 <div className="flex items-center justify-between px-4 py-3"
                                     style={{ background: '#f8fafc', borderTop: `1px solid ${C.border}` }}>
-                                    <span className="text-sm font-bold" style={{ color: C.navy }}>Tổng thanh toán</span>
-                                    <span className="text-sm font-bold" style={{ color: C.orange }}>{payment.totalAmount.toLocaleString('vi-VN')} đ</span>
+                                    <span className="text-sm font-bold" style={{ color: C.navy }}>{t('user.tracking.paymentInfo.totalPayment')}</span>
+                                    <span className="text-sm font-bold" style={{ color: C.orange }}>{payment.totalAmount.toLocaleString(numLocale)} đ</span>
                                 </div>
                             </div>
                             {/* Parsed surchargeNote breakdown */}
@@ -510,26 +490,26 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                         <div className="mt-3 rounded-xl overflow-hidden border" style={{ borderColor: C.border }}>
                                             {breakdown.length > 0 && (
                                                 <>
-                                                    <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ background: '#eff6ff', color: '#2563eb' }}>Chi tiết dịch vụ</div>
-                                                    {breakdown.map((item: { label: string; amount: number }, i: number) => (
-                                                        <div key={i} className="flex justify-between px-3 py-2 text-xs"
-                                                            style={{ borderTop: `1px solid ${C.border}`, color: C.navy }}>
-                                                            <span style={{ color: C.gray }}>{item.label || `Mục ${i + 1}`}</span>
-                                                            <span className="font-semibold">{(item.amount || 0).toLocaleString('vi-VN')}đ</span>
-                                                        </div>
-                                                    ))}
+                                    <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ background: '#eff6ff', color: '#2563eb' }}>{t('user.tracking.paymentInfo.surchargeDetails')}</div>
+                                    {breakdown.map((item: { label: string; amount: number }, i: number) => (
+                                        <div key={i} className="flex justify-between px-3 py-2 text-xs"
+                                            style={{ borderTop: `1px solid ${C.border}`, color: C.navy }}>
+                                            <span style={{ color: C.gray }}>{item.label || t('user.tracking.paymentInfo.surchargeItemFallback', { index: i + 1 })}</span>
+                                            <span className="font-semibold">{(item.amount || 0).toLocaleString(numLocale)}đ</span>
+                                        </div>
+                                    ))}
                                                 </>
                                             )}
                                             {surcharges.length > 0 && (
                                                 <>
-                                                    <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ background: '#fff7ed', color: C.orange }}>Phụ phí phát sinh</div>
-                                                    {surcharges.map((item: { label: string; amount: number }, i: number) => (
-                                                        <div key={i} className="flex justify-between px-3 py-2 text-xs"
-                                                            style={{ borderTop: `1px solid ${C.border}`, color: C.navy }}>
-                                                            <span style={{ color: C.gray }}>{item.label || `Khoản ${i + 1}`}</span>
-                                                            <span className="font-semibold" style={{ color: C.orange }}>+{(item.amount || 0).toLocaleString('vi-VN')}đ</span>
-                                                        </div>
-                                                    ))}
+                                    <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ background: '#fff7ed', color: C.orange }}>{t('user.tracking.paymentInfo.surchargeExtra')}</div>
+                                    {surcharges.map((item: { label: string; amount: number }, i: number) => (
+                                        <div key={i} className="flex justify-between px-3 py-2 text-xs"
+                                            style={{ borderTop: `1px solid ${C.border}`, color: C.navy }}>
+                                            <span style={{ color: C.gray }}>{item.label || t('user.tracking.paymentInfo.surchargeEntryFallback', { index: i + 1 })}</span>
+                                            <span className="font-semibold" style={{ color: C.orange }}>+{(item.amount || 0).toLocaleString(numLocale)}đ</span>
+                                        </div>
+                                    ))}
                                                 </>
                                             )}
                                         </div>
@@ -542,8 +522,8 @@ function CompletedCard({ requestId }: { requestId: string }) {
                             {payment.photoUrls && payment.photoUrls.length > 0 && (
                                 <div className="mt-4">
                                     <p className="text-xs font-semibold mb-2" style={{ color: C.navy }}>
-                                        Ảnh hiện trường từ cứu hộ viên
-                                        <span className="font-normal ml-1" style={{ color: C.gray }}>({payment.photoUrls.length} ảnh)</span>
+                                        {t('user.tracking.paymentInfo.photoTitle')}
+                                        <span className="font-normal ml-1" style={{ color: C.gray }}>{t('user.tracking.paymentInfo.photoCount', { count: payment.photoUrls.length })}</span>
                                     </p>
                                     <div className="grid grid-cols-3 gap-2">
                                         {payment.photoUrls.map((url: string, i: number) => (
@@ -551,7 +531,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                                 className="aspect-square rounded-xl overflow-hidden block outline-none focus:ring-2 focus:ring-orange-500"
                                                 style={{ background: '#f1f5f9' }}
                                             >
-                                                <img src={url} alt={`Ảnh ${i + 1}`} className="w-full h-full object-cover" />
+                                                <img src={url} alt={t('user.tracking.mediaGallery.photoAlt', { index: i + 1 })} className="w-full h-full object-cover" />
                                             </button>
                                         ))}
                                     </div>
@@ -563,14 +543,14 @@ function CompletedCard({ requestId }: { requestId: string }) {
                     {/* ── Media ── */}
                     {(images.length > 0 || videos.length > 0) && (
                         <SectionCard
-                            title={`Ảnh/Video đính kèm (${images.length + videos.length})`}
+                            title={t('user.tracking.mediaGallery.title', { count: images.length + videos.length })}
                             icon={<ImageIcon size={16} style={{ color: C.blue }} />}
                         >
                             {images.length > 0 && (
                                 <div className="grid grid-cols-3 gap-2">
                                     {images.map((src: string, i: number) => (
                                         <div key={i} className="aspect-square rounded-xl overflow-hidden relative" style={{ background: '#f1f5f9' }}>
-                                            <img src={src} alt={`Ảnh ${i + 1}`} className="w-full h-full object-cover" />
+                                            <img src={src} alt={t('user.tracking.mediaGallery.photoAlt', { index: i + 1 })} className="w-full h-full object-cover" />
                                         </div>
                                     ))}
                                 </div>
@@ -601,7 +581,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                             style={{ background: '#fffbeb' }}
                         >
                             <span style={{ fontSize: '28px' }}>⭐</span>
-                            <p className="text-sm font-bold" style={{ color: '#92400e' }}>Cảm ơn bạn đã đánh giá!</p>
+                            <p className="text-sm font-bold" style={{ color: '#92400e' }}>{t('user.tracking.review.thanksTitle')}</p>
                             <div className="flex gap-0.5 mt-1">
                                 {[1, 2, 3, 4, 5].map(s => (
                                     <StarIcon key={s} filled={s <= (request?.review?.rating || selectedStar)} size={20} />
@@ -620,8 +600,8 @@ function CompletedCard({ requestId }: { requestId: string }) {
                         >
                             {/* Title */}
                             <div className="text-center mb-3">
-                                <p className="text-sm font-bold" style={{ color: C.navy }}>Bạn hài lòng với dịch vụ chứ?</p>
-                                <p className="text-[11px] mt-0.5" style={{ color: C.gray }}>⭐ Chọn số sao trực tiếp tại đây</p>
+                                <p className="text-sm font-bold" style={{ color: C.navy }}>{t('user.tracking.review.formTitle')}</p>
+                                <p className="text-[11px] mt-0.5" style={{ color: C.gray }}>{t('user.tracking.review.formHint')}</p>
                             </div>
 
                             {/* Stars */}
@@ -641,7 +621,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                             </div>
                             {selectedStar > 0 && (
                                 <p className="text-center text-[11px] font-medium mb-3" style={{ color: '#92400e' }}>
-                                    {['', 'Tệ', 'Không tốt', 'Bình thường', 'Tốt', 'Xuất sắc'][selectedStar]}
+                                    {(t('user.tracking.review.ratings') as unknown as string[])[selectedStar]}
                                 </p>
                             )}
 
@@ -658,7 +638,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                     >
                                         {/* Quick tags */}
                                         <div className="flex flex-wrap gap-1.5 mb-3">
-                                            {QUICK_TAGS.map(tag => {
+                                            {quickTags.map(tag => {
                                                 const active = selectedTags.includes(tag);
                                                 return (
                                                     <button
@@ -681,7 +661,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                         <textarea
                                             value={comment}
                                             onChange={e => setComment(e.target.value)}
-                                            placeholder="Nhận xét thêm (không bắt buộc)..."
+                                            placeholder={t('user.tracking.review.commentPlaceholder')}
                                             rows={3}
                                             className="w-full py-2.5 px-3 rounded-xl text-sm outline-none resize-none mb-3"
                                             style={{ background: 'white', border: '1px solid #e5e7eb', color: C.navy }}
@@ -700,13 +680,9 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                             {isSubmitting ? (
                                                 <span className="flex items-center gap-2">
                                                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" /><path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-                                                    Đang gửi...
+                                                    {t('user.tracking.review.submittingBtn')}
                                                 </span>
-                                            ) : (
-                                                <>
-                                                    <span>⭐</span> Gửi đánh giá
-                                                </>
-                                            )}
+                                            ) : t('user.tracking.review.submitBtn')}
                                         </button>
                                     </div>
                                 )
@@ -725,7 +701,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                         </svg>
-                        Về trang chủ
+                        {t('user.tracking.actions.homeBtn')}
                     </button>
                     {payment?.id && !existingDispute && (
                         <button
@@ -746,15 +722,10 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                 className="w-full py-2 px-3 rounded-2xl text-xs font-semibold text-center"
                                 style={{ background: '#fff7ed', color: '#c2410c', border: '1px solid #fed7aa' }}
                             >
-                                Đơn đang khiếu nại · {(() => {
-                                    switch (existingDispute.status) {
-                                        case 'WAITING_FOR_PROVIDER': return 'Chờ Provider phản hồi';
-                                        case 'WAITING_FOR_CUSTOMER': return 'Cần bạn phản hồi';
-                                        case 'INVESTIGATING': return 'Admin đang xử lý';
-                                        case 'RESOLVED': return 'Đã giải quyết';
-                                        case 'REJECTED': return 'Đã từ chối';
-                                        default: return existingDispute.status;
-                                    }
+                                {t('user.tracking.dispute.pendingLabel')} · {(() => {
+                                    const key = `user.tracking.dispute.statusLabels.${existingDispute.status}`;
+                                    const label = t(key);
+                                    return label === key ? existingDispute.status : label;
                                 })()}
                             </div>
                             <button
@@ -763,7 +734,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                                 className="w-full py-3 rounded-2xl text-xs font-semibold"
                                 style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}
                             >
-                                Xem trạng thái khiếu nại
+                                {t('user.tracking.dispute.viewStatus')}
                             </button>
                         </div>
                     )}
@@ -777,6 +748,7 @@ function CompletedCard({ requestId }: { requestId: string }) {
                     requestId={requestId}
                     paymentId={payment.id}
                     totalAmount={payment.totalAmount}
+                    commissionRate={payment.commissionRate}
                 />
             )}
 
@@ -812,7 +784,7 @@ export default function RequestTrackingPage() {
     const router = useRouter();
     const params = useParams();
     const requestId = params.id as string;
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
     const { isReady } = useUserGuard();
     const [isRetrying, setIsRetrying] = useState(false);
     const [showQuoteSelection, setShowQuoteSelection] = useState(false);
@@ -887,9 +859,9 @@ export default function RequestTrackingPage() {
     useEffect(() => {
         if (showTrackingMap && status?.status && status.status !== 'IN_PROGRESS') {
             setShowTrackingMap(false);
-            toast.success('Bản đồ đã thu nhỏ, vui lòng xác nhận trạng thái');
+            toast.success(t('user.tracking.page.mapMinimizedToast'));
         }
-    }, [status?.status, showTrackingMap]);
+    }, [status?.status, showTrackingMap, t]);
 
     // ── Accept quote during countdown ────────────────────────────────────────
     const handleAcceptLiveQuote = async (quoteId: string) => {
@@ -899,21 +871,21 @@ export default function RequestTrackingPage() {
             await api.patch(`/rescue-requests/${requestId}/quotes/${quoteId}/respond`, {
                 action: 'ACCEPT',
             });
-            toast.success('Đã chọn báo giá! Provider đang chuẩn bị đến.');
+            toast.success(t('user.tracking.quotes.successToast'));
             // Tracking hook will poll and catch ASSIGNED status automatically
         } catch (err: any) {
-            const msg = err.response?.data?.message || 'Không thể chọn báo giá. Vui lòng thử lại.';
+            const msg = err.response?.data?.message || t('user.tracking.quotes.errorToast');
             toast.error(msg);
             setAcceptingId(null);
         }
     };
 
     const handleCancel = async () => {
-        const confirmed = window.confirm('Bạn có chắc muốn huỷ yêu cầu này?');
+        const confirmed = window.confirm(t('user.tracking.page.cancelConfirm'));
         if (!confirmed) return;
         const success = await cancelRequest();
         if (success) {
-            toast.success('Đã huỷ yêu cầu thành công');
+            toast.success(t('user.tracking.page.cancelSuccess'));
             router.push('/user/requests');
         }
     };
@@ -922,10 +894,10 @@ export default function RequestTrackingPage() {
         setIsRetrying(true);
         try {
             const newRequest = await retryRequest();
-            toast.success('Đã tạo yêu cầu mới!');
+            toast.success(t('user.tracking.page.retrySuccess'));
             router.push(`/user/requests/${newRequest.id}`);
         } catch {
-            toast.error('Không thể thử lại. Vui lòng thử lại sau.');
+            toast.error(t('user.tracking.page.retryError'));
         } finally {
             setIsRetrying(false);
         }
@@ -936,7 +908,7 @@ export default function RequestTrackingPage() {
             <div className="min-h-screen flex items-center justify-center" style={{ background: C.bg }}>
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-3" style={{ borderColor: C.orange }}></div>
-                    <p className="text-sm" style={{ color: C.gray }}>Đang tải yêu cầu...</p>
+                    <p className="text-sm" style={{ color: C.gray }}>{t('user.tracking.page.loading')}</p>
                 </div>
             </div>
         );
@@ -949,10 +921,10 @@ export default function RequestTrackingPage() {
                     <div className="w-14 h-14 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#fef2f2' }}>
                         <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#ef4444" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                     </div>
-                    <h3 className="text-base font-bold mb-2" style={{ color: C.navy }}>Không tải được yêu cầu</h3>
+                    <h3 className="text-base font-bold mb-2" style={{ color: C.navy }}>{t('user.tracking.page.errorTitle')}</h3>
                     <p className="text-sm mb-5" style={{ color: C.gray }}>{error}</p>
                     <button onClick={() => router.push('/user/requests')} className="w-full py-2.5 rounded-xl font-semibold text-sm text-white" style={{ background: C.orange }}>
-                        Quay lại
+                        {t('user.tracking.page.backBtn')}
                     </button>
                 </div>
             </div>
@@ -960,6 +932,20 @@ export default function RequestTrackingPage() {
     }
 
     if (!status) return null;
+
+    const timeLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
+    const statusTKey = `user.tracking.status.${status.status}`;
+    const statusLabelText = (() => {
+        const s = t(statusTKey);
+        return s === statusTKey ? status.status : s;
+    })();
+    const incidentTKey = status.incidentType ? `provider.incidents.${status.incidentType}` : '';
+    const incidentLabelText = status.incidentType
+        ? (() => {
+            const s = t(incidentTKey);
+            return s === incidentTKey ? status.incidentType! : s;
+        })()
+        : t('user.tracking.page.emergency');
 
     const statusStyle = STATUS_COLORS[status.status] || { bg: C.bg, text: C.gray, dot: C.gray };
     const isMatchingWithWindowOpen = (status.status === 'MATCHING' || status.status === 'SEARCHING') && !showQuoteSelection;
@@ -983,7 +969,7 @@ export default function RequestTrackingPage() {
                     </svg>
                 </button>
                 <div className="flex-1 min-w-0">
-                    <h1 className="font-bold text-sm leading-tight" style={{ color: C.navy }}>Yêu cầu cứu hộ</h1>
+                    <h1 className="font-bold text-sm leading-tight" style={{ color: C.navy }}>{t('user.tracking.title')}</h1>
                     <p className="text-xs truncate" style={{ color: C.gray }}>#{displayOrderCode(status.orderCode, requestId)}</p>
                 </div>
                 {/* Status chip */}
@@ -992,7 +978,7 @@ export default function RequestTrackingPage() {
                     style={{ background: statusStyle.bg, color: statusStyle.text }}
                 >
                     <div className="w-1.5 h-1.5 rounded-full" style={{ background: statusStyle.dot }}></div>
-                    {STATUS_LABELS[status.status] || status.status}
+                    {statusLabelText}
                 </div>
             </header>
 
@@ -1006,7 +992,7 @@ export default function RequestTrackingPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold" style={{ color: C.navy }}>
-                            {status.incidentType ? (INCIDENT_LABELS[status.incidentType] || status.incidentType) : 'Cứu hộ khẩn cấp'}
+                            {incidentLabelText}
                         </p>
                         {status.pickupLocation?.addressText && (
                             <p className="text-xs truncate mt-0.5" style={{ color: C.gray }}>
@@ -1015,9 +1001,9 @@ export default function RequestTrackingPage() {
                         )}
                     </div>
                     <div className="text-right flex-shrink-0">
-                        <p className="text-[10px]" style={{ color: C.gray }}>Tạo lúc</p>
+                        <p className="text-[10px]" style={{ color: C.gray }}>{t('user.tracking.page.createdAt')}</p>
                         <p className="text-xs font-medium" style={{ color: C.navy }}>
-                            {status.createdAt ? new Date(status.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                            {status.createdAt ? new Date(status.createdAt).toLocaleTimeString(timeLocale, { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                         </p>
                     </div>
                 </div>
@@ -1078,10 +1064,10 @@ export default function RequestTrackingPage() {
                         </div>
                         <div className="flex-1 text-left">
                             <p className="text-sm font-bold" style={{ color: '#15803d' }}>
-                                Trong lúc chờ — Xem cửa hàng sửa xe gần đây
+                                {t('user.tracking.page.nearbyWhileWaitingTitle')} — {t('user.dashboard.nearbyShops.cardTitle')}
                             </p>
                             <p className="text-xs mt-0.5" style={{ color: '#16a34a' }}>
-                                Tìm garage, tiệm sửa xe gần đây ngay bây giờ
+                                {t('user.dashboard.nearbyShops.cardSubtitle')}
                             </p>
                         </div>
                         <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5}>
@@ -1097,7 +1083,7 @@ export default function RequestTrackingPage() {
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#22c55e' }} />
                             <p className="text-xs font-semibold" style={{ color: C.navy }}>
-                                Báo giá mới nhận — Chọn ngay hoặc đợi thêm
+                                {t('user.tracking.quotes.newHeader')}
                             </p>
                         </div>
 
@@ -1113,7 +1099,7 @@ export default function RequestTrackingPage() {
 
                         {/* Hint */}
                         <p className="text-center text-[11px]" style={{ color: C.gray }}>
-                            Đếm ngược vẫn chạy để chờ báo giá từ providers khác
+                            {t('user.tracking.quotes.countdownActive')}
                         </p>
                     </div>
                 )}
@@ -1160,18 +1146,18 @@ export default function RequestTrackingPage() {
                         </div>
                         <div className="flex-1 text-left">
                             <p className="font-bold text-sm text-white">
-                                Xem Cứu hộ viên trên bản đồ
+                                {t('user.tracking.page.openMapTitle')}
                             </p>
                             <div className="flex items-center gap-1.5 mt-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full animate-pulse bg-white" />
-                                <span className="text-[10px] font-semibold text-white">TRỰC TIẾP</span>
+                                <span className="text-[10px] font-semibold text-white">{t('user.tracking.page.liveBadge')}</span>
                                 {status.matchedEta ? (
                                     <span className="text-[10px] text-white/80">
-                                        · Còn khoảng {status.matchedEta} phút
+                                        {t('user.tracking.page.etaApprox', { minutes: status.matchedEta })}
                                     </span>
                                 ) : (
                                     <span className="text-[10px] text-white/80">
-                                        · Chat & Theo dõi vị trí
+                                        {t('user.tracking.page.trackSubline')}
                                     </span>
                                 )}
                             </div>
@@ -1202,12 +1188,12 @@ export default function RequestTrackingPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
                         </div>
-                        <h3 className="text-sm font-bold mb-1" style={{ color: '#15803d' }}>Provider đang làm việc</h3>
+                        <h3 className="text-sm font-bold mb-1" style={{ color: '#15803d' }}>{t('user.tracking.page.workingTitle')}</h3>
                         <p className="text-xs mb-2" style={{ color: '#6b7280' }}>
-                            Vui lòng quan sát và hỗ trợ provider trong quá trình sửa chữa.
+                            {t('user.tracking.page.workingDesc')}
                         </p>
                         <p className="text-xs" style={{ color: '#9ca3af' }}>
-                            ⚡ Hãy yên tâm — provider của bạn đang cố gắng hết sức!
+                            {t('user.tracking.page.workingNote')}
                         </p>
                     </div>
                 )}
@@ -1242,14 +1228,14 @@ export default function RequestTrackingPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </div>
-                        <h3 className="text-sm font-bold mb-1" style={{ color: C.navy }}>Yêu cầu đã bị huỷ</h3>
-                        <p className="text-xs mb-5" style={{ color: C.gray }}>Yêu cầu cứu hộ của bạn đã được huỷ thành công.</p>
+                        <h3 className="text-sm font-bold mb-1" style={{ color: C.navy }}>{t('user.tracking.page.cancelledTitle')}</h3>
+                        <p className="text-xs mb-5" style={{ color: C.gray }}>{t('user.tracking.page.cancelledDesc')}</p>
                         <button
                             onClick={() => router.push('/user')}
                             className="w-full py-3 rounded-xl text-sm font-bold text-white"
                             style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDark})` }}
                         >
-                            Về trang chủ
+                            {t('user.tracking.page.homeBtn')}
                         </button>
                     </div>
                 )}

@@ -3,9 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
-import { Settings, Save, Smartphone, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Settings, Save, Smartphone, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const C = {
@@ -27,8 +28,10 @@ const C = {
 export default function AdminSettingsPage() {
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
+    const { t } = useLanguage();
+    const s = (key: string) => t(`admin.settings.${key}`);
 
-    const [platformName, setPlatformName] = useState('Rescue Me');
+    const [platformName, setPlatformName] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -39,36 +42,43 @@ export default function AdminSettingsPage() {
     }, [user, authLoading, router]);
 
     useEffect(() => {
-        const fetchSettings = async () => {
+        if (!user || user.role !== 'ADMIN') return;
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
             try {
                 const data = await adminApi.getSettings();
-                setPlatformName(data.platformName || 'Rescue Me');
+                if (cancelled) return;
+                const name = (data.platformName || '').trim();
+                setPlatformName(name || t('admin.settings.defaultPlatformName'));
             } catch (err) {
                 console.error(err);
-                toast.error('Lỗi khi tải cài đặt nền tảng');
+                if (!cancelled) {
+                    toast.error(t('admin.settings.toastLoadError'));
+                    setPlatformName(t('admin.settings.defaultPlatformName'));
+                }
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
+        })();
+        return () => {
+            cancelled = true;
         };
-
-        if (user && user.role === 'ADMIN') {
-            fetchSettings();
-        }
-    }, [user]);
+    }, [user, t]);
 
     const handleSaveSettings = async () => {
         if (!platformName.trim()) {
-            toast.error('Tên hệ thống không được để trống');
+            toast.error(s('toastEmptyName'));
             return;
         }
 
         setSaving(true);
         try {
             await adminApi.updateSettings(platformName.trim());
-            toast.success('Lưu cài đặt thành công');
+            toast.success(s('toastSaveSuccess'));
         } catch (err) {
             console.error(err);
-            toast.error('Có lỗi xảy ra khi lưu cài đặt');
+            toast.error(s('toastSaveError'));
         } finally {
             setSaving(false);
         }
@@ -87,44 +97,41 @@ export default function AdminSettingsPage() {
     return (
         <AdminLayout activeTab="/admin/settings">
             <div className="p-6 max-w-4xl mx-auto min-h-screen">
-                {/* Header */}
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: C.navy }}>
                         <Settings className="w-6 h-6" style={{ color: C.orange }} />
-                        Cài đặt Hệ thống
+                        {s('title')}
                     </h1>
                     <p className="mt-1 text-sm font-medium" style={{ color: C.gray }}>
-                        Quản lý các thông tin hiển thị chung và cấu hình hệ thống
+                        {s('subtitle')}
                     </p>
                 </div>
 
                 <div className="bg-white rounded-2xl border p-6 shadow-sm mb-6" style={{ borderColor: C.grayLight }}>
                     <div className="mb-5 pb-4 border-b border-slate-100 flex items-center justify-between">
                         <div>
-                            <h2 className="text-lg font-bold" style={{ color: C.navy }}>Thông tin hiển thị</h2>
-                            <p className="text-xs" style={{ color: C.gray }}>Các thông tin này sẽ hiển thị ở Tiêu đề và Ứng dụng</p>
+                            <h2 className="text-lg font-bold" style={{ color: C.navy }}>{s('sectionTitle')}</h2>
+                            <p className="text-xs" style={{ color: C.gray }}>{s('sectionDesc')}</p>
                         </div>
                         <Smartphone className="w-5 h-5 text-slate-300" />
                     </div>
 
                     <div className="space-y-6 max-w-lg">
-                        {/* Platform Name */}
                         <div>
-                            <label className="block text-sm font-bold mb-2" style={{ color: C.navy }}>Tên hệ thống (Platform Name)</label>
+                            <label className="block text-sm font-bold mb-2" style={{ color: C.navy }}>{s('platformNameLabel')}</label>
                             <input
                                 type="text"
                                 className="w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 transition-all font-medium"
                                 style={{ borderColor: C.grayLight, color: C.navy }}
                                 value={platformName}
                                 onChange={(e) => setPlatformName(e.target.value)}
-                                placeholder="VD: Rescue Me..."
+                                placeholder={s('platformNamePlaceholder')}
                             />
                             <p className="mt-1.5 text-xs flex items-center gap-1" style={{ color: C.gray }}>
-                                <AlertCircle className="w-3.5 h-3.5" /> Sử dụng ngắn gọn để hiển thị tốt trên Header
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {s('platformNameHint')}
                             </p>
                         </div>
 
-                        {/* Save Button */}
                         <div className="pt-2">
                             <button
                                 onClick={handleSaveSettings}
@@ -137,7 +144,7 @@ export default function AdminSettingsPage() {
                                 ) : (
                                     <Save className="w-4 h-4" />
                                 )}
-                                Lưu Thay Đổi
+                                {s('saveChanges')}
                             </button>
                         </div>
                     </div>

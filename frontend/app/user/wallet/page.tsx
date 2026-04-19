@@ -365,7 +365,9 @@ function WithdrawModal({ availableBalance, withdrawalAccounts, onClose, onSucces
     const amount = parseInt(rawAmount.replace(/\D/g, ''), 10) || 0;
     const isBelowMin = amount > 0 && amount < MIN_WITHDRAWAL;
     const isOverBalance = amount > availableBalance;
-    const isDisabled = loading || amount < MIN_WITHDRAWAL || isOverBalance;
+    const hasAccounts = (withdrawalAccounts?.length ?? 0) > 0;
+    const noAccountSelected = hasAccounts && !withdrawalAccountId;
+    const isDisabled = loading || amount < MIN_WITHDRAWAL || isOverBalance || !hasAccounts || noAccountSelected;
     const QUICK = [50_000, 100_000, 200_000, 500_000].filter(q => q <= availableBalance);
 
     const handleWithdraw = async (e: React.FormEvent) => {
@@ -407,7 +409,7 @@ function WithdrawModal({ availableBalance, withdrawalAccounts, onClose, onSucces
                     {withdrawalAccounts?.length ? (
                         <div>
                             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.gray }}>
-                                Tài khoản nhận tiền
+                                {t('user.wallet.withdrawModal.receivingAccountLabel')}
                             </label>
                             <select
                                 value={withdrawalAccountId}
@@ -415,7 +417,7 @@ function WithdrawModal({ availableBalance, withdrawalAccounts, onClose, onSucces
                                 className="w-full px-3 py-3 rounded-xl border text-sm font-medium"
                                 style={{ borderColor: C.border, outline: 'none', background: 'white', color: C.navy }}
                             >
-                                <option value="">Chọn tài khoản</option>
+                                <option value="">{t('user.wallet.withdrawModal.selectAccountPlaceholder')}</option>
                                 {withdrawalAccounts.map(acc => (
                                     <option key={acc.id} value={acc.id}>
                                         {acc.bankName} · {acc.accountNumber}
@@ -424,8 +426,19 @@ function WithdrawModal({ availableBalance, withdrawalAccounts, onClose, onSucces
                             </select>
                         </div>
                     ) : (
-                        <div className="text-xs" style={{ color: C.gray }}>
-                            Bạn chưa cấu hình tài khoản rút tiền trong `Settings`.
+                        <div className="flex items-start gap-2 p-3 rounded-xl text-xs" style={{ background: '#fefce8', color: '#92400e' }}>
+                            <Banknote style={{ width: 14, height: 14, marginTop: 1, flexShrink: 0 }} />
+                            <span>
+                                {t('user.wallet.withdrawModal.noBankAccountHint')}{' '}
+                                <a
+                                    href="/user/settings#withdrawal-accounts"
+                                    onClick={onClose}
+                                    className="font-semibold underline"
+                                    style={{ color: C.orange }}
+                                >
+                                    {t('user.wallet.withdrawModal.goToSettings')}
+                                </a>
+                            </span>
                         </div>
                     )}
 
@@ -485,6 +498,12 @@ function WithdrawModal({ availableBalance, withdrawalAccounts, onClose, onSucces
                         {t('user.wallet.withdrawModal.hint')}
                     </div>
 
+                    {noAccountSelected && (
+                        <p className="text-xs text-red-500 flex items-center gap-1">
+                            <AlertCircle style={{ width: 12, height: 12 }} />
+                            {t('user.wallet.withdrawModal.selectAccountPlaceholder')}
+                        </p>
+                    )}
                     {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle style={{ width: 12, height: 12 }} />{error}</p>}
 
                     <div className="flex gap-2 pt-1">

@@ -26,7 +26,7 @@ const mockAccountDto = {
   accountNumber: '1234567890',
   bankCode: BankCode.VCB,
   bankName: 'Vietcombank',
-  branchName: null,
+  branchName: undefined,
   accountHolderName: 'NGUYEN VAN A',
 };
 

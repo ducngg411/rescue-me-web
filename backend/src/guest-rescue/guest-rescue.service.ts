@@ -144,6 +144,14 @@ export class GuestRescueService {
         });
 
         this.logger.log(`Guest request created: ${rescueRequest.id}`);
+
+        // Broadcast FCM push to nearby online providers (fire-and-forget, non-blocking)
+        setImmediate(() => {
+            this.rescueRequestService.broadcastToProviders(rescueRequest).catch(err =>
+                this.logger.error(`[FCM] broadcastToProviders failed for guest request: ${err.message}`)
+            );
+        });
+
         return rescueRequest;
     }
 

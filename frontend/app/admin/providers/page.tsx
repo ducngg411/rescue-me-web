@@ -40,8 +40,8 @@ function serviceTypeLabel(t: (path: string) => string, key: string): string {
 }
 
 function vehicleChartLabel(t: (path: string) => string, label: string): string {
-    if (label === 'Car') return t('admin.providers.vehicleCar');
-    if (label === 'Motorcycle') return t('admin.providers.vehicleMotorcycle');
+    if (label === 'Car' || label === 'Ô tô') return t('admin.providers.vehicleCar');
+    if (label === 'Motorcycle' || label === 'Xe máy') return t('admin.providers.vehicleMotorcycle');
     return label;
 }
 

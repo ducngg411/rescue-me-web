@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
 import AvatarImage from '@/components/AvatarImage';
 import { displayOrderCode } from '@/lib/reconciliation';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
     Search, ChevronLeft, ChevronRight, Filter, Calendar, Eye,
     X, Mail, Phone, Wallet, Car, Star, Clock, ShieldOff, ShieldCheck,
@@ -30,6 +31,31 @@ const C = {
     blue: '#2563eb',
     blueLight: '#eff6ff',
 };
+
+function localeTag(locale: string) {
+    return locale === 'vi' ? 'vi-VN' : 'en-US';
+}
+
+type Translate = (path: string, params?: Record<string, string | number>) => string;
+
+function incidentTypeLabel(t: Translate, incidentType: string) {
+    const path = `admin.requests.incident.${incidentType}`;
+    const v = t(path);
+    return v === path ? incidentType : v;
+}
+
+function requestStatusBadge(t: Translate, status: string) {
+    const path = `admin.requests.status.${status}`;
+    const label = t(path);
+    const resolved = label === path ? status : label;
+    const styles: Record<string, { color: string; bg: string }> = {
+        COMPLETED: { color: C.green, bg: C.greenLight },
+        CANCELLED: { color: C.red, bg: C.redLight },
+        PAID: { color: C.green, bg: C.greenLight },
+        IN_PROGRESS: { color: C.blue, bg: C.blueLight },
+    };
+    return { label: resolved, ...(styles[status] ?? { color: C.gray, bg: C.bg }) };
+}
 
 interface UserItem {
     id: string;
@@ -77,92 +103,55 @@ interface UserDetail extends UserItem {
 
 type TabType = 'ALL' | 'ACTIVE' | 'INACTIVE' | 'ROLE_USER' | 'ROLE_PROVIDER' | 'ROLE_ADMIN' | 'ACCOUNT_ACTIVE' | 'ACCOUNT_BANNED';
 
-const TAB_GROUPS: { groupLabel: string; tabs: { key: TabType; label: string }[] }[] = [
-    {
-        groupLabel: 'Hồ sơ',
-        tabs: [
-            { key: 'ALL', label: 'Tất cả' },
-            { key: 'ACTIVE', label: 'Đã hoàn thiện' },
-            { key: 'INACTIVE', label: 'Chưa hoàn thiện' },
-        ],
-    },
-    {
-        groupLabel: 'Vai trò',
-        tabs: [
-            { key: 'ROLE_USER', label: 'Customer' },
-            { key: 'ROLE_PROVIDER', label: 'Provider' },
-            { key: 'ROLE_ADMIN', label: 'Admin' },
-        ],
-    },
-    {
-        groupLabel: 'Tài khoản',
-        tabs: [
-            { key: 'ACCOUNT_ACTIVE', label: 'Hoạt động' },
-            { key: 'ACCOUNT_BANNED', label: 'Bị khóa' },
-        ],
-    },
-];
-
-const ALL_TABS = TAB_GROUPS.flatMap(g => g.tabs);
-
-const INCIDENT_LABELS: Record<string, string> = {
-    BREAKDOWN: 'Hỏng xe', ACCIDENT: 'Tai nạn', FLAT_TIRE: 'Xì lốp',
-    BATTERY_DEAD: 'Hết pin', OUT_OF_FUEL: 'Hết xăng', LOCKED_OUT: 'Khóa xe', OTHER: 'Khác',
-};
-const REQUEST_STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-    COMPLETED: { label: 'Hoàn thành', color: C.green, bg: C.greenLight },
-    CANCELLED: { label: 'Đã hủy', color: C.red, bg: C.redLight },
-    PAID: { label: 'Đã thanh toán', color: C.green, bg: C.greenLight },
-    IN_PROGRESS: { label: 'Đang làm', color: C.blue, bg: C.blueLight },
-};
-
 const PAGE_SIZE = 10;
 
 function RoleBadge({ role }: { role: UserItem['role'] }) {
-    const map: Record<UserItem['role'], { label: string; bg: string; color: string }> = {
-        USER: { label: 'Customer', bg: '#eff6ff', color: '#2563eb' },
-        PROVIDER: { label: 'Provider', bg: '#f0fdf4', color: '#16a34a' },
-        ADMIN: { label: 'Admin', bg: '#fefce8', color: '#ca8a04' },
+    const { t } = useLanguage();
+    const map: Record<UserItem['role'], { labelKey: string; bg: string; color: string }> = {
+        USER: { labelKey: 'admin.users.role.USER', bg: '#eff6ff', color: '#2563eb' },
+        PROVIDER: { labelKey: 'admin.users.role.PROVIDER', bg: '#f0fdf4', color: '#16a34a' },
+        ADMIN: { labelKey: 'admin.users.role.ADMIN', bg: '#fefce8', color: '#ca8a04' },
     };
     const c = map[role];
     return (
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: c.bg, color: c.color }}>
-            {c.label}
+            {t(c.labelKey)}
         </span>
     );
 }
 
-/** Profile Status: Hoàn thiện / Chưa hoàn thiện */
 function ProfileBadge({ completed }: { completed: boolean }) {
+    const { t } = useLanguage();
     return completed ? (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: C.greenLight, color: C.green }}>
             <span className="w-1.5 h-1.5 rounded-full bg-current" />
-            Đã hoàn thiện
+            {t('admin.users.profileComplete')}
         </span>
     ) : (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: C.yellowLight, color: C.yellow }}>
             <span className="w-1.5 h-1.5 rounded-full bg-current" />
-            Chưa hoàn thiện
+            {t('admin.users.profileIncomplete')}
         </span>
     );
 }
 
-/** Account Status: Hoạt động / Bị khóa */
 function AccountBadge({ banned }: { banned: boolean }) {
+    const { t } = useLanguage();
     return banned ? (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: C.redLight, color: C.red }}>
             <ShieldOff className="w-2.5 h-2.5" />
-            Bị khóa
+            {t('admin.users.accountBanned')}
         </span>
     ) : (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: C.blueLight, color: C.blue }}>
             <ShieldCheck className="w-2.5 h-2.5" />
-            Hoạt động
+            {t('admin.users.accountActive')}
         </span>
     );
 }
 
 function AuthBadge({ provider }: { provider: 'EMAIL' | 'GOOGLE' }) {
+    const { t } = useLanguage();
     if (provider === 'GOOGLE') return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: C.blueLight, color: C.blue }}>
             <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
@@ -171,13 +160,13 @@ function AuthBadge({ provider }: { provider: 'EMAIL' | 'GOOGLE' }) {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
             </svg>
-            Google
+            {t('admin.users.authGoogle')}
         </span>
     );
     return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: C.greenLight, color: C.green }}>
             <Mail className="w-3 h-3" />
-            Email
+            {t('admin.users.authEmail')}
         </span>
     );
 }
@@ -195,6 +184,8 @@ function UserDetailPanel({
     onDeleted: () => void;
 }) {
     const router = useRouter();
+    const { t, locale } = useLanguage();
+    const loc = localeTag(locale);
     const [user, setUser] = useState<UserDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null); // which action
@@ -211,11 +202,11 @@ function UserDetailPanel({
             const data = await adminApi.getUserDetail(userId);
             setUser(data as UserDetail);
         } catch {
-            setError('Không thể tải thông tin người dùng.');
+            setError(t('admin.users.panel.loadError'));
         } finally {
             setLoading(false);
         }
-    }, [userId]);
+    }, [userId, t]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -231,7 +222,7 @@ function UserDetailPanel({
             await load();
             onUpdated();
         } catch {
-            setError('Có lỗi xảy ra khi khóa tài khoản.');
+            setError(t('admin.users.panel.errorBan'));
         } finally {
             setActionLoading(null);
         }
@@ -250,7 +241,7 @@ function UserDetailPanel({
             await load();
             onUpdated();
         } catch {
-            setError('Có lỗi xảy ra khi mở khóa tài khoản.');
+            setError(t('admin.users.panel.errorUnban'));
         } finally {
             setActionLoading(null);
         }
@@ -268,7 +259,7 @@ function UserDetailPanel({
             setShowDeleteModal(false);
             onDeleted();
         } catch {
-            setError('Có lỗi xảy ra khi xóa tài khoản.');
+            setError(t('admin.users.panel.errorDelete'));
         } finally {
             setActionLoading(null);
         }
@@ -304,7 +295,7 @@ function UserDetailPanel({
             >
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0" style={{ borderColor: C.border }}>
-                    <h2 className="text-base font-bold" style={{ color: C.navy }}>Chi tiết người dùng</h2>
+                    <h2 className="text-base font-bold" style={{ color: C.navy }}>{t('admin.users.panel.title')}</h2>
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" style={{ color: C.gray }}>
                         <X className="w-4 h-4" />
                     </button>
@@ -317,7 +308,7 @@ function UserDetailPanel({
                             <div className="w-8 h-8 rounded-full border-[3px] animate-spin" style={{ borderColor: C.orange, borderTopColor: 'transparent' }} />
                         </div>
                     ) : !user ? (
-                        <div className="p-6 text-center text-sm" style={{ color: C.red }}>{error || 'Không tìm thấy.'}</div>
+                        <div className="p-6 text-center text-sm" style={{ color: C.red }}>{error || t('admin.users.panel.notFound')}</div>
                     ) : (
                         <>
                             {error && (
@@ -332,10 +323,10 @@ function UserDetailPanel({
                                 <div className="mx-5 mt-4 p-3 rounded-xl flex items-start gap-2" style={{ background: C.redLight, borderLeft: `3px solid ${C.red}` }}>
                                     <ShieldOff className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: C.red }} />
                                     <div>
-                                        <p className="text-xs font-bold" style={{ color: C.red }}>Tài khoản đang bị khóa</p>
-                                        <p className="text-xs mt-0.5" style={{ color: '#991b1b' }}>Lý do: {user.banReason}</p>
+                                        <p className="text-xs font-bold" style={{ color: C.red }}>{t('admin.users.panel.bannedTitle')}</p>
+                                        <p className="text-xs mt-0.5" style={{ color: '#991b1b' }}>{t('admin.users.panel.bannedReason')}: {user.banReason}</p>
                                         <p className="text-[10px] mt-0.5 opacity-70" style={{ color: '#991b1b' }}>
-                                            Khóa lúc: {new Date(user.bannedAt!).toLocaleString('vi-VN')}
+                                            {t('admin.users.panel.bannedAt')}: {new Date(user.bannedAt!).toLocaleString(loc)}
                                         </p>
                                     </div>
                                 </div>
@@ -353,7 +344,7 @@ function UserDetailPanel({
                                     />
                                     <div className="min-w-0">
                                         <p className="text-base font-bold truncate" style={{ color: C.navy }}>
-                                            {user.fullName || '(Chưa cập nhật tên)'}
+                                            {user.fullName || t('admin.users.panel.namePlaceholder')}
                                         </p>
                                         <p className="text-xs truncate mb-2" style={{ color: C.gray }}>{user.email}</p>
                                         {/* Dual-status badges */}
@@ -369,21 +360,21 @@ function UserDetailPanel({
                             <div className="grid grid-cols-3 gap-px border-b" style={{ background: C.border }}>
                                 {[
                                             {
-                                                label: 'Số dư ví',
+                                                label: t('admin.users.panel.statWalletBalance'),
                                                 value: user.userWallet
-                                                    ? `${user.userWallet.availableBalance.toLocaleString('vi-VN')}₫`
+                                                    ? `${user.userWallet.availableBalance.toLocaleString(loc)}₫`
                                                     : user.providerWallet
-                                                        ? `${user.providerWallet.availableBalance.toLocaleString('vi-VN')}₫`
+                                                        ? `${user.providerWallet.availableBalance.toLocaleString(loc)}₫`
                                                         : '—',
                                                 icon: <Wallet className="w-3.5 h-3.5" />,
                                             },
                                     { 
-                                        label: user.role === 'PROVIDER' ? 'Job Hoàn Thành' : 'Yêu cầu', 
+                                        label: user.role === 'PROVIDER' ? t('admin.users.panel.statJobsCompleted') : t('admin.users.panel.statRequests'), 
                                         value: String(user.role === 'PROVIDER' ? user._count.assignedRequests : user._count.rescueRequests), 
                                         icon: <Car className="w-3.5 h-3.5" /> 
                                     },
                                     { 
-                                        label: 'Đánh giá', 
+                                        label: t('admin.users.panel.statRating'), 
                                         value: user.role === 'PROVIDER' 
                                             ? `${user.averageRating?.toFixed(1) || '0.0'} (${user._count.reviewsReceived || 0})` 
                                             : String(user._count.reviewsGiven), 
@@ -402,13 +393,13 @@ function UserDetailPanel({
 
                             {/* Info rows */}
                             <div className="px-5 py-4 space-y-3 border-b" style={{ borderColor: C.border }}>
-                                <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>Thông tin liên hệ</p>
+                                <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>{t('admin.users.panel.contactSection')}</p>
                                 {[
-                                    { icon: <Phone className="w-3.5 h-3.5" />, label: 'Số điện thoại', value: user.phoneNumber || '—' },
-                                    { icon: <Mail className="w-3.5 h-3.5" />, label: 'Email', value: user.email },
-                                    { icon: <Car className="w-3.5 h-3.5" />, label: 'Biển số xe', value: user.licensePlate ? `${user.licensePlate}${user.vehicleColor ? ` · ${user.vehicleColor}` : ''}` : '—' },
-                                    { icon: <Clock className="w-3.5 h-3.5" />, label: 'Tham gia', value: new Date(user.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) },
-                                    { icon: <Clock className="w-3.5 h-3.5" />, label: 'Đăng nhập gần nhất', value: user.lastLogin ? new Date(user.lastLogin).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' } as Intl.DateTimeFormatOptions) : '—' },
+                                    { icon: <Phone className="w-3.5 h-3.5" />, label: t('admin.users.panel.phone'), value: user.phoneNumber || '—' },
+                                    { icon: <Mail className="w-3.5 h-3.5" />, label: t('admin.users.panel.email'), value: user.email },
+                                    { icon: <Car className="w-3.5 h-3.5" />, label: t('admin.users.panel.plate'), value: user.licensePlate ? `${user.licensePlate}${user.vehicleColor ? ` · ${user.vehicleColor}` : ''}` : '—' },
+                                    { icon: <Clock className="w-3.5 h-3.5" />, label: t('admin.users.panel.joined'), value: new Date(user.createdAt).toLocaleDateString(loc, { day: '2-digit', month: '2-digit', year: 'numeric' }) },
+                                    { icon: <Clock className="w-3.5 h-3.5" />, label: t('admin.users.panel.lastLogin'), value: user.lastLogin ? new Date(user.lastLogin).toLocaleString(loc, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' } as Intl.DateTimeFormatOptions) : '—' },
                                 ].map(row => (
                                     <div key={row.label} className="flex items-start gap-3">
                                         <span className="mt-0.5 flex-shrink-0" style={{ color: C.gray }}>{row.icon}</span>
@@ -421,7 +412,7 @@ function UserDetailPanel({
                                 <div className="flex items-start gap-3">
                                     <span className="mt-0.5 flex-shrink-0" style={{ color: C.gray }}><Mail className="w-3.5 h-3.5" /></span>
                                     <div>
-                                        <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>Phương thức đăng nhập</p>
+                                        <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>{t('admin.users.panel.loginMethod')}</p>
                                         <div className="mt-0.5"><AuthBadge provider={user.authProvider} /></div>
                                     </div>
                                 </div>
@@ -430,15 +421,15 @@ function UserDetailPanel({
                             {/* Wallet detail */}
                             {user.userWallet && (
                                 <div className="px-5 py-4 border-b" style={{ borderColor: C.border }}>
-                                    <p className="text-[10px] font-semibold tracking-wider uppercase mb-3" style={{ color: C.gray }}>Ví điện tử</p>
+                                    <p className="text-[10px] font-semibold tracking-wider uppercase mb-3" style={{ color: C.gray }}>{t('admin.users.panel.walletSection')}</p>
                                     <div className="rounded-xl p-4 border" style={{ borderColor: C.border, background: C.bg }}>
                                         <div className="flex justify-between items-center mb-2">
-                                            <span className="text-xs" style={{ color: C.gray }}>Số dư khả dụng</span>
-                                            <span className="text-sm font-bold" style={{ color: C.green }}>{user.userWallet.availableBalance.toLocaleString('vi-VN')}₫</span>
+                                            <span className="text-xs" style={{ color: C.gray }}>{t('admin.users.panel.available')}</span>
+                                            <span className="text-sm font-bold" style={{ color: C.green }}>{user.userWallet.availableBalance.toLocaleString(loc)}₫</span>
                                         </div>
                                         <div className="flex justify-between items-center">
-                                            <span className="text-xs" style={{ color: C.gray }}>Đang chờ</span>
-                                            <span className="text-sm font-semibold" style={{ color: C.yellow }}>{user.userWallet.pendingBalance.toLocaleString('vi-VN')}₫</span>
+                                            <span className="text-xs" style={{ color: C.gray }}>{t('admin.users.panel.pending')}</span>
+                                            <span className="text-sm font-semibold" style={{ color: C.yellow }}>{user.userWallet.pendingBalance.toLocaleString(loc)}₫</span>
                                         </div>
                                     </div>
                                 </div>
@@ -447,15 +438,15 @@ function UserDetailPanel({
                             {/* Recent requests */}
                             {user.role === 'PROVIDER' && user.assignedRequests && user.assignedRequests.length > 0 && (
                                 <div className="px-5 py-4 border-b" style={{ borderColor: C.border }}>
-                                    <p className="text-[10px] font-semibold tracking-wider uppercase mb-3" style={{ color: C.gray }}>5 job nhận gần nhất</p>
+                                    <p className="text-[10px] font-semibold tracking-wider uppercase mb-3" style={{ color: C.gray }}>{t('admin.users.panel.recentJobsProvider')}</p>
                                     <div className="space-y-2">
                                         {user.assignedRequests.map(r => {
-                                            const st = REQUEST_STATUS_LABELS[r.status] || { label: r.status, color: C.gray, bg: C.bg };
+                                            const st = requestStatusBadge(t, r.status);
                                             return (
                                                 <div key={r.id} className="flex items-center justify-between gap-2 p-2.5 rounded-xl border" style={{ borderColor: C.border }}>
                                                     <div className="min-w-0">
                                                         <p className="text-xs font-semibold truncate" style={{ color: C.navy }}>
-                                                            {INCIDENT_LABELS[r.incidentType] || r.incidentType}
+                                                            {incidentTypeLabel(t, r.incidentType)}
                                                             {r.orderCode && (
                                                                 <span className="ml-1 font-mono font-normal" style={{ color: C.gray }}>
                                                                     #{displayOrderCode(r.orderCode, r.id)}
@@ -463,8 +454,8 @@ function UserDetailPanel({
                                                             )}
                                                         </p>
                                                         <p className="text-[10px]" style={{ color: C.gray }}>
-                                                            {new Date(r.createdAt).toLocaleDateString('vi-VN')}
-                                                            {r.payment && ` · ${r.payment.totalAmount.toLocaleString('vi-VN')}₫`}
+                                                            {new Date(r.createdAt).toLocaleDateString(loc)}
+                                                            {r.payment && ` · ${r.payment.totalAmount.toLocaleString(loc)}₫`}
                                                         </p>
                                                     </div>
                                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: st.bg, color: st.color }}>
@@ -479,15 +470,15 @@ function UserDetailPanel({
 
                             {user.role === 'USER' && user.rescueRequests && user.rescueRequests.length > 0 && (
                                 <div className="px-5 py-4 border-b" style={{ borderColor: C.border }}>
-                                    <p className="text-[10px] font-semibold tracking-wider uppercase mb-3" style={{ color: C.gray }}>5 yêu cầu gần nhất</p>
+                                    <p className="text-[10px] font-semibold tracking-wider uppercase mb-3" style={{ color: C.gray }}>{t('admin.users.panel.recentRequestsUser')}</p>
                                     <div className="space-y-2">
                                         {user.rescueRequests.map(r => {
-                                            const st = REQUEST_STATUS_LABELS[r.status] || { label: r.status, color: C.gray, bg: C.bg };
+                                            const st = requestStatusBadge(t, r.status);
                                             return (
                                                 <div key={r.id} className="flex items-center justify-between gap-2 p-2.5 rounded-xl border" style={{ borderColor: C.border }}>
                                                     <div className="min-w-0">
                                                         <p className="text-xs font-semibold truncate" style={{ color: C.navy }}>
-                                                            {INCIDENT_LABELS[r.incidentType] || r.incidentType}
+                                                            {incidentTypeLabel(t, r.incidentType)}
                                                             {r.orderCode && (
                                                                 <span className="ml-1 font-mono font-normal" style={{ color: C.gray }}>
                                                                     #{displayOrderCode(r.orderCode, r.id)}
@@ -495,8 +486,8 @@ function UserDetailPanel({
                                                             )}
                                                         </p>
                                                         <p className="text-[10px]" style={{ color: C.gray }}>
-                                                            {new Date(r.createdAt).toLocaleDateString('vi-VN')}
-                                                            {r.payment && ` · ${r.payment.totalAmount.toLocaleString('vi-VN')}₫`}
+                                                            {new Date(r.createdAt).toLocaleDateString(loc)}
+                                                            {r.payment && ` · ${r.payment.totalAmount.toLocaleString(loc)}₫`}
                                                         </p>
                                                     </div>
                                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: st.bg, color: st.color }}>
@@ -515,7 +506,7 @@ function UserDetailPanel({
                 {/* ── Action Footer ── */}
                 {user && !loading && (
                     <div className="px-5 py-4 border-t flex-shrink-0 space-y-2" style={{ borderColor: C.border }}>
-                        <p className="text-[10px] font-semibold tracking-wider uppercase mb-3" style={{ color: C.gray }}>Hành động</p>
+                        <p className="text-[10px] font-semibold tracking-wider uppercase mb-3" style={{ color: C.gray }}>{t('admin.users.panel.actions')}</p>
 
                         {/* Row 1: Suspend/Activate + View Wallet */}
                         <div className="grid grid-cols-2 gap-2">
@@ -527,7 +518,7 @@ function UserDetailPanel({
                                     style={{ background: C.greenLight, color: C.green }}
                                 >
                                     {actionLoading === 'unban' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                                    Mở khóa
+                                    {t('admin.users.panel.unban')}
                                 </button>
                             ) : (
                                 <button
@@ -537,7 +528,7 @@ function UserDetailPanel({
                                     style={{ background: C.yellowLight, color: C.yellow }}
                                 >
                                     <ShieldOff className="w-4 h-4" />
-                                    Khóa TK
+                                    {t('admin.users.panel.ban')}
                                 </button>
                             )}
                             <button
@@ -546,7 +537,7 @@ function UserDetailPanel({
                                 style={{ background: C.blueLight, color: C.blue }}
                             >
                                 <ExternalLink className="w-4 h-4" />
-                                Xem ví
+                                {t('admin.users.panel.viewWallet')}
                             </button>
                         </div>
 
@@ -558,7 +549,7 @@ function UserDetailPanel({
                             style={{ background: C.redLight, color: C.red }}
                         >
                             {actionLoading === 'delete' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                            Xóa tài khoản
+                            {t('admin.users.panel.deleteAccount')}
                         </button>
                     </div>
                 )}
@@ -570,25 +561,25 @@ function UserDetailPanel({
                     <div className="absolute inset-0" onClick={() => setShowBanModal(false)} />
                     <div className="relative bg-white w-full max-w-md rounded-t-2xl p-5 shadow-2xl m-0 mr-0" style={{ right: 0 }}>
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold text-base" style={{ color: C.navy }}>Khóa tài khoản</h3>
+                            <h3 className="font-bold text-base" style={{ color: C.navy }}>{t('admin.users.panel.banModalTitle')}</h3>
                             <button onClick={() => setShowBanModal(false)} className="p-1 rounded-lg hover:bg-gray-100" style={{ color: C.gray }}>
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
                         <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: C.gray }}>
-                            Lý do khóa <span className="text-red-500">*</span>
+                            {t('admin.users.panel.banReasonLabel')} <span className="text-red-500">*</span>
                         </label>
                         <textarea
                             value={banReasonInput}
                             onChange={e => setBanReasonInput(e.target.value)}
                             rows={3}
-                            placeholder="VD: Spam, vi phạm điều khoản, hành vi gian lận..."
+                            placeholder={t('admin.users.panel.banReasonPlaceholder')}
                             className="w-full px-3 py-2 rounded-xl border text-sm focus:outline-none resize-none"
                             style={{ borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                             autoFocus
                         />
                         <p className="text-[10px] mt-1.5 mb-4" style={{ color: C.gray }}>
-                            Lý do này sẽ hiển thị cho người dùng khi họ cố đăng nhập.
+                            {t('admin.users.panel.banReasonHint')}
                         </p>
                         <div className="flex gap-3">
                             <button
@@ -596,7 +587,7 @@ function UserDetailPanel({
                                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 transition-colors"
                                 style={{ color: C.navy }}
                             >
-                                Hủy
+                                {t('admin.users.panel.cancel')}
                             </button>
                             <button
                                 onClick={handleBanConfirm}
@@ -605,7 +596,7 @@ function UserDetailPanel({
                                 style={{ background: C.red }}
                             >
                                 {actionLoading === 'ban' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldOff className="w-4 h-4" />}
-                                Xác nhận khóa
+                                {t('admin.users.panel.confirmBan')}
                             </button>
                         </div>
                     </div>
@@ -618,13 +609,13 @@ function UserDetailPanel({
                     <div className="absolute inset-0 bg-black/40" onClick={() => setShowUnbanModal(false)} />
                     <div className="relative bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl" style={{ border: `1px solid ${C.border}` }}>
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold text-base" style={{ color: C.navy }}>Xác nhận mở khóa</h3>
+                            <h3 className="font-bold text-base" style={{ color: C.navy }}>{t('admin.users.panel.unbanModalTitle')}</h3>
                             <button onClick={() => setShowUnbanModal(false)} className="p-1 rounded-lg hover:bg-gray-100" style={{ color: C.gray }}>
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
                         <p className="text-sm" style={{ color: C.gray }}>
-                            Bạn chắc chắn muốn mở khóa tài khoản <span className="font-semibold" style={{ color: C.navy }}>{user?.fullName || user?.email}</span>?
+                            {t('admin.users.panel.unbanConfirmBody', { name: user?.fullName || user?.email || '' })}
                         </p>
                         {error && (
                             <div className="mt-3 p-3 rounded-xl text-sm" style={{ background: C.redLight, color: C.red }}>
@@ -638,7 +629,7 @@ function UserDetailPanel({
                                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 transition-colors"
                                 style={{ color: C.navy }}
                             >
-                                Hủy
+                                {t('admin.users.panel.cancel')}
                             </button>
                             <button
                                 onClick={handleUnbanConfirm}
@@ -647,7 +638,7 @@ function UserDetailPanel({
                                 style={{ background: C.greenLight, color: C.green }}
                             >
                                 {actionLoading === 'unban' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                                Mở khóa
+                                {t('admin.users.panel.confirmUnban')}
                             </button>
                         </div>
                     </div>
@@ -660,15 +651,15 @@ function UserDetailPanel({
                     <div className="absolute inset-0 bg-black/40" onClick={() => setShowDeleteModal(false)} />
                     <div className="relative bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl" style={{ border: `1px solid ${C.border}` }}>
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold text-base" style={{ color: C.navy }}>Xác nhận xóa tài khoản</h3>
+                            <h3 className="font-bold text-base" style={{ color: C.navy }}>{t('admin.users.panel.deleteModalTitle')}</h3>
                             <button onClick={() => setShowDeleteModal(false)} className="p-1 rounded-lg hover:bg-gray-100" style={{ color: C.gray }}>
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
                         <p className="text-sm" style={{ color: C.gray }}>
-                            Xóa vĩnh viễn tài khoản <span className="font-semibold" style={{ color: C.navy }}>{user?.fullName || user?.email}</span>.
+                            {t('admin.users.panel.deleteConfirmBody', { name: user?.fullName || user?.email || '' })}
                             <span className="block mt-1" style={{ color: C.red, fontWeight: 600 }}>
-                                Hành động này không thể hoàn tác.
+                                {t('admin.users.panel.deleteIrreversible')}
                             </span>
                         </p>
                         {error && (
@@ -683,7 +674,7 @@ function UserDetailPanel({
                                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 transition-colors"
                                 style={{ color: C.navy }}
                             >
-                                Hủy
+                                {t('admin.users.panel.cancel')}
                             </button>
                             <button
                                 onClick={handleDeleteConfirm}
@@ -692,7 +683,7 @@ function UserDetailPanel({
                                 style={{ background: C.red, color: '#fff' }}
                             >
                                 {actionLoading === 'delete' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                                Xóa tài khoản
+                                {t('admin.users.panel.confirmDelete')}
                             </button>
                         </div>
                     </div>
@@ -705,6 +696,38 @@ function UserDetailPanel({
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function AdminUsersPage() {
     const { isReady } = useAdminGuard();
+    const { t, locale } = useLanguage();
+    const loc = localeTag(locale);
+
+    const tabGroups = useMemo(
+        () =>
+            [
+                {
+                    groupLabel: t('admin.users.groupProfile'),
+                    tabs: [
+                        { key: 'ALL' as const, label: t('admin.users.tabAll') },
+                        { key: 'ACTIVE' as const, label: t('admin.users.tabProfileComplete') },
+                        { key: 'INACTIVE' as const, label: t('admin.users.tabProfileIncomplete') },
+                    ],
+                },
+                {
+                    groupLabel: t('admin.users.groupRole'),
+                    tabs: [
+                        { key: 'ROLE_USER' as const, label: t('admin.users.tabRoleUser') },
+                        { key: 'ROLE_PROVIDER' as const, label: t('admin.users.tabRoleProvider') },
+                        { key: 'ROLE_ADMIN' as const, label: t('admin.users.tabRoleAdmin') },
+                    ],
+                },
+                {
+                    groupLabel: t('admin.users.groupAccount'),
+                    tabs: [
+                        { key: 'ACCOUNT_ACTIVE' as const, label: t('admin.users.tabAccountActive') },
+                        { key: 'ACCOUNT_BANNED' as const, label: t('admin.users.tabAccountBanned') },
+                    ],
+                },
+            ] as { groupLabel: string; tabs: { key: TabType; label: string }[] }[],
+        [t],
+    );
 
     const [tab, setTab] = useState<TabType>('ALL');
     const [items, setItems] = useState<UserItem[]>([]);
@@ -780,8 +803,49 @@ export default function AdminUsersPage() {
     const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
     const paginated = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    const verificationRate = stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0;
-    const growthPct = stats.total > 0 ? Math.round((stats.newThisMonth / stats.total) * 100) : 0;
+    const statCards = useMemo(() => {
+        const vr = stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0;
+        const gp = stats.total > 0 ? Math.round((stats.newThisMonth / stats.total) * 100) : 0;
+        return [
+            { label: t('admin.users.statTotal'), value: stats.total, sub: null as string | null, color: C.navy, icon: <Users className="w-4 h-4" /> },
+            {
+                label: t('admin.users.statCompleted'),
+                value: stats.active,
+                sub: t('admin.users.statCompletedSub', { rate: vr }),
+                color: C.green,
+                icon: <CheckCircle className="w-4 h-4" />,
+            },
+            {
+                label: t('admin.users.statProfileIncomplete'),
+                value: stats.inactive,
+                sub: t('admin.users.statProfileIncompleteSub', { rate: 100 - vr }),
+                color: C.yellow,
+                icon: <AlertTriangle className="w-4 h-4" />,
+            },
+            {
+                label: t('admin.users.statNewMonth'),
+                value: stats.newThisMonth,
+                sub: t('admin.users.statMonthGrowth', { rate: gp }),
+                color: C.blue,
+                icon: <Clock className="w-4 h-4" />,
+            },
+        ];
+    }, [stats, t]);
+
+    const tableHeaders = useMemo(
+        () => [
+            t('admin.users.colUser'),
+            t('admin.users.colPhone'),
+            t('admin.users.colAuth'),
+            t('admin.users.colWallet'),
+            tab === 'ROLE_PROVIDER' ? t('admin.users.colJobsDone') : t('admin.users.colRequests'),
+            t('admin.users.colJoined'),
+            t('admin.users.colProfile'),
+            t('admin.users.colAccount'),
+            '',
+        ],
+        [t, tab],
+    );
 
     return (
         <AdminLayout activeTab="/admin/users">
@@ -789,18 +853,13 @@ export default function AdminUsersPage() {
 
                 {/* Header */}
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>Quản lý Người dùng</h1>
-                    <p className="text-sm" style={{ color: C.gray }}>Xem và quản lý tất cả tài khoản người dùng trên hệ thống.</p>
+                    <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>{t('admin.users.listTitle')}</h1>
+                    <p className="text-sm" style={{ color: C.gray }}>{t('admin.users.listSubtitle')}</p>
                 </div>
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    {[
-                        { label: 'TỔNG NGƯỜI DÙNG', value: stats.total, sub: null, color: C.navy, icon: <Users className="w-4 h-4" /> },
-                        { label: 'ĐÃ HOÀN THIỆN', value: stats.active, sub: `${verificationRate}% tổng số`, color: C.green, icon: <CheckCircle className="w-4 h-4" /> },
-                        { label: 'CHƯA HOÀN THIỆN', value: stats.inactive, sub: `${100 - verificationRate}% tổng số`, color: C.yellow, icon: <AlertTriangle className="w-4 h-4" /> },
-                        { label: 'THÁNG NÀY', value: stats.newThisMonth, sub: `+${growthPct}% tăng trưởng`, color: C.blue, icon: <Clock className="w-4 h-4" /> },
-                    ].map(stat => (
+                    {statCards.map(stat => (
                         <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
                             <div className="flex items-center justify-between mb-2">
                                 <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>{stat.label}</p>
@@ -815,7 +874,7 @@ export default function AdminUsersPage() {
                 {/* ─── Chart Row ─── */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                     <ChartCard
-                        title="Top 10 Users theo số yêu cầu"
+                        title={t('admin.users.chartTopByRequests')}
                         icon={<BarChart2 className="w-3.5 h-3.5" />}
                         iconBg="#eff6ff" iconColor="#2563eb"
                     >
@@ -823,11 +882,11 @@ export default function AdminUsersPage() {
                             loading={chartsLoading}
                             items={chartTopUsersReqs}
                             color="#2563eb"
-                            suffix=" đơn"
+                            suffix={t('admin.users.chartBarSuffix')}
                         />
                     </ChartCard>
                     <ChartCard
-                        title="Top 10 Users theo chi tiêu"
+                        title={t('admin.users.chartTopBySpend')}
                         icon={<BarChart2 className="w-3.5 h-3.5" />}
                         iconBg="#f0fdf4" iconColor="#16a34a"
                     >
@@ -844,24 +903,24 @@ export default function AdminUsersPage() {
 
                     {/* Tabs — grouped with separators */}
                     <div className="flex items-center px-5 border-b overflow-x-auto" style={{ borderColor: C.border }}>
-                        {TAB_GROUPS.map((group, gi) => (
+                        {tabGroups.map((group, gi) => (
                             <React.Fragment key={group.groupLabel}>
                                 {gi > 0 && (
                                     <div className="mx-2 h-4 w-px flex-shrink-0" style={{ background: C.border }} />
                                 )}
-                                {group.tabs.map(t => (
+                                {group.tabs.map(tabItem => (
                                     <button
-                                        key={t.key}
+                                        key={tabItem.key}
                                         type="button"
-                                        onClick={() => { setTab(t.key); setPage(1); }}
+                                        onClick={() => { setTab(tabItem.key); setPage(1); }}
                                         className="px-3.5 py-4 text-sm font-medium relative transition-colors whitespace-nowrap"
                                         style={{
-                                            color: tab === t.key ? C.orange : C.gray,
-                                            borderBottom: tab === t.key ? `2px solid ${C.orange}` : '2px solid transparent',
+                                            color: tab === tabItem.key ? C.orange : C.gray,
+                                            borderBottom: tab === tabItem.key ? `2px solid ${C.orange}` : '2px solid transparent',
                                             marginBottom: '-1px',
                                         }}
                                     >
-                                        {t.label}
+                                        {tabItem.label}
                                     </button>
                                 ))}
                             </React.Fragment>
@@ -876,7 +935,7 @@ export default function AdminUsersPage() {
                                 type="text"
                                 value={search}
                                 onChange={e => { setSearch(e.target.value); setPage(1); }}
-                                placeholder="Tìm theo tên, email hoặc SĐT..."
+                                placeholder={t('admin.users.searchPlaceholder')}
                                 className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border focus:outline-none"
                                 style={{ borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                             />
@@ -884,10 +943,10 @@ export default function AdminUsersPage() {
                         <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm" style={{ borderColor: C.border }}>
                             <Filter className="w-3.5 h-3.5" style={{ color: C.gray }} />
                             <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1); }} className="bg-transparent text-sm focus:outline-none cursor-pointer" style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }}>
-                                <option value="NEWEST">Mới nhất</option>
-                                <option value="OLDEST">Cũ nhất</option>
-                                <option value="BALANCE_DESC">Số dư: Cao → Thấp</option>
-                                <option value="REQUESTS_DESC">Yêu cầu: Nhiều nhất</option>
+                                <option value="NEWEST">{t('admin.users.sortNewest')}</option>
+                                <option value="OLDEST">{t('admin.users.sortOldest')}</option>
+                                <option value="BALANCE_DESC">{t('admin.users.sortBalanceDesc')}</option>
+                                <option value="REQUESTS_DESC">{t('admin.users.sortRequestsDesc')}</option>
                             </select>
                         </div>
                         <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm relative" style={{ borderColor: C.border }}>
@@ -918,15 +977,15 @@ export default function AdminUsersPage() {
                             <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke={C.border} strokeWidth={1.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
-                            <span style={{ color: C.gray }}>Không tìm thấy người dùng nào.</span>
+                            <span style={{ color: C.gray }}>{t('admin.users.emptyList')}</span>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm">
                                 <thead style={{ background: C.bg }}>
                                     <tr>
-                                        {['NGƯỜI DÙNG', 'SĐT', 'ĐĂNG NHẬP', 'SỐ DƯ VÍ', tab === 'ROLE_PROVIDER' ? 'JOB HOÀN THÀNH' : 'YÊU CẦU', 'NGÀY THAM GIA', 'HỒ SƠ', 'TÀI KHOẢN', ''].map(h => (
-                                            <th key={h} className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>{h}</th>
+                                        {tableHeaders.map((h, hi) => (
+                                            <th key={`${h}-${hi}`} className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -941,7 +1000,7 @@ export default function AdminUsersPage() {
                                                 <div className="flex items-center gap-3">
                                                     <AvatarImage name={user.fullName || user.email} avatar={user.avatar} className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" fallbackBackground={C.blue} initialsCount={1} />
                                                     <div>
-                                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{user.fullName || <span style={{ color: C.gray }}>(Chưa cập nhật)</span>}</p>
+                                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>{user.fullName || <span style={{ color: C.gray }}>{t('admin.users.nameNotSet')}</span>}</p>
                                                         <p className="text-xs" style={{ color: C.gray }}>{user.email}</p>
                                                     </div>
                                                 </div>
@@ -950,9 +1009,9 @@ export default function AdminUsersPage() {
                                             <td className="px-4 py-3"><AuthBadge provider={user.authProvider} /></td>
                                             <td className="px-4 py-3 text-sm font-semibold" style={{ color: C.navy }}>
                                                 {user.userWallet
-                                                    ? `${user.userWallet.availableBalance.toLocaleString('vi-VN')}₫`
+                                                    ? `${user.userWallet.availableBalance.toLocaleString(loc)}₫`
                                                     : user.providerWallet
-                                                        ? `${user.providerWallet.availableBalance.toLocaleString('vi-VN')}₫`
+                                                        ? `${user.providerWallet.availableBalance.toLocaleString(loc)}₫`
                                                         : <span className="text-xs" style={{ color: C.gray }}>—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-sm font-semibold" style={{ color: C.navy }}>
@@ -960,8 +1019,14 @@ export default function AdminUsersPage() {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex flex-col gap-0.5">
-                                                    <span className="text-xs font-medium" style={{ color: C.navy }}>{new Date(user.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
-                                                    {user.lastLogin && <span className="text-[10px]" style={{ color: C.gray }}>Login {new Date(user.lastLogin).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</span>}
+                                                    <span className="text-xs font-medium" style={{ color: C.navy }}>{new Date(user.createdAt).toLocaleDateString(loc, { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                                                    {user.lastLogin && (
+                                                        <span className="text-[10px]" style={{ color: C.gray }}>
+                                                            {t('admin.users.loginShort', {
+                                                                date: new Date(user.lastLogin).toLocaleDateString(loc, { day: '2-digit', month: '2-digit' }),
+                                                            })}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
                                             {/* Dual status columns */}
@@ -977,7 +1042,7 @@ export default function AdminUsersPage() {
                                                     onClick={() => setSelectedUserId(user.id)}
                                                     className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
                                                     style={{ color: C.blue }}
-                                                    title="Xem chi tiết"
+                                                    title={t('admin.users.viewDetails')}
                                                 >
                                                     <Eye className="w-4 h-4" />
                                                 </button>
@@ -993,7 +1058,11 @@ export default function AdminUsersPage() {
                     {!loading && sorted.length > 0 && (
                         <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
                             <p className="text-xs" style={{ color: C.gray }}>
-                                Showing <span className="font-semibold" style={{ color: C.navy }}>{(page - 1) * PAGE_SIZE + 1}</span> to <span className="font-semibold" style={{ color: C.navy }}>{Math.min(page * PAGE_SIZE, sorted.length)}</span> of <span className="font-semibold" style={{ color: C.navy }}>{sorted.length}</span> users
+                                {t('admin.users.paginationLine', {
+                                    from: (page - 1) * PAGE_SIZE + 1,
+                                    to: Math.min(page * PAGE_SIZE, sorted.length),
+                                    total: sorted.length,
+                                })}
                             </p>
                             <div className="flex items-center gap-1">
                                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed" style={{ color: C.gray }}>

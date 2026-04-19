@@ -22,6 +22,8 @@ import {
     Bell, Clock, Wifi, WifiOff,
 } from 'lucide-react';
 import RescueMeLogo from '@/components/RescueMeLogo';
+import { useProviderDisputeNavBadge } from '@/contexts/ProviderDisputeNavBadgeContext';
+import { useProviderConfig } from '@/contexts/ProviderConfigContext';
 
 // ─── same color tokens as user dashboard ──────────────────────────────────────
 const C = {
@@ -315,6 +317,9 @@ export default function ProviderActivePage() {
         } catch { }
     };
 
+    const { disputeNavBadge, resetDisputeNavBadge } = useProviderDisputeNavBadge();
+    const { commissionRatePct } = useProviderConfig();
+
     const [activeNav, setActiveNav] = useState(t('provider.nav.dashboard'));
     const [weeklyEarnings, setWeeklyEarnings] = useState<number | null>(null);
     const [weeklyJobCount, setWeeklyJobCount] = useState<number>(0);
@@ -436,7 +441,7 @@ export default function ProviderActivePage() {
 
     // Deposit gate: APPROVED but insufficient balance (wait until balance loaded)
     if (walletBalance !== null && walletBalance < MIN_DEPOSIT) {
-        return <DepositGateScreen currentBalance={walletBalance} isReturning={hasActivated} />;
+        return <DepositGateScreen currentBalance={walletBalance} isReturning={hasActivated} commissionRatePct={commissionRatePct} />;
     }
 
     // ── Handlers ──────────────────────────────────────────────────────────────
@@ -494,6 +499,7 @@ export default function ProviderActivePage() {
 
     const nav = (label: string, href: string) => {
         setActiveNav(label);
+        if (href === '/provider/disputes') resetDisputeNavBadge();
         if (href !== '#') router.push(href);
     };
 
@@ -525,6 +531,11 @@ export default function ProviderActivePage() {
                                     onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                 >
                                     {item.icon}{item.label}
+                                    {item.href === '/provider/disputes' && disputeNavBadge > 0 && !active && (
+                                        <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>
+                                            {disputeNavBadge > 99 ? '99+' : disputeNavBadge}
+                                        </span>
+                                    )}
                                 </button>
                             );
                         })}
@@ -780,11 +791,16 @@ export default function ProviderActivePage() {
                         <button
                             key={item.label}
                             onClick={() => nav(item.label, item.href)}
-                            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+                            className="relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
                             style={{ color: active ? C.orange : '#94a3b8' }}
                         >
                             <span style={{ color: active ? C.orange : '#94a3b8' }}>{item.icon}</span>
                             <span className="text-[9px] font-medium">{item.label}</span>
+                            {item.href === '/provider/disputes' && disputeNavBadge > 0 && !active && (
+                                <span className="absolute top-1 right-5 w-4 h-4 text-[9px] font-bold text-white rounded-full flex items-center justify-center" style={{ background: '#ef4444' }}>
+                                    {disputeNavBadge > 99 ? '99+' : disputeNavBadge}
+                                </span>
+                            )}
                         </button>
                     );
                 })}

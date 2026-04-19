@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback, lazy, Suspense } from 'react'
 import ReactConfetti from 'react-confetti';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import type { Locale } from '@/lib/i18n';
 import { useChat } from '@/lib/hooks/useChat';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -67,6 +68,29 @@ function bearingDeg(from: [number, number], to: [number, number]): number {
 function fmtDist(m: number): string {
     if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
     return `${Math.round(m / 10) * 10} m`;
+}
+
+/** VietMap/OSRM-style maneuver sign → short label (locale via `t`). */
+function navInstructionLabelFromSign(sign: number, t: (key: string) => string): string {
+    if (sign === 4 || sign === -7) return t('provider.navigation.turnInstruction.arrive');
+    if (sign === -98) return t('provider.navigation.turnInstruction.uTurn');
+    if (sign === 5 || sign === 6) return t('provider.navigation.turnInstruction.roundabout');
+    if (sign === 3) return t('provider.navigation.turnInstruction.sharpRight');
+    if (sign === 2) return t('provider.navigation.turnInstruction.turnRight');
+    if (sign === 1) return t('provider.navigation.turnInstruction.slightRight');
+    if (sign === -3) return t('provider.navigation.turnInstruction.sharpLeft');
+    if (sign === -2) return t('provider.navigation.turnInstruction.turnLeft');
+    if (sign === -1) return t('provider.navigation.turnInstruction.slightLeft');
+    return t('provider.navigation.turnInstruction.straight');
+}
+
+/** API returns Vietnamese text; for EN we always use sign-based labels. */
+function displayNavInstruction(apiText: string, sign: number, locale: Locale, t: (key: string) => string): string {
+    if (locale === 'en') {
+        return navInstructionLabelFromSign(sign, t);
+    }
+    const trimmed = (apiText || '').trim();
+    return trimmed || navInstructionLabelFromSign(sign, t);
 }
 
 const C = {
@@ -374,7 +398,7 @@ export default function ProviderNavigationView({
 
     // Get provider identity directly from auth — avoids relying on props being undefined
     const { user: authUser } = useAuth();
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
     const providerId = authUser?.id ?? '';
     const providerName = authUser?.name ?? 'Provider';
 
@@ -1189,7 +1213,7 @@ export default function ProviderNavigationView({
                                         {fmtDist(distToManeuver)}
                                     </p>
                                     <p className="text-sm font-bold text-white leading-tight truncate">
-                                        {step.text || (sign === 0 ? t('provider.navigation.turnInstruction.straight') : '—')}
+                                        {displayNavInstruction(step.text, sign, locale, t)}
                                     </p>
                                 </div>
 
@@ -1203,7 +1227,7 @@ export default function ProviderNavigationView({
                                                 : ns === -98 ? '↩' : ns === 4 || ns === -7 ? '📌' : '↑';
                                     return (
                                         <div className="flex-shrink-0 text-center">
-                                            <p className="text-[9px] text-white opacity-60 mb-0.5">Tiếp</p>
+                                            <p className="text-[9px] text-white opacity-60 mb-0.5">{t('provider.navigation.hudNext')}</p>
                                             <span className="text-lg font-bold text-white opacity-80">{nextLabel}</span>
                                         </div>
                                     );
@@ -1235,7 +1259,7 @@ export default function ProviderNavigationView({
                                 boxShadow: '0 2px 12px rgba(0,0,0,0.20)',
                                 zIndex: 20,
                             }}
-                            title="Về vị trí của bạn"
+                            title={t('provider.navigation.recenterTitle')}
                         >
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17l-6.18 3.98L7 14.14 2 9.27l6.91-1.01L12 2z" />
@@ -1292,14 +1316,14 @@ export default function ProviderNavigationView({
                                                     <rect x="6" y="4" width="4" height="16" rx="1" />
                                                     <rect x="14" y="4" width="4" height="16" rx="1" />
                                                 </svg>
-                                                Dừng giả lập
+                                                {t('provider.navigation.simulationStop')}
                                             </>
                                         ) : (
                                             <>
                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
                                                     <path d="M8 5v14l11-7z" />
                                                 </svg>
-                                                Giả lập chạy
+                                                {t('provider.navigation.simulationStart')}
                                             </>
                                         )}
                                     </button>
@@ -1323,7 +1347,7 @@ export default function ProviderNavigationView({
                                             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
                                         </svg>
                                     </div>
-                                    <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: C.gray }}>Tốc độ</span>
+                                    <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: C.gray }}>{t('provider.navigation.speedLabel')}</span>
                                 </div>
                             )}
 

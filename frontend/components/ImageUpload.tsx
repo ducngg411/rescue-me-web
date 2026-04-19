@@ -65,13 +65,13 @@ export default function ImageUpload({
 
         const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
         if (!allowedTypes.includes(file.type)) {
-            setError('Chỉ chấp nhận file ảnh (JPG, PNG, WEBP)');
+            setError(t('components.fileUpload.errors.imageTypeOnly'));
             return;
         }
 
         const maxSize = 5 * 1024 * 1024;
         if (file.size > maxSize) {
-            setError('Ảnh không được vượt quá 5MB');
+            setError(t('components.fileUpload.errors.imageMaxSize'));
             return;
         }
 
@@ -88,7 +88,7 @@ export default function ImageUpload({
     const handleUpload = async () => {
         if (!selectedFile) return;
         if (uploadedImages.length >= maxImages) {
-            setError(`Chỉ được upload tối đa ${maxImages} ảnh`);
+            setError(t('components.fileUpload.errors.maxImages', { max: maxImages }));
             return;
         }
 
@@ -97,7 +97,7 @@ export default function ImageUpload({
         setError(null);
 
         if (!uploadImage && !purpose) {
-            setError('Thiếu cấu hình upload');
+            setError(t('components.fileUpload.errors.missingConfig'));
             setUploading(false);
             return;
         }
@@ -113,12 +113,12 @@ export default function ImageUpload({
                     objectKey = result.objectKey;
                     publicUrl = result.publicUrl;
                 } else {
-                    errMsg = result.error || 'Upload thất bại';
+                    errMsg = result.error || t('components.fileUpload.errors.uploadFailed');
                 }
             } else {
                 const uploadPurpose = purpose;
                 if (!uploadPurpose) {
-                    setError('Thiếu cấu hình upload');
+                    setError(t('components.fileUpload.errors.missingConfig'));
                     setUploading(false);
                     return;
                 }
@@ -132,7 +132,7 @@ export default function ImageUpload({
                     objectKey = result.upload.objectKey;
                     publicUrl = result.upload.publicUrl;
                 } else {
-                    errMsg = result.error || 'Upload thất bại';
+                    errMsg = result.error || t('components.fileUpload.errors.uploadFailed');
                 }
             }
 
@@ -146,7 +146,7 @@ export default function ImageUpload({
                 setError(errMsg);
             }
         } catch (err: any) {
-            setError(err.message || 'Có lỗi xảy ra khi upload ảnh');
+            setError(err.message || t('components.fileUpload.errors.genericImage'));
         } finally {
             setUploading(false);
         }
@@ -204,12 +204,12 @@ export default function ImageUpload({
                                 {t('components.fileUpload.clickToSelectImage')}
                             </p>
                             <p className="text-xs mt-0.5" style={{ color: C.gray }}>
-                                JPG, PNG, WEBP · Tối đa 5MB
+                                {t('components.fileUpload.supported')}
                             </p>
                         </div>
                         <span className="text-[11px] px-2.5 py-0.5 rounded-full font-medium"
                             style={{ background: C.orangeLight, color: C.orange }}>
-                            {uploadedImages.length}/{maxImages} ảnh
+                            {t('components.fileUpload.imageCountBadge', { current: uploadedImages.length, max: maxImages })}
                         </span>
                     </div>
                 </div>
@@ -232,7 +232,7 @@ export default function ImageUpload({
                                 className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50"
                                 style={{ borderColor: C.border, color: C.gray }}
                             >
-                                Hủy
+                                {t('common.cancel')}
                             </button>
                             <button
                                 type="button"
@@ -242,9 +242,9 @@ export default function ImageUpload({
                                 style={{ background: uploading ? C.orangeDark : C.orange }}
                             >
                                 {uploading ? (
-                                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải...</>
+                                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('components.fileUpload.uploading')}</>
                                 ) : (
-                                    <><Upload className="w-3.5 h-3.5" /> Tải lên</>
+                                    <><Upload className="w-3.5 h-3.5" /> {t('components.fileUpload.upload')}</>
                                 )}
                             </button>
                         </div>
@@ -256,7 +256,7 @@ export default function ImageUpload({
             {uploading && (
                 <div className="rounded-xl p-3 border" style={{ borderColor: `${C.orange}40`, background: C.orangeLight }}>
                     <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-medium" style={{ color: C.navy }}>Đang tải lên...</span>
+                        <span className="text-xs font-medium" style={{ color: C.navy }}>{t('components.fileUpload.progressLabel')}</span>
                         <span className="text-xs font-bold" style={{ color: C.orange }}>{Math.round(progress)}%</span>
                     </div>
                     <div className="w-full rounded-full h-1.5" style={{ background: '#fed7aa' }}>
@@ -280,7 +280,7 @@ export default function ImageUpload({
             {uploadedImages.length > 0 && (
                 <div>
                     <p className="text-xs font-semibold mb-2" style={{ color: C.gray }}>
-                        Ảnh đã tải lên ({uploadedImages.length}/{maxImages})
+                        {t('components.fileUpload.uploadedImagesHeading', { current: uploadedImages.length, max: maxImages })}
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                         {uploadedImages.map((image, index) => (
@@ -307,7 +307,7 @@ export default function ImageUpload({
                                     onClick={() => handleRemove(image.objectKey)}
                                     className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
                                     style={{ background: '#ef4444' }}
-                                    title="Xóa ảnh"
+                                    title={t('components.fileUpload.removeImageTitle')}
                                 >
                                     <X className="w-3.5 h-3.5 text-white" />
                                 </button>

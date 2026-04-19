@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
@@ -59,25 +59,48 @@ interface DisputeListItem {
 
 const PAGE_SIZE = 10;
 
-function StatusBadge({ status }: { status: string }) {
-    const configs: Record<string, { bg: string; color: string; dot: string; label: string }> = {
-        WAITING_FOR_PROVIDER: { bg: C.yellowLight, color: C.yellow, dot: '#facc15', label: 'Chờ Provider' },
-        WAITING_FOR_CUSTOMER: { bg: C.yellowLight, color: C.yellow, dot: '#facc15', label: 'Chờ Customer' },
-        INVESTIGATING: { bg: C.purpleLight, color: C.purple, dot: C.purple, label: 'Đang xem xét' },
-        RESOLVED: { bg: C.greenLight, color: C.green, dot: C.green, label: 'Đã xử lý' },
-        REJECTED: { bg: C.greenLight, color: C.green, dot: C.green, label: 'Đã xử lý' },
+/** API may send Vietnamese `label`; prefer `key` (DisputeResolutionType) for i18n. */
+function resolutionChartLabel(
+    t: (path: string, params?: Record<string, string | number>) => string,
+    row: { label: string; key?: string },
+): string {
+    if (row.key) {
+        const path = `admin.disputes.resolutionChart.${row.key}`;
+        const tr = t(path);
+        if (tr !== path) return tr;
+    }
+    const viToKey: Record<string, string> = {
+        'Hoàn 100%': 'FULL_REFUND',
+        'Hoàn một phần': 'PARTIAL_REFUND',
+        'Không hoàn': 'NO_REFUND',
     };
-    const st = configs[status] || { bg: '#f8fafc', color: C.gray, dot: C.gray, label: status };
+    const mapped = row.label ? viToKey[row.label] : undefined;
+    if (mapped) {
+        return t(`admin.disputes.resolutionChart.${mapped}`);
+    }
+    return row.label;
+}
+
+function StatusBadge({ status }: { status: string }) {
+    const { t } = useLanguage();
+    const configs: Record<string, { bg: string; color: string; dot: string; labelKey: string }> = {
+        WAITING_FOR_PROVIDER: { bg: C.yellowLight, color: C.yellow, dot: '#facc15', labelKey: 'admin.disputes.listBadgeWaitProvider' },
+        WAITING_FOR_CUSTOMER: { bg: C.yellowLight, color: C.yellow, dot: '#facc15', labelKey: 'admin.disputes.listBadgeWaitCustomer' },
+        INVESTIGATING: { bg: C.purpleLight, color: C.purple, dot: C.purple, labelKey: 'admin.disputes.listBadgeInvestigating' },
+        RESOLVED: { bg: C.greenLight, color: C.green, dot: C.green, labelKey: 'admin.disputes.listBadgeResolvedDone' },
+        REJECTED: { bg: C.greenLight, color: C.green, dot: C.green, labelKey: 'admin.disputes.listBadgeResolvedDone' },
+    };
+    const st = configs[status] || { bg: '#f8fafc', color: C.gray, dot: C.gray, labelKey: '' };
 
     return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: st.bg, color: st.color }}>
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: st.dot }} />
-            {st.label}
+            {st.labelKey ? t(st.labelKey) : status}
         </span>
     );
 }
 
-function TimeSinceBadge({ createdAt }: { createdAt: string }) {
+function TimeSinceBadge({ createdAt, t }: { createdAt: string; t: (path: string, params?: Record<string, string | number>) => string }) {
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
     if (!mounted) return null;
@@ -97,9 +120,10 @@ function TimeSinceBadge({ createdAt }: { createdAt: string }) {
         color = C.yellow;
     }
 
-    const label = hours < 1 
-        ? `${Math.max(0, Math.floor(diffMs / (1000 * 60)))} phút trước`
-        : `${Math.floor(hours)} giờ trước`;
+    const label =
+        hours < 1
+            ? t('admin.disputes.timeAgoMinutes', { n: Math.max(0, Math.floor(diffMs / (1000 * 60))) })
+            : t('admin.disputes.timeAgoHours', { n: Math.floor(hours) });
 
     return (
         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide" style={{ background: bg, color }}>
@@ -126,6 +150,18 @@ export default function AdminDisputesPage() {
     const [chartResolution, setChartResolution] = useState<{ label: string; value: number }[]>([]);
     const [chartsLoading, setChartsLoading] = useState(true);
 
+    const tabs = useMemo(
+        () =>
+            [
+                { key: 'ALL', label: t('admin.disputes.listTabAll'), apiStatus: '' },
+                { key: 'NEW', label: t('admin.disputes.listTabNew'), apiStatus: '' },
+                { key: 'PENDING_EVIDENCE', label: t('admin.disputes.listTabAwaitingEvidence'), apiStatus: 'WAITING_FOR_PROVIDER,WAITING_FOR_CUSTOMER' },
+                { key: 'UNDER_REVIEW', label: t('admin.disputes.listTabUnderReview'), apiStatus: 'INVESTIGATING' },
+                { key: 'RESOLVED', label: t('admin.disputes.listTabResolved'), apiStatus: 'RESOLVED' },
+            ] as const,
+        [t],
+    );
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
@@ -135,7 +171,7 @@ export default function AdminDisputesPage() {
                         skip: 0,
                         take: 1000, // Fetch more for client-side sort/filter
                     };
-                    const activeTabConfig = tabs.find(t => t.key === tab);
+                    const activeTabConfig = tabs.find((tabItem) => tabItem.key === tab);
                     const statusList = (activeTabConfig?.apiStatus ?? '')
                         .split(',')
                         .map((s) => s.trim())
@@ -167,7 +203,7 @@ export default function AdminDisputesPage() {
         } finally {
             setLoading(false);
         }
-    }, [tab]);
+    }, [tab, tabs]);
 
     useEffect(() => {
         if (isReady) {
@@ -175,14 +211,6 @@ export default function AdminDisputesPage() {
             adminApi.getDisputeResolutionDistribution().then(setChartResolution).catch(() => {}).finally(() => setChartsLoading(false));
         }
     }, [isReady, load]);
-
-    const tabs = [
-        { key: 'ALL', label: 'Tất cả', apiStatus: '' },
-        { key: 'NEW', label: 'Mới', apiStatus: '' },
-        { key: 'PENDING_EVIDENCE', label: 'Chờ bổ sung', apiStatus: 'WAITING_FOR_PROVIDER,WAITING_FOR_CUSTOMER' },
-        { key: 'UNDER_REVIEW', label: 'Đang xem xét', apiStatus: 'INVESTIGATING' },
-        { key: 'RESOLVED', label: 'Đã xử lý', apiStatus: 'RESOLVED' },
-    ];
 
     const filtered = items.filter(d => {
         if (dateFilter) {
@@ -234,10 +262,10 @@ export default function AdminDisputesPage() {
                 {/* ─── Stats Cards Row ─── */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     {[
-                        { label: 'MỚI', value: stats.new, color: C.blue, icon: <AlertTriangle className="w-4 h-4" /> },
-                        { label: 'ĐANG XỬ LÝ', value: stats.inProgress, color: C.orange, icon: <Clock className="w-4 h-4" /> },
-                        { label: 'ĐÃ XỬ LÝ', value: stats.resolved, color: C.green, icon: <CheckCircle className="w-4 h-4" /> },
-                        { label: 'THỐNG KÊ TỔNG', value: stats.total, color: C.navy, icon: <ShieldAlert className="w-4 h-4" /> },
+                        { label: t('admin.disputes.listStatNew'), value: stats.new, color: C.blue, icon: <AlertTriangle className="w-4 h-4" /> },
+                        { label: t('admin.disputes.listStatInProgress'), value: stats.inProgress, color: C.orange, icon: <Clock className="w-4 h-4" /> },
+                        { label: t('admin.disputes.listStatResolved'), value: stats.resolved, color: C.green, icon: <CheckCircle className="w-4 h-4" /> },
+                        { label: t('admin.disputes.listStatTotal'), value: stats.total, color: C.navy, icon: <ShieldAlert className="w-4 h-4" /> },
                     ].map(stat => (
                         <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
                             <div className="flex items-center justify-between mb-2">
@@ -252,7 +280,7 @@ export default function AdminDisputesPage() {
                 {/* ─── Chart Row ─── */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                     <ChartCard
-                        title="Kết quả giải quyết tranh chấp"
+                        title={t('admin.disputes.listChartResolutionTitle')}
                         icon={<BarChart2 className="w-3.5 h-3.5" />}
                         iconBg="#f0fdf4" iconColor="#16a34a"
                     >
@@ -260,14 +288,15 @@ export default function AdminDisputesPage() {
                             loading={chartsLoading}
                             height={130}
                             items={chartResolution.map((d, i) => ({
-                                label: d.label, value: d.value,
+                                label: resolutionChartLabel(t, d),
+                                value: d.value,
                                 color: ['#16a34a', '#f97316', '#ef4444'][i % 3],
                                 displayValue: d.value.toString(),
                             }))}
                         />
                     </ChartCard>
                     <ChartCard
-                        title="Phân bố trạng thái tranh chấp"
+                        title={t('admin.disputes.listChartStatusTitle')}
                         icon={<BarChart2 className="w-3.5 h-3.5" />}
                         iconBg="#fef2f2" iconColor="#ef4444"
                     >
@@ -275,18 +304,18 @@ export default function AdminDisputesPage() {
                             <DonutChart
                                 size={110}
                                 centerLabel={String(stats.total)}
-                                centerSub="Tổng"
+                                centerSub={t('admin.disputes.listDonutTotal')}
                                 slices={[
-                                    { label: 'Mới', value: stats.new, color: '#f97316' },
-                                    { label: 'Đang xử lý', value: stats.inProgress, color: '#2563eb' },
-                                    { label: 'Đã xử lý', value: stats.resolved, color: '#16a34a' },
+                                    { label: t('admin.disputes.listDonutNew'), value: stats.new, color: '#f97316' },
+                                    { label: t('admin.disputes.listDonutInProgress'), value: stats.inProgress, color: '#2563eb' },
+                                    { label: t('admin.disputes.listDonutResolved'), value: stats.resolved, color: '#16a34a' },
                                 ]}
                             />
                             <div className="space-y-2">
                                 {[
-                                    { label: 'Mới', value: stats.new, color: '#f97316' },
-                                    { label: 'Đang xử lý', value: stats.inProgress, color: '#2563eb' },
-                                    { label: 'Đã xử lý', value: stats.resolved, color: '#16a34a' },
+                                    { label: t('admin.disputes.listDonutNew'), value: stats.new, color: '#f97316' },
+                                    { label: t('admin.disputes.listDonutInProgress'), value: stats.inProgress, color: '#2563eb' },
+                                    { label: t('admin.disputes.listDonutResolved'), value: stats.resolved, color: '#16a34a' },
                                 ].map(s => (
                                     <div key={s.label} className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
@@ -329,7 +358,7 @@ export default function AdminDisputesPage() {
                                 type="text"
                                 value={search}
                                 onChange={e => { setSearch(e.target.value); setPage(1); }}
-                                placeholder="Tìm theo ID khiếu nại, ID yêu cầu, hoặc tên khách hàng..."
+                                placeholder={t('admin.disputes.listSearchPlaceholder')}
                                 className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border focus:outline-none focus:ring-2"
                                 style={{ borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                             />
@@ -344,10 +373,10 @@ export default function AdminDisputesPage() {
                                 className="bg-transparent text-sm focus:outline-none cursor-pointer pr-1"
                                 style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                             >
-                                <option value="NEWEST">Mới nhất</option>
-                                <option value="OLDEST">Cũ nhất</option>
-                                <option value="AMOUNT_DESC">Giá trị: Cao đến Thấp</option>
-                                <option value="AMOUNT_ASC">Giá trị: Thấp đến Cao</option>
+                                <option value="NEWEST">{t('admin.disputes.sortNewest')}</option>
+                                <option value="OLDEST">{t('admin.disputes.sortOldest')}</option>
+                                <option value="AMOUNT_DESC">{t('admin.disputes.sortAmountDesc')}</option>
+                                <option value="AMOUNT_ASC">{t('admin.disputes.sortAmountAsc')}</option>
                             </select>
                         </div>
 
@@ -381,7 +410,7 @@ export default function AdminDisputesPage() {
                             <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke={C.border} strokeWidth={1.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
-                            <span style={{ color: C.gray }}>Không tìm thấy khiếu nại nào phù hợp.</span>
+                            <span style={{ color: C.gray }}>{t('admin.disputes.listEmptyFiltered')}</span>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -398,15 +427,15 @@ export default function AdminDisputesPage() {
                                             {t('admin.disputes.colAmount')}
                                         </th>
                                         <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>
-                                            THỜI GIAN
+                                            {t('admin.disputes.colTime')}
                                         </th>
                                         <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>
-                                            QUYẾT ĐỊNH
+                                            {t('admin.disputes.colResolution')}
                                         </th>
                                         <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>
                                             {t('admin.disputes.colStatus')}
                                         </th>
-                                        <th className="px-4 py-3 w-10 text-[10px] font-semibold tracking-wider" style={{ color: C.gray }}>AC</th>
+                                        <th className="px-4 py-3 w-10 text-[10px] font-semibold tracking-wider" style={{ color: C.gray }}>{t('admin.disputes.colAction')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -433,14 +462,14 @@ export default function AdminDisputesPage() {
                                                         <span className="text-xs font-medium" style={{ color: C.navy }}>
                                                             {new Date(row.createdAt).toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                         </span>
-                                                        <TimeSinceBadge createdAt={row.createdAt} />
+                                                        <TimeSinceBadge createdAt={row.createdAt} t={t} />
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3 font-semibold text-xs" style={{ color: C.navy }}>
                                                     {row.status === 'RESOLVED' || row.status === 'REJECTED' ? (
-                                                        row.resolutionType === 'NO_REFUND' ? 'Không hoàn tiền' :
-                                                        row.resolutionType === 'FULL_REFUND' ? 'Hoàn tiền 100%' :
-                                                        row.resolutionType === 'PARTIAL_REFUND' ? 'Hoàn tiền một phần' : '—'
+                                                        row.resolutionType === 'NO_REFUND' ? t('admin.disputes.resolutionDisplayNoRefund') :
+                                                        row.resolutionType === 'FULL_REFUND' ? t('admin.disputes.resolutionDisplayFullRefund') :
+                                                        row.resolutionType === 'PARTIAL_REFUND' ? t('admin.disputes.resolutionDisplayPartialRefund') : '—'
                                                     ) : '—'}
                                                 </td>
                                                 <td className="px-4 py-3">
@@ -460,13 +489,11 @@ export default function AdminDisputesPage() {
                     {!loading && items.length > 0 && (
                         <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
                             <p className="text-xs" style={{ color: C.gray }}>
-                                Showing <span className="font-semibold" style={{ color: C.navy }}>
-                                    {sorted.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
-                                </span> to <span className="font-semibold" style={{ color: C.navy }}>
-                                    {Math.min(page * PAGE_SIZE, sorted.length)}
-                                </span> of <span className="font-semibold" style={{ color: C.navy }}>
-                                    {sorted.length}
-                                </span> disputes
+                                {t('admin.disputes.listPagination', {
+                                    from: sorted.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1,
+                                    to: Math.min(page * PAGE_SIZE, sorted.length),
+                                    total: sorted.length,
+                                })}
                             </p>
                             <div className="flex items-center gap-1">
                                 <button

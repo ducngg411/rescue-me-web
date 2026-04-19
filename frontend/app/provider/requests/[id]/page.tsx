@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useProviderConfig } from '@/contexts/ProviderConfigContext';
 import api from '@/lib/api';
 import { displayOrderCode } from '@/lib/reconciliation';
 import toast from 'react-hot-toast';
@@ -88,6 +89,7 @@ export default function ProviderRequestDetailPage() {
     const params = useParams();
     const { user, loading: authLoading } = useAuth();
     const { t } = useLanguage();
+    const { commissionRatePct } = useProviderConfig();
     const requestId = params.id as string;
 
     const [request, setRequest] = useState<RescueRequest | null>(null);
@@ -692,7 +694,7 @@ export default function ProviderRequestDetailPage() {
                     </div>
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: '#f0fdf4', color: '#16a34a' }}>
                         <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                        Được chọn
+                        {t('provider.requestDetail.accepted.badge')}
                     </div>
                 </div>
 
@@ -1368,7 +1370,7 @@ export default function ProviderRequestDetailPage() {
                                     </div>
                                     <div>
                                         <h2 className="text-sm font-bold" style={{ color: '#1a1a2e' }}>{t('provider.requestDetail.quoteSendTitle')}</h2>
-                                        <p className="text-[11px]" style={{ color: '#6b7280' }}>Điền thông tin và gửi nhanh để được chọn</p>
+                                        <p className="text-[11px]" style={{ color: '#6b7280' }}>{t('provider.requestDetail.quoteFormSubtitle')}</p>
                                     </div>
                                 </div>
 
@@ -1462,7 +1464,9 @@ export default function ProviderRequestDetailPage() {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                         <p className="text-[11px] leading-relaxed" style={{ color: '#9a3412' }}>
-                                            {t('provider.requestDetail.quote.feeNote').replace('{rate}', String(Math.round((Number(process.env.NEXT_PUBLIC_COMMISSION_RATE) || 0.2) * 100)))}
+                                            {commissionRatePct > 0
+                                                ? t('provider.requestDetail.quote.feeNote').replace('{rate}', String(commissionRatePct))
+                                                : t('provider.requestDetail.quote.feeNoteLoading')}
                                         </p>
                                     </div>
                                 </form>

@@ -246,7 +246,7 @@ export default function TxDetailPage() {
                         <div className="px-5 py-4 space-y-3">
                             <Row label={t('provider.txDetail.payment.method')} value={
                                 job.payment.paymentMethod === 'QR' ? ` ${t('provider.txDetail.payment.transfer')}`
-                                    : job.payment.paymentMethod === 'WALLET' ? ' Ví điện tử RescueMe'
+                                    : job.payment.paymentMethod === 'WALLET' ? ` ${t('provider.txDetail.payment.walletMethod')}`
                                         : ` ${t('provider.txDetail.payment.cash')}`
                             } />
                             {job.payment.baseFee > 0 && <Row label={t('provider.txDetail.payment.basePrice')} value={fmt(job.payment.baseFee)} />}
@@ -266,7 +266,9 @@ export default function TxDetailPage() {
                                     const fee = Math.round(job.payment.totalAmount * rate);
                                     return (
                                         <>
-                                            <span className="text-xs" style={{ color: C.gray }}>Phí nền tảng ({Math.round(rate * 100)}%)</span>
+                                            <span className="text-xs" style={{ color: C.gray }}>
+                                                {t('provider.txDetail.payment.platformFeeWithRate').replace('{rate}', String(Math.round(rate * 100)))}
+                                            </span>
                                             <span className="text-xs font-semibold" style={{ color: '#ef4444' }}>−{fmt(fee)}</span>
                                         </>
                                     );

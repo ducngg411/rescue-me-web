@@ -39,30 +39,34 @@ type UploadState = {
     url?: string;
 };
 
-const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
-    WAITING_FOR_PROVIDER: { label: 'Chờ đối tác phản hồi', bg: C.blueLight, color: C.blue },
-    WAITING_FOR_CUSTOMER: { label: 'Chờ bạn phản hồi', bg: C.yellowLight, color: C.yellow },
-    INVESTIGATING: { label: 'Đang điều tra', bg: C.purpleLight, color: C.purple },
-    RESOLVED: { label: 'Đã giải quyết', bg: C.greenLight, color: C.green },
-    REJECTED: { label: 'Bị từ chối', bg: C.redLight, color: C.red },
+const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
+    WAITING_FOR_PROVIDER: { bg: C.blueLight, color: C.blue },
+    WAITING_FOR_CUSTOMER: { bg: C.yellowLight, color: C.yellow },
+    INVESTIGATING: { bg: C.purpleLight, color: C.purple },
+    RESOLVED: { bg: C.greenLight, color: C.green },
+    REJECTED: { bg: C.redLight, color: C.red },
 };
 
 function ProgressTimeline({ status }: { status: string }) {
+    const { t } = useLanguage();
     const steps = [
-        { id: 'created', label: 'Đã gửi khiếu nại', active: false, done: true },
-        { 
-            id: 'processing', 
-            label: 'Đang xử lý', 
+        { id: 'created', label: t('user.disputes.detail.timelineSubmitted'), active: false, done: true },
+        {
+            id: 'processing',
+            label: t('user.disputes.detail.timelineProcessing'),
             active: ['WAITING_FOR_PROVIDER', 'WAITING_FOR_CUSTOMER', 'INVESTIGATING'].includes(status),
-            done: ['RESOLVED', 'REJECTED'].includes(status) 
+            done: ['RESOLVED', 'REJECTED'].includes(status),
         },
-        { 
-            id: 'closed', 
-            label: status === 'REJECTED' ? 'Bị từ chối' : 'Có kết quả', 
+        {
+            id: 'closed',
+            label:
+                status === 'REJECTED'
+                    ? t('user.disputes.detail.timelineClosedRejected')
+                    : t('user.disputes.detail.timelineClosedOk'),
             active: ['RESOLVED', 'REJECTED'].includes(status),
             done: ['RESOLVED', 'REJECTED'].includes(status),
-            isReject: status === 'REJECTED'
-        }
+            isReject: status === 'REJECTED',
+        },
     ];
 
     // Correct 'created' step active state if we are currently investigating
@@ -145,7 +149,8 @@ export default function UserDisputeDetailPage() {
     const id = params?.id as string;
     const { isReady } = useUserGuard();
     const { user } = useAuth();
-    const { locale } = useLanguage();
+    const { t, locale } = useLanguage();
+    const timeLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
     
     const [dispute, setDispute] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -278,7 +283,7 @@ export default function UserDisputeDetailPage() {
         if (!msgBody.trim() && urls.length === 0) return;
         setSending(true);
         try {
-            await userDisputeApi.sendMessage(id, msgBody.trim() || 'Đính kèm minh chứng', urls);
+            await userDisputeApi.sendMessage(id, msgBody.trim() || t('user.disputes.create.evidenceMessageBody'), urls);
             setMsgBody('');
             setUploads([]);
             await load();
@@ -295,14 +300,18 @@ export default function UserDisputeDetailPage() {
     if (!dispute) {
         return <div className="min-h-screen flex items-center justify-center px-4" style={{ background: C.bg }}>
             <div className="bg-white p-6 rounded-2xl text-center w-full max-w-sm border" style={{ borderColor: C.border }}>
-                <p className="font-semibold mb-2" style={{ color: C.navy }}>Không tìm thấy khiếu nại</p>
-                <button onClick={() => router.push('/user/disputes')} className="px-4 py-2 rounded-xl text-sm font-semibold text-white w-full" style={{ background: C.orange }}>Quay lại</button>
+                <p className="font-semibold mb-2" style={{ color: C.navy }}>{t('user.disputes.detail.notFoundTitle')}</p>
+                <button onClick={() => router.push('/user/disputes')} className="px-4 py-2 rounded-xl text-sm font-semibold text-white w-full" style={{ background: C.orange }}>{t('user.disputes.detail.backToList')}</button>
             </div>
         </div>;
     }
 
     const status = dispute.status ?? '';
-    const sm = STATUS_META[status] ?? { label: status, bg: '#f1f5f9', color: C.gray };
+    const statusLabelKey = `user.disputes.status.${status}`;
+    let statusChipLabel = t(statusLabelKey);
+    if (statusChipLabel === statusLabelKey) statusChipLabel = status;
+    const smStyle = STATUS_STYLES[status] ?? { bg: '#f1f5f9', color: C.gray };
+    const sm = { label: statusChipLabel, bg: smStyle.bg, color: smStyle.color };
     const isClosed = dispute.isClosed;
     const canSend = !!dispute?.permissions?.canSendMessage && !isClosed;
     
@@ -310,14 +319,14 @@ export default function UserDisputeDetailPage() {
     const provider = request?.assignedProvider;
     const isVideo = (url: string) => /\.(mp4|webm|mkv|mov)(\?.*)?$/i.test(url) || url.includes('/video/upload/');
     const senderLabel = (msg: any) => {
-        if (msg.senderRole === 'ADMIN') return 'ADMIN';
+        if (msg.senderRole === 'ADMIN') return t('user.disputes.detail.roleAdmin');
         if (msg.senderRole === 'CUSTOMER') {
-            const name = msg.author?.fullName || request?.user?.fullName || 'User';
-            return `${name} (User)`;
+            const name = msg.author?.fullName || request?.user?.fullName || t('common.unknown');
+            return `${name} ${t('user.disputes.detail.roleUserSuffix')}`;
         }
         if (msg.senderRole === 'PROVIDER') {
-            const name = msg.author?.fullName || request?.assignedProvider?.fullName || 'Provider';
-            return `${name} (Provider)`;
+            const name = msg.author?.fullName || request?.assignedProvider?.fullName || t('common.unknown');
+            return `${name} ${t('user.disputes.detail.roleProviderSuffix')}`;
         }
         return msg.senderRole;
     };
@@ -326,11 +335,14 @@ export default function UserDisputeDetailPage() {
         const match = body.match(/^Admin vừa yêu cầu (Provider|Customer) cung cấp thêm chứng cứ:\s*(.+)$/i);
         if (!match) return body;
         const target = match[1]?.toUpperCase();
-        const content = match[2]?.trim();
+        const content = match[2]?.trim() ?? '';
         if (target === 'CUSTOMER') {
-            return `Bạn được Admin yêu cầu cung cấp thêm chứng cứ: ${content}`;
+            return t('user.disputes.detail.systemEvidenceCustomer', { content });
         }
-        return `Admin vừa yêu cầu ${target === 'PROVIDER' ? 'Provider' : 'Customer'} cung cấp thêm chứng cứ: ${content}`;
+        if (target === 'PROVIDER') {
+            return t('user.disputes.detail.systemEvidenceProvider', { content });
+        }
+        return body;
     };
 
     return (
@@ -342,12 +354,12 @@ export default function UserDisputeDetailPage() {
                             <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
                         </button>
                         <div className="min-w-0">
-                            <h1 className="font-bold text-base" style={{ color: C.navy }}>Chi tiết khiếu nại</h1>
+                            <h1 className="font-bold text-base" style={{ color: C.navy }}>{t('user.disputes.detail.headerTitle')}</h1>
                             <p className="text-xs font-semibold mt-0.5" style={{ color: C.gray }}>
-                                Đơn #{displayOrderCode(dispute?.request?.orderCode ?? dispute?.payment?.request?.orderCode, dispute?.payment?.requestId ?? dispute?.request?.id ?? dispute.id)}
+                                {t('user.disputes.detail.orderPrefix')} #{displayOrderCode(dispute?.request?.orderCode ?? dispute?.payment?.request?.orderCode, dispute?.payment?.requestId ?? dispute?.request?.id ?? dispute.id)}
                             </p>
                             <p className="text-[10px]" style={{ color: '#94a3b8' }}>
-                                Case #{displayDisputeCaseRef(String(dispute.id))}
+                                {t('user.disputes.detail.casePrefix')} #{displayDisputeCaseRef(String(dispute.id))}
                             </p>
                         </div>
                     </div>
@@ -363,7 +375,7 @@ export default function UserDisputeDetailPage() {
                         className={`flex-1 py-3 text-sm font-bold text-center border-b-2 transition-colors ${activeTab === 'overview' ? 'border-orange-500' : 'border-transparent'}`}
                         style={{ color: activeTab === 'overview' ? C.orange : C.gray, borderColor: activeTab === 'overview' ? C.orange : 'transparent' }}
                     >
-                        Tổng quan
+                        {t('user.disputes.detail.tabsOverview')}
                     </button>
                     <button
                         onClick={() => {
@@ -373,7 +385,7 @@ export default function UserDisputeDetailPage() {
                         className={`flex-1 py-3 text-sm font-bold text-center border-b-2 transition-colors relative ${activeTab === 'messages' ? 'border-orange-500' : 'border-transparent'}`}
                         style={{ color: activeTab === 'messages' ? C.orange : C.gray, borderColor: activeTab === 'messages' ? C.orange : 'transparent' }}
                     >
-                        Trao đổi
+                        {t('user.disputes.detail.tabsMessages')}
                         {unreadCount > 0 && activeTab !== 'messages' && (
                             <span className="absolute top-2 right-4 w-4 h-4 text-white text-[10px] font-bold flex items-center justify-center rounded-full" style={{ background: C.red }}>
                                 {unreadCount}
@@ -393,20 +405,20 @@ export default function UserDisputeDetailPage() {
 
                     <ProgressTimeline status={status} />
 
-                    <SectionCard title="Chi tiết khiếu nại" icon={<ShieldAlert size={16} style={{ color: C.red }} />}>
-                        <InfoRow label="Lý do chung" value={dispute.reason} />
-                        {dispute.description && <InfoRow label="Mô tả cụ thể" value={dispute.description} />}
-                        {dispute.expectedOutcome && <InfoRow label="Cách giải quyết mong muốn" value={dispute.expectedOutcome} />}
-                        <InfoRow label="Yêu cầu hoàn/bồi thường" value={
+                    <SectionCard title={t('user.disputes.detail.sectionDispute')} icon={<ShieldAlert size={16} style={{ color: C.red }} />}>
+                        <InfoRow label={t('user.disputes.detail.reasonSummary')} value={dispute.reason} />
+                        {dispute.description && <InfoRow label={t('user.disputes.detail.descriptionDetail')} value={dispute.description} />}
+                        {dispute.expectedOutcome && <InfoRow label={t('user.disputes.detail.expectedResolution')} value={dispute.expectedOutcome} />}
+                        <InfoRow label={t('user.disputes.detail.refundRequested')} value={
                             <span style={{ color: C.orange, fontSize: '14px' }}>
-                                {(dispute.targetAmount ?? 0).toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US')}₫
+                                {(dispute.targetAmount ?? 0).toLocaleString(timeLocale)}₫
                             </span>
                         } />
                     </SectionCard>
 
                     {request && (
-                        <SectionCard title="Thông tin dịch vụ" icon={<Receipt size={16} style={{ color: C.blue }} />}>
-                            <InfoRow label="Mã đơn" value={
+                        <SectionCard title={t('user.disputes.detail.sectionService')} icon={<Receipt size={16} style={{ color: C.blue }} />}>
+                            <InfoRow label={t('user.disputes.detail.orderCode')} value={
                                 <button 
                                     onClick={() => router.push(`/user/requests/${request.id}`)}
                                     className="flex items-center justify-end gap-1 hover:underline outline-none"
@@ -418,17 +430,26 @@ export default function UserDisputeDetailPage() {
                                     </svg>
                                 </button>
                             } />
-                            <InfoRow label="Loại sự cố" value={request.incidentType || 'Cứu hộ'} />
-                            <InfoRow label="Đối tác cung cấp" value={provider?.fullName || 'N/A'} />
-                            <InfoRow label="SĐT cứu hộ viên" value={provider?.phoneNumber || 'N/A'} />
-                            <InfoRow label="Email cứu hộ viên" value={provider?.email || 'N/A'} />
-                            <InfoRow label="Tổng thanh toán dịch vụ" value={`${(dispute.payment?.totalAmount ?? 0).toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US')}₫`} />
-                            {request.createdAt && <InfoRow label="Ngày sử dụng" value={new Date(request.createdAt).toLocaleDateString('vi-VN')} />}
+                            <InfoRow
+                                label={t('user.disputes.detail.incidentType')}
+                                value={(() => {
+                                    const inc = request.incidentType as string | undefined;
+                                    if (!inc) return t('user.disputes.detail.incidentFallback');
+                                    const ik = `provider.incidents.${inc}`;
+                                    const il = t(ik);
+                                    return il === ik ? inc : il;
+                                })()}
+                            />
+                            <InfoRow label={t('user.disputes.detail.providerName')} value={provider?.fullName || t('common.notApplicable')} />
+                            <InfoRow label={t('user.disputes.detail.providerPhone')} value={provider?.phoneNumber || t('common.notApplicable')} />
+                            <InfoRow label={t('user.disputes.detail.providerEmail')} value={provider?.email || t('common.notApplicable')} />
+                            <InfoRow label={t('user.disputes.detail.totalServicePaid')} value={`${(dispute.payment?.totalAmount ?? 0).toLocaleString(timeLocale)}₫`} />
+                            {request.createdAt && <InfoRow label={t('user.disputes.detail.serviceDate')} value={new Date(request.createdAt).toLocaleDateString(timeLocale)} />}
                         </SectionCard>
                     )}
 
                     {(dispute.evidence?.length ?? 0) > 0 && (
-                        <SectionCard title="Bằng chứng đính kèm" icon={<ImageIcon size={16} style={{ color: C.green }} />}>
+                        <SectionCard title={t('user.disputes.detail.sectionEvidence')} icon={<ImageIcon size={16} style={{ color: C.green }} />}>
                             <div className="grid grid-cols-3 gap-2">
                                 {dispute.evidence.map((e: any) => {
                                     const video = isVideo(e.url);
@@ -442,10 +463,10 @@ export default function UserDisputeDetailPage() {
                                             {video ? (
                                                 <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
                                                     <Film size={24} className="mb-1" />
-                                                    <span className="text-[10px] uppercase font-bold">Video</span>
+                                                    <span className="text-[10px] uppercase font-bold">{t('user.disputes.detail.evidenceVideoBadge')}</span>
                                                 </div>
                                             ) : (
-                                                <img src={e.url} alt="evidence" className="w-full h-full object-cover group-active:opacity-80 transition-opacity" />
+                                                <img src={e.url} alt="" className="w-full h-full object-cover group-active:opacity-80 transition-opacity" />
                                             )}
                                         </button>
                                     );
@@ -462,8 +483,8 @@ export default function UserDisputeDetailPage() {
                         {(!dispute.messages || dispute.messages.length === 0) && (
                             <div className="text-center mt-10">
                                 <MessageSquare size={32} className="mx-auto mb-3" style={{ color: '#cbd5e1' }} />
-                                <p className="text-sm font-semibold" style={{ color: C.gray }}>Chưa có tin nhắn nào</p>
-                                <p className="text-xs mt-1" style={{ color: '#9ca3af' }}>Gửi tin nhắn hoặc bằng chứng tại đây.</p>
+                                <p className="text-sm font-semibold" style={{ color: C.gray }}>{t('user.disputes.detail.messagesEmpty')}</p>
+                                <p className="text-xs mt-1" style={{ color: '#9ca3af' }}>{t('user.disputes.detail.messagesEmptyHint')}</p>
                             </div>
                         )}
                         {(dispute.messages as any[]).map((msg: any) => {
@@ -522,11 +543,11 @@ export default function UserDisputeDetailPage() {
                                         )}
                                         <div className={`flex items-center gap-1 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                             <span className="text-[9px] font-semibold" style={{ color: '#cbd5e1' }}>
-                                                {new Date(msg.createdAt).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}
+                                                {new Date(msg.createdAt).toLocaleTimeString(timeLocale, { hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                             {isMe && providerLastReadAt && providerLastReadAt >= new Date(msg.createdAt).getTime() && (
                                                 <span className="text-[9px] font-bold" style={{ color: C.blue }}>
-                                                    Seen by PROVIDER
+                                                    {t('user.disputes.detail.seenByProvider')}
                                                 </span>
                                             )}
                                         </div>
@@ -543,7 +564,7 @@ export default function UserDisputeDetailPage() {
                                 <div className="mb-2 bg-orange-50 px-3 py-2 rounded-xl flex items-center justify-between border" style={{ borderColor: '#fed7aa', color: '#c2410c' }}>
                                     <div className="flex items-center gap-2">
                                         <AlertCircle size={16} className="text-orange-500 flex-shrink-0" />
-                                        <span className="text-[11px] font-bold">Lưu ý: Bạn chỉ có 1 lần phản hồi duy nhất!</span>
+                                        <span className="text-[11px] font-bold">{t('user.disputes.detail.oneReplyBanner')}</span>
                                     </div>
                                 </div>
                                 <div className="flex items-end gap-2">
@@ -552,7 +573,7 @@ export default function UserDisputeDetailPage() {
                                             value={msgBody} 
                                             onChange={(e) => setMsgBody(e.target.value)} 
                                             onFocus={() => setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 300)}
-                                            placeholder="Bạn chỉ có 1 lần phản hồi. Hãy mô tả đầy đủ và upload bằng chứng..." 
+                                            placeholder={t('user.disputes.detail.messagePlaceholder')}
                                             className="w-full bg-transparent px-3 py-2 text-[13px] outline-none resize-none max-h-32 min-h-[44px]" 
                                             rows={Math.min(4, msgBody.split('\n').length || 1)}
                                         />
@@ -564,7 +585,7 @@ export default function UserDisputeDetailPage() {
                                                 <Film size={18} />
                                             </button>
                                             <span className="text-[10px] font-medium" style={{ color: '#9ca3af' }}>
-                                                Ảnh + video (tối đa 2 video)
+                                                {t('user.disputes.detail.mediaTypesHint')}
                                             </span>
                                         </div>
                                     </div>
@@ -574,7 +595,7 @@ export default function UserDisputeDetailPage() {
                                         className="h-[44px] px-5 rounded-2xl text-sm font-bold text-white transition-opacity flex-shrink-0 disabled:opacity-50" 
                                         style={{ background: C.orange, boxShadow: `0 4px 12px ${C.orange}40` }}
                                     >
-                                        {sending ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Gửi'}
+                                        {sending ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : t('user.disputes.detail.sendBtn')}
                                     </button>
                                 </div>
                                 <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(e) => void onSelectEvidence(e.target.files, 'image')} />
@@ -595,7 +616,7 @@ export default function UserDisputeDetailPage() {
                                                 <div className="flex-shrink-0 ml-3">
                                                     {u.status === 'uploading' && <div className="w-4 h-4 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin" />}
                                                     {u.status === 'success' && <CheckCircle2 size={16} className="text-green-500" />}
-                                                    {u.status === 'error' && <button onClick={() => void retryUpload(u)} className="text-xs font-bold px-2 py-1 bg-red-50 text-red-600 rounded">Thử lại</button>}
+                                                    {u.status === 'error' && <button onClick={() => void retryUpload(u)} className="text-xs font-bold px-2 py-1 bg-red-50 text-red-600 rounded">{t('user.disputes.detail.retryUpload')}</button>}
                                                 </div>
                                             </div>
                                         ))}
@@ -606,12 +627,12 @@ export default function UserDisputeDetailPage() {
                     )}
                     {!canSend && !isClosed && (
                         <div className="sticky bottom-0 left-0 right-0 px-4 py-4 bg-white border-t text-center text-xs lg:rounded-b-2xl z-10" style={{ borderColor: C.border, color: C.gray }}>
-                            Cảm ơn bạn đã cung cấp thông tin. Hệ thống đã nhận đủ phản hồi từ bạn. Admin đang kiểm tra dữ liệu và sẽ liên hệ lại nếu cần thêm thông tin xác thực.
+                            {t('user.disputes.detail.thanksReceived')}
                         </div>
                     )}
                     {isClosed && (
                         <div className="sticky bottom-0 left-0 right-0 px-4 py-4 bg-white border-t text-center text-xs lg:rounded-b-2xl z-10" style={{ borderColor: C.border, color: C.gray }}>
-                            Cuộc hội thoại này đã kết thúc vì khiếu nại đã được giải quyết.
+                            {t('user.disputes.detail.threadClosed')}
                         </div>
                     )}
                 </div>

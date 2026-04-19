@@ -35,7 +35,7 @@ export default function HomePage() {
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#f8fafc' }}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto" style={{ borderColor: orange }} />
-          <p className="mt-4" style={{ color: gray }}>Đang tải...</p>
+          <p className="mt-4" style={{ color: gray }}>{t('common.loading')}</p>
         </div>
       </div>
     );
@@ -59,7 +59,7 @@ export default function HomePage() {
         </div>
 
         <p className="text-base mb-10 text-center" style={{ color: gray }}>
-          Cứu hộ khẩn cấp, nhanh chóng &amp; tin cậy
+          {t('guest.landing.tagline')}
         </p>
 
         <div className="w-full max-w-sm space-y-4">

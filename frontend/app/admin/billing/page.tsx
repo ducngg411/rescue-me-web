@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAdminGuard } from '@/lib/guards';
@@ -34,19 +34,47 @@ const C = {
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-function formatCurrency(amount: number) {
-    return new Intl.NumberFormat('vi-VN').format(amount) + '₫';
+function localeTag(locale: string) {
+    return locale === 'vi' ? 'vi-VN' : 'en-US';
+}
+
+function formatCurrency(amount: number, loc: string) {
+    return new Intl.NumberFormat(loc).format(amount) + '₫';
 }
 
 function formatRate(rate: number) {
     return (rate * 100).toFixed(1) + '%';
 }
 
-function formatDate(iso: string) {
-    return new Date(iso).toLocaleString('vi-VN', {
+function formatDate(iso: string, loc: string) {
+    return new Date(iso).toLocaleString(loc, {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
     });
+}
+
+type BFn = (key: string, params?: Record<string, string | number>) => string;
+
+function describeAuditEntry(entry: AuditEntry, b: BFn): { label: string; before: string | null; after: string } {
+    if (entry.changeType === 'FEE_RATE') {
+        const oldRate = entry.oldValue ? formatRate(parseFloat(entry.oldValue)) : b('unknownShort');
+        const newRate = formatRate(parseFloat(entry.newValue));
+        return { label: b('auditLabelFee'), before: oldRate, after: newRate };
+    }
+    try {
+        const parsed = JSON.parse(entry.newValue);
+        const after = `${parsed.bankCode ?? b('unknownShort')} • ${parsed.bankAccount ?? b('unknownShort')}`;
+        let before: string | null = null;
+        if (entry.oldValue) {
+            const old = JSON.parse(entry.oldValue);
+            if (old.bankAccount) {
+                before = `${old.bankCode ?? b('unknownShort')} • ${old.bankAccount}`;
+            }
+        }
+        return { label: b('auditLabelBank'), before, after };
+    } catch {
+        return { label: b('auditLabelBank'), before: entry.oldValue, after: entry.newValue };
+    }
 }
 
 type BillingConfig = {
@@ -71,12 +99,13 @@ type AuditEntry = {
 
 // ── Confirm Modal ────────────────────────────────────────────────────────────
 function ConfirmModal({
-    title, description, confirmLabel, confirmColor,
+    title, description, confirmLabel, cancelLabel, confirmColor,
     loading, onConfirm, onCancel,
 }: {
     title: string;
     description: React.ReactNode;
     confirmLabel: string;
+    cancelLabel: string;
     confirmColor: string;
     loading: boolean;
     onConfirm: () => void;
@@ -100,7 +129,7 @@ function ConfirmModal({
                         className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50"
                         style={{ color: C.navy }}
                     >
-                        Hủy
+                        {cancelLabel}
                     </button>
                     <button
                         onClick={onConfirm}
@@ -117,34 +146,12 @@ function ConfirmModal({
     );
 }
 
-// ── Audit log helper: parse an entry into a human-readable sentence ──────────
-function describeAuditEntry(entry: AuditEntry): { label: string; before: string | null; after: string } {
-    if (entry.changeType === 'FEE_RATE') {
-        const oldRate = entry.oldValue ? (parseFloat(entry.oldValue) * 100).toFixed(1) + '%' : '?';
-        const newRate = (parseFloat(entry.newValue) * 100).toFixed(1) + '%';
-        return { label: 'Thay đổi phí hoa hồng', before: oldRate, after: newRate };
-    }
-    // BANK_ACCOUNT: newValue is JSON with SePay fields {bankAccount, bankCode}
-    try {
-        const parsed = JSON.parse(entry.newValue);
-        const after = `${parsed.bankCode ?? '?'} • ${parsed.bankAccount ?? '?'}`;
-        let before: string | null = null;
-        if (entry.oldValue) {
-            const old = JSON.parse(entry.oldValue);
-            if (old.bankAccount) {
-                before = `${old.bankCode ?? '?'} • ${old.bankAccount}`;
-            }
-        }
-        return { label: 'Cập nhật cấu hình SePay', before, after };
-    } catch {
-        return { label: 'Cập nhật cấu hình SePay', before: entry.oldValue, after: entry.newValue };
-    }
-}
-
 // ── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminBillingPage() {
     const { isReady } = useAdminGuard();
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
+    const loc = localeTag(locale);
+    const b = (key: string, params?: Record<string, string | number>) => t(`admin.billing.${key}`, params);
 
     const [config, setConfig] = useState<BillingConfig | null>(null);
     const [loadingConfig, setLoadingConfig] = useState(true);
@@ -184,11 +191,11 @@ export default function AdminBillingPage() {
                 note: '',
             });
         } catch {
-            toast.error('Không thể tải cấu hình billing.');
+            toast.error(b('toastLoadBilling'));
         } finally {
             setLoadingConfig(false);
         }
-    }, []);
+    }, [t]);
 
     const fetchAuditLog = useCallback(async () => {
         setAuditLoading(true);
@@ -200,11 +207,11 @@ export default function AdminBillingPage() {
             setAuditLog(res.items);
             setAuditTotal(res.total);
         } catch {
-            toast.error('Không thể tải lịch sử thay đổi.');
+            toast.error(b('toastLoadAudit'));
         } finally {
             setAuditLoading(false);
         }
-    }, [auditPage]);
+    }, [auditPage, t]);
 
     useEffect(() => {
         if (!isReady) return;
@@ -220,20 +227,20 @@ export default function AdminBillingPage() {
     const handleFeeSave = async () => {
         const rate = parseFloat(feeInput) / 100;
         if (isNaN(rate) || rate < 0 || rate > 1) {
-            toast.error('Phí hoa hồng phải từ 0% đến 100%.');
+            toast.error(b('toastFeeRange'));
             return;
         }
         setFeeSaving(true);
         try {
             await adminApi.updateFee(rate, feeNote || undefined);
-            toast.success('Đã cập nhật phí hoa hồng!');
+            toast.success(b('toastFeeSuccess'));
             setFeeConfirm(false);
             setFeeEditing(false);
             setFeeNote('');
             await fetchConfig();
             await fetchAuditLog();
         } catch {
-            toast.error('Cập nhật thất bại. Vui lòng thử lại.');
+            toast.error(b('toastFeeFail'));
         } finally {
             setFeeSaving(false);
         }
@@ -242,7 +249,7 @@ export default function AdminBillingPage() {
     // ── Bank save ──
     const handleBankSave = async () => {
         if (!bankForm.bankAccount || !bankForm.bankCode) {
-            toast.error('Vui lòng điền số tài khoản và mã ngân hàng.');
+            toast.error(b('toastBankRequired'));
             return;
         }
         setBankSaving(true);
@@ -253,13 +260,13 @@ export default function AdminBillingPage() {
                 apiKey: bankForm.apiKey || undefined,
                 note: bankForm.note || undefined,
             });
-            toast.success('Đã cập nhật tài khoản nhận tiền!');
+            toast.success(b('toastBankSuccess'));
             setBankConfirm(false);
             setBankEditing(false);
             await fetchConfig();
             await fetchAuditLog();
         } catch {
-            toast.error('Cập nhật thất bại. Vui lòng thử lại.');
+            toast.error(b('toastBankFail'));
         } finally {
             setBankSaving(false);
         }
@@ -269,6 +276,55 @@ export default function AdminBillingPage() {
     const feeRateValid = !isNaN(feeRateNum) && feeRateNum >= 0 && feeRateNum <= 100;
     const feeChanged = config && feeRateValid && Math.abs(feeRateNum / 100 - config.commissionRate) > 0.0001;
     const totalAuditPages = Math.max(1, Math.ceil(auditTotal / AUDIT_LIMIT));
+
+    const statsCards = useMemo(
+        () => [
+            {
+                label: b('statCurrentFee'),
+                getValue: (c: BillingConfig | null) => (c ? formatRate(c.commissionRate) : '—'),
+                subValue: b('statCurrentFeeSub'),
+                color: C.orange,
+                icon: <Percent className="w-4 h-4" />,
+            },
+            {
+                label: b('statMonthCommission'),
+                getValue: (c: BillingConfig | null) => (c ? formatCurrency(c.commissionThisMonth, loc) : '—'),
+                subValue: b('statMonthCommissionSub'),
+                color: C.green,
+                icon: <TrendingUp className="w-4 h-4" />,
+            },
+            {
+                label: b('statTotalCommission'),
+                getValue: (c: BillingConfig | null) => (c ? formatCurrency(c.totalCommission, loc) : '—'),
+                subValue: b('statTotalCommissionSub'),
+                color: C.navy,
+                icon: <DollarSign className="w-4 h-4" />,
+            },
+        ],
+        [t, loc],
+    );
+
+    const bankFieldDefs = useMemo(
+        () => [
+            { key: 'bankAccount' as const, label: b('bankFieldAccount'), placeholder: b('bankFieldAccountPh'), required: true },
+            { key: 'bankCode' as const, label: b('bankFieldCode'), placeholder: b('bankFieldCodePh'), required: true },
+            { key: 'apiKey' as const, label: b('bankFieldApi'), placeholder: b('bankFieldApiPh'), required: false },
+            { key: 'note' as const, label: b('bankFieldNote'), placeholder: b('bankFieldNotePh'), required: false },
+        ],
+        [t],
+    );
+
+    const auditColumns = useMemo(
+        () => [
+            b('auditColTime'),
+            b('auditColAdmin'),
+            b('auditColType'),
+            b('auditColBefore'),
+            b('auditColAfter'),
+            b('auditColNote'),
+        ],
+        [t],
+    );
 
     if (!isReady) {
         return (
@@ -288,35 +344,13 @@ export default function AdminBillingPage() {
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>{t('admin.nav.billing')}</h1>
                     <p className="text-sm" style={{ color: C.gray }}>
-                        Quản lý phí hoa hồng nền tảng và tài khoản nhận tiền.
+                        {b('subtitle')}
                     </p>
                 </div>
 
                 {/* ── Stats Cards ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                    {[
-                        {
-                            label: 'PHÍ HIỆN TẠI',
-                            value: config ? formatRate(config.commissionRate) : '—',
-                            subValue: 'Áp dụng cho mọi giao dịch',
-                            color: C.orange,
-                            icon: <Percent className="w-4 h-4" />,
-                        },
-                        {
-                            label: 'HOA HỒNG THÁNG NÀY',
-                            value: config ? formatCurrency(config.commissionThisMonth) : '—',
-                            subValue: 'Tổng thu tháng hiện tại',
-                            color: C.green,
-                            icon: <TrendingUp className="w-4 h-4" />,
-                        },
-                        {
-                            label: 'TỔNG HOA HỒNG',
-                            value: config ? formatCurrency(config.totalCommission) : '—',
-                            subValue: 'Tích lũy từ trước đến nay',
-                            color: C.navy,
-                            icon: <DollarSign className="w-4 h-4" />,
-                        },
-                    ].map(stat => (
+                    {statsCards.map(stat => (
                         <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
                             {loadingConfig ? (
                                 <div className="animate-pulse space-y-2">
@@ -330,7 +364,7 @@ export default function AdminBillingPage() {
                                         <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>{stat.label}</p>
                                         <span style={{ color: stat.color, opacity: 0.6 }}>{stat.icon}</span>
                                     </div>
-                                    <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
+                                    <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.getValue(config)}</p>
                                     <p className="text-[10px] mt-1 font-medium" style={{ color: C.gray }}>{stat.subValue}</p>
                                 </>
                             )}
@@ -345,7 +379,7 @@ export default function AdminBillingPage() {
                         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: C.border }}>
                             <div className="flex items-center gap-2">
                                 <Percent className="w-4 h-4" style={{ color: C.orange }} />
-                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Phí Hoa Hồng Nền Tảng</h2>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>{b('feeSectionTitle')}</h2>
                             </div>
                             {!feeEditing && (
                                 <button
@@ -354,7 +388,7 @@ export default function AdminBillingPage() {
                                     style={{ color: C.orange }}
                                 >
                                     <Edit3 className="w-3.5 h-3.5" />
-                                    Chỉnh sửa
+                                    {b('edit')}
                                 </button>
                             )}
                         </div>
@@ -371,13 +405,13 @@ export default function AdminBillingPage() {
                                     <div className="flex items-start gap-2 p-3 rounded-xl border border-amber-200 bg-amber-50">
                                         <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
                                         <p className="text-xs text-amber-700 leading-relaxed">
-                                            Thay đổi phí sẽ áp dụng ngay cho các giao dịch mới. Các đơn đang xử lý không bị ảnh hưởng.
+                                            {b('feeWarningBanner')}
                                         </p>
                                     </div>
 
                                     <div>
                                         <label className="block text-[10px] font-semibold tracking-wider uppercase mb-2" style={{ color: C.gray }}>
-                                            Phí hoa hồng mới (%)
+                                            {b('feeNewLabel')}
                                         </label>
                                         <div className="relative">
                                             <input
@@ -394,25 +428,25 @@ export default function AdminBillingPage() {
                                                     fontFamily: 'Lexend, sans-serif',
                                                     focusRingColor: C.orange,
                                                 } as React.CSSProperties}
-                                                placeholder="10.0"
+                                                placeholder={b('feePercentPlaceholder')}
                                                 autoFocus
                                             />
                                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: C.gray }}>%</span>
                                         </div>
                                         {!feeRateValid && (
-                                            <p className="text-xs mt-1" style={{ color: C.red }}>Phí phải từ 0% đến 100%.</p>
+                                            <p className="text-xs mt-1" style={{ color: C.red }}>{b('feeInvalidHint')}</p>
                                         )}
                                     </div>
 
                                     <div>
                                         <label className="block text-[10px] font-semibold tracking-wider uppercase mb-2" style={{ color: C.gray }}>
-                                            Ghi chú (tùy chọn)
+                                            {b('feeNoteLabel')}
                                         </label>
                                         <input
                                             type="text"
                                             value={feeNote}
                                             onChange={e => setFeeNote(e.target.value)}
-                                            placeholder="VD: Điều chỉnh theo chiến dịch tháng 4..."
+                                            placeholder={b('feeNotePlaceholder')}
                                             className="w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none"
                                             style={{ borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                                         />
@@ -424,7 +458,7 @@ export default function AdminBillingPage() {
                                             className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 transition-colors"
                                             style={{ color: C.navy }}
                                         >
-                                            Hủy
+                                            {b('cancel')}
                                         </button>
                                         <button
                                             onClick={() => setFeeConfirm(true)}
@@ -433,7 +467,7 @@ export default function AdminBillingPage() {
                                             style={{ background: C.orange }}
                                         >
                                             <Save className="w-4 h-4" />
-                                            Lưu thay đổi
+                                            {b('saveChanges')}
                                         </button>
                                     </div>
                                 </div>
@@ -448,27 +482,29 @@ export default function AdminBillingPage() {
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold" style={{ color: C.navy }}>
-                                                {config ? formatRate(config.commissionRate) : '—'} hoa hồng
+                                                {config ? b('feeRateLine', { rate: formatRate(config.commissionRate) }) : '—'}
                                             </p>
                                             <p className="text-xs mt-0.5" style={{ color: C.gray }}>
-                                                Thu từ mỗi giao dịch hoàn thành trên nền tảng
+                                                {b('feeDesc')}
                                             </p>
                                             <p className="text-[10px] mt-1.5 font-semibold" style={{ color: C.orange }}>
-                                                Ví dụ: đơn 500.000₫ → hoa hồng {config ? formatCurrency(Math.round(500000 * config.commissionRate)) : '—'}
+                                                {b('feeExample', {
+                                                    amount: config ? formatCurrency(Math.round(500000 * config.commissionRate), loc) : '—',
+                                                })}
                                             </p>
                                         </div>
                                     </div>
 
                                     <div className="p-3 rounded-xl border" style={{ borderColor: C.border, background: C.bg }}>
-                                        <p className="text-[10px] font-semibold tracking-wider uppercase mb-2" style={{ color: C.gray }}>Cơ chế thu phí</p>
+                                        <p className="text-[10px] font-semibold tracking-wider uppercase mb-2" style={{ color: C.gray }}>{b('feeMechanismTitle')}</p>
                                         <ul className="space-y-1.5 text-xs" style={{ color: C.gray }}>
                                             <li className="flex items-start gap-2">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-current mt-1.5 flex-shrink-0" style={{ background: C.navy }} />
-                                                <span><strong style={{ color: C.navy }}>Tiền mặt:</strong> Trừ thẳng vào ví cứu hộ viên sau khi job hoàn thành.</span>
+                                                <span>{b('feeBulletCash')}</span>
                                             </li>
                                             <li className="flex items-start gap-2">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-current mt-1.5 flex-shrink-0" style={{ background: C.blue }} />
-                                                <span><strong style={{ color: C.navy }}>QR / Ví:</strong> Khấu trừ khi giải ngân — cứu hộ viên nhận số tiền net.</span>
+                                                <span>{b('feeBulletQrWallet')}</span>
                                             </li>
                                         </ul>
                                     </div>
@@ -482,7 +518,7 @@ export default function AdminBillingPage() {
                         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: C.border }}>
                             <div className="flex items-center gap-2">
                                 <Building2 className="w-4 h-4" style={{ color: C.blue }} />
-                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>Cấu Hình SePay</h2>
+                                <h2 className="text-sm font-bold" style={{ color: C.navy }}>{b('bankSectionTitle')}</h2>
                             </div>
                             {!bankEditing && (
                                 <button
@@ -491,7 +527,7 @@ export default function AdminBillingPage() {
                                     style={{ color: C.blue }}
                                 >
                                     <Edit3 className="w-3.5 h-3.5" />
-                                    Chỉnh sửa
+                                    {b('edit')}
                                 </button>
                             )}
                         </div>
@@ -505,12 +541,7 @@ export default function AdminBillingPage() {
                                 </div>
                             ) : bankEditing ? (
                                 <div className="space-y-3">
-                                    {[
-                                        { key: 'bankAccount', label: 'Số tài khoản *', placeholder: 'VD: 07729096901', required: true },
-                                        { key: 'bankCode', label: 'Mã ngân hàng *', placeholder: 'VD: TPBank', required: true },
-                                        { key: 'apiKey', label: 'SePay API Key (để trống = giữ nguyên)', placeholder: 'Nhập API Key mới nếu muốn cập nhật...', required: false },
-                                        { key: 'note', label: 'Ghi chú (tùy chọn)', placeholder: 'Lý do thay đổi...', required: false },
-                                    ].map(field => (
+                                    {bankFieldDefs.map(field => (
                                         <div key={field.key}>
                                             <label className="block text-[10px] font-semibold tracking-wider uppercase mb-1.5" style={{ color: C.gray }}>
                                                 {field.label}
@@ -540,7 +571,7 @@ export default function AdminBillingPage() {
                                             className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 hover:bg-gray-200 transition-colors"
                                             style={{ color: C.navy }}
                                         >
-                                            Hủy
+                                            {b('cancel')}
                                         </button>
                                         <button
                                             onClick={() => setBankConfirm(true)}
@@ -549,7 +580,7 @@ export default function AdminBillingPage() {
                                             style={{ background: C.blue }}
                                         >
                                             <Save className="w-4 h-4" />
-                                            Lưu tài khoản
+                                            {b('saveAccount')}
                                         </button>
                                     </div>
                                 </div>
@@ -564,15 +595,20 @@ export default function AdminBillingPage() {
                                                 <CreditCard className="w-5 h-5 text-white" />
                                             </div>
                                             <div>
-                                                <p className="text-sm font-bold" style={{ color: C.navy }}>SePay</p>
+                                                <p className="text-sm font-bold" style={{ color: C.navy }}>{b('sepayBrand')}</p>
                                                 <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: '#dbeafe', color: C.blue }}>
                                                     {config.sepayBankCode}
                                                 </span>
                                             </div>
                                         </div>
                                         {[
-                                            { label: 'Số tài khoản', value: config.sepayBankAccount },
-                                            { label: 'API Key', value: config.sepayApiKey ? '••••••••' + config.sepayApiKey.slice(-6) : 'Đang dùng env' },
+                                            { label: b('bankRowAccount'), value: config.sepayBankAccount },
+                                            {
+                                                label: b('bankRowApiKey'),
+                                                value: config.sepayApiKey
+                                                    ? b('bankRowApiMasked', { tail: config.sepayApiKey.slice(-6) })
+                                                    : b('bankRowApiEnv'),
+                                            },
                                         ].map(row => (
                                             <div key={row.label} className="flex items-center justify-between py-1.5 border-t" style={{ borderColor: '#bfdbfe' }}>
                                                 <span className="text-xs" style={{ color: '#1d4ed8' }}>{row.label}</span>
@@ -581,7 +617,7 @@ export default function AdminBillingPage() {
                                         ))}
                                     </div>
                                     <p className="text-[10px]" style={{ color: C.gray }}>
-                                        💡 SePay dùng để nhận thanh toán QR và tự động đối soát top-up từ cứu hộ viên.
+                                        {b('sepayHint')}
                                     </p>
                                 </div>
                             ) : (
@@ -589,13 +625,13 @@ export default function AdminBillingPage() {
                                     <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: C.bg }}>
                                         <Building2 className="w-6 h-6" style={{ color: C.gray }} />
                                     </div>
-                                    <p className="text-sm font-medium" style={{ color: C.gray }}>Chưa cấu hình SePay (đang dùng env)</p>
+                                    <p className="text-sm font-medium" style={{ color: C.gray }}>{b('emptySepayTitle')}</p>
                                     <button
                                         onClick={() => setBankEditing(true)}
                                         className="px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
                                         style={{ background: C.blueLight, color: C.blue }}
                                     >
-                                        Cấu hình SePay
+                                        {b('emptySepayCta')}
                                     </button>
                                 </div>
                             )}
@@ -608,10 +644,10 @@ export default function AdminBillingPage() {
                     <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: C.border }}>
                         <div className="flex items-center gap-2">
                             <History className="w-4 h-4" style={{ color: C.purple }} />
-                            <h2 className="text-sm font-bold" style={{ color: C.navy }}>Lịch Sử Thay Đổi (Audit Log)</h2>
+                            <h2 className="text-sm font-bold" style={{ color: C.navy }}>{b('auditTitle')}</h2>
                         </div>
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: C.purpleLight, color: C.purple }}>
-                            {auditTotal} mục
+                            {b('auditCount', { count: auditTotal })}
                         </span>
                     </div>
 
@@ -619,7 +655,7 @@ export default function AdminBillingPage() {
                         <table className="w-full text-left">
                             <thead style={{ background: C.bg }}>
                                 <tr>
-                                    {['Thời gian', 'Admin', 'Loại thay đổi', 'Trước', 'Sau', 'Ghi chú'].map(col => (
+                                    {auditColumns.map(col => (
                                         <th key={col} className="text-left text-[10px] font-semibold tracking-wider px-4 py-3 uppercase" style={{ color: C.gray }}>
                                             {col}
                                         </th>
@@ -636,17 +672,17 @@ export default function AdminBillingPage() {
                                 ) : auditLog.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="text-center py-10 text-sm" style={{ color: C.gray }}>
-                                            Chưa có lịch sử thay đổi nào.
+                                            {b('auditEmpty')}
                                         </td>
                                     </tr>
                                 ) : (
                                     auditLog.map(entry => {
-                                        const desc = describeAuditEntry(entry);
+                                        const desc = describeAuditEntry(entry, b);
                                         const isFee = entry.changeType === 'FEE_RATE';
                                         return (
                                             <tr key={entry.id} className="border-t hover:bg-gray-50 transition-colors" style={{ borderColor: C.border }}>
                                                 <td className="px-4 py-3 whitespace-nowrap text-xs" style={{ color: C.gray }}>
-                                                    {formatDate(entry.createdAt)}
+                                                    {formatDate(entry.createdAt, loc)}
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <span className="text-sm font-semibold" style={{ color: C.navy }}>{entry.adminName}</span>
@@ -664,7 +700,7 @@ export default function AdminBillingPage() {
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-3 text-xs" style={{ color: C.gray }}>
-                                                    {desc.before ?? <span className="italic">Chưa có</span>}
+                                                    {desc.before ?? <span className="italic">{b('auditNoneBefore')}</span>}
                                                 </td>
                                                 <td className="px-4 py-3 text-xs font-semibold" style={{ color: C.green }}>
                                                     {desc.after}
@@ -684,11 +720,11 @@ export default function AdminBillingPage() {
                     {!auditLoading && auditTotal > 0 && (
                         <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
                             <p className="text-xs" style={{ color: C.gray }}>
-                                Hiển thị <span className="font-semibold" style={{ color: C.navy }}>
-                                    {(auditPage - 1) * AUDIT_LIMIT + 1}
-                                </span> – <span className="font-semibold" style={{ color: C.navy }}>
-                                    {Math.min(auditPage * AUDIT_LIMIT, auditTotal)}
-                                </span> / <span className="font-semibold" style={{ color: C.navy }}>{auditTotal}</span> mục
+                                {b('auditPagination', {
+                                    from: (auditPage - 1) * AUDIT_LIMIT + 1,
+                                    to: Math.min(auditPage * AUDIT_LIMIT, auditTotal),
+                                    total: auditTotal,
+                                })}
                             </p>
                             <div className="flex items-center gap-1">
                                 <button
@@ -734,22 +770,21 @@ export default function AdminBillingPage() {
             {/* ── Fee Confirm Modal ── */}
             {feeConfirm && (
                 <ConfirmModal
-                    title="Xác nhận thay đổi phí"
-                    confirmLabel="Áp dụng ngay"
+                    title={b('feeConfirmTitle')}
+                    confirmLabel={b('feeConfirmApply')}
+                    cancelLabel={b('cancel')}
                     confirmColor={C.orange}
                     loading={feeSaving}
                     onConfirm={handleFeeSave}
                     onCancel={() => setFeeConfirm(false)}
                     description={
                         <span>
-                            Bạn đang thay đổi phí hoa hồng từ{' '}
-                            <strong style={{ color: C.navy }}>{config ? formatRate(config.commissionRate) : '?'}</strong>{' '}
-                            sang{' '}
-                            <strong style={{ color: C.orange }}>
-                                {feeRateValid ? (parseFloat(feeInput) / 100 * 100).toFixed(1) + '%' : '?'}
-                            </strong>.
+                            {b('feeConfirmIntro', {
+                                from: config ? formatRate(config.commissionRate) : b('unknownShort'),
+                                to: feeRateValid ? formatRate(feeRateNum / 100) : b('unknownShort'),
+                            })}
                             <br /><br />
-                            Thay đổi này sẽ áp dụng cho tất cả giao dịch mới và sẽ được ghi lại trong audit log.
+                            {b('feeConfirmOutro')}
                         </span>
                     }
                 />
@@ -758,20 +793,20 @@ export default function AdminBillingPage() {
             {/* ── Bank Account Confirm Modal ── */}
             {bankConfirm && (
                 <ConfirmModal
-                    title="Xác nhận cập nhật SePay"
-                    confirmLabel="Lưu cấu hình"
+                    title={b('bankConfirmTitle')}
+                    confirmLabel={b('bankConfirmSave')}
+                    cancelLabel={b('cancel')}
                     confirmColor={C.blue}
                     loading={bankSaving}
                     onConfirm={handleBankSave}
                     onCancel={() => setBankConfirm(false)}
                     description={
                         <span>
-                            Bạn đang cập nhật cấu hình SePay:{' '}
-                            <strong style={{ color: C.navy }}>
-                                {bankForm.bankCode} • {bankForm.bankAccount}
-                            </strong>.
+                            {b('bankConfirmIntro', {
+                                summary: `${bankForm.bankCode} • ${bankForm.bankAccount}`,
+                            })}
                             <br /><br />
-                            Thay đổi sẽ có hiệu lực ngay và được ghi lại trong audit log.
+                            {b('bankConfirmOutro')}
                         </span>
                     }
                 />

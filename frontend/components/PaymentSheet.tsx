@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const C = {
     orange: '#f97316',
@@ -13,10 +14,6 @@ const C = {
     border: '#f1f5f9',
     green: '#16a34a',
 };
-
-function fmt(n: number) {
-    return n.toLocaleString('vi-VN') + 'đ';
-}
 
 interface Item { id: number; label: string; amount: number; }
 
@@ -34,6 +31,13 @@ let nextId = 1;
 const makeItem = (): Item => ({ id: nextId++, label: '', amount: 0 });
 
 export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentMethod, disableWallet = false, onClose, onSubmitted }: PaymentSheetProps) {
+    const { t, locale } = useLanguage();
+    const numLoc = locale === 'en' ? 'en-US' : 'vi-VN';
+    const fmt = useMemo(
+        () => (n: number) => n.toLocaleString(numLoc) + 'đ',
+        [numLoc],
+    );
+
     // ── Primary total (editable, pre-filled from accepted quote) ──────────────
     const [baseFee, setBaseFee] = useState(defaultAmount > 0 ? defaultAmount : 0);
 
@@ -72,6 +76,20 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
 
     const surchargeTotal = surchargeItems.reduce((s, i) => s + i.amount, 0);
     const totalAmount = baseFee + surchargeTotal;
+
+    const paymentOptions = useMemo(
+        () =>
+            [
+                { value: 'CASH' as const, label: t('provider.paymentFinalizeModal.methodCash'), sub: t('provider.paymentFinalizeModal.methodCashSub') },
+                { value: 'QR' as const, label: t('provider.paymentFinalizeModal.methodQr'), sub: t('provider.paymentFinalizeModal.methodQrSub') },
+                {
+                    value: 'WALLET' as const,
+                    label: t('provider.paymentFinalizeModal.methodWallet'),
+                    sub: t('provider.paymentFinalizeModal.methodWalletSub'),
+                },
+            ] as const,
+        [t],
+    );
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     const addTo = (setter: React.Dispatch<React.SetStateAction<Item[]>>, show: () => void) => {
@@ -161,14 +179,20 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
 
         const remaining = MAX_PHOTOS - photos.length;
         if (remaining <= 0) {
-            toast.error(`Tối đa ${MAX_PHOTOS} ảnh`);
+            toast.error(t('provider.paymentFinalizeModal.toastMaxPhotos').replace('{max}', String(MAX_PHOTOS)));
             return;
         }
 
         const allowed = ['image/jpeg', 'image/png', 'image/webp'];
         const toUpload = files.slice(0, remaining).filter(f => {
-            if (!allowed.includes(f.type)) { toast.error(`${f.name}: chỉ hỗ trợ JPG/PNG/WebP`); return false; }
-            if (f.size > 5 * 1024 * 1024) { toast.error(`${f.name}: tối đa 5MB`); return false; }
+            if (!allowed.includes(f.type)) {
+                toast.error(t('provider.paymentFinalizeModal.toastBadFileType').replace('{name}', f.name));
+                return false;
+            }
+            if (f.size > 5 * 1024 * 1024) {
+                toast.error(t('provider.paymentFinalizeModal.toastFileTooBig').replace('{name}', f.name));
+                return false;
+            }
             return true;
         });
 
@@ -211,11 +235,11 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                     setPhotos(prev => prev.map(p =>
                         p.localId === localId ? { ...p, status: 'error' } : p
                     ));
-                    toast.error(`Không thể upload ảnh`);
+                    toast.error(t('provider.paymentFinalizeModal.toastPhotoUploadFailed'));
                 }
             })();
         });
-    }, [photos.length]);
+    }, [photos.length, t]);
 
     const removePhoto = useCallback((localId: string) => {
         setPhotos(prev => {
@@ -227,12 +251,17 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
 
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleSubmit = async () => {
-        if (totalAmount <= 0) { toast.error('Vui lòng nhập số tiền thanh toán'); return; }
+        if (totalAmount <= 0) {
+            toast.error(t('provider.paymentFinalizeModal.toastEnterAmount'));
+            return;
+        }
 
         // Don't submit while photos are still uploading
         const stillUploading = photos.filter(p => p.status === 'uploading');
         if (stillUploading.length > 0) {
-            toast.error(`Đang upload ${stillUploading.length} ảnh, vui lòng chờ...`);
+            toast.error(
+                t('provider.paymentFinalizeModal.toastPhotosUploading').replace('{count}', String(stillUploading.length)),
+            );
             return;
         }
 
@@ -271,15 +300,15 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                 pollStatus(requestId);
             } else if (paymentMethod === 'WALLET') {
                 // Wallet payment — user will receive a notification to confirm
-                toast.success('Đã gửi yêu cầu thanh toán qua ví!');
+                toast.success(t('provider.paymentFinalizeModal.toastWalletRequestSent'));
                 setWalletSent(true);
                 startWalletPoll(requestId);
             } else {
-                toast.success('Đã gửi yêu cầu thanh toán!');
+                toast.success(t('provider.paymentFinalizeModal.toastRequestSent'));
                 setCashSent(true); // Show cash-pending overlay instead of closing immediately
             }
         } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Gửi thất bại, thử lại');
+            toast.error(err.response?.data?.message || t('provider.paymentFinalizeModal.toastSubmitFailed'));
         } finally {
             setIsSubmitting(false);
         }
@@ -310,7 +339,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                         <input
                             type="text"
                             inputMode="numeric"
-                            value={item.amount === 0 ? '' : item.amount.toLocaleString('vi-VN')}
+                            value={item.amount === 0 ? '' : item.amount.toLocaleString(numLoc)}
                             onChange={amountInput(setter, item.id)}
                             placeholder="0"
                             className="w-24 text-right text-xs font-semibold outline-none bg-transparent"
@@ -350,8 +379,8 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                         {/* Title */}
                         <div className="flex items-center justify-between mb-4">
                             <div>
-                                <h2 className="text-base font-bold" style={{ color: C.navy }}>Chốt phí & Thanh toán</h2>
-                                <p className="text-xs" style={{ color: C.gray }}>Xác nhận chi tiết trước khi gửi khách</p>
+                                <h2 className="text-base font-bold" style={{ color: C.navy }}>{t('provider.paymentFinalizeModal.title')}</h2>
+                                <p className="text-xs" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.subtitle')}</p>
                             </div>
                             <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: C.bg }}>
                                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={2.5}>
@@ -365,7 +394,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                             className="rounded-2xl px-4 py-4 mb-4"
                             style={{ background: 'linear-gradient(135deg, #fff7ed, #fff)', border: `1.5px solid #fed7aa` }}
                         >
-                            <p className="text-xs text-center mb-1" style={{ color: C.gray }}>Tổng tiền cần thanh toán</p>
+                            <p className="text-xs text-center mb-1" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.totalLabel')}</p>
 
                             {/* Always-prominent total */}
                             <p className="text-4xl font-extrabold text-center" style={{ color: C.orange }}>
@@ -375,12 +404,12 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                             {/* Editable base price line */}
                             <div className="flex items-center justify-center gap-1 mt-3 pt-3" style={{ borderTop: `1px solid #fed7aa` }}>
                                 <span className="text-xs flex-shrink-0" style={{ color: C.gray }}>
-                                    {surchargeTotal > 0 ? 'Giá dịch vụ:' : 'Nhập giá:'}
+                                    {surchargeTotal > 0 ? t('provider.paymentFinalizeModal.basePriceWithExtras') : t('provider.paymentFinalizeModal.basePriceEnter')}
                                 </span>
                                 <input
                                     type="text"
                                     inputMode="numeric"
-                                    value={baseFee === 0 ? '' : baseFee.toLocaleString('vi-VN')}
+                                    value={baseFee === 0 ? '' : baseFee.toLocaleString(numLoc)}
                                     onChange={e => {
                                         const raw = e.target.value.replace(/\D/g, '');
                                         setBaseFee(raw ? parseInt(raw, 10) : 0);
@@ -395,14 +424,14 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                         onClick={() => setBaseFee(defaultAmount)}
                                         className="text-xs underline ml-1 flex-shrink-0"
                                         style={{ color: C.gray }}
-                                    >đặt lại</button>
+                                    >{t('provider.paymentFinalizeModal.resetToQuote')}</button>
                                 )}
                             </div>
 
                             {/* Surcharge & quote reference lines */}
                             {surchargeTotal > 0 && (
                                 <div className="flex items-center justify-center gap-1 mt-1.5">
-                                    <span className="text-xs" style={{ color: C.gray }}>+ Phụ phí:</span>
+                                    <span className="text-xs" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.surchargePlus')}</span>
                                     <span className="text-xs font-semibold" style={{ color: '#d97706' }}>{fmt(surchargeTotal)}</span>
                                 </div>
                             )}
@@ -415,7 +444,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                     <p className="text-xs font-semibold" style={{ color: '#92400e' }}>
-                                        Báo giá bạn đã gửi trước đó: {fmt(defaultAmount)}
+                                        {t('provider.paymentFinalizeModal.quoteBanner').replace('{amount}', fmt(defaultAmount))}
                                     </p>
                                 </div>
                             )}
@@ -433,7 +462,10 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                         className={`transition-transform ${showBreakdown ? 'rotate-180' : ''}`}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                                     </svg>
-                                    Chi tiết {breakdownItems.length > 0 && `(${breakdownItems.length})`}
+                                    {t('provider.paymentFinalizeModal.breakdownToggle')}
+                                    {breakdownItems.length > 0
+                                        ? t('provider.paymentFinalizeModal.breakdownCount').replace('{count}', String(breakdownItems.length))
+                                        : ''}
                                 </button>
                                 <button
                                     onClick={() => addTo(setBreakdownItems, () => setShowBreakdown(true))}
@@ -443,17 +475,17 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                     <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                                     </svg>
-                                    Thêm mục
+                                    {t('provider.paymentFinalizeModal.addBreakdownLine')}
                                 </button>
                             </div>
 
                             {showBreakdown && breakdownItems.length > 0 && (
                                 <>
-                                    {renderItems(breakdownItems, setBreakdownItems, 'VD: Công thay lốp, Ắc quy...')}
+                                    {renderItems(breakdownItems, setBreakdownItems, t('provider.paymentFinalizeModal.breakdownPlaceholder'))}
                                     {/* Sum hint */}
                                     {breakdownItems.some(i => i.amount > 0) && (
                                         <p className="text-right text-xs mt-1.5 pr-1" style={{ color: C.gray }}>
-                                            Tổng chi tiết: <span className="font-semibold">
+                                            {t('provider.paymentFinalizeModal.breakdownSum')} <span className="font-semibold">
                                                 {fmt(breakdownItems.reduce((s, i) => s + i.amount, 0))}
                                             </span>
                                             {breakdownItems.reduce((s, i) => s + i.amount, 0) !== baseFee && baseFee > 0 && (
@@ -464,7 +496,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                 </>
                             )}
                             {showBreakdown && breakdownItems.length === 0 && (
-                                <p className="text-xs text-center py-2" style={{ color: C.gray }}>Bấm "+ Thêm mục" để liệt kê những gì trong tổng tiền</p>
+                                <p className="text-xs text-center py-2" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.breakdownEmptyHint')}</p>
                             )}
                         </div>
 
@@ -480,7 +512,12 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                         className={`transition-transform ${showSurcharge ? 'rotate-180' : ''}`}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                                     </svg>
-                                    Phụ phí phát sinh {surchargeItems.length > 0 && `(${surchargeItems.length} • +${fmt(surchargeTotal)})`}
+                                    {t('provider.paymentFinalizeModal.surchargeToggle')}
+                                    {surchargeItems.length > 0
+                                        ? t('provider.paymentFinalizeModal.surchargeCountTotal')
+                                            .replace('{count}', String(surchargeItems.length))
+                                            .replace('{amount}', fmt(surchargeTotal))
+                                        : ''}
                                 </button>
                                 <button
                                     onClick={() => addTo(setSurchargeItems, () => setShowSurcharge(true))}
@@ -490,25 +527,25 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                     <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                                     </svg>
-                                    Thêm khoản
+                                    {t('provider.paymentFinalizeModal.addSurchargeLine')}
                                 </button>
                             </div>
 
                             {showSurcharge && surchargeItems.length > 0 && renderItems(
-                                surchargeItems, setSurchargeItems, 'VD: Chi phí xe tải, Phụ tùng thêm...'
+                                surchargeItems, setSurchargeItems, t('provider.paymentFinalizeModal.surchargePlaceholder')
                             )}
                             {showSurcharge && surchargeItems.length === 0 && (
-                                <p className="text-xs text-center py-2" style={{ color: C.gray }}>Bấm "+ Thêm khoản" để thêm phụ phí phát sinh tại hiện trường</p>
+                                <p className="text-xs text-center py-2" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.surchargeEmptyHint')}</p>
                             )}
                         </div>
 
                         {/* ── Ghi chú ── */}
                         <div className="mb-4">
-                            <p className="text-xs mb-1 font-medium" style={{ color: C.gray }}>Ghi chú (tuỳ chọn)</p>
+                            <p className="text-xs mb-1 font-medium" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.noteLabel')}</p>
                             <textarea
                                 value={note}
                                 onChange={e => setNote(e.target.value)}
-                                placeholder="Ghi chú thêm cho khách hàng..."
+                                placeholder={t('provider.paymentFinalizeModal.notePlaceholder')}
                                 rows={2}
                                 className="w-full py-2.5 px-3 rounded-xl text-sm outline-none resize-none"
                                 style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.navy }}
@@ -519,8 +556,10 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                         <div className="mb-5">
                             <div className="flex items-center justify-between mb-2">
                                 <p className="text-xs font-bold" style={{ color: C.navy }}>
-                                     Ảnh hiện trường
-                                    <span className="font-normal ml-1" style={{ color: C.gray }}>(tùy chọn · tối đa {MAX_PHOTOS})</span>
+                                    {t('provider.paymentFinalizeModal.photosTitle')}
+                                    <span className="font-normal ml-1" style={{ color: C.gray }}>
+                                        {t('provider.paymentFinalizeModal.photosOptional').replace('{max}', String(MAX_PHOTOS))}
+                                    </span>
                                 </p>
                                 {photos.length < MAX_PHOTOS && (
                                     <button
@@ -532,7 +571,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                         <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                                         </svg>
-                                        Chọn ảnh
+                                        {t('provider.paymentFinalizeModal.choosePhotos')}
                                     </button>
                                 )}
                             </div>
@@ -560,7 +599,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                                     </svg>
-                                    <p className="text-xs" style={{ color: C.gray }}>Chụp hoặc chọn ảnh hiện trường</p>
+                                    <p className="text-xs" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.photosEmptyHint')}</p>
                                 </button>
                             ) : (
                                 /* Photo thumbnails grid */
@@ -569,7 +608,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                         <div key={photo.localId} className="relative aspect-square rounded-xl overflow-hidden" style={{ background: C.bg }}>
                                             <img
                                                 src={photo.previewUrl}
-                                                alt="Ảnh hiện trường"
+                                                alt={t('provider.paymentFinalizeModal.photoAlt')}
                                                 className="w-full h-full object-cover"
                                             />
                                             {/* Status overlay */}
@@ -619,7 +658,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={2}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                                             </svg>
-                                            <span className="text-[9px]" style={{ color: C.gray }}>Thêm</span>
+                                            <span className="text-[9px]" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.addPhoto')}</span>
                                         </button>
                                     )}
                                 </div>
@@ -628,13 +667,9 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
 
                         {/* ── Phương thức thanh toán ── */}
                         <div className="mb-5">
-                            <p className="text-xs font-bold mb-2" style={{ color: C.navy }}>Phương thức thanh toán</p>
+                            <p className="text-xs font-bold mb-2" style={{ color: C.navy }}>{t('provider.paymentFinalizeModal.paymentMethodTitle')}</p>
                             <div className="space-y-2">
-                                {([
-                                    { value: 'CASH', label: 'Tiền mặt', sub: 'Thanh toán trực tiếp tại nơi sửa chữa' },
-                                    { value: 'QR', label: 'Chuyển khoản QR', sub: 'Quét mã QR để chuyển tiền' },
-                                    { value: 'WALLET', label: 'Ví điện tử RescueMe', sub: 'Tự động trừ từ ví user ngay khi xác nhận' },
-                                ] as const).map(opt => {
+                                {paymentOptions.map(opt => {
                                     const isDisabled = opt.value === 'WALLET' && disableWallet;
                                     const isSelected = paymentMethod === opt.value;
                                     return (
@@ -661,7 +696,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                             <div className="flex-1">
                                                 <p className="text-sm font-semibold" style={{ color: isDisabled ? '#9ca3af' : C.navy }}>{opt.label}</p>
                                                 <p className="text-xs" style={{ color: isDisabled ? '#9ca3af' : C.gray }}>
-                                                    {isDisabled ? 'Không khả dụng cho khách vãng lai' : opt.sub}
+                                                    {isDisabled ? t('provider.paymentFinalizeModal.methodWalletDisabledGuest') : opt.sub}
                                                 </p>
                                             </div>
                                         </button>
@@ -690,7 +725,9 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                                 </svg>
                             )}
-                            {isSubmitting ? 'Đang gửi...' : `Gửi yêu cầu thanh toán · ${fmt(totalAmount)}`}
+                            {isSubmitting
+                                ? t('provider.paymentFinalizeModal.submitting')
+                                : t('provider.paymentFinalizeModal.submitBtn').replace('{amount}', fmt(totalAmount))}
                         </button>
                     </div>
                 </div>
@@ -706,30 +743,30 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                     <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: '#f0fdf4' }}>
                                         <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#16a34a" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                     </div>
-                                    <p className="text-lg font-bold mb-1" style={{ color: C.navy }}>Thanh toán thành công!</p>
-                                    <p className="text-sm" style={{ color: C.gray }}>Tiền đã vào hệ thống · Sẽ giải ngân sau 24h</p>
+                                    <p className="text-lg font-bold mb-1" style={{ color: C.navy }}>{t('provider.paymentFinalizeModal.qrSuccessTitle')}</p>
+                                    <p className="text-sm" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.qrSuccessSubtitle')}</p>
                                 </div>
                             ) : qrStep === 'expired' ? (
                                 <div className="p-6 text-center">
-                                    <p className="text-base font-bold mb-3" style={{ color: '#dc2626' }}>QR đã hết hạn</p>
+                                    <p className="text-base font-bold mb-3" style={{ color: '#dc2626' }}>{t('provider.paymentFinalizeModal.qrExpiredTitle')}</p>
                                     <button onClick={async () => {
                                         const r = await api.post(`/rescue-requests/${requestId}/payment/qr/init`);
                                         setQrData(r.data); setQrStep('qr');
                                         startCountdown(r.data.expireAt); pollStatus(requestId);
-                                    }} className="w-full py-3 rounded-2xl text-sm font-bold text-white mb-3" style={{ background: C.orange }}>Tạo QR mới</button>
+                                    }} className="w-full py-3 rounded-2xl text-sm font-bold text-white mb-3" style={{ background: C.orange }}>{t('provider.paymentFinalizeModal.qrRegenerate')}</button>
                                     <button onClick={async () => {
                                         try { await api.patch(`/rescue-requests/${requestId}/payment/switch-to-cash`); } catch { /* ignore */ }
                                         stopAll(); setQrData(null); onSubmitted('CASH');
                                     }} className="w-full py-3 rounded-xl text-xs font-semibold transition-all active:scale-[0.98]" style={{ background: '#fff7ed', color: C.orange, border: `1.5px solid ${C.orange}` }}>
-                                        Khách đổi sang tiền mặt
+                                        {t('provider.paymentFinalizeModal.switchToCash')}
                                     </button>
                                 </div>
                             ) : (
                                 <div className="px-5 pt-5 pb-6">
                                     <div className="flex items-center justify-between mb-3">
                                         <div>
-                                            <p className="text-sm font-bold" style={{ color: C.navy }}>Chuyển khoản QR</p>
-                                            <p className="text-xs" style={{ color: C.gray }}>Nội dung: <span className="font-mono font-semibold" style={{ color: C.orange }}>{qrData.transferCode}</span></p>
+                                            <p className="text-sm font-bold" style={{ color: C.navy }}>{t('provider.paymentFinalizeModal.qrSheetTitle')}</p>
+                                            <p className="text-xs" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.qrTransferRef')} <span className="font-mono font-semibold" style={{ color: C.orange }}>{qrData.transferCode}</span></p>
                                         </div>
                                         <span className="text-sm font-bold tabular-nums px-3 py-1 rounded-xl" style={{
                                             background: secsLeft > 60 ? '#f0fdf4' : secsLeft > 30 ? '#fff7ed' : '#fef2f2',
@@ -740,7 +777,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                     </div>
                                     <img src={qrData.qrUrl} alt="QR" className="w-full rounded-2xl mb-3" style={{ border: '2px solid #f1f5f9' }} />
                                     <p className="text-center text-xs mb-3" style={{ color: C.gray }}>
-                                        Số tiền: <span className="font-bold" style={{ color: C.orange }}>{fmt(qrData.amount)}</span> · Đang chờ khách chuyển khoản...
+                                        {t('provider.paymentFinalizeModal.qrWaitingLine').replace('{amount}', fmt(qrData.amount))}
                                     </p>
                                     <button
                                         onClick={async () => {
@@ -750,7 +787,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                         className="w-full py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-[0.98]"
                                         style={{ background: '#fff7ed', color: C.orange, border: `1.5px solid ${C.orange}` }}
                                     >
-                                        Khách đổi sang tiền mặt
+                                        {t('provider.paymentFinalizeModal.switchToCash')}
                                     </button>
                                 </div>
                             )}
@@ -771,9 +808,9 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                                     </svg>
                                 </div>
-                                <p className="text-base font-bold" style={{ color: C.navy }}>Đã gửi yêu cầu thanh toán</p>
+                                <p className="text-base font-bold" style={{ color: C.navy }}>{t('provider.paymentFinalizeModal.cashSentTitle')}</p>
                                 <p className="text-2xl font-bold mt-1" style={{ color: C.orange }}>{fmt(totalAmount)}</p>
-                                <p className="text-xs mt-1" style={{ color: C.gray }}>Tiền mặt · Đang chờ khách xác nhận</p>
+                                <p className="text-xs mt-1" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.cashSentSubtitle')}</p>
                             </div>
 
                             {/* Switch to QR */}
@@ -791,7 +828,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                         startCountdown(qrRes.data.expireAt);
                                         pollStatus(requestId);
                                     } catch (err: any) {
-                                        toast.error(err.response?.data?.message || 'Không thể chuyển sang QR, thử lại');
+                                        toast.error(err.response?.data?.message || t('provider.paymentFinalizeModal.toastQrSwitchFailed'));
                                     }
                                 }}
                                 className="w-full py-3 rounded-2xl text-sm font-semibold mb-3 flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
@@ -800,7 +837,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                 <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#2563eb" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                                 </svg>
-                                Khách muốn chuyển khoản QR
+                                {t('provider.paymentFinalizeModal.switchToQrBtn')}
                             </button>
 
                             {/* Close / confirm cash */}
@@ -809,7 +846,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                 className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
                                 style={{ background: C.bg, color: C.gray }}
                             >
-                                Đóng
+                                {t('provider.paymentFinalizeModal.close')}
                             </button>
                         </div>
                     </div>
@@ -828,15 +865,15 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                     </div>
-                                    <p className="text-base font-bold mb-1" style={{ color: C.navy }}>Bạn vừa được thanh toán!</p>
+                                    <p className="text-base font-bold mb-1" style={{ color: C.navy }}>{t('provider.paymentFinalizeModal.walletReceivedTitle')}</p>
                                     <p className="text-3xl font-extrabold mt-2 mb-1" style={{ color: '#16a34a' }}>{fmt(totalAmount)}</p>
-                                    <p className="text-xs mb-4" style={{ color: C.gray }}>Đã vào ví RescueMe của bạn · Đơn hàng hoàn thành</p>
+                                    <p className="text-xs mb-4" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.walletReceivedSubtitle')}</p>
                                     <button
                                         onClick={() => { setWalletSent(false); setWalletReceived(false); onSubmitted('WALLET'); }}
                                         className="w-full py-3.5 rounded-2xl text-sm font-bold text-white transition-all active:scale-[0.98]"
                                         style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', boxShadow: '0 4px 14px rgba(22,163,74,0.35)' }}
                                     >
-                                        Tuyệt vời! Đóng
+                                        {t('provider.paymentFinalizeModal.walletReceivedClose')}
                                     </button>
                                 </div>
                             ) : (
@@ -848,9 +885,9 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                             </svg>
                                         </div>
-                                        <p className="text-base font-bold" style={{ color: C.navy }}>Yêu cầu thanh toán đã gửi</p>
+                                        <p className="text-base font-bold" style={{ color: C.navy }}>{t('provider.paymentFinalizeModal.walletPendingTitle')}</p>
                                         <p className="text-2xl font-bold mt-1" style={{ color: '#2563eb' }}>{fmt(totalAmount)}</p>
-                                        <p className="text-xs mt-2" style={{ color: C.gray }}>Ví điện tử RescueMe · Đang chờ user xác nhận...</p>
+                                        <p className="text-xs mt-2" style={{ color: C.gray }}>{t('provider.paymentFinalizeModal.walletPendingSubtitle')}</p>
                                     </div>
                                     <div className="rounded-2xl p-3 mb-4" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
                                         <div className="flex items-center gap-2">
@@ -859,7 +896,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                                 <path className="opacity-75" fill="#2563eb" d="M4 12a8 8 0 018-8v8H4z" />
                                             </svg>
                                             <p className="text-xs font-semibold" style={{ color: '#1d4ed8' }}>
-                                                Đang chờ user xác nhận… Sẽ tự động cập nhật khi thanh toán xong
+                                                {t('provider.paymentFinalizeModal.walletPendingNote')}
                                             </p>
                                         </div>
                                     </div>
@@ -868,7 +905,7 @@ export default function PaymentSheet({ requestId, defaultAmount, defaultPaymentM
                                         className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
                                         style={{ background: C.bg, color: C.gray }}
                                     >
-                                        Đóng (chờ nền)
+                                        {t('provider.paymentFinalizeModal.walletCloseBackground')}
                                     </button>
                                 </>
                             )}

@@ -76,11 +76,9 @@ const C = {
     yellow: '#f59e0b',
 };
 
-const INCIDENT_LABELS: Record<IncidentType, string> = {
-    BREAKDOWN: 'Hỏng xe', ACCIDENT: 'Tai nạn', FLAT_TIRE: 'Lốp xe',
-    BATTERY_DEAD: 'Kích bình', OUT_OF_FUEL: 'Hết xăng',
-    LOCKED_OUT: 'Khóa xe', OTHER: 'Khác',
-};
+const INCIDENT_TYPES: IncidentType[] = [
+    'BREAKDOWN', 'ACCIDENT', 'FLAT_TIRE', 'BATTERY_DEAD', 'OUT_OF_FUEL', 'LOCKED_OUT', 'OTHER',
+];
 
 const INCIDENT_COLORS: Record<IncidentType, { bg: string; color: string }> = {
     BREAKDOWN: { bg: '#fef3c7', color: '#92400e' },
@@ -153,6 +151,8 @@ function HistoryRowStatusBadge({ q, providerId }: { q: Quote; providerId: string
 function StatusBadge({ status }: { status: RequestStatus }) {
     const { t } = useLanguage();
     const cfg: Record<string, { label: string; dot: string; color: string; bg: string }> = {
+        CREATED: { label: t('provider.history.statusBadge.CREATED'), dot: C.gray, color: C.gray, bg: '#f3f4f6' },
+        MATCHED: { label: t('provider.history.statusBadge.MATCHED'), dot: C.blue, color: C.blue, bg: C.blueLight },
         COMPLETED: { label: t('provider.history.statusBadge.COMPLETED'), dot: C.green, color: C.green, bg: C.greenLight },
         PAID: { label: t('provider.history.statusBadge.PAID'), dot: '#7c3aed', color: '#7c3aed', bg: '#f5f3ff' },
         PAYMENT_PENDING: { label: t('provider.history.statusBadge.PAYMENT_PENDING'), dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
@@ -165,6 +165,8 @@ function StatusBadge({ status }: { status: RequestStatus }) {
         ACCEPTED: { label: t('provider.history.statusBadge.ACCEPTED'), dot: C.blue, color: C.blue, bg: C.blueLight },
         ASSIGNED: { label: t('provider.history.statusBadge.ASSIGNED'), dot: C.blue, color: C.blue, bg: C.blueLight },
         MATCHING: { label: t('provider.history.statusBadge.MATCHING'), dot: C.yellow, color: '#ca8a04', bg: '#fefce8' },
+        DISPUTED: { label: t('provider.history.statusBadge.DISPUTED'), dot: C.red, color: C.red, bg: C.redLight },
+        REFUNDED: { label: t('provider.history.statusBadge.REFUNDED'), dot: '#9ca3af', color: '#6b7280', bg: '#f9fafb' },
     };
     const s = cfg[status] ?? { label: status, dot: C.gray, color: C.gray, bg: '#f3f4f6' };
     return (
@@ -184,7 +186,7 @@ function PaymentBadge({ walletTxStatus, paymentMethod }: { walletTxStatus?: stri
         return (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
                 style={{ background: C.greenLight, color: C.green }}>
-                Ví điện tử · Đã nhận
+                {t('provider.history.paymentBadge.walletReceived')}
             </span>
         );
     }
@@ -495,15 +497,29 @@ export default function ProviderHistoryPage() {
         if (filtered.length === 0) { toast.error(t('provider.history.noExport')); return; }
 
         const STATUS_LABELS: Record<string, string> = {
+            CREATED: t('provider.history.statusBadge.CREATED'),
+            MATCHED: t('provider.history.statusBadge.MATCHED'),
             COMPLETED: t('provider.history.statusBadge.COMPLETED'), PAID: t('provider.history.statusBadge.COMPLETED'),
             PAYMENT_PENDING: t('provider.history.statusBadge.PAYMENT_PENDING'), CANCELLED: t('provider.history.statusBadge.CANCELLED'),
             EXPIRED: t('provider.history.statusBadge.EXPIRED'), FAILED: t('provider.history.statusBadge.FAILED'),
             IN_PROGRESS: t('provider.history.statusBadge.IN_PROGRESS'), WORKING: t('provider.history.statusBadge.WORKING'),
             ARRIVED: t('provider.history.statusBadge.ARRIVED'), ACCEPTED: t('provider.history.statusBadge.ACCEPTED'),
             ASSIGNED: t('provider.history.statusBadge.ASSIGNED'), MATCHING: t('provider.history.statusBadge.MATCHING'),
+            DISPUTED: t('provider.history.statusBadge.DISPUTED'),
+            REFUNDED: t('provider.history.statusBadge.REFUNDED'),
         };
 
-        const headers = ['#', 'Date', 'Time', t('provider.history.tableHeader.customer'), 'Phone', t('provider.history.tableHeader.service'), `${t('provider.history.chart.revenue')} (₫)`, `${t('provider.history.chart.profit')} (₫)`, t('provider.history.tableHeader.status')];
+        const headers = [
+            t('provider.history.exportCsvHeaders.index'),
+            t('provider.history.exportCsvHeaders.date'),
+            t('provider.history.exportCsvHeaders.time'),
+            t('provider.history.tableHeader.customer'),
+            t('provider.history.exportCsvHeaders.phone'),
+            t('provider.history.tableHeader.service'),
+            `${t('provider.history.chart.revenue')} (₫)`,
+            `${t('provider.history.chart.profit')} (₫)`,
+            t('provider.history.tableHeader.status'),
+        ];
 
         const rows = filtered.map((q, idx) => {
             const req = q.rescueRequest;
@@ -794,7 +810,7 @@ export default function ProviderHistoryPage() {
                             onChange={e => { setFilterService(e.target.value); resetPage(); }}
                         >
                             <option value="all">{t('provider.history.filter.allServices')}</option>
-                            {(Object.keys(INCIDENT_LABELS) as IncidentType[]).map((k) => (
+                            {INCIDENT_TYPES.map((k) => (
                                 <option key={k} value={k}>{t(`provider.incidents.${k}`)}</option>
                             ))}
                         </select>

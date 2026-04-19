@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Car, Bike, Footprints, ArrowUp, ArrowLeft, ArrowRight, ArrowUpLeft, ArrowUpRight, CornerUpLeft, CornerUpRight, MapPin, RefreshCcw } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -84,20 +85,6 @@ function loadVietMapScript(): Promise<void> {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatDistance(meters: number): string {
-    if (meters < 1000) return `${Math.round(meters)} m`;
-    return `${(meters / 1000).toFixed(1)} km`;
-}
-
-function formatTime(ms: number): string {
-    const minutes = Math.round(ms / 60000);
-    if (minutes < 1) return '< 1 phút';
-    if (minutes < 60) return `${minutes} phút`;
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return m > 0 ? `${h}g ${m}p` : `${h} giờ`;
-}
-
 // Map VietMap sign codes to Vietnamese turn instructions
 function signToIcon(sign?: number) {
     const s = 18;
@@ -118,7 +105,17 @@ function signToIcon(sign?: number) {
 
 // ─── Step Item ───────────────────────────────────────────────────────────────
 
-function StepItem({ step, index }: { step: RouteStep; index: number }) {
+function StepItem({
+    step,
+    index,
+    formatDistance,
+    formatTime,
+}: {
+    step: RouteStep;
+    index: number;
+    formatDistance: (meters: number) => string;
+    formatTime: (ms: number) => string;
+}) {
     const isLast = step.sign === 4;
     return (
         <div
@@ -162,6 +159,23 @@ export default function RouteMapSheet({
     shopAddress,
     shopPhone,
 }: RouteMapSheetProps) {
+    const { t } = useLanguage();
+    const p = 'user.dashboard.nearbyShops.routeSheet';
+
+    const formatDistance = useCallback((meters: number) => {
+        if (meters < 1000) return `${Math.round(meters)} m`;
+        return `${(meters / 1000).toFixed(1)} km`;
+    }, []);
+
+    const formatTime = useCallback((ms: number) => {
+        const minutes = Math.round(ms / 60000);
+        if (minutes < 1) return t(`${p}.timeLessThanMin`);
+        if (minutes < 60) return t(`${p}.timeMinutes`, { minutes });
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        return m > 0 ? t(`${p}.timeHoursMinutes`, { hours: h, minutes: m }) : t(`${p}.timeHoursOnly`, { hours: h });
+    }, [t]);
+
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<any>(null);
     const isMapInitialized = useRef(false);
@@ -202,12 +216,12 @@ export default function RouteMapSheet({
             const path = data.paths?.[0];
             if (!path) {
                 console.error('Không có thông tin data.paths:', data);
-                throw new Error('Không tìm thấy tuyến đường');
+                throw new Error(t(`${p}.errorNoPath`));
             }
 
             const coordinates: [number, number][] = path.points?.coordinates ?? [];
             const steps: RouteStep[] = (path.instructions ?? []).map((s: any) => ({
-                text: s.text ?? 'Tiếp tục đi thẳng',
+                text: s.text ?? t(`${p}.continueStraight`),
                 distance: s.distance ?? 0,
                 time: s.time ?? 0,
                 sign: s.sign,
@@ -217,12 +231,15 @@ export default function RouteMapSheet({
 
             setRouteInfo({ distance: path.distance, time: path.time, coordinates, steps });
         } catch (e: any) {
-            const msg = e?.name === 'TimeoutError' ? 'Hết thời gian kết nối' : (e.message || 'Không thể tính tuyến đường');
+            const noPath = t(`${p}.errorNoPath`);
+            const msg = e?.name === 'TimeoutError'
+                ? t(`${p}.errorTimeout`)
+                : (e?.message === noPath ? noPath : t(`${p}.errorGeneric`));
             setRouteError(msg);
         } finally {
             setIsLoadingRoute(false);
         }
-    }, [userLat, userLng, shopLat, shopLng]);
+    }, [userLat, userLng, shopLat, shopLng, t, formatDistance, formatTime]);
 
     // ── Init / destroy map ────────────────────────────────────────────────────
     useEffect(() => {
@@ -337,9 +354,9 @@ export default function RouteMapSheet({
     if (!isOpen) return null;
 
     const VEHICLES: { key: Vehicle; label: string; icon: React.ReactNode }[] = [
-        { key: 'car', label: 'Ô tô', icon: <Car size={16} strokeWidth={2.5} /> },
-        { key: 'motorcycle', label: 'Xe máy', icon: <Bike size={16} strokeWidth={2.5} /> },
-        { key: 'foot', label: 'Đi bộ', icon: <Footprints size={16} strokeWidth={2.5} /> },
+        { key: 'car', label: t(`${p}.vehicleCar`), icon: <Car size={16} strokeWidth={2.5} /> },
+        { key: 'motorcycle', label: t(`${p}.vehicleMotorcycle`), icon: <Bike size={16} strokeWidth={2.5} /> },
+        { key: 'foot', label: t(`${p}.vehicleWalk`), icon: <Footprints size={16} strokeWidth={2.5} /> },
     ];
 
     return (
@@ -379,7 +396,7 @@ export default function RouteMapSheet({
                             {formatDistance(routeInfo.distance)}
                         </p>
                         <p className="text-[10px] mt-0.5" style={{ color: C.gray }}>
-                            ~{formatTime(routeInfo.time)}
+                            {t(`${p}.approxEta`, { time: formatTime(routeInfo.time) })}
                         </p>
                     </div>
                 )}
@@ -412,7 +429,7 @@ export default function RouteMapSheet({
                             className="text-xs font-semibold underline flex-shrink-0"
                             style={{ color: '#dc2626' }}
                         >
-                            Thử lại
+                            {t(`${p}.retry`)}
                         </button>
                     </div>
                 )}
@@ -425,11 +442,11 @@ export default function RouteMapSheet({
                     >
                         <div className="flex items-center gap-2">
                             <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.blue, border: '2px solid white' }} />
-                            <span className="text-[11px] font-medium" style={{ color: C.navy }}>Vị trí của bạn</span>
+                            <span className="text-[11px] font-medium" style={{ color: C.navy }}>{t(`${p}.yourLocation`)}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.orange, border: '2px solid white' }} />
-                            <span className="text-[11px] font-medium" style={{ color: C.navy }}>Cửa hàng</span>
+                            <span className="text-[11px] font-medium" style={{ color: C.navy }}>{t(`${p}.shop`)}</span>
                         </div>
                     </div>
                 )}
@@ -468,16 +485,16 @@ export default function RouteMapSheet({
                             style={{ background: C.orangeLight }}
                         >
                             <div className="flex-1">
-                                <p className="text-xs" style={{ color: C.gray }}>Tổng quãng đường</p>
+                                <p className="text-xs" style={{ color: C.gray }}>{t(`${p}.totalDistance`)}</p>
                                 <p className="text-base font-bold" style={{ color: C.orange }}>
                                     {formatDistance(routeInfo.distance)}
                                 </p>
                             </div>
                             <div className="w-px h-8" style={{ background: `${C.orange}30` }} />
                             <div className="flex-1">
-                                <p className="text-xs" style={{ color: C.gray }}>Thời gian ước tính</p>
+                                <p className="text-xs" style={{ color: C.gray }}>{t(`${p}.estimatedTime`)}</p>
                                 <p className="text-base font-bold" style={{ color: C.navy }}>
-                                    ~{formatTime(routeInfo.time)}
+                                    {t(`${p}.approxEta`, { time: formatTime(routeInfo.time) })}
                                 </p>
                             </div>
                             {shopPhone && (
@@ -495,7 +512,7 @@ export default function RouteMapSheet({
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                             </svg>
                                         </div>
-                                        <span className="text-[9px] font-medium" style={{ color: C.green }}>Gọi</span>
+                                        <span className="text-[9px] font-medium" style={{ color: C.green }}>{t(`${p}.callBtn`)}</span>
                                     </a>
                                 </>
                             )}
@@ -516,7 +533,7 @@ export default function RouteMapSheet({
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                                 </svg>
                                 <p className="text-xs font-semibold" style={{ color: C.navy }}>
-                                    Hướng dẫn chi tiết ({routeInfo.steps.length} bước)
+                                    {t(`${p}.stepsToggle`, { count: routeInfo.steps.length })}
                                 </p>
                             </div>
                             <svg
@@ -533,7 +550,7 @@ export default function RouteMapSheet({
                                 style={{ maxHeight: '35vh', borderTop: `1px solid ${C.border}` }}
                             >
                                 {routeInfo.steps.map((step, i) => (
-                                    <StepItem key={i} step={step} index={i} />
+                                    <StepItem key={i} step={step} index={i} formatDistance={formatDistance} formatTime={formatTime} />
                                 ))}
                                 <div className="h-4" />
                             </div>

@@ -44,15 +44,6 @@ interface AssignedProviderProps {
     chatCustomerName?: string;
 }
 
-const SERVICE_TYPE_LABELS: Record<string, string> = {
-    TOWING: 'Kéo xe',
-    BATTERY_JUMP: 'Cứu bình điện',
-    TIRE_CHANGE: 'Thay lốp xe',
-    FUEL_DELIVERY: 'Tiếp nhiên liệu',
-    LOCKOUT: 'Mở khóa xe',
-    BREAKDOWN_REPAIR: 'Sửa tại chỗ',
-};
-
 export default function AssignedProvider({
     provider,
     distance,
@@ -75,12 +66,20 @@ export default function AssignedProvider({
 
     const displayName = provider.serviceName || provider.name || 'Provider';
     const initials = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
-    const serviceLabels = provider.serviceTypes.map(t => SERVICE_TYPE_LABELS[t] || t).join(', ');
+    const serviceLabels = provider.serviceTypes
+        .map(type => {
+            const key = `provider.profileDashboard.serviceLabels.${type}`;
+            const label = t(key);
+            return label === key ? type : label;
+        })
+        .join(', ');
 
     const displayDistance = distance
         ? (distance < 1 ? `${(distance * 1000).toFixed(0)} m` : `${distance.toFixed(1)} km`)
-        : 'Đang cập nhật';
-    const displayEta = eta ? `${eta} phút` : 'Đang cập nhật';
+        : t('user.tracking.assignedProvider.distanceUpdating');
+    const displayEta = eta
+        ? t('user.tracking.assignedProvider.etaMinutes', { minutes: eta })
+        : t('user.tracking.assignedProvider.distanceUpdating');
 
     const handleCall = () => { if (provider.phoneNumber) window.location.href = `tel:${provider.phoneNumber}`; };
 
@@ -129,7 +128,7 @@ export default function AssignedProvider({
                             {provider.isOnline && (
                                 <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium flex-shrink-0" style={{ background: '#f0fdf4', color: '#16a34a' }}>
                                     <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#22c55e' }} />
-                                    Online
+                                    {t('user.tracking.assignedProvider.onlineLabel')}
                                 </div>
                             )}
                         </div>

@@ -479,8 +479,10 @@ function WithdrawModal({ availableBalance, withdrawalAccounts = [], onClose, onS
     // Providers must keep at least 100,000 VND in their wallet to receive jobs
     const MIN_REQUIRED_BALANCE = 100_000;
     const isBelowRequiredBalance = numeric > 0 && !isInsufficient && remainingAfterWithdraw < MIN_REQUIRED_BALANCE;
+    const hasAccounts = (withdrawalAccounts?.length ?? 0) > 0;
+    const noAccountSelected = hasAccounts && !withdrawalAccountId;
 
-    const isDisabled = loading || numeric <= 0 || isInsufficient || isBelowMin || isBelowRequiredBalance;
+    const isDisabled = loading || numeric <= 0 || isInsufficient || isBelowMin || isBelowRequiredBalance || !hasAccounts || noAccountSelected;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -527,14 +529,14 @@ function WithdrawModal({ availableBalance, withdrawalAccounts = [], onClose, onS
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     {withdrawalAccounts?.length ? (
                         <div>
-                            <label className="block text-sm font-medium mb-1.5" style={{ color: C.navy }}>Tài khoản nhận tiền</label>
+                            <label className="block text-sm font-medium mb-1.5" style={{ color: C.navy }}>{t('provider.wallet.withdrawModal.receivingAccountLabel')}</label>
                             <select
                                 value={withdrawalAccountId}
                                 onChange={e => setWithdrawalAccountId(e.target.value)}
                                 className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
                                 style={{ border: `1.5px solid ${C.border}`, color: C.navy, background: 'white' }}
                             >
-                                <option value="">Chọn tài khoản</option>
+                                <option value="">{t('provider.wallet.withdrawModal.selectAccountPlaceholder')}</option>
                                 {withdrawalAccounts.map(acc => (
                                     <option key={acc.id} value={acc.id}>
                                         {acc.bankName} · {acc.accountNumber}
@@ -543,8 +545,19 @@ function WithdrawModal({ availableBalance, withdrawalAccounts = [], onClose, onS
                             </select>
                         </div>
                     ) : (
-                        <div className="text-xs" style={{ color: C.gray }}>
-                            Bạn chưa cấu hình tài khoản rút tiền trong `Settings`.
+                        <div className="flex items-start gap-2 p-3 rounded-xl text-xs" style={{ background: '#fefce8', color: '#92400e' }}>
+                            <Banknote style={{ width: 14, height: 14, marginTop: 1, flexShrink: 0 }} />
+                            <span>
+                                {t('provider.wallet.withdrawModal.noBankAccountHint')}{' '}
+                                <a
+                                    href="/provider/settings#withdrawal-accounts"
+                                    onClick={onClose}
+                                    className="font-semibold underline"
+                                    style={{ color: C.orange }}
+                                >
+                                    {t('provider.wallet.withdrawModal.goToSettings')}
+                                </a>
+                            </span>
                         </div>
                     )}
 
@@ -570,11 +583,11 @@ function WithdrawModal({ availableBalance, withdrawalAccounts = [], onClose, onS
                             />
                             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-medium" style={{ color: C.gray }}>VND</span>
                         </div>
-                        {isBelowMin && <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />Cần rút tối thiểu {formatVndFull(MIN_WITHDRAWAL)}</p>}
+                        {isBelowMin && <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{t('provider.wallet.withdrawModal.belowMinHint', { amount: formatVndFull(MIN_WITHDRAWAL) })}</p>}
                         {isInsufficient && <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{t('provider.wallet.withdrawModal.overBalance')}</p>}
                         {isBelowRequiredBalance && !isInsufficient && !isBelowMin && (
                             <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3" />Phải chừa lại tối thiểu {formatVndFull(MIN_REQUIRED_BALANCE)} trong ví
+                                <AlertCircle className="w-3 h-3" />{t('provider.wallet.withdrawModal.belowRequiredHint', { amount: formatVndFull(MIN_REQUIRED_BALANCE) })}
                             </p>
                         )}
                         {!isBelowMin && !isInsufficient && !isBelowRequiredBalance && numeric > 0 && (
@@ -612,13 +625,19 @@ function WithdrawModal({ availableBalance, withdrawalAccounts = [], onClose, onS
                                             color: numeric === maxWithdrawableAmount ? C.orange : C.gray,
                                         }}
                                     >
-                                        Rút tối đa
+                                        {t('provider.wallet.withdrawModal.maxWithdraw')}
                                     </button>
                                 )}
                             </div>
                         </div>
                     )}
 
+                    {noAccountSelected && (
+                        <div className="flex items-start gap-2 p-3 rounded-xl text-sm" style={{ background: '#fff1f2', color: '#ef4444', border: '1px solid #fecdd3' }}>
+                            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            {t('provider.wallet.withdrawModal.selectAccountPlaceholder')}
+                        </div>
+                    )}
                     {error && (
                         <div className="flex items-start gap-2 p-3 rounded-xl text-sm" style={{ background: '#fff1f2', color: '#ef4444', border: '1px solid #fecdd3' }}>
                             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />{error}
@@ -626,7 +645,7 @@ function WithdrawModal({ availableBalance, withdrawalAccounts = [], onClose, onS
                     )}
 
                     <div className="p-3 rounded-xl text-xs" style={{ background: C.orangeLight, color: C.orange }}>
-                        Bạn cần duy trì ít nhất {formatVndFull(MIN_REQUIRED_BALANCE)} trong ví để có thể tiếp tục nhận cuốc xe cẩu mới.
+                        {t('provider.wallet.withdrawModal.minBalanceHint', { amount: formatVndFull(MIN_REQUIRED_BALANCE) })}
                     </div>
 
                     <div className="flex gap-3 pb-6 sm:pb-0">
@@ -857,15 +876,17 @@ function TxRow({ tx }: { tx: Transaction }) {
                                     return (
                                         <div className="space-y-1">
                                             <div className="flex justify-between items-center">
-                                                <span className="text-xs" style={{ color: C.gray }}>Doanh thu gộp</span>
+                                                <span className="text-xs" style={{ color: C.gray }}>{t('provider.txDetail.labels.grossRevenue')}</span>
                                                 <span className="text-xs font-semibold" style={{ color: C.navy }}>{formatVndFull(grossAmount)}</span>
                                             </div>
                                             <div className="flex justify-between items-center">
-                                                <span className="text-xs" style={{ color: C.gray }}>Phí nền tảng ({Math.round(rate * 100)}%)</span>
+                                                <span className="text-xs" style={{ color: C.gray }}>
+                                                    {t('provider.txDetail.payment.platformFeeWithRate').replace('{rate}', String(Math.round(rate * 100)))}
+                                                </span>
                                                 <span className="text-xs font-semibold" style={{ color: '#ef4444' }}>−{formatVndFull(commissionAmount)}</span>
                                             </div>
                                             <div className="flex justify-between items-center pt-1" style={{ borderTop: '1px dashed #e2e8f0' }}>
-                                                <span className="text-xs font-semibold" style={{ color: C.gray }}>Thu nhập thực nhận</span>
+                                                <span className="text-xs font-semibold" style={{ color: C.gray }}>{t('provider.txDetail.payment.netReceived')}</span>
                                                 <span className="text-sm font-bold" style={{ color: '#16a34a' }}>+{formatVndFull(tx.amount)}</span>
                                             </div>
                                         </div>

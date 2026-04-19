@@ -1,14 +1,15 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
 import AdminLayout from '@/components/AdminLayout';
-import { Search, Filter, Calendar, Clock, CheckCircle, AlertTriangle, FileText, ChevronRight, ChevronLeft, XCircle, Eye, Copy, QrCode, ExternalLink, BarChart2 } from 'lucide-react';
+import { Search, Clock, CheckCircle, AlertTriangle, FileText, ChevronRight, ChevronLeft, XCircle, Eye, Copy, ExternalLink, BarChart2 } from 'lucide-react';
 import { ChartCard, LineSparkChart, DonutChart } from '@/components/AdminCharts';
 import { toast } from 'react-hot-toast';
 import bankCodeData from '../../../public/bankcode.json';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const C = {
     orange: '#f97316',
@@ -30,18 +31,27 @@ const C = {
 
 const PAGE_SIZE = 10;
 
+function localeTag(locale: string) {
+    return locale === 'vi' ? 'vi-VN' : 'en-US';
+}
+
 function StatusBadge({ status }: { status: string }) {
-    const configs: Record<string, { bg: string; color: string; dot: string; label: string }> = {
-        PENDING: { bg: C.yellowLight, color: C.yellow, dot: '#facc15', label: 'Chờ xử lý' },
-        COMPLETED: { bg: C.greenLight, color: C.green, dot: C.green, label: 'Thành công' },
-        FAILED: { bg: C.redLight, color: C.red, dot: C.red, label: 'Từ chối' },
+    const { t } = useLanguage();
+    const labelKey = `admin.withdrawals.status.${status}`;
+    const translated = t(labelKey);
+    const label = translated === labelKey ? status : translated;
+
+    const configs: Record<string, { bg: string; color: string; dot: string }> = {
+        PENDING: { bg: C.yellowLight, color: C.yellow, dot: '#facc15' },
+        COMPLETED: { bg: C.greenLight, color: C.green, dot: C.green },
+        FAILED: { bg: C.redLight, color: C.red, dot: C.red },
     };
-    const st = configs[status] || { bg: '#f8fafc', color: C.gray, dot: C.gray, label: status };
+    const st = configs[status] || { bg: '#f8fafc', color: C.gray, dot: C.gray };
 
     return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: st.bg, color: st.color }}>
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: st.dot }} />
-            {st.label}
+            {label}
         </span>
     );
 }
@@ -80,7 +90,12 @@ function removeAccents(str: string) {
 export default function AdminWithdrawalsPage() {
     const router = useRouter();
     const { isReady } = useAdminGuard();
-    
+    const { t, locale } = useLanguage();
+    const loc = localeTag(locale);
+    const w = (key: string, params?: Record<string, string | number>) => t(`admin.withdrawals.${key}`, params);
+    const tlp = (key: string, params?: Record<string, string | number>) =>
+        t(`admin.transactions.listPage.${key}`, params);
+
     const [tab, setTab] = useState<string>('ALL');
     
     // Advanced Search States
@@ -161,7 +176,7 @@ export default function AdminWithdrawalsPage() {
                 // If the webhook changed it to COMPLETED
                 if (updated && updated.status !== 'PENDING') {
                     setViewData(updated);
-                    toast.success('Giao dịch đã được tự động duyệt từ Webhook!');
+                    toast.success(t('admin.withdrawals.toastWebhookApproved'));
                     load(); // Refresh the background table silently
                 }
             } catch (e) {
@@ -170,21 +185,21 @@ export default function AdminWithdrawalsPage() {
         }, 5000);
 
         return () => clearInterval(interval);
-    }, [viewData, load]);
+    }, [viewData, load, t]);
 
     const handleApprove = async () => {
         if (!viewData) return;
-        if (!confirm('Xác nhận đã chuyển khoản thành công và duyệt yêu cầu này?')) return;
+        if (!confirm(w('confirmApprove'))) return;
         setProcessing(true);
         try {
             await adminApi.approveWithdrawal(viewData.id, viewData.userType);
-            toast.success('Duyệt thành công');
+            toast.success(w('toastApproveSuccess'));
             setViewData(null);
             setIsConfirmingReject(false);
             setRejectReason('');
             load();
         } catch (e: any) {
-            toast.error('Có lỗi xảy ra khi duyệt: ' + e?.message);
+            toast.error(w('toastApproveError', { message: String(e?.message ?? '') }));
         } finally {
             setProcessing(false);
         }
@@ -192,30 +207,43 @@ export default function AdminWithdrawalsPage() {
 
     const handleReject = async () => {
         if (!viewData) return;
-        if (!rejectReason.trim()) return toast.error('Vui lòng nhập lý do từ chối');
+        if (!rejectReason.trim()) return toast.error(w('toastRejectNeedReason'));
         setProcessing(true);
         try {
             await adminApi.rejectWithdrawal(viewData.id, viewData.userType, rejectReason);
-            toast.success('Đã từ chối và hoàn tiền');
+            toast.success(w('toastRejectSuccess'));
             setViewData(null);
             setIsConfirmingReject(false);
             setRejectReason('');
             load();
         } catch (e: any) {
-            toast.error('Có lỗi xảy ra: ' + e?.message);
+            toast.error(w('toastRejectError', { message: String(e?.message ?? '') }));
         } finally {
             setProcessing(false);
         }
     };
 
-    const tabs = [
-        { key: 'ALL', label: 'Tất cả' },
-        { key: 'PENDING', label: 'Chờ duyệt' },
-        { key: 'COMPLETED', label: 'Thành công' },
-        { key: 'FAILED', label: 'Từ chối' },
-        { key: 'PROVIDER', label: 'Đối tác' },
-        { key: 'CUSTOMER', label: 'Khách hàng' },
-    ];
+    const tabs = useMemo(
+        () => [
+            { key: 'ALL', label: w('tabs.ALL') },
+            { key: 'PENDING', label: w('tabs.PENDING') },
+            { key: 'COMPLETED', label: w('tabs.COMPLETED') },
+            { key: 'FAILED', label: w('tabs.FAILED') },
+            { key: 'PROVIDER', label: w('tabs.PROVIDER') },
+            { key: 'CUSTOMER', label: w('tabs.CUSTOMER') },
+        ],
+        [t],
+    );
+
+    const statCards = useMemo(
+        () => [
+            { label: w('statPending'), valueKey: 'pending' as const, color: C.yellow, icon: <Clock className="w-4 h-4" /> },
+            { label: w('statCompleted'), valueKey: 'completed' as const, color: C.green, icon: <CheckCircle className="w-4 h-4" /> },
+            { label: w('statRejected'), valueKey: 'failed' as const, color: C.red, icon: <XCircle className="w-4 h-4" /> },
+            { label: w('statTotal'), valueKey: 'total' as const, color: C.navy, icon: <FileText className="w-4 h-4" /> },
+        ],
+        [t],
+    );
 
     const filtered = items.filter(d => {
         const q = search.toLowerCase();
@@ -255,28 +283,23 @@ export default function AdminWithdrawalsPage() {
                 <div className="flex items-center justify-between mb-6">
                     <div>
                         <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>
-                            Quản lý Yêu cầu Rút tiền
+                            {w('title')}
                         </h1>
                         <p className="text-sm" style={{ color: C.gray }}>
-                            Duyệt và kiểm tra các yêu cầu rút tiền từ ví của Đối tác hoặc Khách hàng
+                            {w('subtitle')}
                         </p>
                     </div>
                 </div>
 
                 {/* ─── Stats Cards ─── */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    {[
-                        { label: 'CHỜ DUYỆT', value: stats.pending, color: C.yellow, icon: <Clock className="w-4 h-4" /> },
-                        { label: 'THÀNH CÔNG', value: stats.completed, color: C.green, icon: <CheckCircle className="w-4 h-4" /> },
-                        { label: 'TỪ CHỐI', value: stats.failed, color: C.red, icon: <XCircle className="w-4 h-4" /> },
-                        { label: 'TỔNG CỘNG', value: stats.total, color: C.navy, icon: <FileText className="w-4 h-4" /> },
-                    ].map(stat => (
-                        <div key={stat.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
+                    {statCards.map(stat => (
+                        <div key={stat.valueKey} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
                             <div className="flex items-center justify-between mb-2">
                                 <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>{stat.label}</p>
                                 <span style={{ color: stat.color, opacity: 0.6 }}>{stat.icon}</span>
                             </div>
-                            <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
+                            <p className="text-2xl font-bold" style={{ color: stat.color }}>{stats[stat.valueKey]}</p>
                         </div>
                     ))}
                 </div>
@@ -284,7 +307,7 @@ export default function AdminWithdrawalsPage() {
                 {/* ─── Chart Row ─── */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                     <ChartCard
-                        title="Xu hướng rút tiền (14 ngày gần nhất)"
+                        title={w('chartTrendTitle')}
                         icon={<BarChart2 className="w-3.5 h-3.5" />}
                         iconBg="#fff7ed" iconColor="#f97316"
                     >
@@ -296,7 +319,7 @@ export default function AdminWithdrawalsPage() {
                         />
                     </ChartCard>
                     <ChartCard
-                        title="Phân bố trạng thái rút tiền"
+                        title={w('chartStatusTitle')}
                         icon={<BarChart2 className="w-3.5 h-3.5" />}
                         iconBg="#fefce8" iconColor="#ca8a04"
                     >
@@ -304,18 +327,18 @@ export default function AdminWithdrawalsPage() {
                             <DonutChart
                                 size={110}
                                 centerLabel={String(stats.total)}
-                                centerSub="Tổng"
+                                centerSub={w('donutCenterSub')}
                                 slices={[
-                                    { label: 'Chờ duyệt', value: stats.pending, color: '#ca8a04' },
-                                    { label: 'Thành công', value: stats.completed, color: '#16a34a' },
-                                    { label: 'Từ chối', value: stats.failed, color: '#ef4444' },
+                                    { label: w('donutPending'), value: stats.pending, color: '#ca8a04' },
+                                    { label: w('donutCompleted'), value: stats.completed, color: '#16a34a' },
+                                    { label: w('donutRejected'), value: stats.failed, color: '#ef4444' },
                                 ]}
                             />
                             <div className="space-y-2">
                                 {[
-                                    { label: 'Chờ duyệt', value: stats.pending, color: '#ca8a04' },
-                                    { label: 'Thành công', value: stats.completed, color: '#16a34a' },
-                                    { label: 'Từ chối', value: stats.failed, color: '#ef4444' },
+                                    { label: w('donutPending'), value: stats.pending, color: '#ca8a04' },
+                                    { label: w('donutCompleted'), value: stats.completed, color: '#16a34a' },
+                                    { label: w('donutRejected'), value: stats.failed, color: '#ef4444' },
                                 ].map(s => (
                                     <div key={s.label} className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
@@ -358,7 +381,7 @@ export default function AdminWithdrawalsPage() {
                                     type="text"
                                     value={search}
                                     onChange={e => { setSearch(e.target.value); setPage(1); }}
-                                    placeholder="Tìm theo Mã GD, tên hoặc email..."
+                                    placeholder={w('searchPlaceholder')}
                                     className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-medium transition-all"
                                     style={{ borderColor: C.border, color: C.navy }}
                                 />
@@ -371,7 +394,7 @@ export default function AdminWithdrawalsPage() {
                                     onChange={e => { setDateFrom(e.target.value); setPage(1); }} 
                                     className="text-sm bg-transparent px-2 py-1 outline-none font-medium cursor-pointer" 
                                     style={{ color: C.gray }}
-                                    title="Từ ngày"
+                                    title={w('dateFromTitle')}
                                 />
                                 <span className="text-gray-400 text-sm font-bold opacity-50">-</span>
                                 <input 
@@ -380,7 +403,7 @@ export default function AdminWithdrawalsPage() {
                                     onChange={e => { setDateTo(e.target.value); setPage(1); }} 
                                     className="text-sm bg-transparent px-2 py-1 outline-none font-medium cursor-pointer" 
                                     style={{ color: C.gray }}
-                                    title="Đến ngày"
+                                    title={w('dateToTitle')}
                                 />
                             </div>
                             
@@ -390,8 +413,8 @@ export default function AdminWithdrawalsPage() {
                                 className="text-sm border rounded-xl px-4 py-2 outline-none bg-white font-medium focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
                                 style={{ borderColor: C.border, color: C.gray }}
                             >
-                                <option value="desc">Mới nhất trước</option>
-                                <option value="asc">Cũ nhất trước</option>
+                                <option value="desc">{w('sortNewest')}</option>
+                                <option value="asc">{w('sortOldest')}</option>
                             </select>
                         </div>
                     </div>
@@ -404,20 +427,20 @@ export default function AdminWithdrawalsPage() {
                     ) : paginated.length === 0 ? (
                         <div className="p-12 text-center flex flex-col items-center gap-2">
                             <FileText className="w-10 h-10" style={{ color: C.border }} />
-                            <span style={{ color: C.gray }}>Không tìm thấy yêu cầu rút tiền nào phù hợp.</span>
+                            <span style={{ color: C.gray }}>{w('emptyState')}</span>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm whitespace-nowrap">
                                 <thead style={{ background: C.bg }}>
                                     <tr>
-                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>MÃ GIAO DỊCH</th>
-                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>THÔNG TIN NGƯỜI DÙNG</th>
-                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>SỐ TIỀN & THỜI GIAN</th>
-                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>NGÂN HÀNG</th>
-                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>MÃ ĐỐI SOÁT (SEPAY)</th>
-                                        <th className="text-center text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>ĐỐI SOÁT VÍ</th>
-                                        <th className="text-center text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>TRẠNG THÁI</th>
+                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>{w('colTxnCode')}</th>
+                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>{w('colUser')}</th>
+                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>{w('colAmountTime')}</th>
+                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>{w('colBank')}</th>
+                                        <th className="text-left text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>{w('colSepay')}</th>
+                                        <th className="text-center text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>{w('colWallet')}</th>
+                                        <th className="text-center text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}>{w('colStatus')}</th>
                                         <th className="text-center text-[10px] font-semibold tracking-wider px-4 py-3" style={{ color: C.gray }}></th>
                                     </tr>
                                 </thead>
@@ -434,29 +457,29 @@ export default function AdminWithdrawalsPage() {
                                                     {row.txnCode || '---'}
                                                 </td>
                                                 <td className="px-4 py-4">
-                                                    <div className="font-semibold" style={{ color: C.navy }}>{row.user?.fullName || 'Ẩn danh'}</div>
+                                                    <div className="font-semibold" style={{ color: C.navy }}>{row.user?.fullName || w('anonymousUser')}</div>
                                                     <div className="text-xs mt-0.5" style={{ color: C.gray }}>{row.user?.email}</div>
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     <div className="font-bold text-sm text-green-600 mb-1">
-                                                        {(row.amount).toLocaleString('vi-VN')} ₫
+                                                        {(row.amount).toLocaleString(loc)} ₫
                                                     </div>
                                                     <div className="text-[10px] text-gray-500 flex items-center gap-1">
                                                         <Clock className="w-3 h-3" />
-                                                        {new Date(row.createdAt).toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                        {new Date(row.createdAt).toLocaleDateString(loc, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-4">
-                                                    <div className="text-xs font-medium" style={{ color: C.navy }}>{bInfo.bankName || 'Không có NH'}</div>
-                                                    <div className="text-[10px] font-mono text-gray-500 mt-0.5">TK: {displayAccount}</div>
+                                                    <div className="text-xs font-medium" style={{ color: C.navy }}>{bInfo.bankName || w('noBankName')}</div>
+                                                    <div className="text-[10px] font-mono text-gray-500 mt-0.5">{w('accountShort')} {displayAccount}</div>
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     {(() => {
                                                         const sepay = parseSepayInfo(row.description || '');
                                                         return sepay ? (
                                                             <div>
-                                                                <div className="text-xs font-mono font-semibold" style={{ color: C.green }}>{sepay.ref || '(Chưa có Ref)'}</div>
-                                                                <div className="text-[10px] text-gray-500 mt-0.5">ID: {sepay.id}</div>
+                                                                <div className="text-xs font-mono font-semibold" style={{ color: C.green }}>{sepay.ref || w('sepayNoRef')}</div>
+                                                                <div className="text-[10px] text-gray-500 mt-0.5">{w('sepayIdPrefix')} {sepay.id}</div>
                                                             </div>
                                                         ) : (
                                                             <div className="text-xs text-gray-400 italic">---</div>
@@ -472,9 +495,9 @@ export default function AdminWithdrawalsPage() {
                                                                 router.push(`/admin/transactions/${role}/${row.user.id}`);
                                                             }}
                                                             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-medium transition-colors border border-blue-100"
-                                                            title="Kiểm tra dòng tiền trong ví"
+                                                            title={tlp('openWalletHistoryTitle')}
                                                         >
-                                                            <ExternalLink className="w-3.5 h-3.5" /> Lịch sử Ví
+                                                            <ExternalLink className="w-3.5 h-3.5" /> {tlp('openWalletHistory')}
                                                         </button>
                                                     ) : (
                                                         <span className="text-xs text-gray-400 italic">---</span>
@@ -505,7 +528,11 @@ export default function AdminWithdrawalsPage() {
                     {!loading && filtered.length > 0 && (
                         <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
                             <p className="text-xs" style={{ color: C.gray }}>
-                                Hiển thị {(page - 1) * PAGE_SIZE + 1} - {Math.min(page * PAGE_SIZE, filtered.length)} trên {filtered.length}
+                                {w('paginationLine', {
+                                    from: (page - 1) * PAGE_SIZE + 1,
+                                    to: Math.min(page * PAGE_SIZE, filtered.length),
+                                    total: filtered.length,
+                                })}
                             </p>
                             <div className="flex gap-1">
                                 <button
@@ -532,7 +559,7 @@ export default function AdminWithdrawalsPage() {
                         {/* Header */}
                         <div className="flex items-center justify-between px-6 py-5 pb-4 border-b border-gray-100/60">
                             <div>
-                                <h3 className="text-lg font-bold text-gray-900">Xử lý Yêu cầu rút tiền</h3>
+                                <h3 className="text-lg font-bold text-gray-900">{w('modalTitle')}</h3>
                                 <p className="text-xs text-mono text-gray-500 mt-1">{viewData.txnCode}</p>
                             </div>
                             <button 
@@ -552,29 +579,29 @@ export default function AdminWithdrawalsPage() {
                                     
                                     {/* Summary Box */}
                                     <div className="bg-slate-50 p-5 rounded-2xl">
-                                        <div className="text-sm text-gray-500 mb-1">Số tiền yêu cầu</div>
+                                        <div className="text-sm text-gray-500 mb-1">{w('modalAmountLabel')}</div>
                                         <div className="text-3xl font-bold text-green-600 mb-4">
-                                            {(viewData.amount).toLocaleString('vi-VN')} ₫
+                                            {(viewData.amount).toLocaleString(loc)} ₫
                                         </div>
                                         <div className="flex justify-between items-center text-sm border-t border-gray-200/50 pt-4">
-                                            <span className="text-gray-500">Trạng thái</span>
+                                            <span className="text-gray-500">{w('modalStatus')}</span>
                                             <StatusBadge status={viewData.status} />
                                         </div>
                                     </div>
 
                                     {/* Wallet Info */}
                                     <div>
-                                        <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 px-1">Thông tin Số dư Ví</h4>
+                                        <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 px-1">{w('walletInfoTitle')}</h4>
                                         <div className="bg-slate-50 rounded-2xl divide-y divide-gray-100/60 text-sm overflow-hidden">
                                             <div className="flex justify-between px-5 py-3.5">
-                                                <span className="text-gray-500">Số dư khả dụng hiện tại</span>
-                                                <span className="font-semibold">{(viewData.wallet?.availableBalance || 0).toLocaleString()} ₫</span>
+                                                <span className="text-gray-500">{w('availableNow')}</span>
+                                                <span className="font-semibold">{(viewData.wallet?.availableBalance || 0).toLocaleString(loc)} ₫</span>
                                             </div>
                                             {viewData.status === 'PENDING' && (
                                                 <div className="flex justify-between px-5 py-3.5 bg-blue-50/50">
-                                                    <span className="text-gray-500">Dự tính sau khi duyệt</span>
+                                                    <span className="text-gray-500">{w('afterApproveEstimate')}</span>
                                                     <span className="font-semibold text-blue-600">
-                                                        {((viewData.wallet?.availableBalance || 0) - viewData.amount).toLocaleString()} ₫
+                                                        {((viewData.wallet?.availableBalance || 0) - viewData.amount).toLocaleString(loc)} ₫
                                                     </span>
                                                 </div>
                                             )}
@@ -588,32 +615,32 @@ export default function AdminWithdrawalsPage() {
                                         
                                         return (
                                             <div>
-                                                <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 px-1">Thông tin chuyển khoản</h4>
+                                                <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 px-1">{w('transferInfoTitle')}</h4>
                                                 <div className="w-full space-y-3 text-sm bg-white p-4 rounded-2xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.08)] ring-1 ring-black/5">
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-gray-500">Ngân hàng</span>
+                                                        <span className="text-gray-500">{w('bank')}</span>
                                                         <span className="font-semibold text-right max-w-[150px] truncate" title={bInfo.bankName}>{bInfo.bankName || '---'}</span>
                                                     </div>
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-gray-500">Số tài khoản</span>
+                                                        <span className="text-gray-500">{w('accountNumber')}</span>
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-semibold font-mono text-base tracking-wide">{bInfo.accountNumber || '---'}</span>
                                                             <button 
-                                                                onClick={async () => { await navigator.clipboard.writeText(bInfo.accountNumber); toast.success('Đã copy!'); }}
+                                                                onClick={async () => { await navigator.clipboard.writeText(bInfo.accountNumber); toast.success(w('copied')); }}
                                                                 className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-md"
                                                             ><Copy className="w-3.5 h-3.5" /></button>
                                                         </div>
                                                     </div>
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-gray-500">Chủ tài khoản</span>
+                                                        <span className="text-gray-500">{w('accountHolder')}</span>
                                                         <span className="font-semibold">{bInfo.accountHolderName || '---'}</span>
                                                     </div>
                                                     <div className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-gray-100/60">
-                                                        <span className="text-gray-500 text-[11px] uppercase tracking-wider">Nội dung (Tự động)</span>
+                                                        <span className="text-gray-500 text-[11px] uppercase tracking-wider">{w('transferMemoAuto')}</span>
                                                         <div className="flex items-center justify-between">
                                                             <span className="font-bold text-sm font-mono text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md">{memo}</span>
                                                             <button 
-                                                                onClick={async () => { await navigator.clipboard.writeText(memo); toast.success('Đã copy!'); }}
+                                                                onClick={async () => { await navigator.clipboard.writeText(memo); toast.success(w('copied')); }}
                                                                 className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded-md"
                                                             ><Copy className="w-3.5 h-3.5" /></button>
                                                         </div>
@@ -625,7 +652,7 @@ export default function AdminWithdrawalsPage() {
 
                                     {/* Recent Transactions */}
                                     <div>
-                                        <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 px-1">Lịch sử rút tiền gần đây</h4>
+                                        <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 px-1">{w('recentWithdrawalsTitle')}</h4>
                                         <div className="space-y-2">
                                             {items
                                                 .filter(i => i.walletId === viewData.walletId && i.id !== viewData.id)
@@ -633,15 +660,15 @@ export default function AdminWithdrawalsPage() {
                                                 .map((tx: any) => (
                                                     <div key={tx.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-2xl">
                                                         <div>
-                                                            <div className="text-xs font-medium text-gray-900">{(tx.amount).toLocaleString()} ₫</div>
-                                                            <div className="text-[10px] text-gray-500">{new Date(tx.createdAt).toLocaleDateString('vi-VN')}</div>
+                                                            <div className="text-xs font-medium text-gray-900">{(tx.amount).toLocaleString(loc)} ₫</div>
+                                                            <div className="text-[10px] text-gray-500">{new Date(tx.createdAt).toLocaleDateString(loc)}</div>
                                                         </div>
                                                         <StatusBadge status={tx.status} />
                                                     </div>
                                                 ))}
                                             {items.filter(i => i.walletId === viewData.walletId && i.id !== viewData.id).length === 0 && (
                                                 <div className="text-sm text-gray-400 text-center py-5 bg-slate-50 rounded-2xl border border-dashed border-gray-200">
-                                                    Chưa có giao dịch rút tiền nào khác.
+                                                    {w('recentWithdrawalsEmpty')}
                                                 </div>
                                             )}
                                         </div>
@@ -650,11 +677,11 @@ export default function AdminWithdrawalsPage() {
                                     {/* Rejection Input */}
                                     {viewData.status === 'PENDING' && isConfirmingReject && (
                                         <div className="mt-4 animate-in slide-in-from-top-2 duration-300">
-                                             <h4 className="text-[11px] font-bold text-red-500 uppercase tracking-wider mb-2.5 px-1">Lý do từ chối</h4>
+                                             <h4 className="text-[11px] font-bold text-red-500 uppercase tracking-wider mb-2.5 px-1">{w('rejectReasonTitle')}</h4>
                                              <textarea
                                                 value={rejectReason}
                                                 onChange={e => setRejectReason(e.target.value)}
-                                                placeholder="Bắt buộc: Ghi rõ lý do (VD: Sai STK)..."
+                                                placeholder={w('rejectPlaceholder')}
                                                 className="w-full text-sm rounded-2xl bg-red-50 border-0 ring-1 ring-red-200 p-4 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:bg-white resize-none min-h-[90px] transition-all"
                                                 autoFocus
                                             />
@@ -692,20 +719,20 @@ export default function AdminWithdrawalsPage() {
                                     return (
                                         <div className="w-full md:w-[260px] flex-shrink-0 order-first md:order-last">
                                             <div className="sticky top-0">
-                                                <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 px-1 hidden md:block">Mã VietQR</h4>
+                                                <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 px-1 hidden md:block">{w('vietQrTitle')}</h4>
                                                 <div className="rounded-3xl p-5 bg-slate-50 flex flex-col items-center">
                                                     {qrUrl ? (
                                                         <div className="bg-white p-3 rounded-2xl mb-4 shadow-sm ring-1 ring-black/5 w-full aspect-square flex items-center justify-center">
-                                                            <img src={qrUrl} alt="VietQR" className="w-full h-full object-contain" />
+                                                            <img src={qrUrl} alt={w('vietQrTitle')} className="w-full h-full object-contain" />
                                                         </div>
                                                     ) : (
                                                         <div className="w-full bg-yellow-50 text-yellow-800 text-[11px] p-3.5 rounded-xl mb-4 flex items-start gap-2 shadow-sm ring-1 ring-yellow-400/20">
                                                             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                                                            <span>Chưa có Bank Code để tạo QR tự động.</span>
+                                                            <span>{w('qrMissingBank')}</span>
                                                         </div>
                                                     )}
                                                     <p className="text-xs text-gray-500 text-center leading-relaxed">
-                                                        Sử dụng ứng dụng ngân hàng để quét mã QR. Nội dung chuyển khoản sẽ được <strong>điền tự động</strong>.
+                                                        {w('qrHelp')}
                                                     </p>
                                                 </div>
                                             </div>
@@ -726,14 +753,14 @@ export default function AdminWithdrawalsPage() {
                                             disabled={processing}
                                             className="flex-1 px-4 py-3 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl disabled:opacity-50 transition-colors"
                                         >
-                                            Từ chối
+                                            {w('rejectBtn')}
                                         </button>
                                         <button
                                             onClick={handleApprove}
                                             disabled={processing}
                                             className="flex-[2] px-4 py-3 text-sm font-semibold text-white bg-green-500 hover:bg-green-600 shadow-sm shadow-green-200 rounded-xl disabled:opacity-50 transition-all"
                                         >
-                                            Đã CK Xong
+                                            {w('approveBtn')}
                                         </button>
                                     </>
                                 ) : (
@@ -743,14 +770,14 @@ export default function AdminWithdrawalsPage() {
                                             disabled={processing}
                                             className="flex-1 px-4 py-3 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl disabled:opacity-50 transition-colors"
                                         >
-                                            Hủy
+                                            {w('cancel')}
                                         </button>
                                         <button
                                             onClick={handleReject}
                                             disabled={processing || !rejectReason.trim()}
                                             className="flex-[2] px-4 py-3 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 shadow-sm shadow-red-200 rounded-xl disabled:opacity-50 transition-all"
                                         >
-                                            Xác nhận Từ chối
+                                            {w('confirmReject')}
                                         </button>
                                     </>
                                 )}
@@ -760,24 +787,24 @@ export default function AdminWithdrawalsPage() {
                             const sepayInfo = parseSepayInfo(viewData.description);
                             return (
                                 <div className="p-5 sm:p-6 sm:pt-4 border-t border-gray-100/60 bg-white flex flex-col items-center gap-3 text-sm text-gray-500">
-                                    <div className="italic">Giao dịch này đã được xử lý.</div>
+                                    <div className="italic">{w('processedNotice')}</div>
                                     
                                     {sepayInfo && (
                                         <div className="w-full text-xs font-mono font-medium text-green-700 bg-green-50 border border-green-200 px-4 py-3 rounded-xl flex flex-col gap-2 shadow-sm">
                                             <div className="flex items-center justify-center gap-2 pb-2 border-b border-green-200/50">
                                                 <CheckCircle className="w-4 h-4" />
-                                                <span className="tracking-wide">GIAO DỊCH TỰ ĐỘNG WEBHOOK</span>
+                                                <span className="tracking-wide">{w('webhookBadge')}</span>
                                             </div>
                                             <div className="grid grid-cols-2 gap-y-2 mt-1">
-                                                <span className="text-green-600/80 uppercase tracking-wider text-[10px]">Mã GD Ngân hàng (Ref)</span>
+                                                <span className="text-green-600/80 uppercase tracking-wider text-[10px]">{w('sepayBankRefLabel')}</span>
                                                 <span className="text-right font-bold text-sm tracking-wider">{sepayInfo.ref || '---'}</span>
                                                 
-                                                <span className="text-green-600/80 uppercase tracking-wider text-[10px]">ID Giao dịch SePay</span>
+                                                <span className="text-green-600/80 uppercase tracking-wider text-[10px]">{w('sepayTxnIdLabel')}</span>
                                                 <span className="text-right tracking-wider">{sepayInfo.id}</span>
                                                 
-                                                <span className="text-green-600/80 uppercase tracking-wider text-[10px]">Thời gian yêu cầu</span>
+                                                <span className="text-green-600/80 uppercase tracking-wider text-[10px]">{w('requestTimeLabel')}</span>
                                                 <span className="text-right tracking-wider">
-                                                    {new Date(viewData.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                    {new Date(viewData.createdAt).toLocaleString(loc, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
                                                 </span>
                                             </div>
                                         </div>

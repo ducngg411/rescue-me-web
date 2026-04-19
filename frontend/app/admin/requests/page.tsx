@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { useAdminGuard } from '@/lib/guards';
 import { adminApi } from '@/lib/api';
@@ -24,64 +25,65 @@ const C = {
     purple: '#7c3aed', purpleLight: '#faf5ff',
 };
 
-// ── Label Maps ─────────────────────────────────────────────────────────────────
-const INCIDENT_LABELS: Record<string, string> = {
-    BREAKDOWN: 'Hỏng xe', ACCIDENT: 'Tai nạn', FLAT_TIRE: 'Xì lốp',
-    BATTERY_DEAD: 'Hết pin', OUT_OF_FUEL: 'Hết xăng', LOCKED_OUT: 'Khóa xe', OTHER: 'Khác',
+const STATUS_STYLE: Record<string, { color: string; bg: string }> = {
+    CREATED: { color: C.blue, bg: C.blueLight },
+    SEARCHING: { color: C.blue, bg: C.blueLight },
+    MATCHING: { color: C.blue, bg: C.blueLight },
+    MATCHED: { color: C.yellow, bg: C.yellowLight },
+    ACCEPTED: { color: C.yellow, bg: C.yellowLight },
+    ASSIGNED: { color: C.yellow, bg: C.yellowLight },
+    IN_PROGRESS: { color: C.orange, bg: C.orangeLight },
+    ARRIVED: { color: C.orange, bg: C.orangeLight },
+    WORKING: { color: C.orange, bg: C.orangeLight },
+    PAYMENT_PENDING: { color: C.purple, bg: C.purpleLight },
+    COMPLETED: { color: C.green, bg: C.greenLight },
+    PAID: { color: C.green, bg: C.greenLight },
+    CANCELLED: { color: C.gray, bg: '#f3f4f6' },
+    REJECTED: { color: C.red, bg: C.redLight },
+    EXPIRED: { color: C.gray, bg: '#f3f4f6' },
 };
 
-const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
-    CREATED:         { label: 'Mới tạo',       color: C.blue,   bg: C.blueLight },
-    SEARCHING:       { label: 'Đang tìm',       color: C.blue,   bg: C.blueLight },
-    MATCHING:        { label: 'Đang ghép',      color: C.blue,   bg: C.blueLight },
-    MATCHED:         { label: 'Đã ghép',        color: C.yellow, bg: C.yellowLight },
-    ACCEPTED:        { label: 'Đã nhận',        color: C.yellow, bg: C.yellowLight },
-    ASSIGNED:        { label: 'Đã phân công',   color: C.yellow, bg: C.yellowLight },
-    IN_PROGRESS:     { label: 'Đang thực hiện', color: C.orange, bg: C.orangeLight },
-    ARRIVED:         { label: 'Đã đến nơi',     color: C.orange, bg: C.orangeLight },
-    WORKING:         { label: 'Đang làm',       color: C.orange, bg: C.orangeLight },
-    PAYMENT_PENDING: { label: 'Chờ thanh toán', color: C.purple, bg: C.purpleLight },
-    COMPLETED:       { label: 'Hoàn thành',     color: C.green,  bg: C.greenLight },
-    PAID:            { label: 'Đã thanh toán',  color: C.green,  bg: C.greenLight },
-    CANCELLED:       { label: 'Đã hủy',         color: C.gray,   bg: '#f3f4f6' },
-    REJECTED:        { label: 'Bị từ chối',     color: C.red,    bg: C.redLight },
-    EXPIRED:         { label: 'Hết hạn',        color: C.gray,   bg: '#f3f4f6' },
-};
-
-const ALL_STATUSES = [
-    'CREATED','SEARCHING','MATCHING','MATCHED','ACCEPTED','ASSIGNED',
-    'IN_PROGRESS','ARRIVED','WORKING','PAYMENT_PENDING','COMPLETED','PAID',
-    'CANCELLED','REJECTED','EXPIRED',
-];
+const INCIDENT_TYPES = ['BREAKDOWN', 'ACCIDENT', 'FLAT_TIRE', 'BATTERY_DEAD', 'OUT_OF_FUEL', 'LOCKED_OUT', 'OTHER'] as const;
 
 type TabType = 'ALL' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
-const TABS: { key: TabType; label: string }[] = [
-    { key: 'ALL',       label: 'Tất cả' },
-    { key: 'ACTIVE',    label: 'Đang xử lý' },
-    { key: 'COMPLETED', label: 'Hoàn thành' },
-    { key: 'CANCELLED', label: 'Đã hủy/Hết hạn' },
-    { key: 'DISPUTED',  label: 'Khiếu nại' },
-];
+
+function incidentTypeLabel(t: (path: string) => string, key: string) {
+    const path = `admin.requests.incident.${key}`;
+    const tr = t(path);
+    return tr === path ? key : tr;
+}
+
+function requestStatusLabel(t: (path: string) => string, status: string) {
+    const path = `admin.requests.status.${status}`;
+    const tr = t(path);
+    return tr === path ? status : tr;
+}
 
 const PAGE_SIZE = 15;
 
 function StatusBadge({ status }: { status: string }) {
-    const s = STATUS_META[status] ?? { label: status, color: C.gray, bg: '#f3f4f6' };
+    const { t } = useLanguage();
+    const style = STATUS_STYLE[status] ?? { color: C.gray, bg: '#f3f4f6' };
+    const label = requestStatusLabel(t, status);
     return (
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold whitespace-nowrap"
-            style={{ background: s.bg, color: s.color }}>
+            style={{ background: style.bg, color: style.color }}>
             <span className="w-1.5 h-1.5 rounded-full bg-current" />
-            {s.label}
+            {label}
         </span>
     );
 }
 
-function PaymentBadge({ method, amount }: { method?: string; amount?: number }) {
+function PaymentBadge({ method, amount, locale }: { method?: string; amount?: number; locale: string }) {
+    const { t } = useLanguage();
     if (!method || !amount) return <span style={{ color: C.gray }} className="text-xs">—</span>;
-    const label = method === 'CASH' ? 'Tiền mặt' : method === 'WALLET' ? 'Ví' : 'QR';
+    const label =
+        method === 'CASH' ? t('admin.requests.paymentCash') : method === 'WALLET' ? t('admin.requests.paymentWallet') : t('admin.requests.paymentQr');
+    const numLoc = locale === 'vi' ? 'vi-VN' : 'en-US';
+    const amountStr = amount.toLocaleString(numLoc);
     return (
         <div className="flex flex-col">
-            <span className="text-sm font-bold" style={{ color: C.navy }}>{amount.toLocaleString('vi-VN')}₫</span>
+            <span className="text-sm font-bold" style={{ color: C.navy }}>{locale === 'vi' ? `${amountStr}₫` : `${amountStr} VND`}</span>
             <span className="text-[10px]" style={{ color: C.gray }}>{label}</span>
         </div>
     );
@@ -90,6 +92,20 @@ function PaymentBadge({ method, amount }: { method?: string; amount?: number }) 
 export default function AdminRequestsPage() {
     const { isReady } = useAdminGuard();
     const router = useRouter();
+    const { t, locale } = useLanguage();
+    const dateLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
+
+    const tabsConfig = useMemo(
+        () =>
+            [
+                { key: 'ALL' as TabType, label: t('admin.requests.tabAll') },
+                { key: 'ACTIVE' as TabType, label: t('admin.requests.tabActive') },
+                { key: 'COMPLETED' as TabType, label: t('admin.requests.tabCompleted') },
+                { key: 'CANCELLED' as TabType, label: t('admin.requests.tabCancelled') },
+                { key: 'DISPUTED' as TabType, label: t('admin.requests.tabDisputed') },
+            ],
+        [t],
+    );
 
     const [tab, setTab] = useState<TabType>('ALL');
     const [items, setItems] = useState<any[]>([]);
@@ -160,27 +176,27 @@ export default function AdminRequestsPage() {
 
                 {/* Header */}
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>Quản lý Yêu cầu dịch vụ</h1>
-                    <p className="text-sm" style={{ color: C.gray }}>Toàn bộ lịch sử đơn cứu hộ trên hệ thống.</p>
+                    <h1 className="text-2xl font-bold mb-1" style={{ color: C.navy }}>{t('admin.requests.listTitle')}</h1>
+                    <p className="text-sm" style={{ color: C.gray }}>{t('admin.requests.listSubtitle')}</p>
                 </div>
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                     {[
-                        { label: 'TỔNG ĐƠN', value: stats.total, color: C.navy, icon: <Wrench className="w-4 h-4" /> },
-                        { label: 'HOÀN THÀNH', value: stats.completed, color: C.green, icon: <CheckCircle className="w-4 h-4" /> },
-                        { label: 'ĐÃ HỦY', value: stats.cancelled, color: C.gray, icon: <XCircle className="w-4 h-4" /> },
-                        { label: 'THÁNG NÀY', value: stats.newThisMonth, color: C.blue, icon: <Clock className="w-4 h-4" /> },
-                        { label: 'KHIẾU NẠI', value: stats.disputed, color: C.red, icon: <ShieldAlert className="w-4 h-4" /> },
-                    ].map(s => (
-                        <div key={s.label} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
+                        { key: 'total', labelKey: 'admin.requests.statTotal', value: stats.total, color: C.navy, icon: <Wrench className="w-4 h-4" /> },
+                        { key: 'completed', labelKey: 'admin.requests.statCompleted', value: stats.completed, color: C.green, icon: <CheckCircle className="w-4 h-4" /> },
+                        { key: 'cancelled', labelKey: 'admin.requests.statCancelled', value: stats.cancelled, color: C.gray, icon: <XCircle className="w-4 h-4" /> },
+                        { key: 'month', labelKey: 'admin.requests.statThisMonth', value: stats.newThisMonth, color: C.blue, icon: <Clock className="w-4 h-4" /> },
+                        { key: 'disputed', labelKey: 'admin.requests.statDisputed', value: stats.disputed, color: C.red, icon: <ShieldAlert className="w-4 h-4" /> },
+                    ].map((s) => (
+                        <div key={s.key} className="bg-white rounded-2xl border p-4" style={{ borderColor: C.border }}>
                             <div className="flex items-center justify-between mb-2">
-                                <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>{s.label}</p>
+                                <p className="text-[10px] font-semibold tracking-wider uppercase" style={{ color: C.gray }}>{t(s.labelKey)}</p>
                                 <span style={{ color: s.color, opacity: 0.6 }}>{s.icon}</span>
                             </div>
                             <p className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</p>
-                            {s.label === 'HOÀN THÀNH' && (
-                                <p className="text-[10px] mt-1" style={{ color: C.gray }}>{completionRate}% tổng đơn</p>
+                            {s.key === 'completed' && (
+                                <p className="text-[10px] mt-1" style={{ color: C.gray }}>{t('admin.requests.statCompletedHint', { rate: completionRate })}</p>
                             )}
                         </div>
                     ))}
@@ -189,7 +205,7 @@ export default function AdminRequestsPage() {
                 {/* ─── Chart Row ─── */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                     <ChartCard
-                        title="Xu hướng đơn cứu hộ (14 ngày gần nhất)"
+                        title={t('admin.requests.chartTrendTitle')}
                         icon={<BarChart2 className="w-3.5 h-3.5" />}
                         iconBg="#fff7ed" iconColor="#f97316"
                     >
@@ -202,12 +218,12 @@ export default function AdminRequestsPage() {
                         <div className="flex items-center gap-3 mt-2">
                             <div className="flex items-center gap-1.5">
                                 <div className="w-2 h-2 rounded-full" style={{ background: '#f97316' }} />
-                                <span className="text-[10px]" style={{ color: '#6b7280' }}>Tổng đơn</span>
+                                <span className="text-[10px]" style={{ color: '#6b7280' }}>{t('admin.requests.chartTrendLegend')}</span>
                             </div>
                         </div>
                     </ChartCard>
                     <ChartCard
-                        title="Top 10 Khách hàng nhiều đơn nhất"
+                        title={t('admin.requests.chartTopUsersTitle')}
                         icon={<BarChart2 className="w-3.5 h-3.5" />}
                         iconBg="#eff6ff" iconColor="#2563eb"
                     >
@@ -215,7 +231,7 @@ export default function AdminRequestsPage() {
                             loading={chartsLoading}
                             items={chartTopUsers}
                             color="#2563eb"
-                            suffix=" đơn"
+                            suffix={t('admin.requests.chartRequestsSuffix')}
                         />
                     </ChartCard>
                 </div>
@@ -225,19 +241,19 @@ export default function AdminRequestsPage() {
 
                     {/* Tabs */}
                     <div className="flex items-center px-5 border-b overflow-x-auto" style={{ borderColor: C.border }}>
-                        {TABS.map(t => (
+                        {tabsConfig.map((tabItem) => (
                             <button
-                                key={t.key}
+                                key={tabItem.key}
                                 type="button"
-                                onClick={() => { setTab(t.key); setPage(1); }}
+                                onClick={() => { setTab(tabItem.key); setPage(1); }}
                                 className="px-4 py-4 text-sm font-medium relative transition-colors whitespace-nowrap"
                                 style={{
-                                    color: tab === t.key ? C.orange : C.gray,
-                                    borderBottom: tab === t.key ? `2px solid ${C.orange}` : '2px solid transparent',
+                                    color: tab === tabItem.key ? C.orange : C.gray,
+                                    borderBottom: tab === tabItem.key ? `2px solid ${C.orange}` : '2px solid transparent',
                                     marginBottom: '-1px',
                                 }}
                             >
-                                {t.label}
+                                {tabItem.label}
                             </button>
                         ))}
                     </div>
@@ -251,7 +267,7 @@ export default function AdminRequestsPage() {
                                 type="text"
                                 value={search}
                                 onChange={e => { setSearch(e.target.value); setPage(1); }}
-                                placeholder="Tìm theo mã đơn, tên khách hàng, biển số..."
+                                placeholder={t('admin.requests.searchPlaceholder')}
                                 className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border focus:outline-none"
                                 style={{ borderColor: C.border, color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                             />
@@ -265,9 +281,9 @@ export default function AdminRequestsPage() {
                                 className="bg-transparent text-sm focus:outline-none cursor-pointer"
                                 style={{ color: C.navy, fontFamily: 'Lexend, sans-serif' }}
                             >
-                                <option value="">Tất cả sự cố</option>
-                                {Object.entries(INCIDENT_LABELS).map(([k, v]) => (
-                                    <option key={k} value={k}>{v}</option>
+                                <option value="">{t('admin.requests.filterAllIncidents')}</option>
+                                {INCIDENT_TYPES.map((k) => (
+                                    <option key={k} value={k}>{incidentTypeLabel(t, k)}</option>
                                 ))}
                             </select>
                         </div>
@@ -298,15 +314,24 @@ export default function AdminRequestsPage() {
                     ) : filtered.length === 0 ? (
                         <div className="p-12 text-center flex flex-col items-center gap-2">
                             <Car className="w-10 h-10" style={{ color: C.border }} />
-                            <span className="text-sm" style={{ color: C.gray }}>Không tìm thấy đơn nào.</span>
+                            <span className="text-sm" style={{ color: C.gray }}>{t('admin.requests.emptyList')}</span>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm">
                                 <thead style={{ background: C.bg }}>
                                     <tr>
-                                        {['MÃ ĐƠN', 'KHÁCH HÀNG', 'SỰ CỐ', 'CỨU HỘ VIÊN', 'THANH TOÁN', 'NGÀY TẠO', 'TRẠNG THÁI', ''].map(h => (
-                                            <th key={h} className="px-4 py-3 text-[10px] font-semibold tracking-wider" style={{ color: C.gray }}>{h}</th>
+                                        {[
+                                            t('admin.requests.colOrder'),
+                                            t('admin.requests.colCustomer'),
+                                            t('admin.requests.colIncident'),
+                                            t('admin.requests.colProvider'),
+                                            t('admin.requests.colPayment'),
+                                            t('admin.requests.colCreated'),
+                                            t('admin.requests.colStatus'),
+                                            t('admin.requests.colAction'),
+                                        ].map((h, idx) => (
+                                            <th key={idx} className="px-4 py-3 text-[10px] font-semibold tracking-wider" style={{ color: C.gray }}>{h}</th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -320,7 +345,7 @@ export default function AdminRequestsPage() {
                                                 </span>
                                                 {req._count?.disputeCases > 0 && (
                                                     <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: C.redLight, color: C.red }}>
-                                                        KN
+                                                        {t('admin.requests.disputeBadge')}
                                                     </span>
                                                 )}
                                             </td>
@@ -332,19 +357,19 @@ export default function AdminRequestsPage() {
                                                             className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
                                                             fallbackBackground={C.blue} initialsCount={1} />
                                                         <div className="min-w-0">
-                                                            <p className="text-xs font-semibold truncate max-w-[120px]" style={{ color: C.navy }}>{req.user.fullName || '(Khách)'}</p>
+                                                            <p className="text-xs font-semibold truncate max-w-[120px]" style={{ color: C.navy }}>{req.user.fullName || `(${t('admin.requests.customerFallback')})`}</p>
                                                             <p className="text-[10px] truncate max-w-[120px]" style={{ color: C.gray }}>{req.user.phoneNumber || req.user.email}</p>
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs" style={{ color: C.gray }}>Khách vãng lai</span>
+                                                    <span className="text-xs" style={{ color: C.gray }}>{t('admin.requests.guestWalkIn')}</span>
                                                 )}
                                             </td>
                                             {/* Incident */}
                                             <td className="px-4 py-3">
                                                 <div>
-                                                    <p className="text-xs font-semibold" style={{ color: C.navy }}>{INCIDENT_LABELS[req.incidentType] || req.incidentType}</p>
-                                                    <p className="text-[10px]" style={{ color: C.gray }}>{req.vehicleType === 'CAR' ? 'Ô tô' : 'Xe máy'}{req.licensePlate ? ` · ${req.licensePlate}` : ''}</p>
+                                                    <p className="text-xs font-semibold" style={{ color: C.navy }}>{incidentTypeLabel(t, req.incidentType)}</p>
+                                                    <p className="text-[10px]" style={{ color: C.gray }}>{req.vehicleType === 'CAR' ? t('admin.requests.vehicleCar') : t('admin.requests.vehicleMotorcycle')}{req.licensePlate ? ` · ${req.licensePlate}` : ''}</p>
                                                 </div>
                                             </td>
                                             {/* Provider */}
@@ -357,20 +382,20 @@ export default function AdminRequestsPage() {
                                                         <p className="text-xs font-semibold truncate max-w-[100px]" style={{ color: C.navy }}>{req.assignedProvider.fullName}</p>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs" style={{ color: C.gray }}>Chưa phân</span>
+                                                    <span className="text-xs" style={{ color: C.gray }}>{t('admin.requests.providerUnassigned')}</span>
                                                 )}
                                             </td>
                                             {/* Payment */}
                                             <td className="px-4 py-3">
-                                                <PaymentBadge method={req.payment?.paymentMethod} amount={req.payment?.totalAmount} />
+                                                <PaymentBadge method={req.payment?.paymentMethod} amount={req.payment?.totalAmount} locale={locale} />
                                             </td>
                                             {/* Date */}
                                             <td className="px-4 py-3">
                                                 <p className="text-xs font-medium" style={{ color: C.navy }}>
-                                                    {new Date(req.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                    {new Date(req.createdAt).toLocaleDateString(dateLocale, { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                                 </p>
                                                 <p className="text-[10px]" style={{ color: C.gray }}>
-                                                    {new Date(req.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                                    {new Date(req.createdAt).toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })}
                                                 </p>
                                             </td>
                                             {/* Status */}
@@ -381,7 +406,7 @@ export default function AdminRequestsPage() {
                                                     onClick={() => router.push(`/admin/requests/${req.id}`)}
                                                     className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
                                                     style={{ color: C.blue }}
-                                                    title="Xem chi tiết"
+                                                    title={t('admin.requests.viewDetails')}
                                                 >
                                                     <Eye className="w-4 h-4" />
                                                 </button>
@@ -397,7 +422,7 @@ export default function AdminRequestsPage() {
                     {!loading && total > PAGE_SIZE && (
                         <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: C.border }}>
                             <p className="text-xs" style={{ color: C.gray }}>
-                                Trang <span className="font-semibold" style={{ color: C.navy }}>{page}</span> / {totalPages} · Tổng <span className="font-semibold" style={{ color: C.navy }}>{total}</span> đơn
+                                {t('admin.requests.paginationLine', { page, totalPages, total })}
                             </p>
                             <div className="flex items-center gap-1">
                                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40" style={{ color: C.gray }}>

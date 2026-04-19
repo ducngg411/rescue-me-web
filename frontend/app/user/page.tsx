@@ -393,8 +393,8 @@ export default function UserDashboard() {
                                         </svg>
                                     </div>
                                     <div className="flex-1 text-left">
-                                        <p className="font-semibold text-sm" style={{ color: C.navy }}>Cửa hàng sửa xe gần đây</p>
-                                        <p className="text-xs" style={{ color: C.gray }}>Tìm garage, tiệm sửa xe gần vị trí của bạn</p>
+                                        <p className="font-semibold text-sm" style={{ color: C.navy }}>{t('user.dashboard.nearbyShops.cardTitle')}</p>
+                                        <p className="text-xs" style={{ color: C.gray }}>{t('user.dashboard.nearbyShops.cardSubtitle')}</p>
                                     </div>
                                     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#94a3b8" strokeWidth={2.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -440,8 +440,8 @@ export default function UserDashboard() {
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-3-3v6m-7 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                             </svg>
                                         </div>
-                                        <p className="text-sm font-medium" style={{ color: C.navy }}>Không có yêu cầu cứu hộ</p>
-                                        <p className="text-xs text-center" style={{ color: C.gray }}>Hiện tại không có yêu cầu nào đang thực hiện</p>
+                                        <p className="text-sm font-medium" style={{ color: C.navy }}>{t('user.dashboard.activeRescueEmpty.title')}</p>
+                                        <p className="text-xs text-center" style={{ color: C.gray }}>{t('user.dashboard.activeRescueEmpty.subtitle')}</p>
                                     </div>
                                 ) : (
                                     <>

@@ -75,6 +75,15 @@ export class ProviderController {
     }
 
     /**
+     * GET /me/provider/config
+     * Returns platform config visible to providers (e.g. current commission rate).
+     */
+    @Get('config')
+    async getConfig() {
+        return this.providerService.getProviderConfig();
+    }
+
+    /**
      * GET /me/provider/history-stats?days=7
      * Returns dashboard stats: 7-day revenue, today profit, success rate, avg rating.
      */

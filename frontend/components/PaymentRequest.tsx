@@ -142,7 +142,7 @@ export default function PaymentRequest({
                                 clearInterval(cdRef.current!); cdRef.current = null;
                                 if (!toastShownRef.current) {
                                     toastShownRef.current = true;
-                                    toast.success('Đã thanh toán thành công! Cảm ơn bạn ủng hộ dịch vụ 🎉', { duration: 5000 });
+                                    toast.success(t('user.tracking.paymentRequest.qrSuccessToast'), { duration: 5000 });
                                 }
                                 setDone(true);
                                 onPaymentCompleteRef.current?.();
@@ -162,7 +162,7 @@ export default function PaymentRequest({
             if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
             if (cdRef.current) { clearInterval(cdRef.current); cdRef.current = null; }
         };
-    }, [requestId, payment.paymentMethod, apiBase]);
+    }, [requestId, payment.paymentMethod, apiBase, t]);
 
     const alreadyConfirmed = !!payment.userConfirmedAt || done;
     const supportHotline = getSupportHotline();
@@ -171,11 +171,11 @@ export default function PaymentRequest({
         setIsConfirming(true);
         try {
             await api.patch(`${apiBase}/payment/confirm-sent`);
-            toast.success('Xác nhận thành công!');
+            toast.success(t('user.tracking.paymentRequest.successConfirmToast'));
             setDone(true);
             onPaymentCompleteRef.current?.();
         } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Xác nhận thất bại');
+            toast.error(err.response?.data?.message || t('user.tracking.paymentRequest.failConfirmToast'));
         } finally {
             setIsConfirming(false);
         }
@@ -185,11 +185,11 @@ export default function PaymentRequest({
         setIsConfirming(true);
         try {
             await api.patch(`${apiBase}/payment/wallet-confirm`);
-            toast.success('Thanh toán ví thành công! 🎉');
+            toast.success(t('user.tracking.paymentRequest.successWalletToast'));
             setDone(true);
             onPaymentCompleteRef.current?.();
         } catch (err: any) {
-            toast.error(err.response?.data?.message || 'Thanh toán thất bại');
+            toast.error(err.response?.data?.message || t('user.tracking.paymentRequest.failWalletToast'));
         } finally {
             setIsConfirming(false);
         }
@@ -285,12 +285,12 @@ export default function PaymentRequest({
                             {breakdownItems.length > 0 && (
                                 <>
                                     <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ background: '#eff6ff', color: '#2563eb' }}>
-                                        Chi tiết
+                                        {t('user.tracking.paymentRequest.detailHeader')}
                                     </div>
                                     {breakdownItems.map(({ label, amount }: { label: string; amount: number }, i: number) => (
                                         <div key={i} className="flex justify-between px-3 py-2.5 text-sm"
                                             style={{ borderTop: `1px solid ${C.border}`, color: C.navy }}>
-                                            <span style={{ color: C.gray }}>{label || `Mục ${i + 1}`}</span>
+                                            <span style={{ color: C.gray }}>{label || t('user.tracking.paymentInfo.surchargeItemFallback', { index: i + 1 })}</span>
                                             <span className="font-semibold">{fmt(amount)}</span>
                                         </div>
                                     ))}
@@ -307,12 +307,12 @@ export default function PaymentRequest({
                             {surchargeItems.length > 0 && (
                                 <>
                                     <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide" style={{ background: '#fff7ed', color: C.orange }}>
-                                        Phụ phí phát sinh
+                                        {t('user.tracking.paymentRequest.surchargeHeader')}
                                     </div>
                                     {surchargeItems.map(({ label, amount }: { label: string; amount: number }, i: number) => (
                                         <div key={i} className="flex justify-between px-3 py-2.5 text-sm"
                                             style={{ borderTop: `1px solid ${C.border}`, color: C.navy }}>
-                                            <span style={{ color: C.gray }}>{label || `Khoản ${i + 1}`}</span>
+                                            <span style={{ color: C.gray }}>{label || t('user.tracking.paymentInfo.surchargeEntryFallback', { index: i + 1 })}</span>
                                             <span className="font-semibold" style={{ color: C.orange }}>+{fmt(amount)}</span>
                                         </div>
                                     ))}
@@ -338,8 +338,8 @@ export default function PaymentRequest({
                     {payment.photoUrls && payment.photoUrls.length > 0 && (
                         <div className="mb-2">
                             <p className="text-xs font-semibold mb-2" style={{ color: C.navy }}>
-                                 Ảnh hiện trường từ cứu hộ viên
-                                <span className="font-normal ml-1" style={{ color: C.gray }}>({payment.photoUrls.length} ảnh)</span>
+                                {t('user.tracking.paymentInfo.photoTitle')}
+                                <span className="font-normal ml-1" style={{ color: C.gray }}>{t('user.tracking.paymentInfo.photoCount', { count: payment.photoUrls.length })}</span>
                             </p>
                             <div className="grid grid-cols-3 gap-1.5">
                                 {payment.photoUrls.map((url: string, i: number) => (
@@ -347,7 +347,7 @@ export default function PaymentRequest({
                                         className="aspect-square rounded-xl overflow-hidden block relative outline-none focus:ring-2 focus:ring-orange-500"
                                         style={{ background: '#f1f5f9' }}
                                     >
-                                        <img src={url} alt={`Ảnh ${i + 1}`} className="w-full h-full object-cover" />
+                                        <img src={url} alt={t('user.tracking.mediaGallery.photoAlt', { index: i + 1 })} className="w-full h-full object-cover" />
                                     </button>
                                 ))}
                             </div>
@@ -419,10 +419,10 @@ export default function PaymentRequest({
                                     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#2563eb" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                     </svg>
-                                    <p className="text-xs font-bold" style={{ color: '#1d4ed8' }}>Số dư ví của bạn</p>
+                                    <p className="text-xs font-bold" style={{ color: '#1d4ed8' }}>{t('user.tracking.paymentRequest.walletBalance')}</p>
                                 </div>
                                 {walletLoading ? (
-                                    <p className="text-sm" style={{ color: '#6b7280' }}>Đang tải số dư...</p>
+                                    <p className="text-sm" style={{ color: '#6b7280' }}>{t('user.tracking.paymentRequest.loadingBalance')}</p>
                                 ) : (
                                     <>
                                         <p className="text-2xl font-extrabold" style={{ color: '#1d4ed8' }}>
@@ -437,7 +437,7 @@ export default function PaymentRequest({
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                                 </svg>
                                                 <p className="text-xs font-semibold" style={{ color: '#dc2626' }}>
-                                                    Số dư không đủ — cần thêm {fmt(payment.totalAmount - walletBalance)}
+                                                    {t('user.tracking.paymentRequest.insufficientBalance', { amount: fmt(payment.totalAmount - walletBalance) })}
                                                 </p>
                                             </div>
                                         )}
@@ -469,7 +469,7 @@ export default function PaymentRequest({
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 )}
-                                {isConfirming ? 'Đang xử lý...' : `Xác nhận thanh toán · ${fmt(payment.totalAmount)}`}
+                                {isConfirming ? t('user.tracking.paymentRequest.processing') : t('user.tracking.paymentRequest.confirmPaymentBtn', { amount: fmt(payment.totalAmount) })}
                             </button>
 
                             {/* Insufficient balance: link to top up */}
@@ -479,7 +479,7 @@ export default function PaymentRequest({
                                     className="block w-full py-3 rounded-2xl text-sm font-semibold text-center transition-all"
                                     style={{ background: '#eff6ff', color: '#2563eb', border: '1.5px solid #bfdbfe' }}
                                 >
-                                    + Nạp thêm vào ví
+                                    {t('user.tracking.paymentRequest.topupLink')}
                                 </a>
                             )}
                         </div>
@@ -489,8 +489,8 @@ export default function PaymentRequest({
                             <div className="rounded-2xl overflow-hidden" style={{ border: '1.5px solid #f1f5f9' }}>
                                 <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#fff7ed' }}>
                                     <div>
-                                        <p className="text-xs font-bold" style={{ color: C.navy }}>Quét để thanh toán</p>
-                                        <p className="text-xs" style={{ color: C.gray }}>Nội dung: <span className="font-mono font-bold" style={{ color: C.orange }}>{qrData.transferCode}</span></p>
+                                        <p className="text-xs font-bold" style={{ color: C.navy }}>{t('user.tracking.paymentRequest.qrScanTitle')}</p>
+                                        <p className="text-xs" style={{ color: C.gray }}>{t('user.tracking.paymentRequest.qrContent')} <span className="font-mono font-bold" style={{ color: C.orange }}>{qrData.transferCode}</span></p>
                                     </div>
                                     <span className="text-sm font-bold tabular-nums px-2 py-1 rounded-lg" style={{
                                         background: secsLeft > 60 ? '#f0fdf4' : '#fef2f2',
@@ -499,18 +499,18 @@ export default function PaymentRequest({
                                         {String(Math.floor(secsLeft / 60)).padStart(2, '0')}:{String(secsLeft % 60).padStart(2, '0')}
                                     </span>
                                 </div>
-                                <img src={qrData.qrUrl} alt="QR thanh toán" className="w-full" />
+                                <img src={qrData.qrUrl} alt={t('user.tracking.paymentRequest.qrScanTitle')} className="w-full" />
                                 <p className="text-center text-xs py-2" style={{ color: C.gray }}>
-                                    Số tiền: <span className="font-bold" style={{ color: C.orange }}>{fmt(qrData.amount)}</span> · Đang chờ xác nhận...
+                                    {t('user.tracking.paymentRequest.qrAmount')}<span className="font-bold" style={{ color: C.orange }}>{fmt(qrData.amount)}</span> · {t('user.tracking.paymentRequest.qrWaiting')}
                                 </p>
                             </div>
                         ) : qrData?.status === 'EXPIRED' ? (
                             <div className="rounded-2xl px-4 py-3 text-center text-sm" style={{ background: '#fef2f2', color: '#dc2626' }}>
-                                QR đã hết hạn. Vui lòng yêu cầu provider gửi lại.
+                                {t('user.tracking.paymentRequest.qrExpired')}
                             </div>
                         ) : (
                             <div className="rounded-2xl px-4 py-3 text-center text-sm" style={{ background: C.bg, color: C.gray }}>
-                                Đang tải mã QR...
+                                {t('user.tracking.paymentRequest.qrLoading')}
                             </div>
                         )
                     ) : (
@@ -562,14 +562,18 @@ export default function PaymentRequest({
                     {paymentScope !== 'guest' && existingDispute && (
                         <div className="space-y-2">
                             <div className="w-full py-2 px-3 rounded-2xl text-xs font-semibold text-center" style={{ background: '#fff7ed', color: '#c2410c' }}>
-                                Đơn đang khiếu nại · {existingDispute.status}
+                                {t('user.tracking.dispute.pendingLabel')} · {(() => {
+                                    const key = `user.tracking.dispute.statusLabels.${existingDispute.status}`;
+                                    const label = t(key);
+                                    return label === key ? existingDispute.status : label;
+                                })()}
                             </div>
                             <button
                                 onClick={() => router.push(`/user/disputes/${existingDispute.id}`)}
                                 className="w-full py-3 rounded-2xl text-sm font-semibold"
                                 style={{ background: '#eff6ff', color: '#1d4ed8' }}
                             >
-                                Xem trạng thái khiếu nại
+                                {t('user.tracking.dispute.viewStatus')}
                             </button>
                         </div>
                     )}

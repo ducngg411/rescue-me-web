@@ -107,7 +107,7 @@ export default function LoginPage() {
                 </div>
 
                 {/* ── Right: Auth card ── */}
-                <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-12 relative">
+                <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-12 relative overflow-x-hidden">
                     {/* Language Switcher top-right */}
                     <div className="absolute top-4 right-6">
                         <LanguageSwitcher />
@@ -271,14 +271,14 @@ export default function LoginPage() {
                         </div>
 
                         {/* Google login */}
-                        <div className="flex justify-center">
+                        <div className="w-full overflow-hidden">
                             <GoogleLogin
                                 onSuccess={handleGoogleSuccess}
                                 onError={handleGoogleError}
                                 text="signin_with"
                                 locale={locale}
-                                width="360"
                                 shape="rectangular"
+                                useOneTap={false}
                             />
                         </div>
 

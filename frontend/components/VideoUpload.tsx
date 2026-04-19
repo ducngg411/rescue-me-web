@@ -55,14 +55,14 @@ export default function VideoUpload({
 
         // Validate file type
         if (!file.type.startsWith('video/')) {
-            setError('Vui lòng chọn file video');
+            setError(t('components.fileUpload.errors.videoTypeOnly'));
             return;
         }
 
         // Validate file size (max 50MB for video)
         const maxSize = 50 * 1024 * 1024; // 50MB
         if (file.size > maxSize) {
-            setError('Video không được vượt quá 50MB');
+            setError(t('components.fileUpload.errors.videoMaxSize'));
             return;
         }
 
@@ -77,13 +77,13 @@ export default function VideoUpload({
     const handleUpload = async () => {
         if (!selectedFile) return;
         if (uploadedVideos.length >= maxVideos) {
-            setError(`Chỉ được upload tối đa ${maxVideos} video`);
+            setError(t('components.fileUpload.errors.maxVideos', { max: maxVideos }));
             return;
         }
 
         // Validate Cloudinary config
         if (!cloudinaryCloudName || !cloudinaryUploadPreset) {
-            setError('Chưa cấu hình Cloudinary. Vui lòng kiểm tra file .env.local');
+            setError(t('components.fileUpload.errors.cloudinaryMissing'));
             return;
         }
 
@@ -126,20 +126,20 @@ export default function VideoUpload({
                         trackVideoUpload(videoUrl, publicId, selectedFile);
                     }
                 } else {
-                    setError('Upload thất bại. Vui lòng thử lại.');
+                    setError(t('components.fileUpload.errors.uploadVideoFailed'));
                     setUploading(false);
                 }
             });
 
             xhr.addEventListener('error', () => {
-                setError('Có lỗi xảy ra khi upload video');
+                setError(t('components.fileUpload.errors.genericVideo'));
                 setUploading(false);
             });
 
             xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/upload`);
             xhr.send(formData);
-        } catch (err) {
-            setError('Có lỗi xảy ra khi upload video');
+        } catch {
+            setError(t('components.fileUpload.errors.genericVideo'));
             setUploading(false);
         }
     };
@@ -163,7 +163,7 @@ export default function VideoUpload({
             if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (error) {
             console.error('Failed to track upload:', error);
-            setError('Không thể lưu video. Vui lòng thử lại.');
+            setError(t('components.fileUpload.errors.trackVideoFailed'));
         } finally {
             setUploading(false);
         }
@@ -180,7 +180,7 @@ export default function VideoUpload({
             onRemove?.(videoUrl, uploadId);
         } catch (error: any) {
             console.error('Failed to delete video:', error);
-            const errorMessage = error.response?.data?.message || 'Không thể xóa video';
+            const errorMessage = error.response?.data?.message || t('components.fileUpload.errors.deleteVideoFailed');
             setError(errorMessage);
 
             // If the video was already deleted (404 or upload not found), still call onRemove to update UI
@@ -204,7 +204,7 @@ export default function VideoUpload({
 
     const handleButtonClick = () => {
         if (uploadedVideos.length >= maxVideos) {
-            setError(`Bạn đã upload tối đa ${maxVideos} video`);
+            setError(t('components.fileUpload.errors.maxVideosReached', { max: maxVideos }));
             return;
         }
         fileInputRef.current?.click();
@@ -254,12 +254,12 @@ export default function VideoUpload({
                                 {t('components.fileUpload.clickToSelectVideo')}
                             </p>
                             <p className="text-xs mt-0.5" style={{ color: C.gray }}>
-                                Hỗ trợ: MP4, MOV, AVI (tối đa 50MB)
+                                {t('components.fileUpload.supportedVideo')}
                             </p>
                         </div>
                         <span className="text-[11px] px-2.5 py-0.5 rounded-full font-medium"
                             style={{ background: C.orangeLight, color: C.orange }}>
-                            {uploadedVideos.length}/{maxVideos} video
+                            {t('components.fileUpload.videoCountBadge', { current: uploadedVideos.length, max: maxVideos })}
                         </span>
                     </div>
                 </div>
@@ -284,7 +284,7 @@ export default function VideoUpload({
                                 className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50"
                                 style={{ borderColor: C.border, color: C.gray }}
                             >
-                                Hủy
+                                {t('common.cancel')}
                             </button>
                             <button
                                 type="button"
@@ -294,9 +294,9 @@ export default function VideoUpload({
                                 style={{ background: uploading ? C.orangeDark : C.orange }}
                             >
                                 {uploading ? (
-                                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang tải...</>
+                                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('components.fileUpload.uploading')}</>
                                 ) : (
-                                    <><Upload className="w-3.5 h-3.5" /> Tải lên</>
+                                    <><Upload className="w-3.5 h-3.5" /> {t('components.fileUpload.upload')}</>
                                 )}
                             </button>
                         </div>
@@ -308,7 +308,7 @@ export default function VideoUpload({
             {uploading && (
                 <div className="rounded-xl p-3 border" style={{ borderColor: `${C.orange}40`, background: C.orangeLight }}>
                     <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-medium" style={{ color: C.navy }}>Đang tải lên...</span>
+                        <span className="text-xs font-medium" style={{ color: C.navy }}>{t('components.fileUpload.progressLabel')}</span>
                         <span className="text-xs font-bold" style={{ color: C.orange }}>{Math.round(progress)}%</span>
                     </div>
                     <div className="w-full rounded-full h-1.5" style={{ background: '#fed7aa' }}>
@@ -317,7 +317,7 @@ export default function VideoUpload({
                             style={{ width: `${progress}%`, background: C.orange }}
                         />
                     </div>
-                    <p className="text-[10px] mt-2 text-center" style={{ color: C.orangeDark }}>Vui lòng không đóng trang này...</p>
+                    <p className="text-[10px] mt-2 text-center" style={{ color: C.orangeDark }}>{t('components.fileUpload.keepPageOpen')}</p>
                 </div>
             )}
 
@@ -333,7 +333,7 @@ export default function VideoUpload({
             {uploadedVideos.length > 0 && (
                 <div>
                     <p className="text-xs font-semibold mb-2" style={{ color: C.gray }}>
-                        Video đã tải lên ({uploadedVideos.length}/{maxVideos})
+                        {t('components.fileUpload.uploadedVideosHeading', { current: uploadedVideos.length, max: maxVideos })}
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                         {uploadedVideos.map((video, index) => (
@@ -361,7 +361,7 @@ export default function VideoUpload({
                                     onClick={() => handleRemove(video.uploadId, video.url)}
                                     className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
                                     style={{ background: '#ef4444' }}
-                                    title="Xóa video"
+                                    title={t('components.fileUpload.removeVideoTitle')}
                                 >
                                     <X className="w-3.5 h-3.5 text-white" />
                                 </button>

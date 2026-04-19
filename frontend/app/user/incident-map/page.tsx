@@ -9,20 +9,11 @@ import RescueMeLogo from '@/components/RescueMeLogo';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import AvatarImage from '@/components/AvatarImage';
 import { useUserDisputeNavBadge } from '@/contexts/UserDisputeNavBadgeContext';
+import { IncidentMapDynamicFallback } from '@/components/IncidentMapDynamicFallback';
 
 const IncidentMap = dynamic(() => import('@/components/IncidentMap'), {
     ssr: false,
-    loading: () => (
-        <div className="flex-1 flex items-center justify-center" style={{ background: '#f4f6f9' }}>
-            <div className="text-center">
-                <div
-                    className="w-10 h-10 rounded-full border-[3px] animate-spin mx-auto mb-3"
-                    style={{ borderColor: '#f97316', borderTopColor: 'transparent' }}
-                />
-                <p className="text-sm" style={{ color: '#6b7280' }}>Đang tải bản đồ...</p>
-            </div>
-        </div>
-    ),
+    loading: () => <IncidentMapDynamicFallback />,
 });
 
 const C = {

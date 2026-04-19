@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import RouteMapSheet from './RouteMapSheet';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ type FilterType = 'ALL' | 'PLATFORM' | 'VIETMAP';
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 function ShopCard({ shop, onNavigate }: { shop: NearbyShop; onNavigate: (shop: NearbyShop) => void }) {
+    const { t } = useLanguage();
     const isPlatform = shop.source === 'PLATFORM';
 
     return (
@@ -95,13 +97,13 @@ function ShopCard({ shop, onNavigate }: { shop: NearbyShop; onNavigate: (shop: N
                                 className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
                                 style={{ background: C.greenLight, color: C.green }}
                             >
-                                ✓ Đã xác minh
+                                {t('user.dashboard.nearbyShops.verifiedBadge')}
                             </span>
                         )}
                     </div>
 
                     <p className="text-xs mt-0.5 line-clamp-2 leading-relaxed" style={{ color: C.gray }}>
-                        {shop.address || 'Địa chỉ không có sẵn'}
+                        {shop.address || t('user.dashboard.nearbyShops.addressUnavailable')}
                     </p>
 
                     {/* Rating */}
@@ -146,7 +148,7 @@ function ShopCard({ shop, onNavigate }: { shop: NearbyShop; onNavigate: (shop: N
                         <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                         </svg>
-                        Gọi điện
+                        {t('user.dashboard.nearbyShops.call')}
                     </a>
                 )}
                 <button
@@ -157,7 +159,7 @@ function ShopCard({ shop, onNavigate }: { shop: NearbyShop; onNavigate: (shop: N
                     <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                     </svg>
-                    Chỉ đường
+                    {t('user.dashboard.nearbyShops.directions')}
                 </button>
             </div>
         </div>
@@ -192,6 +194,7 @@ export default function NearbyShopsSheet({
     userLat: propLat,
     userLng: propLng,
 }: NearbyShopsSheetProps) {
+    const { t } = useLanguage();
     const [shops, setShops] = useState<NearbyShop[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -213,16 +216,19 @@ export default function NearbyShopsSheet({
         console.log(`🔍 Fetching nearby shops: lat=${lat}, lng=${lng}, radius=${r}km`);
         try {
             const res = await fetch(`${API_URL}/nearby-shops?lat=${lat}&lng=${lng}&radius=${r}`);
-            if (!res.ok) throw new Error('Không thể tải danh sách cửa hàng');
+            if (!res.ok) {
+                setError(t('user.dashboard.nearbyShops.loadFailed'));
+                return;
+            }
             const data = await res.json();
             setShops(data.shops || []);
             setHasLoaded(true);
-        } catch (e: any) {
-            setError(e.message || 'Có lỗi xảy ra');
+        } catch {
+            setError(t('user.dashboard.nearbyShops.genericError'));
         } finally {
             setIsLoading(false);
         }
-    }, [API_URL]);
+    }, [API_URL, t]);
 
     // Get device GPS when sheet opens — always fresh, don't use stale props
     const getGPSAndFetch = useCallback((r: number) => {
@@ -232,7 +238,7 @@ export default function NearbyShopsSheet({
                 setGpsCoords({ lat: propLat, lng: propLng });
                 fetchShops(propLat, propLng, r);
             } else {
-                setGpsError('Thiết bị không hỗ trợ GPS');
+                setGpsError(t('user.dashboard.nearbyShops.noGpsSupport'));
             }
             return;
         }
@@ -258,12 +264,12 @@ export default function NearbyShopsSheet({
                     setGpsCoords({ lat: propLat, lng: propLng });
                     fetchShops(propLat, propLng, r);
                 } else {
-                    setGpsError('Không lấy được vị trí GPS. Vui lòng bật GPS và thử lại.');
+                    setGpsError(t('user.dashboard.nearbyShops.gpsFailed'));
                 }
             },
             { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
         );
-    }, [propLat, propLng, fetchShops]);
+    }, [propLat, propLng, fetchShops, t]);
 
     // When sheet opens → get GPS fresh
     useEffect(() => {
@@ -296,12 +302,12 @@ export default function NearbyShopsSheet({
 
     const isAnyLoading = isGettingGPS || isLoading;
     const subtitleText = isGettingGPS
-        ? '📍 Đang lấy vị trí GPS...'
+        ? t('user.dashboard.nearbyShops.subtitleGettingGps')
         : isLoading
-        ? 'Đang tìm kiếm cửa hàng...'
+        ? t('user.dashboard.nearbyShops.subtitleSearching')
         : hasLoaded
-        ? `${shops.length} cửa hàng trong ${radius} km`
-        : 'Đang khởi động...';
+        ? t('user.dashboard.nearbyShops.subtitleResults', { count: shops.length, radius })
+        : t('user.dashboard.nearbyShops.subtitleStarting');
 
     if (!isOpen) return null;
 
@@ -347,7 +353,7 @@ export default function NearbyShopsSheet({
                         </div>
                         <div>
                             <h2 className="font-bold text-base leading-tight" style={{ color: C.navy }}>
-                                Cửa hàng sửa xe gần đây
+                                {t('user.dashboard.nearbyShops.cardTitle')}
                             </h2>
                             <p className="text-xs" style={{ color: C.gray }}>
                                 {subtitleText}
@@ -369,7 +375,7 @@ export default function NearbyShopsSheet({
                 <div className="px-5 py-3 space-y-3 flex-shrink-0" style={{ borderBottom: `1px solid ${C.border}` }}>
                     {/* Radius selector */}
                     <div>
-                        <p className="text-xs font-medium mb-2" style={{ color: C.gray }}>Bán kính tìm kiếm</p>
+                        <p className="text-xs font-medium mb-2" style={{ color: C.gray }}>{t('user.dashboard.nearbyShops.searchRadius')}</p>
                         <div className="flex gap-2">
                             {RADIUS_OPTIONS.map((opt) => (
                                 <button
@@ -390,9 +396,9 @@ export default function NearbyShopsSheet({
                     {/* Filter pills */}
                     <div className="flex gap-2">
                         {([
-                            { key: 'ALL', label: `Tất cả (${shops.length})` },
-                            { key: 'PLATFORM', label: `✓ Đã đăng ký (${platformCount})` },
-                            { key: 'VIETMAP', label: `Bản đồ (${vietmapCount})` },
+                            { key: 'ALL' as const, label: t('user.dashboard.nearbyShops.filterAll', { count: shops.length }) },
+                            { key: 'PLATFORM' as const, label: t('user.dashboard.nearbyShops.filterRegistered', { count: platformCount }) },
+                            { key: 'VIETMAP' as const, label: t('user.dashboard.nearbyShops.filterMap', { count: vietmapCount }) },
                         ] as Array<{ key: FilterType; label: string }>).map((f) => (
                             <button
                                 key={f.key}
@@ -426,7 +432,7 @@ export default function NearbyShopsSheet({
                                 className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
                                 style={{ background: C.orange }}
                             >
-                                Thử lại
+                                {t('user.dashboard.nearbyShops.retry')}
                             </button>
                         </div>
                     )}
@@ -453,7 +459,7 @@ export default function NearbyShopsSheet({
                                 className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
                                 style={{ background: C.orange }}
                             >
-                                Thử lại
+                                {t('user.dashboard.nearbyShops.retry')}
                             </button>
                         </div>
                     ) : filteredShops.length === 0 ? (
@@ -466,16 +472,16 @@ export default function NearbyShopsSheet({
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 16.318A4.486 4.486 0 0012.016 15a4.486 4.486 0 00-3.198 1.318M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
                                 </svg>
                             </div>
-                            <p className="font-semibold text-sm" style={{ color: C.navy }}>Không tìm thấy cửa hàng nào</p>
+                            <p className="font-semibold text-sm" style={{ color: C.navy }}>{t('user.dashboard.nearbyShops.emptyTitle')}</p>
                             <p className="text-xs text-center px-8" style={{ color: C.gray }}>
-                                Thử tăng bán kính tìm kiếm để có thêm kết quả
+                                {t('user.dashboard.nearbyShops.emptyHint')}
                             </p>
                             <button
                                 onClick={() => setRadius(r => Math.min(r * 2, 10))}
                                 className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
                                 style={{ background: C.orange }}
                             >
-                                Mở rộng bán kính
+                                {t('user.dashboard.nearbyShops.expandRadius')}
                             </button>
                         </div>
                     ) : (
@@ -490,7 +496,7 @@ export default function NearbyShopsSheet({
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                     <p className="text-xs font-medium" style={{ color: C.green }}>
-                                        {platformCount} cửa hàng đã được xác minh trên RescueMe
+                                        {t('user.dashboard.nearbyShops.verifiedCountBanner', { count: platformCount })}
                                     </p>
                                 </div>
                             )}
@@ -507,7 +513,7 @@ export default function NearbyShopsSheet({
                             <div className="flex items-center gap-2 py-2 px-2">
                                 <div className="flex-1 h-px" style={{ background: C.border }} />
                                 <p className="text-[10px] text-center px-2 whitespace-nowrap" style={{ color: C.gray }}>
-                                    Dữ liệu từ RescueMe & VietMap
+                                    {t('user.dashboard.nearbyShops.dataSourceFooter')}
                                 </p>
                                 <div className="flex-1 h-px" style={{ background: C.border }} />
                             </div>

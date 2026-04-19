@@ -192,9 +192,9 @@ export default function ProviderDisputesPage() {
                                 <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </div>
                             <div>
-                                <p className="text-sm font-semibold" style={{ color: C.navy }}>Hướng dẫn xử lý khiếu nại</p>
+                                <p className="text-sm font-semibold" style={{ color: C.navy }}>{t('provider.disputes.guideTitle')}</p>
                                 <p className="text-xs mt-0.5" style={{ color: C.gray }}>
-                                    Admin sẽ xem xét các khiếu nại và có thể yêu cầu bạn cung cấp thêm bằng chứng. Phản hồi kịp thời giúp giải quyết nhanh hơn.
+                                    {t('provider.disputes.guideBody')}
                                 </p>
                             </div>
                         </div>

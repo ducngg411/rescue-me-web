@@ -6,7 +6,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProviderStatus } from '@/lib/hooks/useProviderStatus';
 import RescueMeLogo from '@/components/RescueMeLogo';
-import { useDisputeNavBadge } from '@/lib/hooks/useDisputeNavBadge';
+import { useProviderDisputeNavBadge } from '@/contexts/ProviderDisputeNavBadgeContext';
 
 const C = {
     orange: '#f97316',
@@ -35,11 +35,7 @@ export default function ProviderLayout({ children, activeTab }: ProviderLayoutPr
         if (user?.isOnline !== undefined) setIsOnline(user.isOnline);
     }, [user?.isOnline]);
 
-    const { badge: disputeBadge, resetOnNavigate: resetDisputeNavBadge } = useDisputeNavBadge({
-            fetchPath: '/disputes/provider',
-            listPath: '/provider/disputes',
-            storagePrefix: 'provider.disputes',
-        });
+    const { disputeNavBadge: disputeBadge, resetDisputeNavBadge } = useProviderDisputeNavBadge();
 
     const handleToggle = async () => {
         if (statusLoading) return;

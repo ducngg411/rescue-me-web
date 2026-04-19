@@ -335,7 +335,7 @@ export default function ProviderTrackingMap({
         document.head.appendChild(s);
     }, []);
 
-    const displayName = providerName || 'Cứu hộ viên';
+    const displayName = providerName || t('user.tracking.trackingMap.providerFallback');
     const initials = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
 
     return (
@@ -357,7 +357,7 @@ export default function ProviderTrackingMap({
                     onClick={onClose}
                     className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 active:scale-95 transition-transform"
                     style={{ background: C.bg }}
-                    aria-label="Đóng bản đồ"
+                    aria-label={t('user.tracking.trackingMap.closeAriaLabel')}
                 >
                     <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke={C.navy} strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -366,7 +366,7 @@ export default function ProviderTrackingMap({
 
                 <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm leading-tight" style={{ color: C.navy }}>
-                        Theo dõi Cứu hộ viên
+                        {t('user.tracking.trackingMap.title')}
                     </p>
                     {customerAddress && (
                         <p className="text-xs truncate mt-0.5" style={{ color: C.gray }}>
@@ -381,13 +381,13 @@ export default function ProviderTrackingMap({
                         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
                             style={{ background: `${C.orange}15`, border: `1px solid ${C.orange}30` }}>
                             <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: C.orange }} />
-                            <span className="text-[11px] font-semibold" style={{ color: C.orange }}>Trực tiếp</span>
+                            <span className="text-[11px] font-semibold" style={{ color: C.orange }}>{t('user.tracking.trackingMap.liveBadge')}</span>
                         </div>
                     )}
                     {liveEta !== null && (
                         <div className="px-2.5 py-1 rounded-full"
                             style={{ background: C.bg, border: `1px solid ${C.border}` }}>
-                            <span className="text-[11px] font-bold" style={{ color: C.navy }}>~{liveEta} phút</span>
+                            <span className="text-[11px] font-bold" style={{ color: C.navy }}>{t('user.tracking.trackingMap.etaMin', { minutes: liveEta! })}</span>
                         </div>
                     )}
                     {isLoadingRoute && (
@@ -408,7 +408,7 @@ export default function ProviderTrackingMap({
                     <div className="absolute top-3 left-3 right-3 flex items-center gap-2 px-3 py-2 rounded-xl"
                         style={{ background: 'rgba(255,255,255,0.95)', border: `1px solid ${C.border}`, boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}>
                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#94a3b8' }} />
-                        <span className="text-xs" style={{ color: C.gray }}>Chờ vị trí GPS từ cứu hộ viên...</span>
+                        <span className="text-xs" style={{ color: C.gray }}>{t('user.tracking.trackingMap.waitingGps')}</span>
                     </div>
                 )}
 
@@ -417,7 +417,7 @@ export default function ProviderTrackingMap({
                     <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl"
                         style={{ background: 'rgba(255,255,255,0.95)', boxShadow: '0 2px 10px rgba(0,0,0,0.1)', border: `1px solid ${C.border}` }}>
                         <p className="text-sm font-bold" style={{ color: C.orange }}>{fmtDist(routeInfo.distM)}</p>
-                        <p className="text-[10px] text-center mt-0.5" style={{ color: C.gray }}>còn lại</p>
+                        <p className="text-[10px] text-center mt-0.5" style={{ color: C.gray }}>{t('user.tracking.trackingMap.distanceRemaining')}</p>
                     </div>
                 )}
 
@@ -427,12 +427,12 @@ export default function ProviderTrackingMap({
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full flex-shrink-0"
                             style={{ background: C.orange, border: '2px solid white', boxShadow: `0 0 4px ${C.orange}80` }} />
-                        <span className="text-[10px] font-medium" style={{ color: C.navy }}>Cứu hộ viên</span>
+                        <span className="text-[10px] font-medium" style={{ color: C.navy }}>{t('user.tracking.trackingMap.legendProvider')}</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full flex-shrink-0"
                             style={{ background: C.blue, border: '2px solid white', boxShadow: `0 0 4px ${C.blue}80` }} />
-                        <span className="text-[10px] font-medium" style={{ color: C.navy }}>Vị trí của bạn</span>
+                        <span className="text-[10px] font-medium" style={{ color: C.navy }}>{t('user.tracking.trackingMap.legendYou')}</span>
                     </div>
                 </div>
             </div>
@@ -465,9 +465,9 @@ export default function ProviderTrackingMap({
                         <p className="font-bold text-sm" style={{ color: C.navy }}>{displayName}</p>
                         <div className="flex items-center gap-1.5 mt-0.5">
                             <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: C.orange }} />
-                            <span className="text-xs" style={{ color: C.orange }}>Đang trên đường đến chỗ bạn</span>
+                            <span className="text-xs" style={{ color: C.orange }}>{t('user.tracking.trackingMap.enRoute')}</span>
                             {liveEta !== null && (
-                                <span className="text-xs" style={{ color: C.gray }}>· ~{liveEta} phút nữa</span>
+                                <span className="text-xs" style={{ color: C.gray }}>{t('user.tracking.trackingMap.etaAway', { minutes: liveEta })}</span>
                             )}
                         </div>
                     </div>
@@ -508,7 +508,7 @@ export default function ProviderTrackingMap({
                                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                 </svg>
-                                <span className="text-sm font-bold">Gọi</span>
+                                <span className="text-sm font-bold">{t('user.tracking.trackingMap.callBtn')}</span>
                             </a>
                         )}
                     </div>

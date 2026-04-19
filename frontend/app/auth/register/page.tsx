@@ -120,7 +120,7 @@ export default function RegisterPage() {
                 </div>
 
                 {/* ── Right: Register card ── */}
-                <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-10 relative">
+                <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-10 relative overflow-x-hidden">
                     {/* Language Switcher top-right */}
                     <div className="absolute top-4 right-6">
                         <LanguageSwitcher />
@@ -282,14 +282,14 @@ export default function RegisterPage() {
                         </div>
 
                         {/* Google */}
-                        <div className="flex justify-center">
+                        <div className="w-full overflow-hidden">
                             <GoogleLogin
                                 onSuccess={handleGoogleSuccess}
                                 onError={handleGoogleError}
                                 text="signup_with"
                                 locale={locale}
-                                width="360"
                                 shape="rectangular"
+                                useOneTap={false}
                             />
                         </div>
                     </div>
