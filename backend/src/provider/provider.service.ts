@@ -377,11 +377,11 @@ export class ProviderService {
         }
 
         if (!user.isOnline) {
-            return []; // Provider offline, không trả request
+            return { requests: [], activeJobId: null };
         }
 
         if (user.verificationStatus !== VerificationStatus.APPROVED) {
-            return []; // Chưa verified, không trả request
+            return { requests: [], activeJobId: null };
         }
 
         // Block provider if wallet is below minimum deposit requirement
@@ -403,7 +403,7 @@ export class ProviderService {
             console.warn(
                 `[Provider ${userId}] Blocked from receiving jobs — insufficient deposit (${availableBalance} VND, required >= ${ProviderService.MIN_PROVIDER_DEPOSIT_VND} VND)`,
             );
-            return [];
+            return { requests: [], activeJobId: null };
         }
 
         // Guard: Provider đang có job active → ẩn inbox (tối đa 1 job tại 1 thời điểm)
@@ -418,7 +418,7 @@ export class ProviderService {
 
         if (activeJob) {
             console.log(`[Provider ${userId}] Has active job ${activeJob.id} (${activeJob.status}) — hiding pending request inbox`);
-            return [];
+            return { requests: [], activeJobId: activeJob.id };
         }
 
         // Get provider current location (GPS) - fallback to default address
@@ -431,7 +431,7 @@ export class ProviderService {
 
         if (!providerLocation || !providerLocation.lat || !providerLocation.lng) {
             console.warn(`[Provider ${userId}] No location set (neither current nor default), cannot match requests`);
-            return [];
+            return { requests: [], activeJobId: null };
         }
 
         const providerLat = providerLocation.lat;
@@ -498,7 +498,7 @@ export class ProviderService {
         console.log(` [Provider ${userId}] Found ${candidateRequests.length}/${allMatchingRequests.length} candidates within ${radiusKm * 1.5}km straight-line`);
 
         if (candidateRequests.length === 0) {
-            return [];
+            return { requests: [], activeJobId: null };
         }
 
         const candidateIds = candidateRequests.map((r) => r.id);
@@ -615,7 +615,7 @@ export class ProviderService {
             console.log(`   → Best match: ${matchedRequests[0].distance}km, ETA: ${matchedRequests[0].eta} minutes`);
         }
 
-        return matchedRequests;
+        return { requests: matchedRequests, activeJobId: null };
     }
 
     private calculateEstimatedEarnings(distanceKm: number, baseFee: number, pricePerKm: number): number {

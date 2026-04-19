@@ -53,6 +53,7 @@ export function usePendingRequests({
     pollInterval = MIN_POLL_INTERVAL,
 }: UsePendingRequestsOptions = {}) {
     const [requests, setRequests] = useState<PendingRequest[]>([]);
+    const [activeJobId, setActiveJobId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -76,14 +77,17 @@ export function usePendingRequests({
         isFetchingRef.current = true;
 
         try {
-            const response = await api.get<PendingRequest[]>('/me/provider/pending-requests', {
-                signal: abortControllerRef.current.signal,
-            });
-            setRequests(response.data);
+            const response = await api.get<{ requests: PendingRequest[]; activeJobId: string | null }>(
+                '/me/provider/pending-requests',
+                { signal: abortControllerRef.current.signal },
+            );
+            const { requests: incoming, activeJobId: jobId } = response.data;
+            setRequests(incoming);
+            setActiveJobId(jobId);
             setError(null);
 
             // Adaptive backoff: reset to fast polling when requests are found
-            if (response.data.length > 0) {
+            if (incoming.length > 0) {
                 consecutiveEmptyRef.current = 0;
                 currentIntervalRef.current = pollInterval;
             } else {
@@ -94,7 +98,7 @@ export function usePendingRequests({
                 );
             }
 
-            return response.data;
+            return incoming;
         } catch (err: any) {
             if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
                 // Request was aborted — not an error, just ignore
@@ -153,6 +157,7 @@ export function usePendingRequests({
         } else {
             stopPolling();
             setRequests([]);
+            setActiveJobId(null);
         }
 
         return () => {
@@ -241,6 +246,7 @@ export function usePendingRequests({
 
     return {
         requests,
+        activeJobId,
         isLoading,
         error,
         fetchRequests,

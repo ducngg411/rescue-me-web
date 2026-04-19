@@ -250,7 +250,7 @@ export default function ProviderActivePage() {
     const { user, loading: authLoading, logout } = useAuth();
     const { t } = useLanguage();
     const { isOnline, isLoading: statusLoading, toggleOnlineStatus, setIsOnline } = useProviderStatus();
-    const { requests, fetchRequests } = usePendingRequests({ enabled: isOnline, pollInterval: 2000 });
+    const { requests, activeJobId, fetchRequests } = usePendingRequests({ enabled: isOnline, pollInterval: 2000 });
     const { location } = useProviderLocation({ enabled: isOnline, updateInterval: 30000 });
 
     // FCM push notifications — register token when online, refresh request list on foreground message
@@ -632,6 +632,24 @@ export default function ProviderActivePage() {
                     {/* Scrollable left/center */}
                     <div className="flex-1 overflow-y-auto">
                         <div className="p-4 md:p-6 space-y-4">
+
+                            {/* Active job banner — shown when provider has an in-progress job */}
+                            {activeJobId && isOnline && (
+                                <div
+                                    className="flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer"
+                                    style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
+                                    onClick={() => router.push(`/provider/requests/${activeJobId}`)}
+                                >
+                                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-orange-500 animate-pulse" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold" style={{ color: C.navy }}>Bạn đang có công việc chưa hoàn thành</p>
+                                        <p className="text-xs mt-0.5" style={{ color: C.gray }}>Nhấn để quay lại công việc đang thực hiện</p>
+                                    </div>
+                                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: C.orange, flexShrink: 0 }}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </div>
+                            )}
 
                             {/* Greeting */}
                             <div>
