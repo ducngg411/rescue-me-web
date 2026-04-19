@@ -144,6 +144,11 @@ export function usePendingRequests({
 
     useEffect(() => {
         if (enabled) {
+            // Reset backoff counters every time provider goes online so the first
+            // poll after toggling online is always at the fastest interval (2s),
+            // not a backed-off interval from a previous idle session.
+            consecutiveEmptyRef.current = 0;
+            currentIntervalRef.current = pollInterval;
             startPolling();
         } else {
             stopPolling();

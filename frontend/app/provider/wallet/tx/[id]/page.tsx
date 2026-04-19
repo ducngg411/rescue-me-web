@@ -262,7 +262,7 @@ export default function TxDetailPage() {
                             </div>
                             <div className="flex items-center justify-between">
                                 {(() => {
-                                    const rate = typeof job.payment.commissionRate === 'number' ? job.payment.commissionRate : 0.2;
+                                    const rate = typeof job.payment.commissionRate === 'number' ? job.payment.commissionRate : 0.1;
                                     const fee = Math.round(job.payment.totalAmount * rate);
                                     return (
                                         <>
@@ -273,9 +273,9 @@ export default function TxDetailPage() {
                                 })()}
                             </div>
                             <div className="flex items-center justify-between pt-1" style={{ borderTop: `1px dashed ${C.border}` }}>
-                                <span className="text-xs font-semibold" style={{ color: C.gray }}>{t('provider.txDetail.payment.netIncome').replace('{rate}', String(Math.round((typeof job.payment.commissionRate === 'number' ? job.payment.commissionRate : 0.2) * 100)))}</span>
+                                <span className="text-xs font-semibold" style={{ color: C.gray }}>{t('provider.txDetail.payment.netIncome').replace('{rate}', String(Math.round((typeof job.payment.commissionRate === 'number' ? job.payment.commissionRate : 0.1) * 100)))}</span>
                                 {(() => {
-                                    const rate = typeof job.payment.commissionRate === 'number' ? job.payment.commissionRate : 0.2;
+                                    const rate = typeof job.payment.commissionRate === 'number' ? job.payment.commissionRate : 0.1;
                                     const net = Math.round(job.payment.totalAmount * (1 - rate));
                                     return (
                                         <span className="text-sm font-bold" style={{ color: C.green }}>+{fmt(net)}</span>

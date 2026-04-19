@@ -536,6 +536,7 @@ export class WalletService {
                         createdAt: request.payment.createdAt,
                         userConfirmedAt: (request.payment as any).userConfirmedAt,
                         providerConfirmedAt: (request.payment as any).providerConfirmedAt,
+                        commissionRate: await this.getEffectiveCommissionRate(),
                     } : null,
                     review: request.review ? {
                         rating: request.review.rating,
@@ -1315,6 +1316,12 @@ export class WalletService {
         const netAmount = Math.round(transferAmount * (1 - commissionRate));
         const holdReleaseAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // +24h
 
+        const jobRequest = await this.prisma.rescueRequest.findUnique({
+            where: { id: jobTx.requestId },
+            select: { orderCode: true },
+        });
+        const displayCode = jobRequest?.orderCode ?? jobTx.requestId;
+
         await (this.prisma as any).$transaction(async (tx: any) => {
             await tx.jobPaymentTransaction.update({
                 where: { id: jobTx.id },
@@ -1330,9 +1337,14 @@ export class WalletService {
                     status: WalletTransactionStatus.PENDING,
                     referenceType: WalletReferenceType.JOB_PAYMENT as any,
                     referenceId: jobTx.requestId,
-                    description: `Thu nhập job QR • chờ giải ngân 24h • HH ${commissionRate * 100}%`,
+                    description: `Thu nhập QR - Đơn ${displayCode} • chờ giải ngân 24h • HH ${commissionRate * 100}%`,
                     holdReleaseAt,
                 } as any,
+            });
+            // Persist commission rate on the payment record for historical accuracy
+            await tx.payment.update({
+                where: { id: payment.id },
+                data: { commissionRate },
             });
             await tx.providerWallet.update({
                 where: { id: wallet.id },

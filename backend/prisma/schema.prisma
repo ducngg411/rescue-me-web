@@ -238,6 +238,7 @@ model Payment {
   note                String?
   photoUrls           String[]      @default([])
   paymentMethod       PaymentMethod @default(CASH)
+  commissionRate      Float?
   userConfirmedAt     DateTime?
   providerConfirmedAt DateTime?
   disputeReason       String?

@@ -406,6 +406,21 @@ export class ProviderService {
             return [];
         }
 
+        // Guard: Provider đang có job active → ẩn inbox (tối đa 1 job tại 1 thời điểm)
+        const PROVIDER_BUSY_STATUSES = ['ASSIGNED', 'IN_PROGRESS', 'ARRIVED', 'WORKING', 'PAYMENT_PENDING'];
+        const activeJob = await this.prisma.rescueRequest.findFirst({
+            where: {
+                assignedProviderId: userId,
+                status: { in: PROVIDER_BUSY_STATUSES as any },
+            },
+            select: { id: true, status: true },
+        });
+
+        if (activeJob) {
+            console.log(`[Provider ${userId}] Has active job ${activeJob.id} (${activeJob.status}) — hiding pending request inbox`);
+            return [];
+        }
+
         // Get provider current location (GPS) - fallback to default address
         let providerLocation = user.currentLocation as any;
 

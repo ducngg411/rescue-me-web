@@ -161,8 +161,21 @@ export class CommissionService {
             `rate=${rate * 100}% commission=${commissionAmount} VND`,
         );
 
+        // Resolve human-readable order code for transaction description
+        const jobRef = await this.prisma.rescueRequest.findUnique({
+            where: { id: jobId },
+            select: { orderCode: true },
+        });
+        const displayCode = jobRef?.orderCode ?? jobId;
+
         // 4. Ensure provider wallet exists
         const wallet = await this.walletService.ensureWallet(payment.providerId);
+
+        // Persist the rate used so future reads are historically accurate
+        await this.prisma.payment.update({
+            where: { id: payment.id },
+            data: { commissionRate: rate },
+        });
 
         // 5. Always deduct commission – wallet is allowed to go negative.
         //    Use debitCommission() which skips the balance guard.
@@ -171,7 +184,7 @@ export class CommissionService {
             commissionAmount,
             jobId,
             {
-                description: `Phí hoa hồng nền tảng ${rate * 100}% - Job #${jobId}`,
+                description: `Phí hoa hồng nền tảng ${rate * 100}% - Đơn ${displayCode}`,
             },
         );
 
@@ -262,6 +275,19 @@ export class CommissionService {
         // 4. Ensure provider wallet exists
         const wallet = await this.walletService.ensureWallet(payment.providerId);
 
+        // Persist the rate used so future reads are historically accurate
+        await this.prisma.payment.update({
+            where: { id: payment.id },
+            data: { commissionRate: rate },
+        });
+
+        // Resolve human-readable order code for transaction description
+        const jobRef = await this.prisma.rescueRequest.findUnique({
+            where: { id: jobId },
+            select: { orderCode: true },
+        });
+        const displayCode = jobRef?.orderCode ?? jobId;
+
         // 5. Create a PENDING CREDIT — money sits in pendingBalance for 24h
         // holdReleaseAt ensures ONLY WalletService.autoReleaseHolding releases this,
         // preventing double-release by EscrowScheduler (which queries by createdAt).
@@ -273,7 +299,7 @@ export class CommissionService {
             jobId,
             {
                 status: WalletTransactionStatus.PENDING,
-                description: `Thu nhập job QR #${jobId} (chờ giải ngân) — hoa hồng ${rate * 100}% đã khấu trừ`,
+                description: `Thu nhập QR - Đơn ${displayCode} (chờ giải ngân) — hoa hồng ${rate * 100}% đã khấu trừ`,
                 holdReleaseAt,
             },
         );

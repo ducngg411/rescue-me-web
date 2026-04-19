@@ -210,6 +210,23 @@ export class RescueRequestService {
             throw new NotFoundException('User not found');
         }
 
+        // Guard: Customer chỉ được tạo 1 request tại 1 thời điểm
+        const ACTIVE_REQUEST_STATUSES = ['MATCHING', 'ASSIGNED', 'IN_PROGRESS', 'ARRIVED', 'WORKING', 'PAYMENT_PENDING'];
+        const existingActiveRequest = await this.prisma.rescueRequest.findFirst({
+            where: {
+                userId,
+                status: { in: ACTIVE_REQUEST_STATUSES as any },
+            },
+            select: { id: true, status: true },
+        });
+
+        if (existingActiveRequest) {
+            console.log(`🚫 [RescueRequest] Customer ${userId} already has active request ${existingActiveRequest.id} (${existingActiveRequest.status})`);
+            throw new BadRequestException(
+                `Bạn đang có 1 yêu cầu cứu hộ chưa hoàn thành (${existingActiveRequest.status}). Vui lòng hủy hoặc chờ hoàn thành trước khi tạo yêu cầu mới.`,
+            );
+        }
+
         // Prepare media items
         const mediaItems: Array<{
             mediaType: string;
@@ -944,6 +961,23 @@ export class RescueRequestService {
             throw new ForbiddenException('Invalid provider');
         }
 
+        // Guard: Provider không được gửi quote khi đang có job active
+        const PROVIDER_BUSY_STATUSES = ['ASSIGNED', 'IN_PROGRESS', 'ARRIVED', 'WORKING', 'PAYMENT_PENDING'];
+        const activeJob = await this.prisma.rescueRequest.findFirst({
+            where: {
+                assignedProviderId: providerId,
+                status: { in: PROVIDER_BUSY_STATUSES as any },
+            },
+            select: { id: true, status: true },
+        });
+
+        if (activeJob) {
+            console.log(`🚫 [Quote] Provider ${providerId} has active job ${activeJob.id} (${activeJob.status}), blocking new quote`);
+            throw new BadRequestException(
+                `Bạn đang có 1 công việc chưa hoàn thành (${activeJob.status}). Vui lòng hoàn thành công việc hiện tại trước khi gửi báo giá mới.`,
+            );
+        }
+
         // Check if provider already sent a quote for this request
         const existingQuote = await this.prisma.quote.findFirst({
             where: {
@@ -1168,9 +1202,22 @@ export class RescueRequestService {
                         status: 'CANCELLED',
                     },
                 });
+
+                // Auto-cancel all OTHER PENDING quotes this provider sent to OTHER requests
+                // Provider now has a job → their quotes elsewhere are no longer actionable
+                await tx.quote.updateMany({
+                    where: {
+                        providerId: quote.providerId,
+                        rescueRequestId: { not: rescueRequestId },
+                        status: 'PENDING',
+                    },
+                    data: {
+                        status: 'CANCELLED',
+                    },
+                });
             });
 
-            console.log(' [Quote] Quote accepted, request ASSIGNED to provider');
+            console.log(`✅ [Quote] Quote accepted — request ASSIGNED to provider ${quote.providerId}. Auto-cancelled provider's other pending quotes.`);
         } else {
             // Reject quote
             await this.prisma.quote.update({

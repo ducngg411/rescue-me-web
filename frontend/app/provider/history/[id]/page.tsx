@@ -235,7 +235,7 @@ export default function HistoryJobDetailPage() {
     const revenueAmount = isWinner
         ? (payAmt != null && payAmt > 0 ? payAmt : (quote?.price ?? 0))
         : (quote?.price ?? 0);
-    const commissionRate = typeof payment?.commissionRate === 'number' ? payment.commissionRate : 0.2;
+    const commissionRate = typeof payment?.commissionRate === 'number' ? payment.commissionRate : 0.1;
     const profit = Math.round(revenueAmount * (1 - commissionRate));
     const quoteProfit = quote ? Math.round(quote.price * (1 - commissionRate)) : 0;
 
