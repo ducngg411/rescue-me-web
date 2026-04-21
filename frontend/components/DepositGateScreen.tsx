@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const C = {
     orange: '#f97316', orangeDark: '#ea6c0a', orangeLight: '#fff7ed',
@@ -21,7 +22,16 @@ interface DepositGateScreenProps {
 
 export default function DepositGateScreen({ currentBalance, isReturning = false, commissionRatePct = 0 }: DepositGateScreenProps) {
     const router = useRouter();
+    const { t } = useLanguage();
     const needed = Math.max(0, MIN_DEPOSIT - currentBalance);
+
+    const policyBullets = [
+        commissionRatePct > 0
+            ? t('provider.depositGate.policyBulletCommission').replace('{{pct}}', String(commissionRatePct))
+            : t('provider.depositGate.policyBulletCommissionGeneric'),
+        t('provider.depositGate.policyBulletMinBalance'),
+        t('provider.depositGate.policyBulletLowBalance'),
+    ];
 
     return (
         <div
@@ -62,15 +72,15 @@ export default function DepositGateScreen({ currentBalance, isReturning = false,
                             : { background: 'rgba(74,222,128,0.15)', color: '#4ade80' }
                         }
                     >
-                        {isReturning ? 'Số dư cần bổ sung' : 'Hồ sơ đã được duyệt ✓'}
+                        {isReturning ? t('provider.depositGate.badgeTopupNeeded') : t('provider.depositGate.badgeApproved')}
                     </span>
                     <h1 className="text-xl font-bold text-white mb-1">
-                        {isReturning ? 'Số dư cần được bổ sung' : 'Chỉ còn 1 bước nữa!'}
+                        {isReturning ? t('provider.depositGate.titleReturning') : t('provider.depositGate.titleFirstVisit')}
                     </h1>
                     <p className="text-sm" style={{ color: 'rgba(255,255,255,0.6)' }}>
                         {isReturning
-                            ? `Duy trì tối thiểu ${fmtVnd(MIN_DEPOSIT)} để tiếp tục nhận đơn`
-                            : 'Tài khoản của bạn đã được xác minh thành công'}
+                            ? t('provider.depositGate.subtitleReturning').replace('{{amount}}', fmtVnd(MIN_DEPOSIT))
+                            : t('provider.depositGate.subtitleVerified')}
                     </p>
                 </div>
 
@@ -81,17 +91,11 @@ export default function DepositGateScreen({ currentBalance, isReturning = false,
                         style={{ background: C.orangeLight, border: `1.5px solid #fed7aa` }}
                     >
                         <p className="text-xs font-bold mb-2" style={{ color: '#9a3412' }}>
-                            Chính sách ký quỹ hoạt động
+                            {t('provider.depositGate.policyTitle')}
                         </p>
                         <div className="space-y-1.5">
-                            {[
-                                commissionRatePct > 0
-                                    ? `Mỗi đơn hoàn thành, hệ thống trừ ${commissionRatePct}% hoa hồng từ ví`
-                                    : `Mỗi đơn hoàn thành, hệ thống trừ hoa hồng nền tảng từ ví`,
-                                'Số dư tối thiểu đảm bảo bạn có thể nhận đơn liên tục',
-                                'Khi số dư xuống thấp, bạn sẽ được nhắc nạp thêm',
-                            ].map(s => (
-                                <div key={s} className="flex items-start gap-2">
+                            {policyBullets.map((s, i) => (
+                                <div key={i} className="flex items-start gap-2">
                                     <div
                                         className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5"
                                         style={{ background: C.orange }}
@@ -107,15 +111,15 @@ export default function DepositGateScreen({ currentBalance, isReturning = false,
                         style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0' }}
                     >
                         <div>
-                            <p className="text-xs" style={{ color: C.gray }}>Số dư tối thiểu yêu cầu</p>
+                            <p className="text-xs" style={{ color: C.gray }}>{t('provider.depositGate.minBalanceLabel')}</p>
                             <p className="text-xl font-bold" style={{ color: C.navy }}>{fmtVnd(MIN_DEPOSIT)}</p>
                         </div>
                         {currentBalance > 0 && (
                             <div className="text-right">
-                                <p className="text-xs" style={{ color: C.gray }}>Số dư hiện tại</p>
+                                <p className="text-xs" style={{ color: C.gray }}>{t('provider.depositGate.currentBalanceLabel')}</p>
                                 <p className="text-sm font-semibold" style={{ color: C.orange }}>{fmtVnd(currentBalance)}</p>
                                 <p className="text-[10px] mt-0.5" style={{ color: '#ef4444' }}>
-                                    Cần thêm {fmtVnd(needed)}
+                                    {t('provider.depositGate.needMore').replace('{{amount}}', fmtVnd(needed))}
                                 </p>
                             </div>
                         )}
@@ -129,7 +133,7 @@ export default function DepositGateScreen({ currentBalance, isReturning = false,
                             boxShadow: `0 6px 20px ${C.orange}50`,
                         }}
                     >
-                        Nạp tiền vào ví ngay
+                        {t('provider.depositGate.topUpBtn')}
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                             <path d="M5 12h14M12 5l7 7-7 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
@@ -142,7 +146,7 @@ export default function DepositGateScreen({ currentBalance, isReturning = false,
                         className="block text-center text-xs py-1"
                         style={{ color: C.gray }}
                     >
-                        Tìm hiểu thêm về chính sách hoa hồng →
+                        {t('provider.depositGate.commissionLink')}
                     </a>
                 </div>
             </div>

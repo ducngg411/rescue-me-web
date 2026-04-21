@@ -68,7 +68,7 @@ export default function ForgotPasswordPage() {
             setResendCooldown(30);
         } catch (err: any) {
             const msg = err?.response?.data?.message;
-            toast.error(msg || 'Gửi email thất bại. Vui lòng thử lại.');
+            toast.error(msg || t('auth.forgotPassword.sendEmailError'));
         } finally {
             setLoading(false);
         }
@@ -87,17 +87,17 @@ export default function ForgotPasswordPage() {
     const getFirebasePhoneError = (code: string): string => {
         switch (code) {
             case 'auth/invalid-phone-number':
-                return 'Số điện thoại không hợp lệ. Nhập dạng 0912345678 hoặc +84912345678.';
+                return t('auth.forgotPassword.phoneInvalid');
             case 'auth/too-many-requests':
-                return 'Gửi quá nhiều lần. Vui lòng thử lại sau vài phút.';
+                return t('auth.forgotPassword.phoneTooManyRequests');
             case 'auth/quota-exceeded':
-                return 'Hệ thống tạm thời quá tải. Vui lòng thử lại sau.';
+                return t('auth.forgotPassword.phoneQuotaExceeded');
             case 'auth/captcha-check-failed':
-                return 'Xác minh reCAPTCHA thất bại. Vui lòng thử lại.';
+                return t('auth.forgotPassword.phoneCaptchaFailed');
             case 'auth/missing-phone-number':
-                return 'Vui lòng nhập số điện thoại.';
+                return t('auth.forgotPassword.phoneMissing');
             default:
-                return `Gửi OTP thất bại (${code}). Vui lòng thử lại.`;
+                return t('auth.forgotPassword.phoneOtpError').replace('{{code}}', code);
         }
     };
 
@@ -109,7 +109,7 @@ export default function ForgotPasswordPage() {
             const result = await signInWithPhoneNumber(auth, e164Phone, verifier);
             setConfirmationResult(result);
             setPhoneStep('otp');
-            toast.success('Mã OTP đã được gửi đến ' + e164Phone);
+            toast.success(t('auth.forgotPassword.otpSentTo') + ' ' + e164Phone);
         } catch (err: any) {
             // Reset recaptcha on error so user can retry
             if (recaptchaVerifierRef.current) {
@@ -135,8 +135,8 @@ export default function ForgotPasswordPage() {
             router.push(`/auth/reset-password?token=${result.resetToken}`);
         } catch (err: any) {
             toast.error(err.code === 'auth/invalid-verification-code'
-                ? 'Mã OTP không đúng. Vui lòng kiểm tra lại.'
-                : 'Xác minh thất bại. Vui lòng thử lại.');
+                ? t('auth.forgotPassword.otpInvalidCode')
+                : t('auth.forgotPassword.otpVerifyError'));
         } finally {
             setLoading(false);
         }
@@ -232,8 +232,8 @@ export default function ForgotPasswordPage() {
                                     }}
                                 >
                                     {resendCooldown > 0
-                                        ? `Gửi lại sau ${resendCooldown}s`
-                                        : 'Gửi lại email'}
+                                        ? t('auth.forgotPassword.resendAfter').replace('{{seconds}}', String(resendCooldown))
+                                        : t('auth.forgotPassword.resendEmail')}
                                 </button>
                             </div>
                         ) : (
@@ -347,14 +347,14 @@ export default function ForgotPasswordPage() {
                                             onMouseEnter={e => (e.currentTarget.style.color = '#f97316')}
                                             onMouseLeave={e => (e.currentTarget.style.color = '#6b7280')}
                                         >
-                                            ← Đổi số
+                                            {t('auth.forgotPassword.changePhone')}
                                         </button>
                                     </div>
                                     <div
                                         className="rounded-lg px-4 py-3 text-sm mb-2"
                                         style={{ background: '#fff8f5', border: '1px solid #fed7aa', color: '#92400e' }}
                                     >
-                                        Mã OTP đã gửi đến <strong>{phoneForm.getValues('phone')}</strong>
+                                        {t('auth.forgotPassword.otpSentTo')} <strong>{phoneForm.getValues('phone')}</strong>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium mb-1.5" style={{ color: '#374151' }}>
@@ -366,7 +366,7 @@ export default function ForgotPasswordPage() {
                                             inputMode="numeric"
                                             maxLength={6}
                                             placeholder={t('auth.forgotPassword.otpPlaceholder')}
-                                            {...otpForm.register('otp', { required: 'OTP không được để trống' })}
+                                            {...otpForm.register('otp', { required: t('auth.forgotPassword.otpRequired') })}
                                             className="w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all text-center tracking-widest text-lg font-bold"
                                             style={inputStyle(!!otpForm.formState.errors.otp)}
                                             onFocus={e => { e.target.style.border = '1.5px solid #f97316'; }}

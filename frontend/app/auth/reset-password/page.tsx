@@ -40,7 +40,7 @@ function ResetPasswordContent() {
             if (msg.includes('hết hạn') || msg.includes('hợp lệ') || msg.includes('sử dụng')) {
                 toast.error(t('auth.resetPassword.invalidToken'));
             } else {
-                toast.error(msg || 'Đặt lại mật khẩu thất bại. Vui lòng thử lại.');
+                toast.error(msg || t('auth.resetPassword.resetError'));
             }
         } finally {
             setLoading(false);
@@ -69,7 +69,7 @@ function ResetPasswordContent() {
                 <div className="text-5xl mb-4">⚠️</div>
                 <p className="text-sm" style={{ color: '#6b7280' }}>{t('auth.resetPassword.missingToken')}</p>
                 <a href="/auth/forgot-password" className="mt-4 inline-block text-sm font-medium" style={{ color: '#f97316' }}>
-                    Yêu cầu lại
+                    {t('auth.resetPassword.requestAgain')}
                 </a>
             </div>
         );
@@ -88,7 +88,7 @@ function ResetPasswordContent() {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                Quay lại đăng nhập
+                {t('auth.resetPassword.backToLogin')}
             </a>
 
             {/* Header */}
@@ -234,7 +234,7 @@ export default function ResetPasswordPage() {
                 </div>
             </div>
             <div className="flex flex-1 lg:max-w-md xl:max-w-lg items-center justify-center bg-white px-8 py-12">
-                <Suspense fallback={<div className="text-sm" style={{ color: '#6b7280' }}>Đang tải...</div>}>
+                <Suspense fallback={<div className="text-sm" style={{ color: '#6b7280' }} />}>
                     <ResetPasswordContent />
                 </Suspense>
             </div>
