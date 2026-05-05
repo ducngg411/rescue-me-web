@@ -1,4 +1,5 @@
-import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -524,5 +525,127 @@ export class UploadsService {
         const uploadUrl = await getSignedUrl(this.s3Client, command, { expiresIn });
 
         return { uploadUrl, objectKey, publicUrl, expiresIn };
+    }
+
+    // ==================== ORPHAN CLEANUP CRONJOB ====================
+
+    private readonly logger = new Logger(UploadsService.name);
+
+    /**
+     * Chạy mỗi ngày lúc 2 AM.
+     * Xóa các ảnh (REQUEST_PHOTO, REVIEW_PHOTO, BEFORE_AFTER) đã confirmed=true
+     * nhưng không được dùng trong bất kỳ record nghiệp vụ nào sau 7 ngày.
+     * An toàn tuyệt đối vì:
+     *  1. Chỉ xóa sau 7 ngày (buffer cực lớn).
+     *  2. Dò chéo với bảng request_media trước khi xóa.
+     */
+    @Cron('0 2 * * *') // 2:00 AM mỗi ngày
+    async cleanupOrphanedPhotos() {
+        this.logger.log('[Orphan Cleanup] Bắt đầu quét ảnh mồ côi...');
+
+        const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        let deleted = 0;
+        let failed = 0;
+
+        // ── 1. REQUEST_PHOTO: dò chéo bảng request_media theo objectKey ──────
+        const requestPhotos = await this.prisma.upload.findMany({
+            where: {
+                purpose: PrismaUploadPurpose.REQUEST_PHOTO,
+                confirmed: true,
+                createdAt: { lt: cutoff },
+            },
+            select: { id: true, objectKey: true, userId: true },
+        });
+
+        if (requestPhotos.length > 0) {
+            const keys = requestPhotos
+                .map(u => u.objectKey)
+                .filter((k): k is string => k !== null);
+
+            const usedKeys = await this.prisma.requestMedia.findMany({
+                where: { objectKey: { in: keys } },
+                select: { objectKey: true },
+            });
+            const usedKeySet = new Set(usedKeys.map(r => r.objectKey));
+
+            for (const u of requestPhotos) {
+                if (!u.objectKey || usedKeySet.has(u.objectKey)) continue;
+                try { await this.deleteUpload(u.userId, u.id); deleted++; }
+                catch (e) { this.logger.error(`[Orphan Cleanup] REQUEST_PHOTO id=${u.id}: ${e.message}`); failed++; }
+            }
+        }
+
+        // ── 2. REVIEW_PHOTO: dò chéo bảng Payment.photoUrls theo publicUrl ──
+        const reviewPhotos = await this.prisma.upload.findMany({
+            where: {
+                purpose: PrismaUploadPurpose.REVIEW_PHOTO,
+                confirmed: true,
+                createdAt: { lt: cutoff },
+            },
+            select: { id: true, publicUrl: true, userId: true },
+        });
+
+        if (reviewPhotos.length > 0) {
+            const urls = reviewPhotos.map(u => u.publicUrl);
+
+            // Payment.photoUrls là String[] — cần tìm những Payment nào chứa URL này
+            const paymentsWithPhotos = await this.prisma.payment.findMany({
+                where: { photoUrls: { hasSome: urls } },
+                select: { photoUrls: true },
+            });
+            const usedUrlSet = new Set(paymentsWithPhotos.flatMap(p => p.photoUrls));
+
+            for (const u of reviewPhotos) {
+                if (usedUrlSet.has(u.publicUrl)) continue;
+                try { await this.deleteUpload(u.userId, u.id); deleted++; }
+                catch (e) { this.logger.error(`[Orphan Cleanup] REVIEW_PHOTO id=${u.id}: ${e.message}`); failed++; }
+            }
+        }
+
+        // ── 3. BEFORE_AFTER: chưa có bảng downstream riêng → xóa hết sau 7 ngày ─
+        const beforeAfterPhotos = await this.prisma.upload.findMany({
+            where: {
+                purpose: PrismaUploadPurpose.BEFORE_AFTER,
+                confirmed: true,
+                createdAt: { lt: cutoff },
+            },
+            select: { id: true, userId: true },
+        });
+
+        for (const u of beforeAfterPhotos) {
+            try { await this.deleteUpload(u.userId, u.id); deleted++; }
+            catch (e) { this.logger.error(`[Orphan Cleanup] BEFORE_AFTER id=${u.id}: ${e.message}`); failed++; }
+        }
+
+        // ── 4. CHATBOT_ATTACHMENT: dò chéo ChatbotMessage.imageUrls theo publicUrl ──
+        const chatbotUploads = await this.prisma.upload.findMany({
+            where: {
+                purpose: PrismaUploadPurpose.REQUEST_PHOTO, // mapped từ CHATBOT_ATTACHMENT
+                storageType: 'R2',
+                confirmed: true,
+                createdAt: { lt: cutoff },
+                objectKey: { startsWith: 'chatbot/' },
+            },
+            select: { id: true, publicUrl: true, userId: true },
+        });
+
+        if (chatbotUploads.length > 0) {
+            const chatbotUrls = chatbotUploads.map(u => u.publicUrl);
+            const messagesWithUrls = await this.prisma.chatbotMessage.findMany({
+                where: { imageUrls: { hasSome: chatbotUrls } },
+                select: { imageUrls: true },
+            });
+            const usedChatbotUrlSet = new Set(messagesWithUrls.flatMap(m => m.imageUrls));
+
+            for (const u of chatbotUploads) {
+                if (usedChatbotUrlSet.has(u.publicUrl)) continue;
+                try { await this.deleteUpload(u.userId, u.id); deleted++; }
+                catch (e) { this.logger.error(`[Orphan Cleanup] CHATBOT_ATTACHMENT id=${u.id}: ${e.message}`); failed++; }
+            }
+        }
+
+        this.logger.log(
+            `[Orphan Cleanup] Hoàn thành. Đã xóa: ${deleted}, Thất bại: ${failed}.`
+        );
     }
 }

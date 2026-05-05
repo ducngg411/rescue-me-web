@@ -53,7 +53,7 @@ export default function CreateRescueRequestPage() {
         incidentLocation: null as RescueLocationData | null,
         contactPhone: '',
         description: '',
-        images: [] as Array<{ objectKey: string; publicUrl: string }>,
+        images: [] as Array<{ objectKey: string; publicUrl: string; uploadId?: string }>,
         videoUrls: [] as string[],
         videoUploadIds: [] as string[],
     });
@@ -165,7 +165,8 @@ export default function CreateRescueRequestPage() {
                 pickupLocation: formData.incidentLocation,
                 contactPhone: formData.contactPhone,
                 description: formData.description,
-                mediaObjectKeys: formData.images.map((img) => img.objectKey),
+                uploadIds: formData.images.filter(img => img.uploadId).map(img => img.uploadId!),
+                mediaObjectKeys: formData.images.filter(img => !img.uploadId).map(img => img.objectKey),
                 videoUploadIds: formData.videoUploadIds,
                 videoUrls: formData.videoUrls,
             };
@@ -183,8 +184,8 @@ export default function CreateRescueRequestPage() {
         }
     };
 
-    const handleImageUploadSuccess = (objectKey: string, publicUrl: string) => {
-        setFormData((prev) => ({ ...prev, images: [...prev.images, { objectKey, publicUrl }] }));
+    const handleImageUploadSuccess = (objectKey: string, publicUrl: string, uploadId?: string) => {
+        setFormData((prev) => ({ ...prev, images: [...prev.images, { objectKey, publicUrl, uploadId }] }));
     };
     const handleImageRemove = (objectKey: string) => {
         setFormData((prev) => ({ ...prev, images: prev.images.filter((img) => img.objectKey !== objectKey) }));

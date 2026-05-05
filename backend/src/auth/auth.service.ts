@@ -337,6 +337,18 @@ export class AuthService {
     }
 
     // ==================== SESSION & TOKEN MANAGEMENT ====================
+
+    /** Parse JWT TTL string (e.g. "7d", "2h", "3600") sang milliseconds */
+    private parseTtlMs(ttl: string | undefined, fallbackMs: number): number {
+        if (!ttl) return fallbackMs;
+        const num = parseInt(ttl, 10);
+        if (isNaN(num)) return fallbackMs;
+        if (/d$/i.test(ttl)) return num * 86_400_000;
+        if (/h$/i.test(ttl)) return num * 3_600_000;
+        if (/m$/i.test(ttl)) return num * 60_000;
+        return num * 1_000; // seconds (plain number)
+    }
+
     private async createSession(user: User) {
         const accessToken = this.jwtService.sign(
             { sub: user.id, email: user.email, role: user.role },
@@ -348,24 +360,28 @@ export class AuthService {
             { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' },
         );
 
-        await this.prisma.session.upsert({
-            where: { token: accessToken },
-            create: {
-                userId: user.id,
-                token: accessToken,
-                refreshToken,
-                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            },
-            update: {
-                refreshToken,
-                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            },
-        });
+        // expiresAt bám theo refresh TTL — session sống được bao lâu thì refresh token còn dùng được
+        const refreshTtlMs = this.parseTtlMs(
+            process.env.JWT_REFRESH_EXPIRES_IN,
+            30 * 24 * 60 * 60 * 1000, // 30d fallback
+        );
 
-        return {
-            accessToken,
-            refreshToken,
-        };
+        // Chỉ dọn session đã hết hạn, giữ nguyên session của các thiết bị khác
+        await this.prisma.$transaction([
+            this.prisma.session.deleteMany({
+                where: { userId: user.id, expiresAt: { lt: new Date() } },
+            }),
+            this.prisma.session.create({
+                data: {
+                    userId: user.id,
+                    token: accessToken,
+                    refreshToken,
+                    expiresAt: new Date(Date.now() + refreshTtlMs),
+                },
+            }),
+        ]);
+
+        return { accessToken, refreshToken };
     }
 
     async validateUser(userId: string) {
@@ -395,6 +411,76 @@ export class AuthService {
         });
 
         return { message: 'Đăng xuất thành công' };
+    }
+
+    async refreshTokens(refreshToken: string) {
+        // 1. Xác minh chữ ký JWT
+        let payload: { sub: string; type: string };
+        try {
+            payload = this.jwtService.verify(refreshToken);
+        } catch {
+            throw new UnauthorizedException('Refresh token không hợp lệ hoặc đã hết hạn');
+        }
+
+        if (payload.type !== 'refresh') {
+            throw new UnauthorizedException('Token không phải refresh token');
+        }
+
+        // 2. Tìm session khớp với refreshToken và chưa hết hạn (chống token reuse)
+        const session = await this.prisma.session.findFirst({
+            where: {
+                userId: payload.sub,
+                refreshToken,
+                expiresAt: { gt: new Date() },
+            },
+        });
+
+        if (!session) {
+            throw new UnauthorizedException('Phiên đăng nhập không tồn tại hoặc đã bị thu hồi');
+        }
+
+        // 3. Kiểm tra user vẫn hợp lệ (không bị ban)
+        const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+        if (!user) {
+            throw new UnauthorizedException('User không tồn tại');
+        }
+        if (user.bannedAt) {
+            throw new ForbiddenException(
+                `ACCOUNT_BANNED::${user.banReason || 'Vi phạm điều khoản sử dụng'}`,
+            );
+        }
+
+        // 4. Phát hành token mới (rotation)
+        const newAccessToken = this.jwtService.sign(
+            { sub: user.id, email: user.email, role: user.role },
+            { expiresIn: process.env.JWT_EXPIRES_IN || '7d' },
+        );
+        const newRefreshToken = this.jwtService.sign(
+            { sub: user.id, type: 'refresh' },
+            { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' },
+        );
+
+        // 5. Cập nhật session (xóa cũ, tạo mới để giữ unique constraint trên token)
+        const refreshTtlMs = this.parseTtlMs(
+            process.env.JWT_REFRESH_EXPIRES_IN,
+            30 * 24 * 60 * 60 * 1000, // 30d fallback
+        );
+        await this.prisma.$transaction([
+            this.prisma.session.delete({ where: { id: session.id } }),
+            this.prisma.session.create({
+                data: {
+                    userId: user.id,
+                    token: newAccessToken,
+                    refreshToken: newRefreshToken,
+                    expiresAt: new Date(Date.now() + refreshTtlMs),
+                },
+            }),
+        ]);
+
+        return {
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken,
+        };
     }
 
     // ==================== ROLE SELECTION ====================

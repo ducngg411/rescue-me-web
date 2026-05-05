@@ -85,7 +85,33 @@ export class GuestRescueService {
             cloudinaryPublicId: string | null;
         }> = [];
 
-        if (dto.mediaObjectKeys && dto.mediaObjectKeys.length > 0) {
+        // Add images — prefer uploadIds (real metadata) over legacy mediaObjectKeys
+        if (dto.uploadIds && dto.uploadIds.length > 0) {
+            const uploads = await this.prisma.upload.findMany({
+                where: {
+                    id: { in: dto.uploadIds },
+                    confirmed: true,
+                },
+                select: {
+                    objectKey: true,
+                    fileName: true,
+                    fileSize: true,
+                    contentType: true,
+                    publicUrl: true,
+                },
+            });
+            for (const upload of uploads) {
+                mediaItems.push({
+                    mediaType: 'IMAGE',
+                    objectKey: upload.objectKey,
+                    fileName: upload.fileName,
+                    fileSize: upload.fileSize,
+                    contentType: upload.contentType,
+                    publicUrl: upload.publicUrl,
+                    cloudinaryPublicId: null,
+                });
+            }
+        } else if (dto.mediaObjectKeys && dto.mediaObjectKeys.length > 0) {
             for (const objectKey of dto.mediaObjectKeys) {
                 const fileName = objectKey.split('/').pop() || 'unknown';
                 mediaItems.push({
@@ -267,7 +293,6 @@ export class GuestRescueService {
         quoteId: string,
         guestSessionId: string,
         action: 'ACCEPT' | 'REJECT',
-        rejectionReason?: string,
     ) {
         const rescueRequest = await this.prisma.rescueRequest.findFirst({
             where: { id: requestId, guestSessionId },
@@ -330,7 +355,7 @@ export class GuestRescueService {
         } else {
             await this.prisma.quote.update({
                 where: { id: quoteId },
-                data: { status: 'REJECTED', rejectionReason: rejectionReason ?? null, userRespondedAt: now },
+                data: { status: 'REJECTED', userRespondedAt: now },
             });
             return { success: true, action: 'REJECT', quoteId };
         }

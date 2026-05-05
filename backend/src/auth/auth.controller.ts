@@ -21,6 +21,7 @@ import {
     ForgotPasswordEmailDto,
     ForgotPasswordPhoneDto,
     ResetPasswordDto,
+    RefreshTokenDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
@@ -121,5 +122,15 @@ export class AuthController {
     async logout(@Request() req) {
         const token = req.headers.authorization?.replace('Bearer ', '');
         return this.authService.logout(req.user.id, token);
+    }
+
+    // ==================== REFRESH TOKEN ====================
+    @ApiOperation({ summary: 'Exchange a valid refresh token for a new access + refresh token pair' })
+    @ApiResponse({ status: 200, description: 'New token pair issued' })
+    @ApiResponse({ status: 401, description: 'Refresh token invalid or expired' })
+    @Post('refresh')
+    @HttpCode(HttpStatus.OK)
+    async refresh(@Body() dto: RefreshTokenDto) {
+        return this.authService.refreshTokens(dto.refreshToken);
     }
 }

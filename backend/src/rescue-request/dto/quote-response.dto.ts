@@ -23,12 +23,7 @@ export class QuoteResponseDto {
     estimatedArrivalMinutes: number;
     message?: string;
     status: QuoteStatus;
-    rejectionReason?: string;
     userRespondedAt?: Date;
-    providerLocation?: {
-        lat: number;
-        lng: number;
-    };
     createdAt: Date;
     updatedAt: Date;
     expiresAt?: Date;

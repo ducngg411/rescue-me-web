@@ -88,11 +88,19 @@ export class CreateRescueRequestDto {
   @IsOptional()
   vehicleColor?: string;
 
+  /** Preferred: Upload IDs for images — backend fetches real fileName/fileSize/contentType */
+  @ApiPropertyOptional({ type: [String], example: ['upl_abc123'] })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  uploadIds?: string[];
+
+  /** Legacy fallback: raw object keys. Used when uploadIds is not provided. */
   @ApiPropertyOptional({ type: [String], example: ['uploads/img1.jpg'] })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
-  mediaObjectKeys?: string[]; // Array of object keys from pre-uploaded media (images)
+  mediaObjectKeys?: string[];
 
   @ApiPropertyOptional({ type: [String], example: [] })
   @IsArray()

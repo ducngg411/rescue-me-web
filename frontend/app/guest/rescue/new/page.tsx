@@ -64,7 +64,7 @@ export default function GuestNewRequestPage() {
     const [incidentLocation, setIncidentLocation] = useState<RescueLocationData | null>(null);
     const [contactPhone, setContactPhone] = useState('');
     const [description, setDescription] = useState('');
-    const [images, setImages] = useState<Array<{ objectKey: string; publicUrl: string }>>([]);
+    const [images, setImages] = useState<Array<{ objectKey: string; publicUrl: string; uploadId?: string }>>([]);
     const [videoUrls, setVideoUrls] = useState<string[]>([]);
     const [videoUploadIds, setVideoUploadIds] = useState<string[]>([]);
 
@@ -220,7 +220,8 @@ export default function GuestNewRequestPage() {
                 pickupLocation: incidentLocation,
                 contactPhone,
                 description: description || undefined,
-                mediaObjectKeys: images.map((i) => i.objectKey),
+                uploadIds: images.filter(i => i.uploadId).map(i => i.uploadId!),
+                mediaObjectKeys: images.filter(i => !i.uploadId).map(i => i.objectKey),
                 videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
                 videoUploadIds: videoUploadIds.length > 0 ? videoUploadIds : undefined,
             });
@@ -435,8 +436,8 @@ export default function GuestNewRequestPage() {
                                     uploadImage={guestImageUploadAdapter}
                                     maxImages={5}
                                     uploadedImages={images}
-                                    onSuccess={(objectKey, publicUrl) =>
-                                        setImages((prev) => [...prev, { objectKey, publicUrl }])
+                                    onSuccess={(objectKey, publicUrl, uploadId) =>
+                                        setImages((prev) => [...prev, { objectKey, publicUrl, uploadId }])
                                     }
                                     onRemove={(objectKey) =>
                                         setImages((prev) => prev.filter((i) => i.objectKey !== objectKey))

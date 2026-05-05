@@ -144,6 +144,12 @@ export class ResetPasswordDto {
     newPassword: string;
 }
 
+export class RefreshTokenDto {
+    @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+    @IsString({ message: 'Refresh token không được để trống' })
+    refreshToken: string;
+}
+
 
 export class UpdateUserProfileDto {
     @ApiProperty({ example: 'Nguyễn Văn A' })

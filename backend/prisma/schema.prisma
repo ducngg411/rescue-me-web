@@ -8,71 +8,71 @@ datasource db {
 }
 
 model User {
-  id                    String             @id @default(cuid())
-  email                 String             @unique
-  name                  String?
-  avatar                String?
-  authProvider          AuthProvider
-  hashedPassword        String?
-  googleId              String?            @unique
-  profileCompleted      Boolean            @default(false)
-  role                  UserRole           @default(USER)
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
-  lastLogin             DateTime?
-  contactEmail          String?
-  defaultAddress        Json?
-  fullName              String?
-  licensePlate          String?
-  phoneNumber           String?
-  vehicleColor          String?
-  vehicleType           VehicleType?
-  businessAddress       Json?
-  businessName          String?
-  isActive              Boolean            @default(false)
-  serviceRadiusKm       Int?
-  serviceTypes          ServiceType[]
-  supportedVehicleTypes VehicleType[]
-  verificationStatus    VerificationStatus @default(DRAFT)
-  permanentAddress      Json?
-  providerType          ProviderType?
-  submittedAt           DateTime?
-  rejectReasonCode      String?
-  rejectReasonDetail    String?
-  rejectedAt            DateTime?
-  address               String?
-  approvedAt            DateTime?
-  baseFee               Int?
-  emergencyAvailable    Boolean            @default(false)
-  isOnline              Boolean            @default(false)
-  pricePerKm            Int?
-  serviceName           String?
-  suspendedAt           DateTime?
-  suspensionReason      String?
-  bannedAt              DateTime?
-  banReason             String?
-  rescueVehicles        Json?
-  currentLocation       Json?
-  lastLocationUpdate    DateTime?
-  fcmToken              String?   // FCM device token for push notifications
-  averageRating         Float?
-  reviewCount           Int                @default(0)
-  providerWallet        ProviderWallet?    @relation("ProviderWallet")
-  quotes                Quote[]            @relation("ProviderQuotes")
-  assignedRequests      RescueRequest[]    @relation("AssignedRequests")
-  rescueRequests        RescueRequest[]    @relation("UserRequests")
-  reviewsReceived       Review[]           @relation("ProviderReviews")
-  reviewsGiven          Review[]           @relation("UserReviews")
-  sessions              Session[]
-  uploads               Upload[]
-  userWallet            UserWallet?        @relation("UserWallet")
-  passwordResetTokens        PasswordResetToken[]
-  disputesResolved           DisputeCase[]          @relation("DisputeResolvedBy")
-  disputesAssigned           DisputeCase[]          @relation("DisputeAssignedTo")
-  disputeMessages            DisputeMessage[]       @relation("DisputeMessageAuthor")
-  disputeEvidenceUploaded    DisputeEvidence[]      @relation("DisputeEvidenceUploader")
-  disputesOpened             DisputeCase[]          @relation("DisputeOpenedBy")
-  disputeReadStates          DisputeReadState[]
+  id                      String               @id @default(cuid())
+  email                   String               @unique
+  name                    String?
+  avatar                  String?
+  authProvider            AuthProvider
+  hashedPassword          String?
+  googleId                String?              @unique
+  profileCompleted        Boolean              @default(false)
+  role                    UserRole             @default(USER)
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  lastLogin               DateTime?
+  contactEmail            String?
+  defaultAddress          Json?
+  fullName                String?
+  licensePlate            String?
+  phoneNumber             String?
+  vehicleColor            String?
+  vehicleType             VehicleType?
+  businessAddress         Json?
+  businessName            String?
+  isActive                Boolean              @default(false)
+  serviceRadiusKm         Int?
+  serviceTypes            ServiceType[]
+  supportedVehicleTypes   VehicleType[]
+  verificationStatus      VerificationStatus   @default(DRAFT)
+  permanentAddress        Json?
+  providerType            ProviderType?
+  submittedAt             DateTime?
+  rejectReasonCode        String?
+  rejectReasonDetail      String?
+  rejectedAt              DateTime?
+  address                 String?
+  approvedAt              DateTime?
+  baseFee                 Int?
+  emergencyAvailable      Boolean              @default(false)
+  isOnline                Boolean              @default(false)
+  pricePerKm              Int?
+  serviceName             String?
+  suspendedAt             DateTime?
+  suspensionReason        String?
+  bannedAt                DateTime?
+  banReason               String?
+  rescueVehicles          Json?
+  currentLocation         Json?
+  lastLocationUpdate      DateTime?
+  fcmToken                String? // FCM device token for push notifications
+  averageRating           Float?
+  reviewCount             Int                  @default(0)
+  providerWallet          ProviderWallet?      @relation("ProviderWallet")
+  quotes                  Quote[]              @relation("ProviderQuotes")
+  assignedRequests        RescueRequest[]      @relation("AssignedRequests")
+  rescueRequests          RescueRequest[]      @relation("UserRequests")
+  reviewsReceived         Review[]             @relation("ProviderReviews")
+  reviewsGiven            Review[]             @relation("UserReviews")
+  sessions                Session[]
+  uploads                 Upload[]
+  userWallet              UserWallet?          @relation("UserWallet")
+  passwordResetTokens     PasswordResetToken[]
+  disputesResolved        DisputeCase[]        @relation("DisputeResolvedBy")
+  disputesAssigned        DisputeCase[]        @relation("DisputeAssignedTo")
+  disputeMessages         DisputeMessage[]     @relation("DisputeMessageAuthor")
+  disputeEvidenceUploaded DisputeEvidence[]    @relation("DisputeEvidenceUploader")
+  disputesOpened          DisputeCase[]        @relation("DisputeOpenedBy")
+  disputeReadStates       DisputeReadState[]
 
   providerWithdrawalAccounts ProviderWithdrawalAccount[] @relation("ProviderWithdrawalAccounts")
   customerWithdrawalAccounts CustomerWithdrawalAccount[] @relation("CustomerWithdrawalAccounts")
@@ -125,50 +125,50 @@ model Upload {
 }
 
 model RescueRequest {
-  id                   String         @id @default(cuid())
+  id                    String                 @id @default(cuid())
   /// Human-friendly id for support: RMO-YYMMDD-XXXX (same in user/provider/admin UIs)
-  orderCode            String?        @unique
-  userId               String?
-  guestSessionId       String?
-  requesterType        RequesterType  @default(USER)
-  incidentType         IncidentType
-  vehicleType          VehicleType
+  orderCode             String?                @unique
+  userId                String?
+  guestSessionId        String?
+  requesterType         RequesterType          @default(USER)
+  incidentType          IncidentType
+  vehicleType           VehicleType
   /// Snapshot of requester vehicle at time of request (guests have no User row)
-  licensePlate         String?
-  vehicleColor         String?
-  description          String?
-  pickupLocation       Json
-  dropoffLocation      Json?
-  status               RequestStatus  @default(CREATED)
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-  contactPhone         String         @default("")
-  videoUrls            String[]       @default([])
-  searchPhase          Int            @default(1)
-  assignedProviderId   String?
-  matchingStartedAt    DateTime?
-  assignedAt           DateTime?
-  expiresAt            DateTime?
-  matchAttempts        Int            @default(1)
-  matchedDistance      Float?
-  matchedEta           Int?
-  declinedProviders    String[]       @default([])
-  maxQuotes            Int            @default(3)
-  quoteCount           Int            @default(0)
-  quoteWindowClosedAt  DateTime?
-  quoteWindowDuration  Int            @default(90)
-  quoteWindowExpiresAt DateTime?
-  viewingProviders     String[]       @default([])
-  viewingUpdatedAt     DateTime?
-  completedAt          DateTime?
-  payment              Payment?
-  quotes               Quote[]
-  media                RequestMedia[]
-  assignedProvider     User?          @relation("AssignedRequests", fields: [assignedProviderId], references: [id])
-  user                 User?          @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
-  guestSession         GuestSession?  @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
-  review               Review?
-  disputeCases         DisputeCase[]
+  licensePlate          String?
+  vehicleColor          String?
+  description           String?
+  pickupLocation        Json
+  dropoffLocation       Json?
+  status                RequestStatus          @default(CREATED)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  contactPhone          String                 @default("")
+  videoUrls             String[]               @default([])
+  searchPhase           Int                    @default(1)
+  assignedProviderId    String?
+  matchingStartedAt     DateTime?
+  assignedAt            DateTime?
+  expiresAt             DateTime?
+  matchAttempts         Int                    @default(1)
+  matchedDistance       Float?
+  matchedEta            Int?
+  declinedProviders     String[]               @default([])
+  maxQuotes             Int                    @default(3)
+  quoteCount            Int                    @default(0)
+  quoteWindowClosedAt   DateTime?
+  quoteWindowDuration   Int                    @default(90)
+  quoteWindowExpiresAt  DateTime?
+  viewingProviders      String[]               @default([])
+  viewingUpdatedAt      DateTime?
+  completedAt           DateTime?
+  payment               Payment?
+  quotes                Quote[]
+  media                 RequestMedia[]
+  assignedProvider      User?                  @relation("AssignedRequests", fields: [assignedProviderId], references: [id])
+  user                  User?                  @relation("UserRequests", fields: [userId], references: [id], onDelete: Cascade)
+  guestSession          GuestSession?          @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
+  review                Review?
+  disputeCases          DisputeCase[]
   jobPaymentTransaction JobPaymentTransaction?
 
   @@index([userId])
@@ -204,9 +204,7 @@ model Quote {
   estimatedArrivalMinutes Int
   message                 String?
   status                  QuoteStatus   @default(PENDING)
-  rejectionReason         String?
   userRespondedAt         DateTime?
-  providerLocation        Json?
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
   expiresAt               DateTime?
@@ -230,8 +228,6 @@ model Payment {
   userId              String?
   guestSessionId      String?
   baseFee             Int           @default(0)
-  distanceFee         Int           @default(0)
-  overtimeFee         Int           @default(0)
   otherFee            Int           @default(0)
   totalAmount         Int
   surchargeNote       String?
@@ -256,43 +252,43 @@ model Payment {
 }
 
 model DisputeCase {
-  id                         String                    @id @default(cuid())
-  paymentId                  String                    @unique
-  requestId                  String
-  openedByUserId             String?
-  openedByRole               DisputeOpenedByRole
+  id                       String                 @id @default(cuid())
+  paymentId                String                 @unique
+  requestId                String
+  openedByUserId           String?
+  openedByRole             DisputeOpenedByRole
   /// Amount in dispute (VND). May be less than totalAmount for partial disputes.
-  targetAmount               Int                       @default(0)
-  reason                     String
-  description                String?
-  expectedOutcome            String?
-  status                     DisputeCaseStatus         @default(WAITING_FOR_PROVIDER)
-  resolutionType             DisputeResolutionType?
-  resolutionAmountCustomer   Int?
-  resolutionAmountProvider   Int?
-  resolutionNote             String?
-  firstResponseDueAt         DateTime?
-  resolutionDueAt            DateTime?
-  firstRespondedAt           DateTime?
-  resolvedAt                 DateTime?
-  resolvedByUserId           String?
-  assignedToUserId           String?
-  customerMessageCount       Int                       @default(0)
-  providerMessageCount       Int                       @default(0)
-  customerReplyAllowed       Boolean                   @default(false)
-  providerReplyAllowed       Boolean                   @default(false)
-  providerUnresponsiveAt     DateTime?
-  lastCoordinatorNote        String?
-  createdAt                  DateTime                  @default(now())
-  updatedAt                  DateTime                  @updatedAt
-  payment                    Payment                   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  request                    RescueRequest             @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  openedBy                   User?                     @relation("DisputeOpenedBy", fields: [openedByUserId], references: [id], onDelete: SetNull)
-  resolvedBy                 User?                     @relation("DisputeResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
-  assignedTo                 User?                     @relation("DisputeAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
-  messages                   DisputeMessage[]
-  evidence                   DisputeEvidence[]
-  readStates                 DisputeReadState[]
+  targetAmount             Int                    @default(0)
+  reason                   String
+  description              String?
+  expectedOutcome          String?
+  status                   DisputeCaseStatus      @default(WAITING_FOR_PROVIDER)
+  resolutionType           DisputeResolutionType?
+  resolutionAmountCustomer Int?
+  resolutionAmountProvider Int?
+  resolutionNote           String?
+  firstResponseDueAt       DateTime?
+  resolutionDueAt          DateTime?
+  firstRespondedAt         DateTime?
+  resolvedAt               DateTime?
+  resolvedByUserId         String?
+  assignedToUserId         String?
+  customerMessageCount     Int                    @default(0)
+  providerMessageCount     Int                    @default(0)
+  customerReplyAllowed     Boolean                @default(false)
+  providerReplyAllowed     Boolean                @default(false)
+  providerUnresponsiveAt   DateTime?
+  lastCoordinatorNote      String?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  payment                  Payment                @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  request                  RescueRequest          @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  openedBy                 User?                  @relation("DisputeOpenedBy", fields: [openedByUserId], references: [id], onDelete: SetNull)
+  resolvedBy               User?                  @relation("DisputeResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  assignedTo               User?                  @relation("DisputeAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  messages                 DisputeMessage[]
+  evidence                 DisputeEvidence[]
+  readStates               DisputeReadState[]
 
   @@index([requestId])
   @@index([status])
@@ -303,18 +299,18 @@ model DisputeCase {
 }
 
 model DisputeMessage {
-  id           String              @id @default(cuid())
-  caseId       String
-  senderRole   DisputeSenderRole
-  messageType  DisputeMessageType  @default(TEXT)
-  body         String
-  mediaUrls    String[]            @default([])
+  id          String             @id @default(cuid())
+  caseId      String
+  senderRole  DisputeSenderRole
+  messageType DisputeMessageType @default(TEXT)
+  body        String
+  mediaUrls   String[]           @default([])
   /// INTERNAL = admin-only notes; PUBLIC = visible in customer/provider-facing timeline
-  visibility   DisputeVisibility   @default(PUBLIC)
-  userId       String?
-  createdAt    DateTime            @default(now())
-  disputeCase  DisputeCase         @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  author       User?               @relation("DisputeMessageAuthor", fields: [userId], references: [id], onDelete: SetNull)
+  visibility  DisputeVisibility  @default(PUBLIC)
+  userId      String?
+  createdAt   DateTime           @default(now())
+  disputeCase DisputeCase        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  author      User?              @relation("DisputeMessageAuthor", fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([caseId])
   @@index([createdAt])
@@ -323,14 +319,14 @@ model DisputeMessage {
 
 model DisputeReadState {
   id            String      @id @default(cuid())
-  caseId         String
-  userId         String
-  lastReadAt     DateTime?
-  lastMessageId  String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  disputeCase    DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  caseId        String
+  userId        String
+  lastReadAt    DateTime?
+  lastMessageId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  disputeCase   DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([caseId, userId])
   @@index([userId, updatedAt])
@@ -338,14 +334,14 @@ model DisputeReadState {
 }
 
 model DisputeEvidence {
-  id                 String      @id @default(cuid())
-  caseId             String
-  url                String
-  note               String?
-  uploadedByUserId   String?
-  createdAt          DateTime    @default(now())
-  disputeCase        DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  uploadedBy         User?       @relation("DisputeEvidenceUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  id               String      @id @default(cuid())
+  caseId           String
+  url              String
+  note             String?
+  uploadedByUserId String?
+  createdAt        DateTime    @default(now())
+  disputeCase      DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  uploadedBy       User?       @relation("DisputeEvidenceUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
 
   @@index([caseId])
   @@map("dispute_evidence")
@@ -368,21 +364,20 @@ model ProviderWallet {
 }
 
 model WalletTransaction {
-  id            String                  @id @default(cuid())
+  id                 String                  @id @default(cuid())
   /// Public reconciliation code for this wallet line (provider)
-  txnCode       String?                 @unique
-  walletId      String
-  type          WalletTransactionType
-  amount        Int
-  status        WalletTransactionStatus @default(PENDING)
-  referenceType WalletReferenceType
-  referenceId   String
-  description   String?
-  sepayId       Int?                    @unique
-  sepayReferenceCode String?
-  createdAt     DateTime                @default(now())
-  holdReleaseAt DateTime?
-  wallet        ProviderWallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  txnCode            String?                 @unique
+  walletId           String
+  type               WalletTransactionType
+  amount             Int
+  status             WalletTransactionStatus @default(PENDING)
+  referenceType      WalletReferenceType
+  referenceId        String
+  description        String?
+
+  createdAt          DateTime                @default(now())
+  holdReleaseAt      DateTime?
+  wallet             ProviderWallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
   @@index([walletId, status])
@@ -393,28 +388,9 @@ model WalletTransaction {
 }
 
 model ProviderWithdrawalAccount {
-  id                 String   @id @default(cuid())
-  providerId        String
-  provider          User     @relation("ProviderWithdrawalAccounts", fields: [providerId], references: [id], onDelete: Cascade)
-
-  accountNumber      String
-  bankCode           BankCode?
-  bankName           String
-  branchName         String?
-  accountHolderName  String
-
-  isDefault         Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@index([providerId])
-  @@map("provider_withdrawal_accounts")
-}
-
-model CustomerWithdrawalAccount {
-  id                 String   @id @default(cuid())
-  userId             String
-  user               User     @relation("CustomerWithdrawalAccounts", fields: [userId], references: [id], onDelete: Cascade)
+  id         String @id @default(cuid())
+  providerId String
+  provider   User   @relation("ProviderWithdrawalAccounts", fields: [providerId], references: [id], onDelete: Cascade)
 
   accountNumber     String
   bankCode          BankCode?
@@ -422,9 +398,28 @@ model CustomerWithdrawalAccount {
   branchName        String?
   accountHolderName String
 
-  isDefault         Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerId])
+  @@map("provider_withdrawal_accounts")
+}
+
+model CustomerWithdrawalAccount {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation("CustomerWithdrawalAccounts", fields: [userId], references: [id], onDelete: Cascade)
+
+  accountNumber     String
+  bankCode          BankCode?
+  bankName          String
+  branchName        String?
+  accountHolderName String
+
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@map("customer_withdrawal_accounts")
@@ -452,19 +447,19 @@ model TopupTransaction {
 }
 
 model JobPaymentTransaction {
-  id           String          @id @default(cuid())
+  id           String        @id @default(cuid())
   /// Public reconciliation code for this job QR payment row
-  txnCode      String?         @unique
-  requestId    String          @unique
-  paymentId    String          @unique
-  transferCode String          @unique
+  txnCode      String?       @unique
+  requestId    String        @unique
+  paymentId    String        @unique
+  transferCode String        @unique
   amount       Int
-  status       String          @default("PENDING")
+  status       String        @default("PENDING")
   expireAt     DateTime
-  sepayId      Int?            @unique
+  sepayId      Int?          @unique
   completedAt  DateTime?
-  createdAt    DateTime        @default(now())
-  request      RescueRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now())
+  request      RescueRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@index([transferCode])
   @@index([requestId, status])
@@ -506,21 +501,20 @@ model UserWallet {
 }
 
 model UserWalletTransaction {
-  id            String                  @id @default(cuid())
+  id                 String                  @id @default(cuid())
   /// Public reconciliation code for this wallet line (user)
-  txnCode       String?                 @unique
-  walletId      String
-  type          WalletTransactionType
-  amount        Int
-  status        WalletTransactionStatus @default(PENDING)
-  referenceType UserWalletReferenceType
-  referenceId   String
-  description   String?
-  sepayId       Int?                    @unique
-  sepayReferenceCode String?
-  holdReleaseAt DateTime?
-  createdAt     DateTime                @default(now())
-  wallet        UserWallet              @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  txnCode            String?                 @unique
+  walletId           String
+  type               WalletTransactionType
+  amount             Int
+  status             WalletTransactionStatus @default(PENDING)
+  referenceType      UserWalletReferenceType
+  referenceId        String
+  description        String?
+
+  holdReleaseAt      DateTime?
+  createdAt          DateTime                @default(now())
+  wallet             UserWallet              @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
   @@index([walletId, status])
@@ -565,17 +559,17 @@ model PasswordResetToken {
 }
 
 model GuestSession {
-  id              String          @id @default(cuid())
-  phoneNormalized String
-  phoneVerifiedAt DateTime
-  expiresAt       DateTime
-  deviceId        String?
-  lastIp          String?
-  isConverted     Boolean         @default(false)
-  convertedUserId String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  rescueRequests  RescueRequest[]
+  id                   String                @id @default(cuid())
+  phoneNormalized      String
+  phoneVerifiedAt      DateTime
+  expiresAt            DateTime
+  deviceId             String?
+  lastIp               String?
+  isConverted          Boolean               @default(false)
+  convertedUserId      String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  rescueRequests       RescueRequest[]
   chatbotConversations ChatbotConversation[]
 
   @@index([phoneNormalized])
@@ -584,18 +578,18 @@ model GuestSession {
 }
 
 model ChatbotConversation {
-  id             String              @id @default(cuid())
+  id             String           @id @default(cuid())
   userId         String?
   guestSessionId String?
   userRole       ChatbotUserRole
   title          String?
   guidedState    Json?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
   messages       ChatbotMessage[]
 
-  user           User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  guestSession   GuestSession?       @relation(fields: [guestSessionId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestSession GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([guestSessionId])
@@ -603,17 +597,17 @@ model ChatbotConversation {
 }
 
 model ChatbotMessage {
-  id             String              @id @default(cuid())
+  id             String             @id @default(cuid())
   conversationId String
   role           ChatbotMessageRole
   content        String
   toolCalls      Json?
   toolResults    Json?
   metadata       Json?
-  imageUrls      String[]            @default([])
-  createdAt      DateTime            @default(now())
+  imageUrls      String[]           @default([])
+  createdAt      DateTime           @default(now())
 
-  conversation   ChatbotConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation ChatbotConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
   @@map("chatbot_messages")
@@ -843,14 +837,14 @@ model PlatformConfig {
 }
 
 model FeeAuditLog {
-  id          String          @id @default(cuid())
-  adminId     String
-  adminName   String
-  changeType  AuditChangeType
-  oldValue    String?
-  newValue    String
-  note        String?
-  createdAt   DateTime        @default(now())
+  id         String          @id @default(cuid())
+  adminId    String
+  adminName  String
+  changeType AuditChangeType
+  oldValue   String?
+  newValue   String
+  note       String?
+  createdAt  DateTime        @default(now())
 
   @@index([createdAt])
   @@map("fee_audit_logs")

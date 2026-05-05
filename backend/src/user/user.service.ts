@@ -8,7 +8,6 @@ export class UserService {
     constructor(private prisma: PrismaService) { }
 
     async updateProfile(userId: string, dto: UpdateUserProfileDto, userRole: UserRole) {
-        // Kiểm tra role phải là USER
         if (userRole !== UserRole.USER) {
             throw new ForbiddenException('Chỉ người dùng với role USER mới có thể cập nhật profile này');
         }

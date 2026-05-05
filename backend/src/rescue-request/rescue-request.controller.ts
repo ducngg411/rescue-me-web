@@ -181,7 +181,6 @@ export class RescueRequestController {
             quoteId,
             req.user.id,
             respondQuoteDto.action,
-            respondQuoteDto.rejectionReason,
         );
     }
 

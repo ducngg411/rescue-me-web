@@ -5,24 +5,8 @@ import {
     IsString,
     Min,
     Max,
-    ValidateNested,
-    IsNumber,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-
-// Provider Location DTO
-export class ProviderLocationDto {
-    @ApiProperty({ example: 10.7800 })
-    @IsNumber()
-    @IsNotEmpty()
-    lat: number;
-
-    @ApiProperty({ example: 106.6950 })
-    @IsNumber()
-    @IsNotEmpty()
-    lng: number;
-}
 
 export class CreateQuoteDto {
     @ApiProperty({ example: 250000, description: 'Giá báo giá (tối thiểu 10,000 VND)' })
@@ -42,10 +26,4 @@ export class CreateQuoteDto {
     @IsString()
     @IsOptional()
     message?: string; // Lời nhắn từ provider
-
-    @ApiPropertyOptional({ type: () => ProviderLocationDto })
-    @ValidateNested()
-    @Type(() => ProviderLocationDto)
-    @IsOptional()
-    providerLocation?: ProviderLocationDto; // Vị trí provider khi gửi báo giá
 }

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { isTokenExpiringSoon, refreshTokens } from './auth';
 
 const api = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
@@ -27,9 +28,9 @@ function isGuestApiPath(url: string): boolean {
     return path.startsWith('/guest/') || path.includes('/chatbot/guest');
 }
 
-// Request interceptor để thêm token
+// Request interceptor — gắn token + proactive refresh
 api.interceptors.request.use(
-    (config) => {
+    async (config) => {
         const url = config.url || '';
         const isGuestRoute = isGuestApiPath(url);
 
@@ -39,56 +40,72 @@ api.interceptors.request.use(
                 config.headers.Authorization = `Bearer ${guestToken}`;
             }
         } else {
-            const token = localStorage.getItem('accessToken');
+            let token = localStorage.getItem('accessToken');
+
+            // Proactive refresh: nếu token sắp hết hạn (< 60s), đổi trước khi gửi
+            if (token && isTokenExpiringSoon(token)) {
+                try {
+                    token = await refreshTokens();
+                } catch {
+                    // refresh thất bại => để request tiếp tục với token cũ, interceptor 401 sẽ xử lý
+                }
+            }
+
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
             }
         }
         return config;
     },
-    (error) => {
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
-// Response interceptor để handle errors
+// Response interceptor — fallback 401 retry
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
+        const originalRequest = error.config;
+
         if (error.response?.status === 401) {
-            // Only force-logout when the token itself is missing/invalid/expired.
-            // Authorization errors (user lacks permission) should NOT log the user out.
             const message: string = error.response?.data?.message || '';
-            const isTokenError = !message || // No message = no token at all
+            const isTokenError = !message ||
                 message.toLowerCase().includes('token') ||
                 message.toLowerCase().includes('invalid') ||
                 message.toLowerCase().includes('expired') ||
                 message.toLowerCase().includes('jwt') ||
-                message === 'Unauthorized'; // raw JWT guard rejection
+                message === 'Unauthorized';
 
-            if (isTokenError) {
-                const reqUrl = error.config?.url || '';
-                const isGuestRoute = isGuestApiPath(reqUrl);
+            const reqUrl = originalRequest?.url || '';
+            const isGuestRoute = isGuestApiPath(reqUrl);
+
+            if (isGuestRoute) {
+                // Guest: xóa token và redirect
+                localStorage.removeItem('guestAccessToken');
+                localStorage.removeItem('guestSession');
                 const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-
-                if (isGuestRoute) {
-                    localStorage.removeItem('guestAccessToken');
-                    localStorage.removeItem('guestSession');
-                    if (!pathname.startsWith('/guest/rescue/new')) {
-                        window.location.href = '/guest/rescue/new';
-                    }
-                } else {
-                    const isAuthPage = typeof window !== 'undefined' &&
-                        (pathname.startsWith('/auth/') || pathname === '/auth');
-
+                if (!pathname.startsWith('/guest/rescue/new')) {
+                    window.location.href = '/guest/rescue/new';
+                }
+            } else if (isTokenError && !originalRequest?._retry) {
+                // Thử refresh một lần duy nhất
+                originalRequest._retry = true;
+                try {
+                    const newToken = await refreshTokens();
+                    originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+                    return api(originalRequest); // retry request gốc
+                } catch {
+                    // Refresh thất bại => đăng xuất
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                    const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+                    const isAuthPage = pathname.startsWith('/auth/') || pathname === '/auth';
                     if (!isAuthPage) {
-                        localStorage.removeItem('accessToken');
-                        localStorage.removeItem('refreshToken');
                         window.location.href = '/auth/login';
                     }
                 }
             }
         }
+
         return Promise.reject(error);
     }
 );

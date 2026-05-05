@@ -78,7 +78,6 @@ export class GuestRescueController {
             quoteId,
             req.user.guestSessionId,
             dto.action as 'ACCEPT' | 'REJECT',
-            dto.rejectionReason,
         );
     }
 

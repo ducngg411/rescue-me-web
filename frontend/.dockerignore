@@ -1,0 +1,23 @@
+node_modules
+.next
+.git
+.gitignore
+Dockerfile
+.dockerignore
+
+# Never bake local env files into the image — build args via docker-compose
+# are the single source of truth for NEXT_PUBLIC_* values.
+.env
+.env.*
+!.env.production.example
+
+# Logs / caches
+*.log
+npm-debug.log*
+tsconfig.tsbuildinfo
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode
+.idea

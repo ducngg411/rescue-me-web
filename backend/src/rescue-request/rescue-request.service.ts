@@ -238,8 +238,35 @@ export class RescueRequestService {
             cloudinaryPublicId: string | null;
         }> = [];
 
-        // Add images from mediaObjectKeys
-        if (dto.mediaObjectKeys && dto.mediaObjectKeys.length > 0) {
+        // Add images — prefer uploadIds (real metadata) over legacy mediaObjectKeys
+        if (dto.uploadIds && dto.uploadIds.length > 0) {
+            const uploads = await this.prisma.upload.findMany({
+                where: {
+                    id: { in: dto.uploadIds },
+                    userId,
+                    confirmed: true,
+                },
+                select: {
+                    objectKey: true,
+                    fileName: true,
+                    fileSize: true,
+                    contentType: true,
+                    publicUrl: true,
+                },
+            });
+            for (const upload of uploads) {
+                mediaItems.push({
+                    mediaType: 'IMAGE',
+                    objectKey: upload.objectKey,
+                    fileName: upload.fileName,
+                    fileSize: upload.fileSize,
+                    contentType: upload.contentType,
+                    publicUrl: upload.publicUrl,
+                    cloudinaryPublicId: null,
+                });
+            }
+        } else if (dto.mediaObjectKeys && dto.mediaObjectKeys.length > 0) {
+            // Legacy fallback: construct URL from objectKey (fileSize/contentType not available)
             for (const objectKey of dto.mediaObjectKeys) {
                 const fileName = objectKey.split('/').pop() || 'unknown';
                 mediaItems.push({
@@ -1028,7 +1055,6 @@ export class RescueRequestService {
                         price: dto.price,
                         estimatedArrivalMinutes: dto.estimatedArrivalMinutes,
                         message: dto.message,
-                        providerLocation: dto.providerLocation ? (dto.providerLocation as any) : undefined,
                         status: 'PENDING',
                         expiresAt: quoteExpiresAt,
                     },
@@ -1128,7 +1154,6 @@ export class RescueRequestService {
         quoteId: string,
         userId: string,
         action: 'ACCEPT' | 'REJECT',
-        rejectionReason?: string,
     ) {
         console.log(`💬 [Quote] User ${action} quote:`, quoteId);
 
@@ -1237,7 +1262,6 @@ export class RescueRequestService {
                 where: { id: quoteId },
                 data: {
                     status: 'REJECTED',
-                    rejectionReason,
                     userRespondedAt: now,
                 },
             });

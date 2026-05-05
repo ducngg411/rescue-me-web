@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>System Architecture Diagram</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      padding: 40px 24px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #79c0ff;
+      margin-bottom: 48px;
+      text-transform: uppercase;
+    }
+
+    /* ── Layout ── */
+    .diagram {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    /* ── Nodes ── */
+    .node {
+      border-radius: 10px;
+      padding: 12px 20px;
+      text-align: center;
+      position: relative;
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      z-index: 2;
+    }
+    .node .sub {
+      font-size: 0.72rem;
+      font-weight: 400;
+      opacity: 0.8;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+
+    /* colour themes */
+    .node-user      { background: #1f6feb; border: 2px solid #388bfd; color: #fff; min-width: 120px; }
+    .node-gateway   { background: #1a3a5c; border: 2px solid #388bfd; color: #a5d6ff; min-width: 260px; }
+    .node-orch      { background: #163b2e; border: 2px solid #3fb950; color: #7ee787; min-width: 280px; }
+    .node-speech    { background: #2e1f63; border: 2px solid #8957e5; color: #d2a8ff; min-width: 190px; }
+    .node-retriever { background: #1f3d2e; border: 2px solid #3fb950; color: #7ee787; min-width: 220px; }
+    .node-memory    { background: #1a2f40; border: 2px solid #58a6ff; color: #79c0ff; min-width: 340px; }
+    .node-prompt    { background: #3b2312; border: 2px solid #f0883e; color: #ffa657; min-width: 190px; }
+    .node-llm       { background: #3b2312; border: 2px solid #f0883e; color: #ffa657; min-width: 190px; }
+    .node-stream    { background: #3b2312; border: 2px solid #f0883e; color: #ffa657; min-width: 190px; }
+    .node-queue     { background: #1a2840; border: 2px solid #58a6ff; color: #79c0ff; min-width: 600px; }
+    .node-memproc   { background: #162030; border: 2px solid #30a6d0; color: #56d4f5; min-width: 200px; }
+    .node-consol    { background: #162030; border: 2px solid #30a6d0; color: #56d4f5; min-width: 200px; }
+
+    /* memory sub-items */
+    .mem-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .mem-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #0d1e2e;
+      border-radius: 6px;
+      padding: 7px 14px;
+      font-size: 0.75rem;
+      border: 1px solid #30475e;
+    }
+    .mem-item .badge {
+      font-size: 0.65rem;
+      padding: 2px 7px;
+      border-radius: 20px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-redis    { background: #5c1a1a; color: #ff7b72; border: 1px solid #da3633; }
+    .badge-postgres { background: #1a3a5c; color: #79c0ff; border: 1px solid #388bfd; }
+    .badge-profile  { background: #3b2312; color: #ffa657; border: 1px solid #f0883e; }
+
+    /* ── Connectors ── */
+    .arrow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      position: relative;
+    }
+    .arrow-line {
+      width: 2px;
+      background: linear-gradient(to bottom, #388bfd55, #388bfd);
+      height: 36px;
+    }
+    .arrow-head {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 9px solid #388bfd;
+    }
+
+    .arrow-green .arrow-line  { background: linear-gradient(to bottom, #3fb95055, #3fb950); }
+    .arrow-green .arrow-head  { border-top-color: #3fb950; }
+    .arrow-orange .arrow-line { background: linear-gradient(to bottom, #f0883e55, #f0883e); }
+    .arrow-orange .arrow-head { border-top-color: #f0883e; }
+    .arrow-cyan .arrow-line   { background: linear-gradient(to bottom, #30a6d055, #30a6d0); }
+    .arrow-cyan .arrow-head   { border-top-color: #30a6d0; }
+
+    /* ── Split row (Speech + Retriever) ── */
+    .split-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 80px;
+      width: 100%;
+    }
+    .split-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Horizontal connector between orch and the two branches ── */
+    .branch-connector {
+      position: relative;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      height: 50px;
+    }
+    .branch-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    /* ── Section divider ── */
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      max-width: 700px;
+      margin: 40px 0 20px;
+      color: #58a6ff;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .section-label::before,
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, transparent, #30475e);
+    }
+    .section-label::before { background: linear-gradient(to left, transparent, #30475e); }
+
+    /* ── Async section ── */
+    .async-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      gap: 0;
+    }
+
+    /* ── User label at bottom ── */
+    .user-recv {
+      margin-top: 14px;
+      font-size: 0.78rem;
+      color: #8b949e;
+      font-style: italic;
+    }
+
+    /* ── Tooltip hint ── */
+    .node[title] { cursor: default; }
+  </style>
+</head>
+<body>
+
+<h1>System Architecture</h1>
+
+<div class="diagram">
+
+  <!-- USER -->
+  <div class="node node-user">User</div>
+
+  <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+  <!-- API GATEWAY -->
+  <div class="node node-gateway">
+    API Gateway
+    <div class="sub">Auth &nbsp;|&nbsp; Rate Limit &nbsp;|&nbsp; SSL</div>
+  </div>
+
+  <div class="arrow"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+  <!-- ORCHESTRATOR -->
+  <div class="node node-orch">
+    Orchestrator (Core)
+    <div class="sub">Session &amp; Flow Control</div>
+  </div>
+
+  <!-- Branch connector SVG -->
+  <div style="position:relative;width:600px;height:54px;">
+    <svg width="600" height="54" viewBox="0 0 600 54" style="overflow:visible;">
+      <!-- left branch -->
+      <line x1="300" y1="0" x2="140" y2="0" stroke="#8957e5" stroke-width="2"/>
+      <line x1="140" y1="0" x2="140" y2="44" stroke="#8957e5" stroke-width="2"/>
+      <polygon points="134,44 146,44 140,54" fill="#8957e5"/>
+      <!-- right branch -->
+      <line x1="300" y1="0" x2="460" y2="0" stroke="#3fb950" stroke-width="2"/>
+      <line x1="460" y1="0" x2="460" y2="44" stroke="#3fb950" stroke-width="2"/>
+      <polygon points="454,44 466,44 460,54" fill="#3fb950"/>
+    </svg>
+  </div>
+
+  <!-- SPLIT ROW: Speech + Retriever -->
+  <div class="split-row" style="align-items:flex-start;gap:120px;">
+
+    <!-- LEFT: Speech → Prompt → LLM → Stream -->
+    <div class="split-col">
+      <div class="node node-speech">
+        Speech Service
+        <div class="sub">STT &nbsp;/&nbsp; TTS &nbsp;/&nbsp; Pronunciation</div>
+      </div>
+      <div class="arrow arrow-orange"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+      <div class="node node-prompt">
+        Prompt Builder
+        <div class="sub">clean + optimize context</div>
+      </div>
+      <div class="arrow arrow-orange"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+      <div class="node node-llm">
+        LLM Gateway
+        <div class="sub">OpenAI / local model / fallback</div>
+      </div>
+      <div class="arrow arrow-orange"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+      <div class="node node-stream">
+        Streaming Response
+      </div>
+      <div class="arrow arrow-orange"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+      <div class="node node-user">User</div>
+      <div class="user-recv">nhận voice / text</div>
+    </div>
+
+    <!-- RIGHT: Retriever → Memory -->
+    <div class="split-col" style="margin-top:0;">
+      <div class="node node-retriever">
+        Retriever API
+        <div class="sub">RAG Layer</div>
+      </div>
+      <div class="arrow arrow-green"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+      <div class="node node-memory" style="padding:16px 22px;">
+        <div style="font-size:0.85rem;font-weight:700;margin-bottom:4px;color:#79c0ff;">Memory Layer</div>
+        <div class="mem-grid">
+          <div class="mem-item">
+            <span>Short-term</span>
+            <span class="badge badge-redis">Redis</span>
+          </div>
+          <div class="mem-item">
+            <span>Long-term</span>
+            <span class="badge badge-postgres">Postgres + Vector</span>
+          </div>
+          <div class="mem-item">
+            <span>Priority</span>
+            <span class="badge badge-profile">User Profile DB</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── ASYNC SECTION ── -->
+  <div class="section-label">⚡ Async Pipeline — Non-blocking</div>
+
+  <div class="async-section">
+
+    <!-- EVENT QUEUE -->
+    <div class="node node-queue">
+      Event Queue
+      <div class="sub">Kafka / RabbitMQ</div>
+    </div>
+
+    <div class="arrow arrow-cyan"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+    <!-- MEMORY PROCESSOR -->
+    <div class="node node-memproc">
+      Memory Processor
+      <div class="sub">Extract info &nbsp;·&nbsp; Summarize &nbsp;·&nbsp; Score relevance</div>
+    </div>
+
+    <div class="arrow arrow-cyan"><div class="arrow-line"></div><div class="arrow-head"></div></div>
+
+    <!-- CONSOLIDATION -->
+    <div class="node node-consol">
+      Consolidation
+      <div class="sub">Update long-term &nbsp;·&nbsp; Update priority &nbsp;·&nbsp; Prune data</div>
+    </div>
+
+  </div>
+
+</div><!-- .diagram -->
+
+</body>
+</html>

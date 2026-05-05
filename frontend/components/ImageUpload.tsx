@@ -23,7 +23,7 @@ interface ImageUploadProps {
     /** When set, used instead of `uploadFile` + `purpose` (e.g. guest presign flow). */
     uploadImage?: ImageUploadAdapter;
     purpose?: UploadPurpose;
-    onSuccess?: (objectKey: string, publicUrl: string) => void;
+    onSuccess?: (objectKey: string, publicUrl: string, uploadId?: string) => void;
     onRemove?: (objectKey: string) => void;
     uploadedImages?: Array<{ objectKey: string; publicUrl: string }>;
     disabled?: boolean;
@@ -105,6 +105,7 @@ export default function ImageUpload({
         try {
             let objectKey: string | undefined;
             let publicUrl: string | undefined;
+            let uploadId: string | undefined;
             let errMsg: string | undefined;
 
             if (uploadImage) {
@@ -112,6 +113,7 @@ export default function ImageUpload({
                 if (result.success && result.objectKey && result.publicUrl) {
                     objectKey = result.objectKey;
                     publicUrl = result.publicUrl;
+                    // uploadId not available via custom adapter
                 } else {
                     errMsg = result.error || t('components.fileUpload.errors.uploadFailed');
                 }
@@ -131,13 +133,14 @@ export default function ImageUpload({
                 if (result.success && result.upload) {
                     objectKey = result.upload.objectKey;
                     publicUrl = result.upload.publicUrl;
+                    uploadId = result.upload.id; // real Upload ID for backend lookup
                 } else {
                     errMsg = result.error || t('components.fileUpload.errors.uploadFailed');
                 }
             }
 
             if (objectKey && publicUrl) {
-                onSuccess?.(objectKey, publicUrl);
+                onSuccess?.(objectKey, publicUrl, uploadId);
                 setSelectedFile(null);
                 setPreview(null);
                 setProgress(0);

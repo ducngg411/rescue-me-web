@@ -124,12 +124,63 @@ export const isTokenValid = (token: string): boolean => {
     }
 };
 
+/** Trả về true nếu accessToken hết hạn trong vòng 60 giây tới */
+export const isTokenExpiringSoon = (token: string, bufferMs = 60_000): boolean => {
+    try {
+        const decoded: any = jwtDecode(token);
+        return decoded.exp * 1000 - Date.now() < bufferMs;
+    } catch {
+        return true; // token lỗi => coi như sắp hết hạn
+    }
+};
+
 export const getStoredToken = (): string | null => {
     const token = localStorage.getItem('accessToken');
     if (token && isTokenValid(token)) {
         return token;
     }
     return null;
+};
+
+// ==================== REFRESH TOKENS ====================
+let _refreshPromise: Promise<string> | null = null;
+
+/**
+ * Đổi refreshToken lấy cặp token mới.
+ * Deduplication: nhiều request gọi đồng thời chỉ tạo 1 lần call thực sự.
+ */
+export const refreshTokens = async (): Promise<string> => {
+    if (_refreshPromise) return _refreshPromise;
+
+    _refreshPromise = (async () => {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) {
+            throw new Error('Không có refresh token');
+        }
+
+        // Dùng fetch thô để tránh đệ quy qua axios interceptor
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+        const res = await fetch(`${baseUrl}/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+        });
+
+        if (!res.ok) {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            throw new Error('Refresh token không hợp lệ hoặc đã hết hạn');
+        }
+
+        const data = await res.json();
+        localStorage.setItem('accessToken', data.accessToken);
+        localStorage.setItem('refreshToken', data.refreshToken);
+        return data.accessToken as string;
+    })().finally(() => {
+        _refreshPromise = null;
+    });
+
+    return _refreshPromise;
 };
 
 // ==================== PROVIDER PROFILE ====================
