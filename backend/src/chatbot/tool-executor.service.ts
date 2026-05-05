@@ -212,7 +212,6 @@ export class ToolExecutorService {
                         status: true,
                         paymentMethod: true,
                         baseFee: true,
-                        distanceFee: true,
                     },
                 },
                 quotes: {
