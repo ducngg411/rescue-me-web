@@ -291,4 +291,8 @@ Nếu cần, có thể tách README thành:
 - `docs/deployment.md`
 - `docs/env.md`
 
+<<<<<<< HEAD
 để tài liệu ngắn gọn và dễ maintain hơn khi dự án mở rộng.
+=======
+để tài liệu ngắn gọn và dễ maintain hơn khi dự án mở rộng.
+>>>>>>> 2409c2079abdf6c8128727bb078017fc96b1a93c
