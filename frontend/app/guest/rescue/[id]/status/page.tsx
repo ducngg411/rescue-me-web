@@ -198,35 +198,16 @@ export default function GuestStatusPage() {
     const [showRegisterModal, setShowRegisterModal] = useState(false);
     const [showTrackingMap, setShowTrackingMap] = useState(false);
     const [timeLeft, setTimeLeft] = useState(0);
+    const [gracePeriodSecondsRemaining, setGracePeriodSecondsRemaining] = useState(0);
     const statusRef = useRef(statusData);
     statusRef.current = statusData;
+    const prevGracePeriodSecRef = useRef<number | null>(null);
 
-    // ── Auto-close tracking map when provider arrives ─────────────────────────
-    useEffect(() => {
-        if (showTrackingMap && statusData?.status && statusData.status !== 'IN_PROGRESS') {
-            setShowTrackingMap(false);
-            toast.success('Bản đồ đã thu nhỏ, vui lòng xác nhận trạng thái');
-        }
-    }, [statusData?.status, showTrackingMap]);
-
-    useEffect(() => {
-        const s = statusData;
-        const active = s?.status === 'MATCHING' && s.quoteWindowOpen === true;
-        if (!active) {
-            setTimeLeft(0);
-            return;
-        }
-
-        const tick = () => matchingQuoteWindowSecondsRemaining(statusRef.current);
-        setTimeLeft(tick());
-        const timer = setInterval(() => setTimeLeft(tick()), 1000);
-        return () => clearInterval(timer);
-    }, [
-        statusData?.status,
-        statusData?.quoteWindowOpen,
-        statusData?.quoteWindowExpiresAt,
-        statusData?.expiresAt,
-    ]);
+    const calcGracePeriod = useCallback((closedAt: string | null | undefined): number => {
+        if (!closedAt) return 0;
+        const elapsed = Math.floor((Date.now() - new Date(closedAt).getTime()) / 1000);
+        return Math.max(0, 60 - elapsed);
+    }, []);
 
     const fetchStatus = useCallback(async () => {
         try {
@@ -239,6 +220,63 @@ export default function GuestStatusPage() {
             setLoading(false);
         }
     }, [id, t]);
+
+    // ── Auto-close tracking map when provider arrives ─────────────────────────
+    useEffect(() => {
+        if (showTrackingMap && statusData?.status && statusData.status !== 'IN_PROGRESS') {
+            setShowTrackingMap(false);
+            toast.success('Bản đồ đã thu nhỏ, vui lòng xác nhận trạng thái');
+        }
+    }, [statusData?.status, showTrackingMap]);
+
+    useEffect(() => {
+        const s = statusData;
+        const isMatching = s?.status === 'MATCHING';
+
+        if (!isMatching) {
+            setTimeLeft(0);
+            setGracePeriodSecondsRemaining(0);
+            prevGracePeriodSecRef.current = null;
+            return;
+        }
+
+        // Seed grace ref on status change to avoid false-trigger on reload
+        if (s.quoteWindowOpen === false) {
+            const grace = calcGracePeriod(s.quoteWindowClosedAt);
+            setGracePeriodSecondsRemaining(grace);
+            prevGracePeriodSecRef.current = grace;
+        } else {
+            setGracePeriodSecondsRemaining(0);
+            prevGracePeriodSecRef.current = null;
+        }
+
+        const timer = setInterval(() => {
+            const current = statusRef.current;
+            setTimeLeft(matchingQuoteWindowSecondsRemaining(current));
+
+            if (current?.quoteWindowOpen === false) {
+                const grace = calcGracePeriod(current.quoteWindowClosedAt);
+                const prev = prevGracePeriodSecRef.current;
+                prevGracePeriodSecRef.current = grace;
+                setGracePeriodSecondsRemaining(grace);
+
+                if (grace === 0 && prev !== null && prev > 0) {
+                    console.log('⏰ [Guest Grace] 1-min selection window expired — re-fetching to trigger expire');
+                    fetchStatus();
+                }
+            }
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [
+        statusData?.status,
+        statusData?.quoteWindowOpen,
+        statusData?.quoteWindowExpiresAt,
+        statusData?.quoteWindowClosedAt,
+        statusData?.expiresAt,
+        calcGracePeriod,
+        fetchStatus,
+    ]);
 
     useEffect(() => {
         if (!isReady) return;
@@ -435,6 +473,7 @@ export default function GuestStatusPage() {
                             requestId={id}
                             requestScope="guest"
                             quoteCount={statusData.quoteCount ?? 0}
+                            gracePeriodSecondsRemaining={gracePeriodSecondsRemaining}
                             enableReject
                             onQuoteAccepted={() => fetchStatus()}
                             onQuoteRejected={() => fetchStatus()}
@@ -570,8 +609,39 @@ export default function GuestStatusPage() {
                     </div>
                 )}
 
-                {/* ── Cancelled / Expired ── */}
-                {isCancelled && (
+                {/* ── Expired ── */}
+                {statusData.status === 'EXPIRED' && (
+                    <div className="bg-white rounded-2xl p-6 text-center" style={{ boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
+                        <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#fefce8' }}>
+                            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#ca8a04" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-base font-bold mb-1" style={{ color: C.navy }}>{t('guest.status.expired.title')}</h3>
+                        <p className="text-sm mb-5" style={{ color: C.gray }}>{t('guest.status.expired.desc')}</p>
+                        <div className="space-y-2.5">
+                            <button
+                                type="button"
+                                onClick={() => router.push('/guest/rescue/new')}
+                                className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98]"
+                                style={{ background: `linear-gradient(135deg, ${C.orange} 0%, ${C.orangeDark} 100%)`, boxShadow: `0 4px 12px ${C.orange}40` }}
+                            >
+                                {t('guest.status.expired.newRequestBtn')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => router.push('/')}
+                                className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
+                                style={{ background: '#f8fafc', color: C.gray, border: `1.5px solid ${C.border}` }}
+                            >
+                                {t('guest.status.expired.homeBtn')}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Cancelled / Rejected ── */}
+                {(statusData.status === 'CANCELLED' || statusData.status === 'REJECTED') && (
                     <div className="rounded-2xl p-5 text-center" style={{ background: '#f8fafc', border: `1.5px solid ${C.border}` }}>
                         <div className="w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center" style={{ background: '#f1f5f9' }}>
                             <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke={C.gray} strokeWidth={2}>

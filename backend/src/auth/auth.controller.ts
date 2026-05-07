@@ -25,14 +25,14 @@ import {
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
-@ApiTags('Auth')
-@Controller('auth')
+@ApiTags('Auth') // Swagger tag for grouping auth endpoints
+@Controller('auth') // /auth
 export class AuthController {
     constructor(private authService: AuthService) { }
 
     // ==================== REGISTRATION ====================
-    @ApiOperation({ summary: 'Register with email and password' })
-    @ApiResponse({ status: 201, description: 'User created, tokens returned' })
+    @ApiOperation({ summary: 'Register with email and password' }) // Swagger operation summary
+    @ApiResponse({ status: 201, description: 'User created, tokens returned' }) // Swagger response description
     @Post('register/email')
     @HttpCode(HttpStatus.CREATED)
     async registerEmail(@Body() dto: RegisterEmailDto) {
@@ -56,7 +56,7 @@ export class AuthController {
 
     // ==================== PROFILE ====================
     @ApiOperation({ summary: 'Select user role (USER or PROVIDER)' })
-    @ApiBearerAuth('JWT')
+    @ApiBearerAuth('JWT') // key for swagger to know that this endpoint requires authentication
     @Post('profile/select-role')
     @UseGuards(JwtAuthGuard)
     @HttpCode(HttpStatus.OK)

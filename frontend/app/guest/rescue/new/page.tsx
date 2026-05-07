@@ -228,7 +228,13 @@ export default function GuestNewRequestPage() {
             toast.success(t('user.create.toasts.createSuccess'));
             router.push(`/guest/rescue/${response.data.id}/status`);
         } catch (err: any) {
-            toast.error(err?.response?.data?.message || t('user.create.toasts.defaultError'));
+            const data = err?.response?.data;
+            if (data?.code === 'ACTIVE_REQUEST_EXISTS' && data?.requestId) {
+                toast(t('guest.status.activeRequestRedirect'), { icon: '↩️' });
+                router.push(`/guest/rescue/${data.requestId}/status`);
+                return;
+            }
+            toast.error(data?.message || t('user.create.toasts.defaultError'));
         } finally {
             setLoadingSubmit(false);
         }

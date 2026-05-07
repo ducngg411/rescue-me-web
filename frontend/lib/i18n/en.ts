@@ -673,6 +673,7 @@ const en = {
                 expiredSub: 'No more quotes available. Please try requesting again.',
                 loading: 'Loading quotes...',
                 loadError: 'Failed to load quotes',
+                graceTimerWarning: 'Choose now — quotes auto-cancel when time runs out',
             },
             page: {
                 loading: 'Loading request...',
@@ -2674,6 +2675,7 @@ const en = {
         status: {
             title: 'Request Status',
             guestBadge: 'Guest Request',
+            activeRequestRedirect: 'You have an unfinished request — redirecting...',
             registerToSave: 'Register to save this request to your account',
             cancelBtn: 'Cancel request',
             timeline: {
@@ -2735,6 +2737,12 @@ const en = {
             },
             cancelled: {
                 subtitle: 'This request has ended',
+            },
+            expired: {
+                title: 'No provider found',
+                desc: 'No provider responded in time. Try again — someone usually picks up within a few minutes.',
+                newRequestBtn: 'Create new request',
+                homeBtn: 'Back to home',
             },
             quotes: {
                 sectionTitle: 'Quotes received ({count})',

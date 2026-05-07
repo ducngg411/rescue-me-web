@@ -677,60 +677,6 @@ export class RescueRequestService {
         return { success: true, message: 'Request declined successfully' };
     }
 
-    async retryRescueRequest(requestId: string, userId: string) {
-        // Get original request
-        const originalRequest = await this.getRescueRequestById(requestId, userId);
-
-        // Only allow retry if status is EXPIRED or CANCELLED
-        if (!['EXPIRED', 'CANCELLED'].includes(originalRequest.status)) {
-            throw new Error('Can only retry EXPIRED or CANCELLED requests');
-        }
-
-        console.log(` [RescueRequest] Retrying request ${requestId}`);
-
-        // Create new request with same data - start with Phase 1
-        const now = new Date();
-        const phase1Timeout = 60; // Phase 1: 60 seconds
-        const expiresAt = new Date(now.getTime() + phase1Timeout * 1000);
-
-        const retryOrderCode = await allocateUniqueOrderCode(this.prisma);
-        const newRequest = await this.prisma.rescueRequest.create({
-            data: {
-                orderCode: retryOrderCode,
-                userId,
-                incidentType: originalRequest.incidentType,
-                vehicleType: originalRequest.vehicleType,
-                licensePlate: originalRequest.licensePlate,
-                vehicleColor: originalRequest.vehicleColor,
-                description: originalRequest.description,
-                contactPhone: originalRequest.contactPhone,
-                pickupLocation: originalRequest.pickupLocation as any,
-                dropoffLocation: originalRequest.dropoffLocation as any,
-                videoUrls: originalRequest.videoUrls,
-                status: 'MATCHING',
-                matchingStartedAt: now,
-                expiresAt: expiresAt,
-                matchAttempts: (originalRequest.matchAttempts || 0) + 1,
-                searchPhase: 1, // Restart with Phase 1
-            },
-            include: {
-                media: true,
-                user: {
-                    select: {
-                        id: true,
-                        name: true,
-                        email: true,
-                        phoneNumber: true,
-                        avatar: true,
-                    },
-                },
-            },
-        });
-
-        console.log(` [RescueRequest] Created retry request: ${newRequest.id}`);
-
-        return newRequest;
-    }
 
     async getRequestStatus(requestId: string, userId: string) {
         const request = await this.getRescueRequestById(requestId, userId);
@@ -850,9 +796,18 @@ export class RescueRequestService {
 
         for (const request of expiredRequests) {
             if (request.searchPhase === 1) {
-                // Phase 1 → Phase 2: Expand search radius + 30s extra
-                const phase2Timeout = 30; // Phase 2: 30 seconds expanded radius
-                const newExpiresAt = new Date(now.getTime() + phase2Timeout * 1000);
+                const pendingQuoteCount = await this.prisma.quote.count({
+                    where: { rescueRequestId: request.id, status: 'PENDING' },
+                });
+
+                // Quote slots full → window is closing on its own, skip entirely
+                if (pendingQuoteCount >= (request.maxQuotes ?? 3)) {
+                    console.log(`⏸️ [RescueRequest] ${request.id} Phase 1 ended — quotes full (${pendingQuoteCount}/${request.maxQuotes}), skipping Phase 2`);
+                    continue;
+                }
+
+                // Phase 2 expires exactly when the quote window does — keeps phases in sync with the 3-min window
+                const newExpiresAt = request.quoteWindowExpiresAt ?? new Date(now.getTime() + 120 * 1000);
 
                 await this.prisma.rescueRequest.update({
                     where: { id: request.id },
@@ -862,11 +817,20 @@ export class RescueRequestService {
                     },
                 });
 
-                console.log(` [RescueRequest] ${request.id} → Phase 2 (expanded search), new expires: ${newExpiresAt.toISOString()}`);
                 phase1ToPhase2Count++;
 
-                // TODO: Broadcast to providers with expanded radius (P2 - Provider side)
-                // this.broadcastToProviders(request, { radiusKm: 20 });
+                // Only re-broadcast if no quote yet — user already has options, no need to spam more providers
+                if (pendingQuoteCount === 0) {
+                    console.log(` [RescueRequest] ${request.id} → Phase 2 (0 quotes, re-broadcasting), expires: ${newExpiresAt.toISOString()}`);
+                    setImmediate(() => {
+                        this.broadcastToProviders(request).catch(err =>
+                            this.logger.error(`[FCM] Phase 2 broadcastToProviders failed: ${err.message}`)
+                        );
+                    });
+                } else {
+                    console.log(` [RescueRequest] ${request.id} → Phase 2 (${pendingQuoteCount} quote(s) pending, skipping broadcast), expires: ${newExpiresAt.toISOString()}`);
+                }
+
             } else if (request.searchPhase === 2) {
                 // Phase 2 → EXPIRED only if there are NO pending quotes waiting for user selection
                 // If there are quotes, the request stays MATCHING and user will be prompted to choose
@@ -895,13 +859,58 @@ export class RescueRequestService {
             }
         }
 
-        if (phase1ToPhase2Count > 0 || phase2ToExpiredCount > 0) {
-            console.log(`📊 [RescueRequest] Phase 1→2: ${phase1ToPhase2Count}, Phase 2→EXPIRED: ${phase2ToExpiredCount}`);
+        // ── Case 3: Selection Deadline ───────────────────────────────────────
+        // Quote window has been closed (either full or time-expired) but the user
+        // has not selected any quote. Providers are stuck. Give the user a 1-minute
+        // grace period after the window closes; after that, auto-expire the request
+        // and cancel all lingering quotes so providers can move on.
+        const SELECTION_GRACE_MINUTES = 1;
+        const selectionDeadlineCutoff = new Date(now.getTime() - SELECTION_GRACE_MINUTES * 60 * 1000);
+
+        const abandonedRequests = await this.prisma.rescueRequest.findMany({
+            where: {
+                status: 'MATCHING',
+                quoteWindowClosedAt: {
+                    not: null,
+                    lte: selectionDeadlineCutoff, // window closed more than 10 min ago
+                },
+            },
+            select: { id: true, quoteWindowClosedAt: true },
+        });
+
+        let selectionTimeoutCount = 0;
+
+        for (const req of abandonedRequests) {
+            await this.prisma.$transaction(async (tx) => {
+                // Cancel all pending quotes for this request
+                await tx.quote.updateMany({
+                    where: { rescueRequestId: req.id, status: 'PENDING' },
+                    data: { status: 'CANCELLED' },
+                });
+
+                // Expire the request
+                await tx.rescueRequest.update({
+                    where: { id: req.id },
+                    data: { status: 'EXPIRED' },
+                });
+            });
+
+            this.logger.warn(
+                `[SelectionDeadline] Request ${req.id} expired — user did not select a quote within ${SELECTION_GRACE_MINUTES} min after window closed`,
+            );
+            selectionTimeoutCount++;
+        }
+
+        if (phase1ToPhase2Count > 0 || phase2ToExpiredCount > 0 || selectionTimeoutCount > 0) {
+            console.log(
+                `📊 [RescueRequest] Phase 1→2: ${phase1ToPhase2Count}, Phase 2→EXPIRED: ${phase2ToExpiredCount}, SelectionTimeout: ${selectionTimeoutCount}`,
+            );
         }
 
         return {
             phase1ToPhase2: phase1ToPhase2Count,
             phase2ToExpired: phase2ToExpiredCount,
+            selectionTimeout: selectionTimeoutCount,
             totalProcessed: expiredRequests.length,
         };
     }
@@ -1031,9 +1040,9 @@ export class RescueRequestService {
             throw new BadRequestException('You already sent a quote for this request');
         }
 
-        // Individual Quote TTL: 2 minutes from now (quotes sent early expire sooner)
-        const quoteTTL = 2 * 60 * 1000; // 2 minutes
-        const quoteExpiresAt = new Date(now.getTime() + quoteTTL);
+        // Quote TTL: aligned with the request's quote window so all quotes expire together
+        // Using quoteWindowExpiresAt ensures quotes sent early don't vanish before the window closes
+        const quoteExpiresAt = rescueRequest.quoteWindowExpiresAt ?? new Date(now.getTime() + 3 * 60 * 1000);
 
         // Create quote + sync quoteCount from real PENDING rows (avoids race vs cached quoteCount)
         const maxQ = rescueRequest.maxQuotes ?? 3;
@@ -1346,45 +1355,6 @@ export class RescueRequestService {
         return { success: true, status: 'IN_PROGRESS' };
     }
 
-    /**
-     * Provider hoàn thành công việc: WORKING → COMPLETED
-     * PATCH /rescue-requests/:id/complete-service
-     */
-    async completeService(requestId: string, providerId: string) {
-        const request = await this.prisma.rescueRequest.findUnique({ where: { id: requestId } });
-        if (!request) throw new NotFoundException('Rescue request not found');
-        if (request.assignedProviderId !== providerId) throw new ForbiddenException('Not assigned to this request');
-        if (request.status === 'COMPLETED') return { success: true, status: 'COMPLETED' };
-        if (!['IN_PROGRESS', 'ARRIVED', 'WORKING'].includes(request.status)) throw new BadRequestException(`Cannot complete from status: ${request.status}`);
-        await this.prisma.rescueRequest.update({
-            where: { id: requestId },
-            data: { status: 'COMPLETED', completedAt: new Date() },
-        });
-        console.log(` [RescueRequest] Provider ${providerId} completed service → COMPLETED`);
-
-        // Deduct platform commission for CASH payments (fire-and-forget, non-blocking)
-        // The commission service will create a DEBIT transaction and reduce availableBalance.
-        // If balance goes negative the provider is blocked from receiving new jobs.
-        setImmediate(async () => {
-            try {
-                const payment = await this.prisma.payment.findUnique({
-                    where: { requestId },
-                });
-                if (payment && payment.paymentMethod === 'CASH') {
-                    const result = await this.commissionService.handleCashJobCompletion(requestId);
-                    console.log(
-                        `💰 [Commission] Cash commission deducted for job ${requestId}: ` +
-                        `${result.commissionAmount} VND (${result.commissionRate * 100}%). ` +
-                        `New balance: ${result.walletSnapshot.availableBalance} VND`,
-                    );
-                }
-            } catch (err) {
-                console.error(`❌ [Commission] Failed to deduct commission for job ${requestId}:`, err.message);
-            }
-        });
-
-        return { success: true, status: 'COMPLETED' };
-    }
 
     /**
      * Provider xem danh sách quotes đã gửi
@@ -1452,17 +1422,23 @@ export class RescueRequestService {
     }
 
     /**
-     * Auto-expire PENDING quotes that exceeded expiresAt
+     * Auto-expire PENDING quotes that exceeded expiresAt.
+     * Quotes belonging to a still-MATCHING request are intentionally skipped —
+     * the user must have a chance to select before quotes disappear.
      */
     async checkAndExpireQuotes() {
         const now = new Date();
 
-        // Find PENDING quotes that have expired
+        // Only expire quotes whose rescue request is no longer MATCHING.
+        // If the request is still MATCHING, quotes must stay PENDING so the user can select.
         const expiredQuotes = await this.prisma.quote.findMany({
             where: {
                 status: 'PENDING',
                 expiresAt: {
                     lte: now,
+                },
+                rescueRequest: {
+                    status: { not: 'MATCHING' },
                 },
             },
         });

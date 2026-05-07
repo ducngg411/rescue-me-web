@@ -105,7 +105,7 @@ export default function MatchingStatus({
                         <div
                             className="h-full rounded-full transition-all duration-1000"
                             style={{
-                                width: `${Math.min(100, (timeRemaining / 120) * 100)}%`,
+                                width: `${Math.min(100, (timeRemaining / 180) * 100)}%`,
                                 background: timeRemaining < 30 ? '#ef4444' : C.orange,
                             }}
                         />

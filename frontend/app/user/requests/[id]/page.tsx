@@ -807,7 +807,7 @@ export default function RequestTrackingPage() {
     const [liveQuotes, setLiveQuotes] = useState<Quote[]>([]);
     const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
-    const { status, isLoading, error, timeRemaining, quoteWindowJustClosed, cancelRequest, retryRequest } = useRequestTracking({
+    const { status, isLoading, error, timeRemaining, quoteWindowJustClosed, gracePeriodSecondsRemaining, cancelRequest } = useRequestTracking({
         requestId,
         enabled: isReady,
     });
@@ -890,17 +890,9 @@ export default function RequestTrackingPage() {
         }
     };
 
-    const handleRetry = async () => {
-        setIsRetrying(true);
-        try {
-            const newRequest = await retryRequest();
-            toast.success(t('user.tracking.page.retrySuccess'));
-            router.push(`/user/requests/${newRequest.id}`);
-        } catch {
-            toast.error(t('user.tracking.page.retryError'));
-        } finally {
-            setIsRetrying(false);
-        }
+    const handleRetry = () => {
+        // Retry = create a new request from the home page
+        router.push('/user');
     };
 
     if (!isReady || isLoading) {
@@ -1109,6 +1101,7 @@ export default function RequestTrackingPage() {
                     <QuoteSelectionPanel
                         requestId={requestId}
                         quoteCount={status.quoteCount ?? 0}
+                        gracePeriodSecondsRemaining={gracePeriodSecondsRemaining}
                         onQuoteAccepted={() => {
                             setShowQuoteSelection(false);
                         }}

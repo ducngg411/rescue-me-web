@@ -69,6 +69,19 @@ export class GuestRescueService {
             throw new ForbiddenException('Guest session invalid or expired');
         }
 
+        const ACTIVE_STATUSES = ['MATCHING', 'ASSIGNED', 'IN_PROGRESS', 'ARRIVED', 'WORKING', 'PAYMENT_PENDING'];
+        const existingActive = await this.prisma.rescueRequest.findFirst({
+            where: { guestSessionId, status: { in: ACTIVE_STATUSES as any } },
+            select: { id: true, status: true },
+        });
+        if (existingActive) {
+            throw new BadRequestException({
+                code: 'ACTIVE_REQUEST_EXISTS',
+                requestId: existingActive.id,
+                message: `Bạn đang có 1 yêu cầu cứu hộ chưa hoàn thành (${existingActive.status}).`,
+            });
+        }
+
         const now = new Date();
         const phase1Timeout = 60;
         const phaseExpiresAt = new Date(now.getTime() + phase1Timeout * 1000);
@@ -347,6 +360,12 @@ export class GuestRescueService {
 
                 await tx.quote.updateMany({
                     where: { rescueRequestId: requestId, id: { not: quoteId }, status: 'PENDING' },
+                    data: { status: 'CANCELLED' },
+                });
+
+                // Provider now has a job — cancel their pending quotes on other requests to prevent double-booking
+                await tx.quote.updateMany({
+                    where: { providerId: quote.providerId, rescueRequestId: { not: requestId }, status: 'PENDING' },
                     data: { status: 'CANCELLED' },
                 });
             });

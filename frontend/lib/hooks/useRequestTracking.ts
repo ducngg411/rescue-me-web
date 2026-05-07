@@ -57,6 +57,7 @@ export function useRequestTracking({
     const [error, setError] = useState<string | null>(null);
     const [timeRemaining, setTimeRemaining] = useState<number>(0);
     const [quoteWindowJustClosed, setQuoteWindowJustClosed] = useState(false);
+    const [gracePeriodSecondsRemaining, setGracePeriodSecondsRemaining] = useState<number>(0);
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const expireCheckInProgress = useRef<boolean>(false);
@@ -64,6 +65,13 @@ export function useRequestTracking({
     // Track latest status in a ref so countdown interval can read it without stale closure
     const statusRef = useRef<RequestStatus | null>(null);
     const prevCountdownSecRef = useRef<number | null>(null);
+    const prevGracePeriodSecRef = useRef<number | null>(null);
+
+    const calcGracePeriod = (closedAt: string | null | undefined): number => {
+        if (!closedAt) return 0;
+        const elapsed = Math.floor((Date.now() - new Date(closedAt).getTime()) / 1000);
+        return Math.max(0, 60 - elapsed);
+    };
 
     // Force backend to check and transition phases immediately
     const triggerExpireCheck = useCallback(async () => {
@@ -112,9 +120,20 @@ export function useRequestTracking({
                         triggerExpireCheck();
                     }
                 }
+
+                // Grace period: 60s after window closes for user to pick a quote
+                if (newStatus.quoteWindowOpen === false) {
+                    const grace = calcGracePeriod(newStatus.quoteWindowClosedAt);
+                    setGracePeriodSecondsRemaining(grace);
+                    prevGracePeriodSecRef.current = grace; // seed so interval doesn't false-trigger on reload
+                } else {
+                    setGracePeriodSecondsRemaining(0);
+                    prevGracePeriodSecRef.current = null;
+                }
             } else {
                 setTimeRemaining(0);
                 prevCountdownSecRef.current = 0;
+                setGracePeriodSecondsRemaining(0);
             }
 
             return newStatus;
@@ -177,6 +196,19 @@ export function useRequestTracking({
                     triggerExpireCheck();
                 }
             }
+
+            // Tick grace period countdown; trigger expire when it hits 0
+            if (s?.status === 'MATCHING' && s.quoteWindowOpen === false) {
+                const grace = calcGracePeriod(s.quoteWindowClosedAt);
+                const prevGrace = prevGracePeriodSecRef.current;
+                prevGracePeriodSecRef.current = grace;
+                setGracePeriodSecondsRemaining(grace);
+
+                if (grace === 0 && prevGrace !== null && prevGrace > 0) {
+                    console.log('⏰ [Grace] 1-min selection window expired — triggering expire check');
+                    triggerExpireCheck();
+                }
+            }
         }, 1000);
     }, [fetchStatus, pollInterval, stopPolling, triggerExpireCheck]);
 
@@ -205,19 +237,6 @@ export function useRequestTracking({
         }
     };
 
-    const retryRequest = async () => {
-        try {
-            const response = await api.post(`/rescue-requests/${requestId}/retry`, undefined, {
-                signal: abortControllerRef.current?.signal,
-            });
-            return response.data;
-        } catch (err: any) {
-            if (err?.code === 'ERR_CANCELED') throw err;
-            console.error('Error retrying request:', err);
-            setError(err.response?.data?.message || 'Failed to retry request');
-            throw err;
-        }
-    };
 
     return {
         status,
@@ -225,8 +244,8 @@ export function useRequestTracking({
         error,
         timeRemaining,
         quoteWindowJustClosed,
+        gracePeriodSecondsRemaining,
         refresh: fetchStatus,
         cancelRequest,
-        retryRequest,
     };
 }

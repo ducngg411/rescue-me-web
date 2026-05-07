@@ -86,10 +86,6 @@ export class RescueRequestController {
         return this.rescueRequestService.cancelRescueRequest(id, req.user.id);
     }
 
-    @Post(':id/retry')
-    async retryRescueRequest(@Request() req, @Param('id') id: string) {
-        return this.rescueRequestService.retryRescueRequest(id, req.user.id);
-    }
 
     // Manual trigger expire check (for testing/debugging)
     @Post('admin/expire-check')
@@ -129,10 +125,6 @@ export class RescueRequestController {
         return this.rescueRequestService.denyArrival(requestId, req.user.id);
     }
 
-    @Patch(':id/complete-service')
-    async completeService(@Request() req, @Param('id') requestId: string) {
-        return this.rescueRequestService.completeService(requestId, req.user.id);
-    }
 
     // ==================== QUOTE ENDPOINTS ====================
 

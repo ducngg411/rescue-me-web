@@ -48,6 +48,8 @@ interface QuoteSelectionPanelProps {
     /** When true, show reject and call `onQuoteRejected` after successful REJECT. */
     enableReject?: boolean;
     onQuoteRejected?: () => void;
+    /** Seconds remaining in the 1-minute grace period after quote window closes. */
+    gracePeriodSecondsRemaining?: number;
 }
 
 function formatPrice(price: number) {
@@ -61,6 +63,7 @@ export default function QuoteSelectionPanel({
     onQuoteAccepted,
     enableReject = false,
     onQuoteRejected,
+    gracePeriodSecondsRemaining,
 }: QuoteSelectionPanelProps) {
     const { t } = useLanguage();
     const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -169,6 +172,31 @@ export default function QuoteSelectionPanel({
                     </svg>
                     <p className="text-xs" style={{ color: '#7c3aed' }} dangerouslySetInnerHTML={{ __html: t('user.tracking.quotes.selectionHint') }} />
                 </div>
+
+                {/* Grace period countdown */}
+                {(gracePeriodSecondsRemaining ?? 0) > 0 && (
+                    <div
+                        className="mt-2 rounded-xl p-3 flex items-center gap-3"
+                        style={{
+                            background: gracePeriodSecondsRemaining! < 15 ? '#fef2f2' : C.orangeLight,
+                            border: `1.5px solid ${gracePeriodSecondsRemaining! < 15 ? '#fecaca' : '#fed7aa'}`,
+                            transition: 'background 0.3s, border-color 0.3s',
+                        }}
+                    >
+                        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke={gracePeriodSecondsRemaining! < 15 ? '#ef4444' : C.orange} strokeWidth={2} className="flex-shrink-0">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-xs flex-1" style={{ color: gracePeriodSecondsRemaining! < 15 ? '#ef4444' : C.navy }}>
+                            {t('user.tracking.quotes.graceTimerWarning')}
+                        </p>
+                        <span
+                            className="text-lg font-bold tabular-nums flex-shrink-0"
+                            style={{ color: gracePeriodSecondsRemaining! < 15 ? '#ef4444' : C.orange }}
+                        >
+                            0:{String(gracePeriodSecondsRemaining).padStart(2, '0')}
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Quote Cards */}

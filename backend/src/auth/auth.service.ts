@@ -68,7 +68,7 @@ export class AuthService {
         const tokens = await this.createSession(user);
 
         return {
-            user: this.sanitizeUser(user),
+            user: this.sanitizeUser(user), // Filter out private fields (hashedPassword, googleId)
             tokens,
             requiresProfileCompletion: true,
         };

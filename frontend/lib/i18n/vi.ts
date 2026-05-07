@@ -672,6 +672,7 @@ const vi = {
                 expiredSub: 'Không còn báo giá khả dụng. Vui lòng thử lại yêu cầu.',
                 loading: 'Đang tải báo giá...',
                 loadError: 'Không thể tải danh sách báo giá',
+                graceTimerWarning: 'Chọn ngay — báo giá tự huỷ sau khi hết giờ',
             },
             page: {
                 loading: 'Đang tải yêu cầu...',
@@ -2674,6 +2675,7 @@ const vi = {
         status: {
             title: 'Trạng thái yêu cầu',
             guestBadge: 'Yêu cầu khách',
+            activeRequestRedirect: 'Bạn đang có yêu cầu chưa hoàn thành — đang chuyển hướng...',
             registerToSave: 'Đăng ký để lưu yêu cầu này vào tài khoản',
             cancelBtn: 'Hủy yêu cầu',
             timeline: {
@@ -2735,6 +2737,12 @@ const vi = {
             },
             cancelled: {
                 subtitle: 'Yêu cầu này đã kết thúc',
+            },
+            expired: {
+                title: 'Không tìm được cứu hộ viên',
+                desc: 'Không có cứu hộ viên nào phản hồi trong thời gian chờ. Hãy thử lại — thường sẽ có người nhận trong vài phút.',
+                newRequestBtn: 'Tạo yêu cầu mới',
+                homeBtn: 'Về trang chủ',
             },
             quotes: {
                 sectionTitle: 'Báo giá nhận được ({count})',
